@@ -8,7 +8,7 @@ export class TenantsService {
 }
 
 @Module({
-  providers: [TenantsService, PrismaService],
+  providers: [TenantsService],
   exports: [TenantsService],
 })
 export class TenantsModule {}

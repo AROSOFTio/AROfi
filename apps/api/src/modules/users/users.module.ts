@@ -6,13 +6,18 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
   
   async findOneByEmail(email: string) {
-    // This is a placeholder
-    return { id: 1, email }; 
+    return this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        role: true,
+        tenant: true,
+      },
+    })
   }
 }
 
 @Module({
-  providers: [UsersService, PrismaService],
+  providers: [UsersService],
   exports: [UsersService],
 })
 export class UsersModule {}

@@ -8,7 +8,7 @@ export class HotspotsService {
 }
 
 @Module({
-  providers: [HotspotsService, PrismaService],
+  providers: [HotspotsService],
   exports: [HotspotsService],
 })
 export class HotspotsModule {}

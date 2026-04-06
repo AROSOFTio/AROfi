@@ -21,6 +21,7 @@ const navItems = [
   {
     section: 'Sales',
     items: [
+      { href: '/sales', label: 'Sales', icon: <PaymentIcon /> },
       { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon /> },
       { href: '/customers', label: 'Customers', icon: <UsersIcon /> },
       { href: '/agents', label: 'Agents', icon: <AgentIcon /> },
@@ -29,7 +30,7 @@ const navItems = [
   {
     section: 'Finance',
     items: [
-      { href: '/payments', label: 'Payments', icon: <PaymentIcon /> },
+      { href: '/transactions', label: 'Transactions', icon: <PaymentIcon /> },
       { href: '/billing', label: 'Billing & Wallet', icon: <BillingIcon /> },
       { href: '/settlements', label: 'Settlements', icon: <SettlementIcon /> },
     ]

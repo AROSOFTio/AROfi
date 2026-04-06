@@ -8,48 +8,313 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  domain    String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum PackageStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
 
-  users     User[]
-  hotspots  Hotspot[]
+enum PricingStrategy {
+  FIXED
+}
+
+enum VoucherBatchStatus {
+  DRAFT
+  ACTIVE
+  EXHAUSTED
+  CANCELLED
+}
+
+enum VoucherStatus {
+  GENERATED
+  SOLD
+  REDEEMED
+  EXPIRED
+  VOID
+}
+
+enum BillingChannel {
+  MOBILE_MONEY
+  VOUCHER
+  WALLET_ADJUSTMENT
+  SYSTEM
+}
+
+enum BillingTransactionType {
+  MOBILE_MONEY_SALE
+  VOUCHER_SALE
+  VOUCHER_REDEMPTION
+  WALLET_ADJUSTMENT
+}
+
+enum BillingTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum WalletOwnerType {
+  TENANT
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerTransactionType {
+  SALE
+  WALLET_ADJUSTMENT
+  REDEMPTION
+}
+
+model Tenant {
+  id                  String               @id @default(uuid())
+  name                String
+  domain              String?              @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  users               User[]
+  hotspots            Hotspot[]
+  packages            Package[]
+  voucherBatches      VoucherBatch[]
+  vouchers            Voucher[]
+  wallets             Wallet[]
+  billingTransactions BillingTransaction[]
+  ledgerTransactions  LedgerTransaction[]
+  ledgerEntries       LedgerEntry[]
+  voucherRedemptions  VoucherRedemption[]
 }
 
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
-  permissions String[] // JSON or Array of permissions
+  permissions String[]
   users       User[]
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  firstName String?
-  lastName  String?
-  roleId    String
-  role      Role     @relation(fields: [roleId], references: [id])
-  tenantId  String?
-  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String            @id @default(uuid())
+  email                  String            @unique
+  password               String
+  firstName              String?
+  lastName               String?
+  roleId                 String
+  role                   Role              @relation(fields: [roleId], references: [id])
+  tenantId               String?
+  tenant                 Tenant?           @relation(fields: [tenantId], references: [id])
+  isActive               Boolean           @default(true)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  generatedVoucherBatches VoucherBatch[]   @relation("VoucherBatchGenerator")
+  voucherRedemptions     VoucherRedemption[] @relation("VoucherRedemptionActor")
 }
 
 model Hotspot {
-  id           String   @id @default(uuid())
-  name         String
-  nasIpAddress String?
-  secret       String?
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String              @id @default(uuid())
+  name               String
+  nasIpAddress       String?
+  secret             String?
+  tenantId           String
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  voucherRedemptions VoucherRedemption[]
+}
+
+model Package {
+  id                  String               @id @default(uuid())
+  tenantId            String
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  name                String
+  code                String
+  description         String?
+  durationMinutes     Int
+  dataLimitMb         Int?
+  deviceLimit         Int?
+  downloadSpeedKbps   Int?
+  uploadSpeedKbps     Int?
+  isFeatured          Boolean              @default(false)
+  status              PackageStatus        @default(DRAFT)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  prices              PackagePrice[]
+  voucherBatches      VoucherBatch[]
+  vouchers            Voucher[]
+  billingTransactions BillingTransaction[]
+  voucherRedemptions  VoucherRedemption[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+}
+
+model PackagePrice {
+  id          String          @id @default(uuid())
+  packageId   String
+  package     Package         @relation(fields: [packageId], references: [id])
+  amountUgx   Int
+  currency    String          @default("UGX")
+  strategy    PricingStrategy @default(FIXED)
+  isDefault   Boolean         @default(true)
+  startsAt    DateTime        @default(now())
+  endsAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([packageId, startsAt])
+}
+
+model VoucherBatch {
+  id                String            @id @default(uuid())
+  tenantId          String
+  tenant            Tenant            @relation(fields: [tenantId], references: [id])
+  packageId         String
+  package           Package           @relation(fields: [packageId], references: [id])
+  generatedByUserId String?
+  generatedByUser   User?             @relation("VoucherBatchGenerator", fields: [generatedByUserId], references: [id])
+  batchNumber       String            @unique
+  prefix            String
+  quantity          Int
+  faceValueUgx      Int
+  expiresAt         DateTime?
+  status            VoucherBatchStatus @default(ACTIVE)
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  vouchers          Voucher[]
+
+  @@index([tenantId, createdAt])
+}
+
+model Voucher {
+  id                  String               @id @default(uuid())
+  tenantId            String
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  batchId             String
+  batch               VoucherBatch         @relation(fields: [batchId], references: [id])
+  packageId           String
+  package             Package              @relation(fields: [packageId], references: [id])
+  code                String               @unique
+  serialNumber        String               @unique
+  faceValueUgx        Int
+  status              VoucherStatus        @default(GENERATED)
+  soldAt              DateTime?
+  redeemedAt          DateTime?
+  expiresAt           DateTime?
+  soldToReference     String?
+  customerReference   String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  billingTransactions BillingTransaction[]
+  redemption          VoucherRedemption?
+
+  @@index([tenantId, status])
+}
+
+model Wallet {
+  id                  String               @id @default(uuid())
+  tenantId            String
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  ownerType           WalletOwnerType      @default(TENANT)
+  currency            String               @default("UGX")
+  balanceUgx          Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  ledgerTransactions  LedgerTransaction[]
+  ledgerEntries       LedgerEntry[]
+  billingTransactions BillingTransaction[]
+
+  @@unique([tenantId, ownerType])
+}
+
+model BillingTransaction {
+  id                  String                   @id @default(uuid())
+  tenantId            String
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id])
+  walletId            String?
+  wallet              Wallet?                  @relation(fields: [walletId], references: [id])
+  packageId           String?
+  package             Package?                 @relation(fields: [packageId], references: [id])
+  voucherId           String?
+  voucher             Voucher?                 @relation(fields: [voucherId], references: [id])
+  ledgerTransactionId String?                  @unique
+  ledgerTransaction   LedgerTransaction?       @relation(fields: [ledgerTransactionId], references: [id])
+  channel             BillingChannel
+  type                BillingTransactionType
+  status              BillingTransactionStatus @default(COMPLETED)
+  grossAmountUgx      Int
+  feeAmountUgx        Int                      @default(0)
+  netAmountUgx        Int                      @default(0)
+  customerReference   String?
+  externalReference   String?                  @unique
+  paymentProvider     String?
+  metadata            Json?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([type, status])
+}
+
+model LedgerTransaction {
+  id                  String               @id @default(uuid())
+  tenantId            String?
+  tenant              Tenant?              @relation(fields: [tenantId], references: [id])
+  walletId            String?
+  wallet              Wallet?              @relation(fields: [walletId], references: [id])
+  reference           String               @unique
+  type                LedgerTransactionType
+  channel             BillingChannel
+  description         String
+  grossAmountUgx      Int                  @default(0)
+  feeAmountUgx        Int                  @default(0)
+  netAmountUgx        Int                  @default(0)
+  sourceType          String?
+  sourceId            String?
+  metadata            Json?
+  createdAt           DateTime             @default(now())
+  entries             LedgerEntry[]
+  billingTransaction  BillingTransaction?
+
+  @@index([tenantId, createdAt])
+}
+
+model LedgerEntry {
+  id                  String            @id @default(uuid())
+  ledgerTransactionId String
+  ledgerTransaction   LedgerTransaction @relation(fields: [ledgerTransactionId], references: [id])
+  tenantId            String?
+  tenant              Tenant?           @relation(fields: [tenantId], references: [id])
+  walletId            String?
+  wallet              Wallet?           @relation(fields: [walletId], references: [id])
+  accountCode         String
+  direction           LedgerDirection
+  amountUgx           Int
+  memo                String?
+  createdAt           DateTime          @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([walletId, createdAt])
+}
+
+model VoucherRedemption {
+  id                String    @id @default(uuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  voucherId         String    @unique
+  voucher           Voucher   @relation(fields: [voucherId], references: [id])
+  packageId         String
+  package           Package   @relation(fields: [packageId], references: [id])
+  redeemedByUserId  String?
+  redeemedByUser    User?     @relation("VoucherRedemptionActor", fields: [redeemedByUserId], references: [id])
+  hotspotId         String?
+  hotspot           Hotspot?  @relation(fields: [hotspotId], references: [id])
+  customerReference String?
+  sessionReference  String?
+  createdAt         DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
 }
 
 model AuditLog {

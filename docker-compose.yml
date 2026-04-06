@@ -83,6 +83,7 @@ services:
     container_name: arofi-admin
     restart: unless-stopped
     environment:
+      - API_SERVER_URL=http://api:3000/api
       - NEXT_PUBLIC_API_URL=/api
       - NODE_ENV=production
     networks:
@@ -95,6 +96,7 @@ services:
     container_name: arofi-portal
     restart: unless-stopped
     environment:
+      - API_SERVER_URL=http://api:3000/api
       - NEXT_PUBLIC_API_URL=/api
       - NODE_ENV=production
     networks:
