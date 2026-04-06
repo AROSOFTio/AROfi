@@ -1,21 +1,21 @@
-export default function Dashboard() {
+export default function DashboardHome() {
   const stats = [
-    { label: 'Total Tenants', value: '—', color: 'blue', change: 'Vendors on platform' },
-    { label: 'Active Hotspots', value: '—', color: 'green', change: 'Live NAS points' },
-    { label: 'Revenue (Monthly)', value: 'UGX —', color: 'amber', change: 'Gross collections' },
-    { label: 'Active Sessions', value: '—', color: 'purple', change: 'Online right now' },
-    { label: 'Vouchers Sold', value: '—', color: 'blue', change: 'This month' },
-    { label: 'Mobile Money Txns', value: '—', color: 'green', change: 'Yo! Uganda payments' },
-    { label: 'Platform Fees (8%)', value: 'UGX —', color: 'amber', change: 'MM fee earned' },
-    { label: 'Pending Settlements', value: 'UGX —', color: 'purple', change: 'Awaiting disburse' },
+    { label: 'Total Tenants', value: '-', color: 'blue', change: 'Vendors on platform' },
+    { label: 'Active Hotspots', value: '-', color: 'green', change: 'Live NAS points' },
+    { label: 'Revenue (Monthly)', value: 'UGX -', color: 'amber', change: 'Gross collections' },
+    { label: 'Active Sessions', value: '-', color: 'purple', change: 'Online right now' },
+    { label: 'Vouchers Sold', value: '-', color: 'blue', change: 'This month' },
+    { label: 'Mobile Money Txns', value: '-', color: 'green', change: 'Yo! Uganda payments' },
+    { label: 'Platform Fees (8%)', value: 'UGX -', color: 'amber', change: 'MM fee earned' },
+    { label: 'Pending Settlements', value: 'UGX -', color: 'purple', change: 'Awaiting disburse' },
   ]
 
   const recentTxns = [
     { id: 'TXN-001', tenant: 'SpeedNet Kampala', amount: 'UGX 5,000', method: 'MTN MoMo', status: 'success', time: 'Just now' },
     { id: 'TXN-002', tenant: 'QuickFi Entebbe', amount: 'UGX 2,000', method: 'Airtel Money', status: 'success', time: '2 min ago' },
-    { id: 'TXN-003', tenant: 'NetZone Jinja',   amount: 'UGX 10,000', method: 'Voucher',     status: 'success', time: '5 min ago' },
+    { id: 'TXN-003', tenant: 'NetZone Jinja', amount: 'UGX 10,000', method: 'Voucher', status: 'success', time: '5 min ago' },
     { id: 'TXN-004', tenant: 'SpeedNet Kampala', amount: 'UGX 5,000', method: 'MTN MoMo', status: 'pending', time: '8 min ago' },
-    { id: 'TXN-005', tenant: 'BudaNet Masaka',  amount: 'UGX 3,000', method: 'Airtel Money', status: 'failed',  time: '12 min ago' },
+    { id: 'TXN-005', tenant: 'BudaNet Masaka', amount: 'UGX 3,000', method: 'Airtel Money', status: 'failed', time: '12 min ago' },
   ]
 
   return (
@@ -23,7 +23,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Platform overview — Currency: UGX (Ugandan Shilling)</p>
+          <p className="page-subtitle">Platform overview - Currency: UGX (Ugandan Shilling)</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-ghost">Export Report</button>
@@ -31,7 +31,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="stats-grid">
         {stats.map((s) => (
           <div key={s.label} className={`stat-card ${s.color}`}>
@@ -42,7 +41,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Recent Transactions */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">Recent Transactions</span>
@@ -80,7 +78,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Active Sessions */}
       <div className="charts-grid">
         <div className="card">
           <div className="card-header">
@@ -95,7 +92,7 @@ export default function Dashboard() {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Revenue Breakdown</span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>This month · UGX</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>This month | UGX</span>
           </div>
           <div className="empty-state">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
@@ -104,7 +101,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tenants Table */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">Tenants (Vendors)</span>
