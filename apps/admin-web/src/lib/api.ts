@@ -4,7 +4,6 @@ export async function fetchApi<T>(path: string): Promise<T | null> {
   try {
     const response = await fetch(`${API_SERVER_URL}${path}`, {
       cache: 'no-store',
-      next: { revalidate: 0 },
     })
 
     if (!response.ok) {

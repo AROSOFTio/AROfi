@@ -25,6 +25,19 @@ import { YoGatewayResponse, YoUgandaGatewayService } from './yo-uganda.gateway.s
 
 @Injectable()
 export class PaymentsService {
+  private readonly pendingPaymentStatuses = new Set<PaymentStatus>([
+    PaymentStatus.INITIATED,
+    PaymentStatus.PENDING,
+    PaymentStatus.INDETERMINATE,
+  ])
+
+  private readonly terminalPaymentStatuses = new Set<PaymentStatus>([
+    PaymentStatus.COMPLETED,
+    PaymentStatus.FAILED,
+    PaymentStatus.CANCELLED,
+    PaymentStatus.EXPIRED,
+  ])
+
   private readonly paymentInclude = {
     tenant: {
       select: {
@@ -132,9 +145,7 @@ export class PaymentsService {
     return {
       summary: {
         totalPayments: payments.length,
-        pendingPayments: payments.filter((payment) =>
-          [PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.INDETERMINATE].includes(payment.status),
-        ).length,
+        pendingPayments: payments.filter((payment) => this.pendingPaymentStatuses.has(payment.status)).length,
         completedPayments: payments.filter((payment) => payment.status === PaymentStatus.COMPLETED).length,
         failedPayments: payments.filter((payment) => payment.status === PaymentStatus.FAILED).length,
         grossCollectionsUgx: payments
@@ -369,9 +380,7 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found')
     }
 
-    if (
-      [PaymentStatus.COMPLETED, PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(payment.status)
-    ) {
+    if (this.terminalPaymentStatuses.has(payment.status)) {
       return this.getPayment(payment.id)
     }
 
