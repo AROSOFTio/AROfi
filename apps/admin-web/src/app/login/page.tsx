@@ -32,7 +32,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <h1>AROFi</h1>
+          <img src="/logo.png" alt="AROFi Logo" style={{ width: '200px', height: 'auto', margin: '0 auto 10px', display: 'block' }} />
           <p>Hotspot Billing & Network Management</p>
           <p style={{ marginTop: 4, fontSize: 11 }}>AROSOFT Innovations Ltd</p>
         </div>

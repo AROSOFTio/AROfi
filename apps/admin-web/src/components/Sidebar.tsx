@@ -49,7 +49,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <h1>AROFi</h1>
+        <img src="/logo.png" alt="AROFi Logo" style={{ width: '100%', height: 'auto', marginBottom: '10px' }} />
         <p>Hotspot Management Platform</p>
       </div>
       {navItems.map((group) => (
