@@ -24,6 +24,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-arofi_dev}
     volumes:
       - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-arofi_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - arofi-net
 
@@ -33,6 +38,11 @@ services:
     restart: unless-stopped
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - arofi-net
 
@@ -59,8 +69,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change_this_in_production}
       - NODE_ENV=production
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - arofi-net
 
