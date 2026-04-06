@@ -6,18 +6,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
+
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-      if (!res.ok) throw new Error('Invalid credentials')
+
+      if (!res.ok) {
+        throw new Error('Invalid credentials')
+      }
+
       const data = await res.json()
       localStorage.setItem('access_token', data.access_token)
       window.location.href = '/'
@@ -32,21 +38,27 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <img src="/logo.png" alt="AROFi Logo" style={{ width: '200px', height: 'auto', margin: '0 auto 10px', display: 'block' }} />
+          <img
+            src="/logo.png"
+            alt="AROFi Logo"
+            style={{ width: '200px', height: 'auto', margin: '0 auto 10px', display: 'block' }}
+          />
           <p>Hotspot Billing & Network Management</p>
           <p style={{ marginTop: 4, fontSize: 11 }}>AROSOFT Innovations Ltd</p>
         </div>
 
         {error && (
-          <div style={{
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            borderRadius: 8,
-            padding: '10px 14px',
-            fontSize: 13,
-            color: '#f87171',
-            marginBottom: 18,
-          }}>
+          <div
+            style={{
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: 13,
+              color: '#f87171',
+              marginBottom: 18,
+            }}
+          >
             {error}
           </div>
         )}
@@ -69,7 +81,7 @@ export default function LoginPage() {
             <input
               className="form-input"
               type="password"
-              placeholder="••••••••••"
+              placeholder="**********"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -87,7 +99,7 @@ export default function LoginPage() {
         </form>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-          AROFi v1.0 · &copy; 2026 AROSOFT Innovations Ltd
+          AROFi v1.0 | &copy; 2026 AROSOFT Innovations Ltd
         </p>
       </div>
     </div>
