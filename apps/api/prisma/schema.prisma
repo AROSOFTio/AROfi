@@ -54,6 +54,41 @@ enum BillingTransactionStatus {
   REVERSED
 }
 
+enum PaymentProvider {
+  YO_UGANDA
+}
+
+enum PaymentMethod {
+  MOBILE_MONEY
+}
+
+enum PaymentNetwork {
+  MTN
+  AIRTEL
+  UNKNOWN
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  COMPLETED
+  FAILED
+  INDETERMINATE
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentEventType {
+  REQUESTED
+  STATUS_CHECK
+  WEBHOOK_RECEIVED
+  WEBHOOK_PROCESSED
+  WEBHOOK_REJECTED
+  STATE_TRANSITION
+  ACTIVATION_POSTED
+  ACTIVATION_FAILED
+}
+
 enum WalletOwnerType {
   TENANT
 }
@@ -67,6 +102,19 @@ enum LedgerTransactionType {
   SALE
   WALLET_ADJUSTMENT
   REDEMPTION
+}
+
+enum PackageActivationSource {
+  MOBILE_MONEY
+  VOUCHER
+}
+
+enum PackageActivationStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  FAILED
+  REVOKED
 }
 
 model Tenant {
@@ -85,6 +133,9 @@ model Tenant {
   ledgerTransactions  LedgerTransaction[]
   ledgerEntries       LedgerEntry[]
   voucherRedemptions  VoucherRedemption[]
+  payments            Payment[]
+  paymentWebhooks     PaymentWebhook[]
+  packageActivations  PackageActivation[]
 }
 
 model Role {
@@ -121,6 +172,7 @@ model Hotspot {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   voucherRedemptions VoucherRedemption[]
+  packageActivations PackageActivation[]
 }
 
 model Package {
@@ -144,6 +196,8 @@ model Package {
   vouchers            Voucher[]
   billingTransactions BillingTransaction[]
   voucherRedemptions  VoucherRedemption[]
+  payments            Payment[]
+  packageActivations  PackageActivation[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -252,6 +306,7 @@ model BillingTransaction {
   metadata            Json?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
+  payment             Payment?
 
   @@index([tenantId, createdAt])
   @@index([type, status])
@@ -313,8 +368,98 @@ model VoucherRedemption {
   customerReference String?
   sessionReference  String?
   createdAt         DateTime  @default(now())
+  activation        PackageActivation?
 
   @@index([tenantId, createdAt])
+}
+
+model Payment {
+  id                  String             @id @default(uuid())
+  tenantId            String
+  tenant              Tenant             @relation(fields: [tenantId], references: [id])
+  packageId           String
+  package             Package            @relation(fields: [packageId], references: [id])
+  billingTransactionId String?           @unique
+  billingTransaction  BillingTransaction? @relation(fields: [billingTransactionId], references: [id])
+  provider            PaymentProvider    @default(YO_UGANDA)
+  method              PaymentMethod      @default(MOBILE_MONEY)
+  network             PaymentNetwork     @default(UNKNOWN)
+  status              PaymentStatus      @default(INITIATED)
+  amountUgx           Int
+  currency            String             @default("UGX")
+  phoneNumber         String
+  customerReference   String?
+  externalReference   String             @unique
+  providerReference   String?            @unique
+  idempotencyKey      String             @unique
+  providerStatus      String?
+  statusMessage       String?
+  requestPayload      Json?
+  responsePayload     Json?
+  metadata            Json?
+  initiatedAt         DateTime           @default(now())
+  completedAt         DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  webhooks            PaymentWebhook[]
+  activation          PackageActivation?
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+}
+
+model PaymentWebhook {
+  id                 String         @id @default(uuid())
+  tenantId           String?
+  tenant             Tenant?        @relation(fields: [tenantId], references: [id])
+  paymentId          String?
+  payment            Payment?       @relation(fields: [paymentId], references: [id])
+  provider           PaymentProvider @default(YO_UGANDA)
+  eventType          PaymentEventType
+  externalReference  String?
+  providerReference  String?
+  verificationStatus String?
+  headers            Json
+  payload            Json
+  notes              String?
+  isProcessed        Boolean        @default(false)
+  processedAt        DateTime?
+  createdAt          DateTime       @default(now())
+
+  @@index([paymentId, createdAt])
+  @@index([externalReference, createdAt])
+}
+
+model PackageActivation {
+  id                  String                 @id @default(uuid())
+  tenantId            String
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id])
+  packageId           String
+  package             Package                @relation(fields: [packageId], references: [id])
+  paymentId           String?                @unique
+  payment             Payment?               @relation(fields: [paymentId], references: [id])
+  voucherRedemptionId String?                @unique
+  voucherRedemption   VoucherRedemption?     @relation(fields: [voucherRedemptionId], references: [id])
+  hotspotId           String?
+  hotspot             Hotspot?               @relation(fields: [hotspotId], references: [id])
+  source              PackageActivationSource
+  status              PackageActivationStatus @default(ACTIVE)
+  customerReference   String?
+  accessPhoneNumber   String?
+  durationMinutes     Int
+  dataLimitMb         Int?
+  deviceLimit         Int?
+  downloadSpeedKbps   Int?
+  uploadSpeedKbps     Int?
+  startedAt           DateTime               @default(now())
+  endsAt              DateTime
+  metadata            Json?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([tenantId, status, endsAt])
+  @@index([accessPhoneNumber, status])
 }
 
 model AuditLog {

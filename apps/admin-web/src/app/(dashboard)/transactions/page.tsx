@@ -52,6 +52,8 @@ export default async function TransactionsPage() {
                 <th>Tenant</th>
                 <th>Type</th>
                 <th>Channel</th>
+                <th>Customer</th>
+                <th>Provider</th>
                 <th>Gross</th>
                 <th>Fee</th>
                 <th>Net</th>
@@ -62,7 +64,7 @@ export default async function TransactionsPage() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={11}>
                     <div className="empty-state">
                       <p>No transactions recorded yet.</p>
                     </div>
@@ -78,6 +80,8 @@ export default async function TransactionsPage() {
                   <td>{item.tenant.name}</td>
                   <td>{formatTransactionType(item.type)}</td>
                   <td>{item.channel.toLowerCase()}</td>
+                  <td>{item.customerReference ?? 'Walk-in'}</td>
+                  <td>{item.paymentProvider ?? 'Internal'}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(item.grossAmountUgx)}</td>
                   <td>{formatCurrency(item.feeAmountUgx)}</td>
                   <td>{formatCurrency(item.netAmountUgx)}</td>

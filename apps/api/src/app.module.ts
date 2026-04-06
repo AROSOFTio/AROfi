@@ -6,6 +6,7 @@ import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { HotspotsModule } from './modules/hotspots/hotspots.module';
 import { PackagesModule } from './modules/packages/packages.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
@@ -19,6 +20,7 @@ import { PrismaModule } from './prisma.module';
     TenantsModule,
     HotspotsModule,
     PackagesModule,
+    PaymentsModule,
     VouchersModule,
     BillingModule,
     WalletsModule,

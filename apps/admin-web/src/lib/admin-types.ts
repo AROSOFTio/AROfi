@@ -199,3 +199,93 @@ export type BillingTransactionItem = {
     description: string
   } | null
 }
+
+export type PaymentOverviewResponse = {
+  summary: {
+    totalPayments: number
+    pendingPayments: number
+    completedPayments: number
+    failedPayments: number
+    grossCollectionsUgx: number
+    activeActivations: number
+    mobileMoneyRequests: number
+  }
+  payments: PaymentItem[]
+  recentLogs: PaymentLogItem[]
+}
+
+export type PaymentItem = {
+  id: string
+  provider: string
+  method: string
+  network: string
+  status: string
+  amountUgx: number
+  currency: string
+  phoneNumber: string
+  customerReference?: string | null
+  externalReference: string
+  providerReference?: string | null
+  providerStatus?: string | null
+  statusMessage?: string | null
+  initiatedAt: string
+  completedAt?: string | null
+  failedAt?: string | null
+  createdAt: string
+  tenant: TenantSummary & {
+    domain?: string | null
+  }
+  package: {
+    id: string
+    name: string
+    code: string
+    durationMinutes: number
+    dataLimitMb?: number | null
+    deviceLimit?: number | null
+    downloadSpeedKbps?: number | null
+    uploadSpeedKbps?: number | null
+  }
+  billingTransaction?: {
+    id: string
+    status: string
+    externalReference?: string | null
+    grossAmountUgx: number
+    feeAmountUgx: number
+    netAmountUgx: number
+    createdAt: string
+  } | null
+  activation?: {
+    id: string
+    status: string
+    startedAt: string
+    endsAt: string
+    accessPhoneNumber?: string | null
+    package: {
+      id: string
+      name: string
+      code: string
+    }
+    hotspot?: {
+      id: string
+      name: string
+    } | null
+  } | null
+}
+
+export type PaymentLogItem = {
+  id: string
+  eventType: string
+  externalReference?: string | null
+  providerReference?: string | null
+  verificationStatus?: string | null
+  notes?: string | null
+  isProcessed: boolean
+  processedAt?: string | null
+  createdAt: string
+  tenant?: TenantSummary | null
+  payment?: {
+    id: string
+    externalReference: string
+    status: string
+  } | null
+}

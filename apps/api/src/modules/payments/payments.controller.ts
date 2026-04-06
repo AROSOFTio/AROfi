@@ -1,0 +1,47 @@
+import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common'
+import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
+import { PaymentsService } from './payments.service'
+
+@Controller('payments')
+export class PaymentsController {
+  constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Get('overview')
+  getOverview(@Query('tenantId') tenantId?: string) {
+    return this.paymentsService.getOverview(tenantId)
+  }
+
+  @Get('portal/context')
+  getPortalContext(
+    @Query('tenantDomain') tenantDomain?: string,
+    @Query('phoneNumber') phoneNumber?: string,
+  ) {
+    return this.paymentsService.getPortalContext(tenantDomain, phoneNumber)
+  }
+
+  @Post('portal/initiate')
+  initiatePortalPayment(@Body() dto: InitiatePortalPaymentDto) {
+    return this.paymentsService.initiatePortalPayment(dto)
+  }
+
+  @Post('webhooks/yo-uganda')
+  handleYoWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('token') token?: string,
+    @Query('event') event?: string,
+    @Query('externalReference') externalReference?: string,
+  ) {
+    return this.paymentsService.handleYoWebhook(payload, headers, token, event, externalReference)
+  }
+
+  @Get(':paymentId')
+  getPayment(@Param('paymentId') paymentId: string) {
+    return this.paymentsService.getPayment(paymentId)
+  }
+
+  @Post(':paymentId/check-status')
+  checkPaymentStatus(@Param('paymentId') paymentId: string) {
+    return this.paymentsService.checkPaymentStatus(paymentId)
+  }
+}

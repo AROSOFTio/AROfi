@@ -3,12 +3,14 @@ import {
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
+  PackageActivationSource,
   Prisma,
   VoucherBatchStatus,
   VoucherStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
+import { PackageActivationService } from '../payments/package-activation.service'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
@@ -19,6 +21,7 @@ export class VouchersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly billingService: BillingService,
+    private readonly packageActivationService: PackageActivationService,
     private readonly voucherCodeService: VoucherCodeService,
   ) {}
 
@@ -407,6 +410,32 @@ export class VouchersService {
             sessionReference: dto.sessionReference,
           },
         },
+      })
+
+      const packageRecord = await tx.package.findUnique({
+        where: { id: voucher.packageId },
+      })
+
+      if (!packageRecord) {
+        throw new NotFoundException('Package not found for voucher redemption')
+      }
+
+      await this.packageActivationService.activateInTransaction(tx, {
+        tenantId: voucher.tenantId,
+        packageId: voucher.packageId,
+        voucherRedemptionId: redemption.id,
+        hotspotId: dto.hotspotId,
+        source: PackageActivationSource.VOUCHER,
+        customerReference: dto.customerReference,
+        durationMinutes: packageRecord.durationMinutes,
+        dataLimitMb: packageRecord.dataLimitMb,
+        deviceLimit: packageRecord.deviceLimit,
+        downloadSpeedKbps: packageRecord.downloadSpeedKbps,
+        uploadSpeedKbps: packageRecord.uploadSpeedKbps,
+        metadata: {
+          voucherCode: voucher.code,
+          sessionReference: dto.sessionReference,
+        } as Prisma.InputJsonValue,
       })
 
       await this.refreshBatchStatus(voucher.batchId, tx)

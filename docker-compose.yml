@@ -68,6 +68,13 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:-change_this_in_production}
       - NODE_ENV=production
+      - YO_API_MODE=${YO_API_MODE:-live}
+      - YO_API_BASE_URL=${YO_API_BASE_URL:-https://paymentsapi1.yo.co.ug/ybs/task.php}
+      - YO_API_FALLBACK_URL=${YO_API_FALLBACK_URL:-https://paymentsapi2.yo.co.ug/ybs/task.php}
+      - YO_API_USERNAME=${YO_API_USERNAME:-}
+      - YO_API_PASSWORD=${YO_API_PASSWORD:-}
+      - YO_WEBHOOK_BASE_URL=${YO_WEBHOOK_BASE_URL:-https://arofi.arosoft.io/api/payments/webhooks/yo-uganda}
+      - YO_WEBHOOK_TOKEN=${YO_WEBHOOK_TOKEN:-change_me_yo_webhook}
     depends_on:
       postgres:
         condition: service_healthy

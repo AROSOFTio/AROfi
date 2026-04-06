@@ -39,9 +39,12 @@ export function getStatusBadgeClass(status: string) {
     case 'COMPLETED':
     case 'CREDIT':
     case 'GENERATED':
+    case 'accepted':
     case 'success':
       return 'badge badge-success'
     case 'PENDING':
+    case 'INITIATED':
+    case 'INDETERMINATE':
     case 'DEBIT':
     case 'SOLD':
     case 'pending':
@@ -51,7 +54,10 @@ export function getStatusBadgeClass(status: string) {
     case 'ARCHIVED':
     case 'FAILED':
     case 'REVERSED':
+    case 'CANCELLED':
+    case 'EXPIRED':
     case 'VOID':
+    case 'rejected':
     case 'failed':
       return 'badge badge-danger'
     default:
