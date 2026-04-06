@@ -1,3 +1,6 @@
+import './globals.css'
+import type { Metadata } from 'next'
+
 export const metadata: Metadata = {
   title: 'AROFi Portal – High-speed Internet Access',
   description: 'Buy hotspot packages securely and get connected instantly.',
