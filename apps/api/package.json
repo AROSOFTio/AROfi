@@ -30,10 +30,10 @@
     "@nestjs/bullmq": "^10.0.0",
     "class-validator": "^0.14.1",
     "class-transformer": "^0.5.1",
-    "ts-node": "^10.9.1"
+    "tsx": "^4.7.1"
   },
   "prisma": {
-    "seed": "node --loader ts-node/esm prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
