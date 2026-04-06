@@ -1,7 +1,7 @@
+# Build stage
 FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
-
-RUN apk add --no-cache python3 make g++ openssl1.1-compat
+RUN apk add --no-cache python3 make g++ openssl libc6-compat
 COPY package*.json ./
 RUN npm install
 
@@ -10,10 +10,10 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+# Runtime stage
 FROM node:20-alpine
 WORKDIR /usr/src/app
-
-RUN apk add --no-cache openssl1.1-compat
+RUN apk add --no-cache openssl libc6-compat
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package.json ./
