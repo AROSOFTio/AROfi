@@ -5,6 +5,7 @@ import {
   LedgerDirection,
   LedgerTransactionType,
   PackageStatus,
+  Prisma,
   PrismaClient,
   VoucherBatchStatus,
   VoucherStatus,
@@ -28,7 +29,7 @@ type SeedSaleInput = {
   customerReference?: string
   externalReference?: string
   paymentProvider?: string
-  metadata?: Record<string, unknown>
+  metadata?: Prisma.InputJsonValue
 }
 
 async function createSeedSaleTransaction(input: SeedSaleInput) {
