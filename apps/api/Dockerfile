@@ -18,6 +18,9 @@ COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package.json ./
 COPY --from=builder /usr/src/app/prisma ./prisma
 
-EXPOSE 3000
+# Find where NestJS put the compiled code (dist/main.js or dist/src/main.js)
+RUN ls -R dist
 
-CMD ["node", "dist/main"]
+EXPOSE 3000
+# Use a flexible command to find and run the main entry point
+CMD ["sh", "-c", "node $(find dist -name main.js | head -n 1)"]
