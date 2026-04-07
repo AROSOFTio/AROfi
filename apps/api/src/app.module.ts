@@ -7,6 +7,9 @@ import { TenantsModule } from './modules/tenants/tenants.module';
 import { HotspotsModule } from './modules/hotspots/hotspots.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { RadiusModule } from './modules/radius/radius.module';
+import { RoutersModule } from './modules/routers/routers.module';
+import { SessionsModule } from './modules/sessions/sessions.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
@@ -19,6 +22,9 @@ import { PrismaModule } from './prisma.module';
     UsersModule,
     TenantsModule,
     HotspotsModule,
+    RoutersModule,
+    SessionsModule,
+    RadiusModule,
     PackagesModule,
     PaymentsModule,
     VouchersModule,

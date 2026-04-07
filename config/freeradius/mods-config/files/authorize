@@ -1,0 +1,8 @@
+# AROFi Phase 4 bootstrap credentials.
+# Dynamic package, voucher, and customer sync can extend this file in later phases.
+
+arofi-health Cleartext-Password := "radius-health"
+	Reply-Message := "AROFi FreeRADIUS is online"
+
+HR1APR-0001 Cleartext-Password := "HR1APR-0001"
+	Reply-Message := "Voucher login bootstrap"

@@ -89,6 +89,44 @@ enum PaymentEventType {
   ACTIVATION_FAILED
 }
 
+enum RouterVendor {
+  MIKROTIK
+}
+
+enum RouterConnectionMode {
+  ROUTEROS_API
+  ROUTEROS_API_SSL
+}
+
+enum RouterStatus {
+  PENDING
+  HEALTHY
+  DEGRADED
+  OFFLINE
+}
+
+enum RadiusClientStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum RadiusEventType {
+  ACCESS_REQUEST
+  ACCESS_ACCEPT
+  ACCESS_REJECT
+  ACCOUNTING_START
+  ACCOUNTING_INTERIM
+  ACCOUNTING_STOP
+  COA_REQUEST
+  DISCONNECT_REQUEST
+}
+
+enum SessionStatus {
+  ACTIVE
+  CLOSED
+  STALE
+}
+
 enum WalletOwnerType {
   TENANT
 }
@@ -136,6 +174,12 @@ model Tenant {
   payments            Payment[]
   paymentWebhooks     PaymentWebhook[]
   packageActivations  PackageActivation[]
+  routerGroups        RouterGroup[]
+  routers             Router[]
+  routerHealthChecks  RouterHealthCheck[]
+  radiusClients       RadiusClient[]
+  radiusEvents        RadiusEvent[]
+  networkSessions     NetworkSession[]
 }
 
 model Role {
@@ -173,6 +217,165 @@ model Hotspot {
   updatedAt          DateTime            @updatedAt
   voucherRedemptions VoucherRedemption[]
   packageActivations PackageActivation[]
+  routers            Router[]
+  radiusEvents       RadiusEvent[]
+  networkSessions    NetworkSession[]
+}
+
+model RouterGroup {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String
+  code        String
+  description String?
+  region      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  routers     Router[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, name])
+}
+
+model Router {
+  id                    String               @id @default(uuid())
+  tenantId              String
+  tenant                Tenant               @relation(fields: [tenantId], references: [id])
+  groupId               String?
+  group                 RouterGroup?         @relation(fields: [groupId], references: [id])
+  hotspotId             String?
+  hotspot               Hotspot?             @relation(fields: [hotspotId], references: [id])
+  name                  String
+  identity              String?
+  vendor                RouterVendor         @default(MIKROTIK)
+  host                  String
+  apiPort               Int                  @default(8728)
+  connectionMode        RouterConnectionMode @default(ROUTEROS_API)
+  username              String
+  passwordCiphertext    String
+  sharedSecretCiphertext String
+  siteLabel             String?
+  model                 String?
+  serialNumber          String?
+  routerOsVersion       String?
+  status                RouterStatus         @default(PENDING)
+  healthMessage         String?
+  lastSeenAt            DateTime?
+  lastHealthCheckAt     DateTime?
+  lastLatencyMs         Int?
+  activeSessionCount    Int                  @default(0)
+  lastProvisionedAt     DateTime?
+  tags                  String[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  radiusClient          RadiusClient?
+  healthChecks          RouterHealthCheck[]
+  radiusEvents          RadiusEvent[]
+  sessions              NetworkSession[]
+
+  @@unique([tenantId, host])
+  @@index([tenantId, status])
+  @@index([groupId])
+}
+
+model RouterHealthCheck {
+  id               String       @id @default(uuid())
+  tenantId         String
+  tenant           Tenant       @relation(fields: [tenantId], references: [id])
+  routerId         String
+  router           Router       @relation(fields: [routerId], references: [id])
+  status           RouterStatus
+  latencyMs        Int?
+  message          String?
+  cpuUsagePercent  Int?
+  memoryUsagePercent Int?
+  activeUsers      Int?
+  rawPayload       Json?
+  checkedAt        DateTime     @default(now())
+
+  @@index([tenantId, checkedAt])
+  @@index([routerId, checkedAt])
+}
+
+model RadiusClient {
+  id               String             @id @default(uuid())
+  tenantId         String
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  routerId         String             @unique
+  router           Router             @relation(fields: [routerId], references: [id])
+  shortName        String
+  ipAddress        String
+  secretCiphertext String
+  status           RadiusClientStatus @default(ACTIVE)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([tenantId, status])
+}
+
+model RadiusEvent {
+  id                String          @id @default(uuid())
+  tenantId          String
+  tenant            Tenant          @relation(fields: [tenantId], references: [id])
+  routerId          String?
+  router            Router?         @relation(fields: [routerId], references: [id])
+  hotspotId         String?
+  hotspot           Hotspot?        @relation(fields: [hotspotId], references: [id])
+  sessionId         String?
+  session           NetworkSession? @relation(fields: [sessionId], references: [id])
+  eventType         RadiusEventType
+  username          String?
+  customerReference String?
+  phoneNumber       String?
+  macAddress        String?
+  ipAddress         String?
+  nasIpAddress      String?
+  authMethod        String?
+  responseCode      String?
+  message           String?
+  payload           Json?
+  createdAt         DateTime        @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([routerId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model NetworkSession {
+  id                  String             @id @default(uuid())
+  tenantId            String
+  tenant              Tenant             @relation(fields: [tenantId], references: [id])
+  routerId            String?
+  router              Router?            @relation(fields: [routerId], references: [id])
+  hotspotId           String?
+  hotspot             Hotspot?           @relation(fields: [hotspotId], references: [id])
+  activationId        String?
+  activation          PackageActivation? @relation(fields: [activationId], references: [id])
+  voucherRedemptionId String?
+  voucherRedemption   VoucherRedemption? @relation(fields: [voucherRedemptionId], references: [id])
+  radiusSessionId     String
+  status              SessionStatus      @default(ACTIVE)
+  username            String
+  customerReference   String?
+  phoneNumber         String?
+  macAddress          String?
+  ipAddress           String?
+  nasIpAddress        String?
+  packageName         String?
+  startedAt           DateTime           @default(now())
+  endedAt             DateTime?
+  sessionTimeSeconds  Int                @default(0)
+  inputOctets         BigInt             @default(0)
+  outputOctets        BigInt             @default(0)
+  lastAccountingAt    DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  radiusEvents        RadiusEvent[]
+
+  @@unique([tenantId, radiusSessionId])
+  @@index([tenantId, status, startedAt])
+  @@index([routerId, status])
 }
 
 model Package {
@@ -369,6 +572,7 @@ model VoucherRedemption {
   sessionReference  String?
   createdAt         DateTime  @default(now())
   activation        PackageActivation?
+  networkSessions   NetworkSession[]
 
   @@index([tenantId, createdAt])
 }
@@ -457,6 +661,7 @@ model PackageActivation {
   metadata            Json?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
+  sessions            NetworkSession[]
 
   @@index([tenantId, status, endsAt])
   @@index([accessPhoneNumber, status])

@@ -15,7 +15,7 @@ const navItems = [
       { href: '/routers', label: 'Routers', icon: <RouterIcon /> },
       { href: '/hotspots', label: 'Hotspots', icon: <HotspotIcon /> },
       { href: '/packages', label: 'Packages', icon: <PackageIcon /> },
-      { href: '/sessions', label: 'Sessions', icon: <ActivityIcon /> },
+      { href: '/sessions', label: 'Usage Analytics', icon: <ActivityIcon /> },
     ]
   },
   {

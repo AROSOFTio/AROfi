@@ -33,6 +33,41 @@ export function formatDuration(minutes: number) {
   return `${minutes} min`
 }
 
+export function formatSessionTime(totalSeconds: number | null | undefined) {
+  const seconds = totalSeconds ?? 0
+
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) {
+    return `${minutes} min`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes === 0 ? `${hours} hr` : `${hours} hr ${remainingMinutes} min`
+}
+
+export function formatMegabytes(value: number | null | undefined) {
+  const megabytes = value ?? 0
+
+  if (megabytes >= 1024) {
+    return `${(megabytes / 1024).toFixed(2)} GB`
+  }
+
+  return `${megabytes.toFixed(2)} MB`
+}
+
+export function formatLatency(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return 'N/A'
+  }
+
+  return `${value} ms`
+}
+
 export function getStatusBadgeClass(status: string) {
   switch (status) {
     case 'ACTIVE':

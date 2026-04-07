@@ -289,3 +289,214 @@ export type PaymentLogItem = {
     status: string
   } | null
 }
+
+export type RouterItem = {
+  id: string
+  name: string
+  identity: string
+  vendor: string
+  host: string
+  apiPort: number
+  connectionMode: string
+  siteLabel?: string | null
+  model?: string | null
+  serialNumber?: string | null
+  routerOsVersion?: string | null
+  status: string
+  healthMessage?: string | null
+  lastSeenAt?: string | null
+  lastHealthCheckAt?: string | null
+  lastLatencyMs?: number | null
+  activeSessions: number
+  tags: string[]
+  tenant: TenantSummary & {
+    domain?: string | null
+  }
+  group?: {
+    id: string
+    name: string
+    code: string
+  } | null
+  hotspot?: {
+    id: string
+    name: string
+    nasIpAddress?: string | null
+  } | null
+  radiusClient?: {
+    id: string
+    shortName: string
+    ipAddress: string
+    status: string
+    sharedSecretHint?: string | null
+  } | null
+  latestHealthCheck?: {
+    id: string
+    status: string
+    latencyMs?: number | null
+    message?: string | null
+    checkedAt: string
+  } | null
+}
+
+export type RouterOverviewResponse = {
+  summary: {
+    totalRouters: number
+    healthyRouters: number
+    degradedRouters: number
+    offlineRouters: number
+    pendingRouters: number
+    routerGroups: number
+    activeSessions: number
+    averageLatencyMs: number
+  }
+  groups: Array<{
+    id: string
+    name: string
+    code: string
+    description?: string | null
+    region?: string | null
+    tenant: TenantSummary
+    routerCount: number
+    healthyCount: number
+    degradedCount: number
+    offlineCount: number
+  }>
+  routers: RouterItem[]
+  recentHealthChecks: Array<{
+    id: string
+    status: string
+    latencyMs?: number | null
+    message?: string | null
+    checkedAt: string
+    tenant: TenantSummary
+    router: {
+      id: string
+      name: string
+    }
+  }>
+  radiusFoundation: {
+    serverHost: string
+    authPort: number
+    accountingPort: number
+    sharedSecretHint: string
+    clientsConfigured: number
+    authEventsToday: number
+    accountingEventsToday: number
+  }
+}
+
+export type RouterSetupResponse = {
+  router: RouterItem
+  radiusServer: {
+    host: string
+    authPort: number
+    accountingPort: number
+    sharedSecret: string
+  }
+  onboardingChecklist: string[]
+  provisioningScript: string
+  radiusClient?: {
+    id: string
+    shortName: string
+    ipAddress: string
+    status: string
+    sharedSecretHint: string
+    sharedSecret: string
+  } | null
+}
+
+export type SessionItem = {
+  id: string
+  radiusSessionId: string
+  status: string
+  username: string
+  customerReference?: string | null
+  phoneNumber?: string | null
+  macAddress?: string | null
+  ipAddress?: string | null
+  nasIpAddress?: string | null
+  packageName: string
+  startedAt: string
+  endedAt?: string | null
+  sessionTimeSeconds: number
+  dataUsedMb: number
+  inputMb: number
+  outputMb: number
+  lastAccountingAt?: string | null
+  tenant: TenantSummary
+  router?: {
+    id: string
+    name: string
+    status: string
+  } | null
+  hotspot?: {
+    id: string
+    name: string
+  } | null
+  activation?: {
+    id: string
+    status: string
+    endsAt: string
+    package: {
+      id: string
+      name: string
+      code: string
+    }
+  } | null
+  voucherRedemption?: {
+    id: string
+    voucher: {
+      id: string
+      code: string
+    }
+  } | null
+}
+
+export type SessionOverviewResponse = {
+  summary: {
+    activeSessions: number
+    totalSessionsToday: number
+    dataUsedTodayMb: number
+    averageSessionMinutes: number
+    acceptedAuthToday: number
+    rejectedAuthToday: number
+  }
+  activeSessions: SessionItem[]
+  recentSessions: SessionItem[]
+  recentEvents: Array<{
+    id: string
+    eventType: string
+    username?: string | null
+    customerReference?: string | null
+    phoneNumber?: string | null
+    macAddress?: string | null
+    ipAddress?: string | null
+    nasIpAddress?: string | null
+    authMethod?: string | null
+    responseCode?: string | null
+    message?: string | null
+    createdAt: string
+    tenant: TenantSummary
+    router?: {
+      id: string
+      name: string
+    } | null
+    hotspot?: {
+      id: string
+      name: string
+    } | null
+    session?: {
+      id: string
+      radiusSessionId: string
+      status: string
+    } | null
+  }>
+  usageByRouter: Array<{
+    id: string
+    name: string
+    tenant?: TenantSummary | null
+    activeSessions: number
+    totalSessions: number
+    totalDataMb: number
+  }>
+}

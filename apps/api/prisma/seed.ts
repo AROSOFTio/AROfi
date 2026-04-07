@@ -4,17 +4,34 @@ import {
   BillingTransactionType,
   LedgerDirection,
   LedgerTransactionType,
+  PackageActivationStatus,
+  PackageActivationSource,
   PackageStatus,
   Prisma,
   PrismaClient,
+  RadiusEventType,
+  RouterConnectionMode,
+  RouterStatus,
+  SessionStatus,
   VoucherBatchStatus,
   VoucherStatus,
   WalletOwnerType,
 } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
-import { randomUUID } from 'crypto'
+import { createCipheriv, createHash, randomBytes, randomUUID } from 'crypto'
 
 const prisma = new PrismaClient()
+
+function encryptSeedValue(value: string) {
+  const secret = process.env.ROUTER_CREDENTIAL_SECRET ?? 'change_this_router_secret'
+  const key = createHash('sha256').update(secret).digest()
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
+  const authTag = cipher.getAuthTag()
+
+  return `v1:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`
+}
 
 type SeedSaleInput = {
   tenantId: string
@@ -183,7 +200,7 @@ async function createWalletAdjustment(
 }
 
 async function main() {
-  console.log('Seeding AROFi billing core...')
+  console.log('Seeding AROFi billing and network core...')
 
   const [superAdminRole, vendorAdminRole, financeRole] = await Promise.all([
     prisma.role.upsert({
@@ -284,30 +301,6 @@ async function main() {
     },
   })
 
-  const existingHotspot = await prisma.hotspot.findFirst({
-    where: {
-      tenantId: vendorTenant.id,
-      name: 'City Centre Hotspot',
-    },
-  })
-
-  const hotspot = existingHotspot
-    ? await prisma.hotspot.update({
-        where: { id: existingHotspot.id },
-        data: {
-          nasIpAddress: '10.10.0.1',
-          secret: 'radius-secret',
-        },
-      })
-    : await prisma.hotspot.create({
-        data: {
-          tenantId: vendorTenant.id,
-          name: 'City Centre Hotspot',
-          nasIpAddress: '10.10.0.1',
-          secret: 'radius-secret',
-        },
-      })
-
   const existingPackageIds = (
     await prisma.package.findMany({
       where: { tenantId: vendorTenant.id },
@@ -315,6 +308,15 @@ async function main() {
     })
   ).map((pkg) => pkg.id)
 
+  await prisma.radiusEvent.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.networkSession.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.routerHealthCheck.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.radiusClient.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.router.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.routerGroup.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.paymentWebhook.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.packageActivation.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.payment.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.voucherRedemption.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.billingTransaction.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.ledgerEntry.deleteMany({ where: { tenantId: vendorTenant.id } })
@@ -325,12 +327,32 @@ async function main() {
   await prisma.package.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.wallet.deleteMany({ where: { tenantId: vendorTenant.id } })
 
+  await prisma.hotspot.deleteMany({ where: { tenantId: vendorTenant.id } })
+
   const tenantWallet = await prisma.wallet.create({
     data: {
       tenantId: vendorTenant.id,
       ownerType: WalletOwnerType.TENANT,
       currency: 'UGX',
       balanceUgx: 0,
+    },
+  })
+
+  const cityCentreHotspot = await prisma.hotspot.create({
+    data: {
+      tenantId: vendorTenant.id,
+      name: 'City Centre Hotspot',
+      nasIpAddress: '10.10.0.1',
+      secret: 'radius-secret',
+    },
+  })
+
+  const nakawaHotspot = await prisma.hotspot.create({
+    data: {
+      tenantId: vendorTenant.id,
+      name: 'Nakawa Lounge Hotspot',
+      nasIpAddress: '10.10.0.2',
+      secret: 'radius-secret',
     },
   })
 
@@ -398,6 +420,121 @@ async function main() {
       },
     },
     include: { prices: true },
+  })
+
+  const metroCoreGroup = await prisma.routerGroup.create({
+    data: {
+      tenantId: vendorTenant.id,
+      name: 'Metro Core',
+      code: 'METRO',
+      description: 'Primary aggregation routers for Kampala city coverage.',
+      region: 'Kampala CBD',
+    },
+  })
+
+  const branchEdgeGroup = await prisma.routerGroup.create({
+    data: {
+      tenantId: vendorTenant.id,
+      name: 'Branch Edge',
+      code: 'BRANCH',
+      description: 'Remote branch gateways with smaller hotspot footprints.',
+      region: 'Greater Kampala',
+    },
+  })
+
+  const cityRouter = await prisma.router.create({
+    data: {
+      tenantId: vendorTenant.id,
+      groupId: metroCoreGroup.id,
+      hotspotId: cityCentreHotspot.id,
+      name: 'City Centre Gateway',
+      identity: 'city-core-rtr01',
+      host: '10.10.0.1',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      username: 'arofi-sync',
+      passwordCiphertext: encryptSeedValue('router-api-pass'),
+      sharedSecretCiphertext: encryptSeedValue('radius-secret'),
+      siteLabel: 'City Centre Arcade',
+      model: 'CCR2004-1G-12S+2XS',
+      serialNumber: 'ARO-CITY-001',
+      routerOsVersion: '7.18.2',
+      status: RouterStatus.HEALTHY,
+      healthMessage: 'RouterOS API reachable and sending AAA traffic',
+      lastSeenAt: new Date('2026-04-07T07:25:00.000Z'),
+      lastHealthCheckAt: new Date('2026-04-07T07:25:00.000Z'),
+      lastLatencyMs: 38,
+      activeSessionCount: 1,
+      lastProvisionedAt: new Date('2026-04-06T08:15:00.000Z'),
+      tags: ['metro', 'mikrotik', 'radius'],
+      radiusClient: {
+        create: {
+          tenantId: vendorTenant.id,
+          shortName: 'city-centre-gateway',
+          ipAddress: '10.10.0.1',
+          secretCiphertext: encryptSeedValue('radius-secret'),
+        },
+      },
+    },
+  })
+
+  const branchRouter = await prisma.router.create({
+    data: {
+      tenantId: vendorTenant.id,
+      groupId: branchEdgeGroup.id,
+      hotspotId: nakawaHotspot.id,
+      name: 'Nakawa Edge',
+      identity: 'nakawa-edge-rtr02',
+      host: '10.10.0.2',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      username: 'arofi-sync',
+      passwordCiphertext: encryptSeedValue('router-edge-pass'),
+      sharedSecretCiphertext: encryptSeedValue('radius-secret'),
+      siteLabel: 'Nakawa Lounge',
+      model: 'hEX S',
+      serialNumber: 'ARO-NAKAWA-002',
+      routerOsVersion: '7.16.4',
+      status: RouterStatus.OFFLINE,
+      healthMessage: 'Router has not checked in since the last branch outage.',
+      lastSeenAt: new Date('2026-04-06T18:12:00.000Z'),
+      lastHealthCheckAt: new Date('2026-04-07T07:10:00.000Z'),
+      lastLatencyMs: 412,
+      activeSessionCount: 0,
+      lastProvisionedAt: new Date('2026-04-05T14:30:00.000Z'),
+      tags: ['branch', 'mikrotik'],
+      radiusClient: {
+        create: {
+          tenantId: vendorTenant.id,
+          shortName: 'nakawa-edge',
+          ipAddress: '10.10.0.2',
+          secretCiphertext: encryptSeedValue('radius-secret'),
+        },
+      },
+    },
+  })
+
+  await prisma.routerHealthCheck.createMany({
+    data: [
+      {
+        tenantId: vendorTenant.id,
+        routerId: cityRouter.id,
+        status: RouterStatus.HEALTHY,
+        latencyMs: 38,
+        message: 'RouterOS API endpoint reachable',
+        activeUsers: 1,
+        checkedAt: new Date('2026-04-07T07:25:00.000Z'),
+      },
+      {
+        tenantId: vendorTenant.id,
+        routerId: branchRouter.id,
+        status: RouterStatus.OFFLINE,
+        latencyMs: 412,
+        message: 'Timed out after 4000ms while connecting to RouterOS API',
+        activeUsers: 0,
+        checkedAt: new Date('2026-04-07T07:10:00.000Z'),
+      },
+    ],
   })
 
   const batch = await prisma.voucherBatch.create({
@@ -478,13 +615,13 @@ async function main() {
     },
   })
 
-  await prisma.voucherRedemption.create({
+  const redemption = await prisma.voucherRedemption.create({
     data: {
       tenantId: vendorTenant.id,
       voucherId: vouchers[0].id,
       packageId: hourlyPackage.id,
       redeemedByUserId: financeUser.id,
-      hotspotId: hotspot.id,
+      hotspotId: cityCentreHotspot.id,
       customerReference: '+256772123456',
       sessionReference: 'SESSION-APR-0001',
     },
@@ -504,7 +641,31 @@ async function main() {
       netAmountUgx: 0,
       customerReference: '+256772123456',
       externalReference: 'VOUCHER-REDEEM-0001',
-      metadata: { hotspot: hotspot.name, sessionReference: 'SESSION-APR-0001' },
+      metadata: { hotspot: cityCentreHotspot.name, sessionReference: 'SESSION-APR-0001' },
+    },
+  })
+
+  const voucherActivation = await prisma.packageActivation.create({
+    data: {
+      tenantId: vendorTenant.id,
+      packageId: hourlyPackage.id,
+      voucherRedemptionId: redemption.id,
+      hotspotId: cityCentreHotspot.id,
+      source: PackageActivationSource.VOUCHER,
+      status: PackageActivationStatus.ACTIVE,
+      customerReference: '+256772123456',
+      accessPhoneNumber: '256772123456',
+      durationMinutes: hourlyPackage.durationMinutes,
+      dataLimitMb: hourlyPackage.dataLimitMb,
+      deviceLimit: hourlyPackage.deviceLimit,
+      downloadSpeedKbps: hourlyPackage.downloadSpeedKbps,
+      uploadSpeedKbps: hourlyPackage.uploadSpeedKbps,
+      startedAt: new Date('2026-04-07T07:05:00.000Z'),
+      endsAt: new Date('2026-04-07T08:05:00.000Z'),
+      metadata: {
+        voucherCode: vouchers[0].code,
+        sessionReference: 'SESSION-APR-0001',
+      } as Prisma.InputJsonValue,
     },
   })
 
@@ -532,6 +693,135 @@ async function main() {
     },
   })
 
+  await prisma.networkSession.createMany({
+    data: [
+      {
+        tenantId: vendorTenant.id,
+        routerId: cityRouter.id,
+        hotspotId: cityCentreHotspot.id,
+        activationId: voucherActivation.id,
+        voucherRedemptionId: redemption.id,
+        radiusSessionId: 'SESSION-APR-0001',
+        status: SessionStatus.ACTIVE,
+        username: vouchers[0].code,
+        customerReference: '+256772123456',
+        phoneNumber: '256772123456',
+        macAddress: '84:7B:57:11:22:33',
+        ipAddress: '172.16.10.21',
+        nasIpAddress: cityCentreHotspot.nasIpAddress,
+        packageName: hourlyPackage.name,
+        startedAt: new Date('2026-04-07T07:05:00.000Z'),
+        sessionTimeSeconds: 1800,
+        inputOctets: BigInt(73400320),
+        outputOctets: BigInt(36700160),
+        lastAccountingAt: new Date('2026-04-07T07:35:00.000Z'),
+      },
+      {
+        tenantId: vendorTenant.id,
+        routerId: branchRouter.id,
+        hotspotId: nakawaHotspot.id,
+        radiusSessionId: 'SESSION-APR-0002',
+        status: SessionStatus.CLOSED,
+        username: '256700111222',
+        customerReference: '+256700111222',
+        phoneNumber: '256700111222',
+        macAddress: '48:A9:8A:44:55:66',
+        ipAddress: '172.16.11.40',
+        nasIpAddress: nakawaHotspot.nasIpAddress,
+        packageName: dailyPackage.name,
+        startedAt: new Date('2026-04-07T05:10:00.000Z'),
+        endedAt: new Date('2026-04-07T05:54:00.000Z'),
+        sessionTimeSeconds: 2640,
+        inputOctets: BigInt(188743680),
+        outputOctets: BigInt(62914560),
+        lastAccountingAt: new Date('2026-04-07T05:54:00.000Z'),
+      },
+    ],
+  })
+
+  await prisma.radiusEvent.createMany({
+    data: [
+      {
+        tenantId: vendorTenant.id,
+        routerId: cityRouter.id,
+        hotspotId: cityCentreHotspot.id,
+        eventType: RadiusEventType.ACCESS_ACCEPT,
+        username: vouchers[0].code,
+        customerReference: '+256772123456',
+        phoneNumber: '256772123456',
+        macAddress: '84:7B:57:11:22:33',
+        ipAddress: '172.16.10.21',
+        nasIpAddress: cityCentreHotspot.nasIpAddress,
+        authMethod: 'VOUCHER',
+        responseCode: 'Access-Accept',
+        message: 'Voucher access granted',
+        payload: {
+          plan: hourlyPackage.code,
+          hotspot: cityCentreHotspot.name,
+        } as Prisma.InputJsonValue,
+        createdAt: new Date('2026-04-07T07:05:00.000Z'),
+      },
+      {
+        tenantId: vendorTenant.id,
+        routerId: cityRouter.id,
+        hotspotId: cityCentreHotspot.id,
+        eventType: RadiusEventType.ACCOUNTING_INTERIM,
+        username: vouchers[0].code,
+        customerReference: '+256772123456',
+        phoneNumber: '256772123456',
+        macAddress: '84:7B:57:11:22:33',
+        ipAddress: '172.16.10.21',
+        nasIpAddress: cityCentreHotspot.nasIpAddress,
+        authMethod: 'VOUCHER',
+        responseCode: 'Interim-Update',
+        message: 'Interim usage update received',
+        payload: {
+          inputOctets: '73400320',
+          outputOctets: '36700160',
+        } as Prisma.InputJsonValue,
+        createdAt: new Date('2026-04-07T07:35:00.000Z'),
+      },
+      {
+        tenantId: vendorTenant.id,
+        routerId: branchRouter.id,
+        hotspotId: nakawaHotspot.id,
+        eventType: RadiusEventType.ACCESS_REJECT,
+        username: 'unknown-client',
+        customerReference: 'Walk-in unknown user',
+        macAddress: '90:AA:BB:CC:DD:EE',
+        ipAddress: '172.16.11.99',
+        nasIpAddress: nakawaHotspot.nasIpAddress,
+        authMethod: 'UNKNOWN',
+        responseCode: 'Access-Reject',
+        message: 'No active package activation found',
+        payload: {
+          hotspot: nakawaHotspot.name,
+        } as Prisma.InputJsonValue,
+        createdAt: new Date('2026-04-07T06:42:00.000Z'),
+      },
+      {
+        tenantId: vendorTenant.id,
+        routerId: branchRouter.id,
+        hotspotId: nakawaHotspot.id,
+        eventType: RadiusEventType.ACCOUNTING_STOP,
+        username: '256700111222',
+        customerReference: '+256700111222',
+        phoneNumber: '256700111222',
+        macAddress: '48:A9:8A:44:55:66',
+        ipAddress: '172.16.11.40',
+        nasIpAddress: nakawaHotspot.nasIpAddress,
+        authMethod: 'MOBILE_MONEY',
+        responseCode: 'Accounting-Stop',
+        message: 'Session closed cleanly',
+        payload: {
+          inputOctets: '188743680',
+          outputOctets: '62914560',
+        } as Prisma.InputJsonValue,
+        createdAt: new Date('2026-04-07T05:54:00.000Z'),
+      },
+    ],
+  })
+
   await prisma.voucher.update({
     where: { id: vouchers[2].id },
     data: {
@@ -553,6 +843,7 @@ async function main() {
     walletId: tenantWallet.id,
     packages: [hourlyPackage.code, dailyPackage.code, weekendPackage.code],
     voucherBatch: batch.batchNumber,
+    routers: [cityRouter.name, branchRouter.name],
   })
 }
 
