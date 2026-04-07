@@ -961,6 +961,7 @@ async function main() {
       status: PaymentStatus.COMPLETED,
       provider: 'YO_UGANDA',
       network: 'MTN',
+      idempotencyKey: 'SEED-PAYMENT-0001',
       amountUgx: 5000,
       phoneNumber: '256700111222',
       customerReference: '+256700111222',
