@@ -27,4 +27,8 @@ export class RecordMobileMoneySaleDto {
   @IsOptional()
   @IsString()
   network?: string
+
+  @IsOptional()
+  @IsUUID()
+  agentId?: string
 }

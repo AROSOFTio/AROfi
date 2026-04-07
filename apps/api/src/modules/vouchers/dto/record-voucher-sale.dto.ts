@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator'
 
 export class RecordVoucherSaleDto {
   @IsString()
@@ -8,4 +8,8 @@ export class RecordVoucherSaleDto {
   @IsOptional()
   @IsString()
   externalReference?: string
+
+  @IsOptional()
+  @IsUUID()
+  agentId?: string
 }

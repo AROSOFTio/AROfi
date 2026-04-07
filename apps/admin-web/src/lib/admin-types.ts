@@ -193,11 +193,179 @@ export type BillingTransactionItem = {
     code: string
     status: string
   } | null
+  agent?: {
+    id: string
+    code: string
+    name: string
+    phoneNumber: string
+    type: string
+    status: string
+  } | null
   ledgerTransaction?: {
     id: string
     reference: string
     description: string
   } | null
+}
+
+export type AgentItem = {
+  id: string
+  code: string
+  name: string
+  phoneNumber: string
+  email?: string | null
+  type: string
+  status: string
+  territory?: string | null
+  commissionRateBps: number
+  floatLimitUgx: number
+  notes?: string | null
+  createdAt: string
+  tenant: TenantSummary
+  wallet?: {
+    id: string
+    balanceUgx: number
+    currency: string
+  } | null
+  walletBalanceUgx: number
+  availableFloatUgx: number
+  accruedCommissionUgx: number
+  settledCommissionUgx: number
+  lifetimeSalesUgx: number
+  lifetimeCommissionUgx: number
+  totalDisbursedUgx: number
+}
+
+export type AgentsOverviewResponse = {
+  summary: {
+    totalAgents: number
+    activeAgents: number
+    resellers: number
+    totalFloatUgx: number
+    accruedCommissionUgx: number
+    totalDisbursedUgx: number
+  }
+  agents: AgentItem[]
+  recentCommissions: Array<{
+    id: string
+    status: string
+    amountUgx: number
+    createdAt: string
+    tenant: TenantSummary
+    agent: {
+      id: string
+      code: string
+      name: string
+    }
+    sourceTransaction?: {
+      id: string
+      type: string
+      grossAmountUgx: number
+      createdAt: string
+    } | null
+  }>
+  recentDisbursements: Array<{
+    id: string
+    reference: string
+    method: string
+    status: string
+    amountUgx: number
+    destinationReference?: string | null
+    providerReference?: string | null
+    createdAt: string
+    completedAt?: string | null
+    tenant: TenantSummary
+    agent: {
+      id: string
+      code: string
+      name: string
+    }
+    settlement?: {
+      id: string
+      reference: string
+    } | null
+  }>
+}
+
+export type FloatOverviewResponse = {
+  summary: {
+    tenantWalletBalanceUgx: number
+    totalAgentWalletBalanceUgx: number
+    reservedCommissionUgx: number
+    workingFloatUgx: number
+    activeAgents: number
+  }
+  tenantWallets: Array<{
+    id: string
+    balanceUgx: number
+    currency: string
+    tenant: TenantSummary
+  }>
+  agents: AgentItem[]
+  movements: BillingTransactionItem[]
+}
+
+export type DisbursementOverviewResponse = {
+  summary: {
+    totalSettlements: number
+    readySettlements: number
+    processingSettlements: number
+    totalPayableUgx: number
+    totalDisbursedUgx: number
+    pendingDisbursementUgx: number
+  }
+  settlements: Array<{
+    id: string
+    reference: string
+    status: string
+    periodStart: string
+    periodEnd: string
+    openingFloatUgx: number
+    closingFloatUgx: number
+    grossSalesUgx: number
+    commissionsUgx: number
+    payableAmountUgx: number
+    notes?: string | null
+    createdAt: string
+    updatedAt: string
+    tenant: TenantSummary
+    agent: {
+      id: string
+      code: string
+      name: string
+      phoneNumber: string
+    }
+    disbursedAmountUgx: number
+  }>
+  disbursements: Array<{
+    id: string
+    reference: string
+    method: string
+    status: string
+    amountUgx: number
+    destinationReference?: string | null
+    providerReference?: string | null
+    notes?: string | null
+    createdAt: string
+    completedAt?: string | null
+    tenant: TenantSummary
+    agent: {
+      id: string
+      code: string
+      name: string
+      phoneNumber: string
+    }
+    settlement?: {
+      id: string
+      reference: string
+      payableAmountUgx: number
+    } | null
+    billingTransaction?: {
+      id: string
+      externalReference: string
+      status: string
+    } | null
+  }>
 }
 
 export type PaymentOverviewResponse = {

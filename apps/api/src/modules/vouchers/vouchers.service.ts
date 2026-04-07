@@ -277,6 +277,7 @@ export class VouchersService {
         tenantId: voucher.tenantId,
         packageId: voucher.packageId,
         voucherId: voucher.id,
+        agentId: dto.agentId,
         channel: BillingChannel.VOUCHER,
         type: BillingTransactionType.VOUCHER_SALE,
         grossAmountUgx: voucher.faceValueUgx,

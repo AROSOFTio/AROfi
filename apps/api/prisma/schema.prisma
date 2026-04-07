@@ -37,6 +37,9 @@ enum BillingChannel {
   MOBILE_MONEY
   VOUCHER
   WALLET_ADJUSTMENT
+  FLOAT_TRANSFER
+  COMMISSION
+  DISBURSEMENT
   SYSTEM
 }
 
@@ -45,6 +48,10 @@ enum BillingTransactionType {
   VOUCHER_SALE
   VOUCHER_REDEMPTION
   WALLET_ADJUSTMENT
+  AGENT_FLOAT_TOPUP
+  AGENT_FLOAT_RETURN
+  AGENT_COMMISSION
+  AGENT_DISBURSEMENT
 }
 
 enum BillingTransactionStatus {
@@ -129,6 +136,7 @@ enum SessionStatus {
 
 enum WalletOwnerType {
   TENANT
+  AGENT
 }
 
 enum LedgerDirection {
@@ -140,6 +148,50 @@ enum LedgerTransactionType {
   SALE
   WALLET_ADJUSTMENT
   REDEMPTION
+  FLOAT_TRANSFER
+  COMMISSION
+  DISBURSEMENT
+}
+
+enum AgentType {
+  FIELD_AGENT
+  RESELLER
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum CommissionStatus {
+  ACCRUED
+  SETTLED
+  REVERSED
+}
+
+enum SettlementStatus {
+  DRAFT
+  READY
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum DisbursementMethod {
+  MOBILE_MONEY
+  BANK_TRANSFER
+  CASH
+  MANUAL
+}
+
+enum DisbursementStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
 enum PackageActivationSource {
@@ -162,6 +214,7 @@ model Tenant {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   users               User[]
+  agents              Agent[]
   hotspots            Hotspot[]
   packages            Package[]
   voucherBatches      VoucherBatch[]
@@ -170,6 +223,9 @@ model Tenant {
   billingTransactions BillingTransaction[]
   ledgerTransactions  LedgerTransaction[]
   ledgerEntries       LedgerEntry[]
+  agentCommissions    AgentCommission[]
+  settlements         Settlement[]
+  disbursements       Disbursement[]
   voucherRedemptions  VoucherRedemption[]
   payments            Payment[]
   paymentWebhooks     PaymentWebhook[]
@@ -204,6 +260,33 @@ model User {
   updatedAt              DateTime          @updatedAt
   generatedVoucherBatches VoucherBatch[]   @relation("VoucherBatchGenerator")
   voucherRedemptions     VoucherRedemption[] @relation("VoucherRedemptionActor")
+}
+
+model Agent {
+  id                String            @id @default(uuid())
+  tenantId          String
+  tenant            Tenant            @relation(fields: [tenantId], references: [id])
+  code              String
+  name              String
+  phoneNumber       String
+  email             String?
+  type              AgentType         @default(FIELD_AGENT)
+  status            AgentStatus       @default(ACTIVE)
+  territory         String?
+  commissionRateBps Int               @default(500)
+  floatLimitUgx     Int               @default(0)
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  wallet            Wallet?
+  transactions      BillingTransaction[]
+  commissions       AgentCommission[]
+  settlements       Settlement[]
+  disbursements     Disbursement[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, phoneNumber])
+  @@index([tenantId, status])
 }
 
 model Hotspot {
@@ -474,6 +557,9 @@ model Wallet {
   tenantId            String
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
   ownerType           WalletOwnerType      @default(TENANT)
+  ownerReference      String
+  agentId             String?              @unique
+  agent               Agent?               @relation(fields: [agentId], references: [id])
   currency            String               @default("UGX")
   balanceUgx          Int                  @default(0)
   createdAt           DateTime             @default(now())
@@ -481,8 +567,12 @@ model Wallet {
   ledgerTransactions  LedgerTransaction[]
   ledgerEntries       LedgerEntry[]
   billingTransactions BillingTransaction[]
+  commissions         AgentCommission[]
+  settlements         Settlement[]
+  disbursements       Disbursement[]
 
-  @@unique([tenantId, ownerType])
+  @@unique([tenantId, ownerType, ownerReference])
+  @@index([agentId])
 }
 
 model BillingTransaction {
@@ -491,6 +581,8 @@ model BillingTransaction {
   tenant              Tenant                   @relation(fields: [tenantId], references: [id])
   walletId            String?
   wallet              Wallet?                  @relation(fields: [walletId], references: [id])
+  agentId             String?
+  agent               Agent?                   @relation(fields: [agentId], references: [id])
   packageId           String?
   package             Package?                 @relation(fields: [packageId], references: [id])
   voucherId           String?
@@ -510,9 +602,13 @@ model BillingTransaction {
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
   payment             Payment?
+  sourceCommission    AgentCommission?         @relation("AgentCommissionSource")
+  payoutCommission    AgentCommission?         @relation("AgentCommissionPayout")
+  disbursement        Disbursement?
 
   @@index([tenantId, createdAt])
   @@index([type, status])
+  @@index([agentId, createdAt])
 }
 
 model LedgerTransaction {
@@ -665,6 +761,88 @@ model PackageActivation {
 
   @@index([tenantId, status, endsAt])
   @@index([accessPhoneNumber, status])
+}
+
+model AgentCommission {
+  id                  String             @id @default(uuid())
+  tenantId            String
+  tenant              Tenant             @relation(fields: [tenantId], references: [id])
+  agentId             String
+  agent               Agent              @relation(fields: [agentId], references: [id])
+  walletId            String?
+  wallet              Wallet?            @relation(fields: [walletId], references: [id])
+  sourceTransactionId String             @unique
+  sourceTransaction   BillingTransaction @relation("AgentCommissionSource", fields: [sourceTransactionId], references: [id])
+  payoutTransactionId String?            @unique
+  payoutTransaction   BillingTransaction? @relation("AgentCommissionPayout", fields: [payoutTransactionId], references: [id])
+  settlementId        String?
+  settlement          Settlement?        @relation(fields: [settlementId], references: [id])
+  status              CommissionStatus   @default(ACCRUED)
+  basisAmountUgx      Int
+  rateBps             Int
+  amountUgx           Int
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([agentId, status])
+}
+
+model Settlement {
+  id             String           @id @default(uuid())
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id])
+  agentId        String
+  agent          Agent            @relation(fields: [agentId], references: [id])
+  walletId       String
+  wallet         Wallet           @relation(fields: [walletId], references: [id])
+  reference      String           @unique
+  status         SettlementStatus @default(DRAFT)
+  periodStart    DateTime
+  periodEnd      DateTime
+  openingFloatUgx Int             @default(0)
+  closingFloatUgx Int             @default(0)
+  grossSalesUgx  Int              @default(0)
+  commissionsUgx Int              @default(0)
+  payableAmountUgx Int            @default(0)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  commissions    AgentCommission[]
+  disbursements  Disbursement[]
+
+  @@index([tenantId, createdAt])
+  @@index([agentId, status])
+}
+
+model Disbursement {
+  id                  String              @id @default(uuid())
+  tenantId            String
+  tenant              Tenant              @relation(fields: [tenantId], references: [id])
+  agentId             String
+  agent               Agent               @relation(fields: [agentId], references: [id])
+  settlementId        String?
+  settlement          Settlement?         @relation(fields: [settlementId], references: [id])
+  walletId            String
+  wallet              Wallet              @relation(fields: [walletId], references: [id])
+  billingTransactionId String?            @unique
+  billingTransaction  BillingTransaction? @relation(fields: [billingTransactionId], references: [id])
+  reference           String              @unique
+  method              DisbursementMethod  @default(MOBILE_MONEY)
+  status              DisbursementStatus  @default(PENDING)
+  amountUgx           Int
+  destinationReference String?
+  providerReference   String?
+  notes               String?
+  metadata            Json?
+  initiatedAt         DateTime            @default(now())
+  completedAt         DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([agentId, status])
 }
 
 model AuditLog {

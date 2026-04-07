@@ -68,6 +68,12 @@ export function formatLatency(value: number | null | undefined) {
   return `${value} ms`
 }
 
+export function formatBasisPoints(value: number | null | undefined) {
+  const basisPoints = value ?? 0
+  const percentage = basisPoints / 100
+  return Number.isInteger(percentage) ? `${percentage}%` : `${percentage.toFixed(2)}%`
+}
+
 export function getStatusBadgeClass(status: string) {
   switch (status) {
     case 'ACTIVE':
@@ -78,15 +84,19 @@ export function getStatusBadgeClass(status: string) {
     case 'success':
       return 'badge badge-success'
     case 'PENDING':
+    case 'READY':
+    case 'PROCESSING':
     case 'INITIATED':
     case 'INDETERMINATE':
     case 'DEBIT':
     case 'SOLD':
+    case 'SUSPENDED':
     case 'pending':
       return 'badge badge-warning'
     case 'REDEEMED':
       return 'badge badge-info'
     case 'ARCHIVED':
+    case 'DISABLED':
     case 'FAILED':
     case 'REVERSED':
     case 'CANCELLED':

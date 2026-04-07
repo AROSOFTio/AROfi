@@ -1,3 +1,4 @@
+import { WalletOwnerType } from '@prisma/client'
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
 
@@ -13,6 +14,14 @@ export class WalletsService {
           select: {
             id: true,
             name: true,
+          },
+        },
+        agent: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            phoneNumber: true,
           },
         },
         ledgerEntries: {
@@ -42,12 +51,24 @@ export class WalletsService {
 
   async getWallet(tenantId: string) {
     return this.prisma.wallet.findFirst({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ownerType: WalletOwnerType.TENANT,
+        ownerReference: tenantId,
+      },
       include: {
         tenant: {
           select: {
             id: true,
             name: true,
+          },
+        },
+        agent: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            phoneNumber: true,
           },
         },
         ledgerEntries: {

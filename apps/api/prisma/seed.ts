@@ -1,7 +1,11 @@
 import {
+  AgentType,
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
+  CommissionStatus,
+  DisbursementMethod,
+  DisbursementStatus,
   LedgerDirection,
   LedgerTransactionType,
   PackageActivationStatus,
@@ -15,6 +19,7 @@ import {
   RouterConnectionMode,
   RouterStatus,
   SessionStatus,
+  SettlementStatus,
   VoucherBatchStatus,
   VoucherStatus,
   WalletOwnerType,
@@ -40,6 +45,7 @@ type SeedSaleInput = {
   walletId: string
   packageId: string
   voucherId?: string
+  agentId?: string
   type: BillingTransactionType
   channel: BillingChannel
   grossAmountUgx: number
@@ -112,6 +118,7 @@ async function createSeedSaleTransaction(input: SeedSaleInput) {
       data: {
         tenantId: input.tenantId,
         walletId: input.walletId,
+        agentId: input.agentId,
         packageId: input.packageId,
         voucherId: input.voucherId,
         ledgerTransactionId: ledgerTransaction.id,
@@ -125,6 +132,202 @@ async function createSeedSaleTransaction(input: SeedSaleInput) {
         externalReference: reference,
         paymentProvider: input.paymentProvider,
         metadata: input.metadata,
+      },
+    })
+  })
+}
+
+async function createAgentFloatTransfer(input: {
+  tenantId: string
+  tenantWalletId: string
+  agentWalletId: string
+  agentId: string
+  amountUgx: number
+  description: string
+  type: BillingTransactionType.AGENT_FLOAT_TOPUP | BillingTransactionType.AGENT_FLOAT_RETURN
+}) {
+  const isTopUp = input.type === BillingTransactionType.AGENT_FLOAT_TOPUP
+  const sourceWalletId = isTopUp ? input.tenantWalletId : input.agentWalletId
+  const destinationWalletId = isTopUp ? input.agentWalletId : input.tenantWalletId
+  const sourceAccountCode = isTopUp ? 'tenant_wallet' : 'agent_wallet'
+  const destinationAccountCode = isTopUp ? 'agent_wallet' : 'tenant_wallet'
+
+  return prisma.$transaction(async (tx) => {
+    const ledgerTransaction = await tx.ledgerTransaction.create({
+      data: {
+        tenantId: input.tenantId,
+        walletId: input.agentWalletId,
+        reference: `FLOAT-${randomUUID()}`,
+        type: LedgerTransactionType.FLOAT_TRANSFER,
+        channel: BillingChannel.FLOAT_TRANSFER,
+        description: input.description,
+        grossAmountUgx: input.amountUgx,
+        feeAmountUgx: 0,
+        netAmountUgx: isTopUp ? input.amountUgx : -input.amountUgx,
+        sourceType: isTopUp ? 'AgentFloatTopUp' : 'AgentFloatReturn',
+        sourceId: input.agentId,
+        metadata: {
+          agentId: input.agentId,
+          tenantWalletId: input.tenantWalletId,
+          agentWalletId: input.agentWalletId,
+        } as Prisma.InputJsonValue,
+        entries: {
+          create: [
+            {
+              tenantId: input.tenantId,
+              walletId: sourceWalletId,
+              accountCode: sourceAccountCode,
+              direction: LedgerDirection.DEBIT,
+              amountUgx: input.amountUgx,
+              memo: input.description,
+            },
+            {
+              tenantId: input.tenantId,
+              walletId: destinationWalletId,
+              accountCode: destinationAccountCode,
+              direction: LedgerDirection.CREDIT,
+              amountUgx: input.amountUgx,
+              memo: input.description,
+            },
+          ],
+        },
+      },
+    })
+
+    await tx.wallet.update({
+      where: { id: input.tenantWalletId },
+      data: {
+        balanceUgx: {
+          increment: isTopUp ? -input.amountUgx : input.amountUgx,
+        },
+      },
+    })
+
+    await tx.wallet.update({
+      where: { id: input.agentWalletId },
+      data: {
+        balanceUgx: {
+          increment: isTopUp ? input.amountUgx : -input.amountUgx,
+        },
+      },
+    })
+
+    return tx.billingTransaction.create({
+      data: {
+        tenantId: input.tenantId,
+        walletId: input.agentWalletId,
+        agentId: input.agentId,
+        ledgerTransactionId: ledgerTransaction.id,
+        channel: BillingChannel.FLOAT_TRANSFER,
+        type: input.type,
+        status: BillingTransactionStatus.COMPLETED,
+        grossAmountUgx: input.amountUgx,
+        feeAmountUgx: 0,
+        netAmountUgx: isTopUp ? input.amountUgx : -input.amountUgx,
+        customerReference: input.agentId,
+        externalReference: `FLOAT-TXN-${randomUUID()}`,
+        paymentProvider: 'Internal',
+        metadata: {
+          description: input.description,
+        } as Prisma.InputJsonValue,
+      },
+    })
+  })
+}
+
+async function createAgentCommission(input: {
+  tenantId: string
+  agentId: string
+  agentWalletId: string
+  sourceTransactionId: string
+  basisAmountUgx: number
+  rateBps: number
+  description: string
+}) {
+  const amountUgx = Math.round((input.basisAmountUgx * input.rateBps) / 10000)
+
+  return prisma.$transaction(async (tx) => {
+    const ledgerTransaction = await tx.ledgerTransaction.create({
+      data: {
+        tenantId: input.tenantId,
+        walletId: input.agentWalletId,
+        reference: `COMM-${randomUUID()}`,
+        type: LedgerTransactionType.COMMISSION,
+        channel: BillingChannel.COMMISSION,
+        description: input.description,
+        grossAmountUgx: amountUgx,
+        feeAmountUgx: 0,
+        netAmountUgx: amountUgx,
+        sourceType: 'AgentCommission',
+        sourceId: input.sourceTransactionId,
+        metadata: {
+          agentId: input.agentId,
+          sourceTransactionId: input.sourceTransactionId,
+        } as Prisma.InputJsonValue,
+        entries: {
+          create: [
+            {
+              tenantId: input.tenantId,
+              accountCode: 'commission_expense',
+              direction: LedgerDirection.DEBIT,
+              amountUgx,
+              memo: input.description,
+            },
+            {
+              tenantId: input.tenantId,
+              walletId: input.agentWalletId,
+              accountCode: 'agent_wallet',
+              direction: LedgerDirection.CREDIT,
+              amountUgx,
+              memo: input.description,
+            },
+          ],
+        },
+      },
+    })
+
+    await tx.wallet.update({
+      where: { id: input.agentWalletId },
+      data: {
+        balanceUgx: {
+          increment: amountUgx,
+        },
+      },
+    })
+
+    const payoutTransaction = await tx.billingTransaction.create({
+      data: {
+        tenantId: input.tenantId,
+        walletId: input.agentWalletId,
+        agentId: input.agentId,
+        ledgerTransactionId: ledgerTransaction.id,
+        channel: BillingChannel.COMMISSION,
+        type: BillingTransactionType.AGENT_COMMISSION,
+        status: BillingTransactionStatus.COMPLETED,
+        grossAmountUgx: amountUgx,
+        feeAmountUgx: 0,
+        netAmountUgx: amountUgx,
+        customerReference: input.agentId,
+        externalReference: `COMMISSION-TXN-${randomUUID()}`,
+        paymentProvider: 'Internal',
+        metadata: {
+          rateBps: input.rateBps,
+          sourceTransactionId: input.sourceTransactionId,
+        } as Prisma.InputJsonValue,
+      },
+    })
+
+    return tx.agentCommission.create({
+      data: {
+        tenantId: input.tenantId,
+        agentId: input.agentId,
+        walletId: input.agentWalletId,
+        sourceTransactionId: input.sourceTransactionId,
+        payoutTransactionId: payoutTransaction.id,
+        status: CommissionStatus.ACCRUED,
+        basisAmountUgx: input.basisAmountUgx,
+        rateBps: input.rateBps,
+        amountUgx,
       },
     })
   })
@@ -195,7 +398,7 @@ async function createWalletAdjustment(
         feeAmountUgx: 0,
         netAmountUgx: amountUgx,
         externalReference: `WALLET-ADJUST-${randomUUID()}`,
-        metadata: { description },
+        metadata: { description } as Prisma.InputJsonValue,
       },
     })
   })
@@ -316,6 +519,9 @@ async function main() {
   await prisma.radiusClient.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.router.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.routerGroup.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.disbursement.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.settlement.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.agentCommission.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.paymentWebhook.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.packageActivation.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.payment.deleteMany({ where: { tenantId: vendorTenant.id } })
@@ -328,6 +534,7 @@ async function main() {
   await prisma.packagePrice.deleteMany({ where: { packageId: { in: existingPackageIds } } })
   await prisma.package.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.wallet.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.agent.deleteMany({ where: { tenantId: vendorTenant.id } })
 
   await prisma.hotspot.deleteMany({ where: { tenantId: vendorTenant.id } })
 
@@ -335,10 +542,65 @@ async function main() {
     data: {
       tenantId: vendorTenant.id,
       ownerType: WalletOwnerType.TENANT,
+      ownerReference: vendorTenant.id,
       currency: 'UGX',
       balanceUgx: 0,
     },
   })
+
+  const [campusAgent, cityReseller] = await Promise.all([
+    prisma.agent.create({
+      data: {
+        tenantId: vendorTenant.id,
+        code: 'AG-CAMPUS',
+        name: 'Shamim Katushabe',
+        phoneNumber: '256772445566',
+        email: 'shamim@citynet.ug',
+        type: AgentType.FIELD_AGENT,
+        territory: 'Makerere & Wandegeya',
+        commissionRateBps: 500,
+        floatLimitUgx: 30000,
+        notes: 'Campus roaming sales agent',
+      },
+    }),
+    prisma.agent.create({
+      data: {
+        tenantId: vendorTenant.id,
+        code: 'RSL-CBD',
+        name: 'Peter Ssenfuma',
+        phoneNumber: '256701889900',
+        email: 'peter@citynet.ug',
+        type: AgentType.RESELLER,
+        territory: 'Kampala CBD',
+        commissionRateBps: 700,
+        floatLimitUgx: 50000,
+        notes: 'Counter reseller with own booth',
+      },
+    }),
+  ])
+
+  const [campusAgentWallet, cityResellerWallet] = await Promise.all([
+    prisma.wallet.create({
+      data: {
+        tenantId: vendorTenant.id,
+        ownerType: WalletOwnerType.AGENT,
+        ownerReference: campusAgent.id,
+        agentId: campusAgent.id,
+        currency: 'UGX',
+        balanceUgx: 0,
+      },
+    }),
+    prisma.wallet.create({
+      data: {
+        tenantId: vendorTenant.id,
+        ownerType: WalletOwnerType.AGENT,
+        ownerReference: cityReseller.id,
+        agentId: cityReseller.id,
+        currency: 'UGX',
+        balanceUgx: 0,
+      },
+    }),
+  ])
 
   const cityCentreHotspot = await prisma.hotspot.create({
     data: {
@@ -576,6 +838,26 @@ async function main() {
     'Opening float loaded for voucher operations',
   )
 
+  await createAgentFloatTransfer({
+    tenantId: vendorTenant.id,
+    tenantWalletId: tenantWallet.id,
+    agentWalletId: campusAgentWallet.id,
+    agentId: campusAgent.id,
+    amountUgx: 8000,
+    description: 'Initial float issued to campus agent',
+    type: BillingTransactionType.AGENT_FLOAT_TOPUP,
+  })
+
+  await createAgentFloatTransfer({
+    tenantId: vendorTenant.id,
+    tenantWalletId: tenantWallet.id,
+    agentWalletId: cityResellerWallet.id,
+    agentId: cityReseller.id,
+    amountUgx: 12000,
+    description: 'Initial float issued to city reseller',
+    type: BillingTransactionType.AGENT_FLOAT_TOPUP,
+  })
+
   const mobileMoneySale = await createSeedSaleTransaction({
     tenantId: vendorTenant.id,
     walletId: tenantWallet.id,
@@ -588,7 +870,7 @@ async function main() {
     customerReference: '+256700111222',
     externalReference: 'YO-APR-2026-0001',
     paymentProvider: 'Yo! Uganda',
-    metadata: { network: 'MTN', packageCode: dailyPackage.code },
+    metadata: { network: 'MTN', packageCode: dailyPackage.code } as Prisma.InputJsonValue,
   })
 
   await createSeedSaleTransaction({
@@ -603,7 +885,7 @@ async function main() {
     description: 'Counter sale of hourly hotspot voucher',
     customerReference: 'Walk-in customer',
     externalReference: 'VOUCHER-SALE-0001',
-    metadata: { batchNumber: batch.batchNumber, soldBy: vendorAdminUser.email },
+    metadata: { batchNumber: batch.batchNumber, soldBy: vendorAdminUser.email } as Prisma.InputJsonValue,
   })
 
   await prisma.voucher.update({
@@ -643,7 +925,7 @@ async function main() {
       netAmountUgx: 0,
       customerReference: '+256772123456',
       externalReference: 'VOUCHER-REDEEM-0001',
-      metadata: { hotspot: cityCentreHotspot.name, sessionReference: 'SESSION-APR-0001' },
+      metadata: { hotspot: cityCentreHotspot.name, sessionReference: 'SESSION-APR-0001' } as Prisma.InputJsonValue,
     },
   })
 
@@ -734,7 +1016,7 @@ async function main() {
       externalReference: mobileMoneyPayment.externalReference,
       providerReference: mobileMoneyPayment.providerReference,
       verificationStatus: 'accepted',
-      headers: {},
+      headers: {} as Prisma.InputJsonValue,
       payload: {
         transactionStatus: 'SUCCEEDED',
         transactionReference: mobileMoneyPayment.providerReference,
@@ -747,11 +1029,12 @@ async function main() {
     },
   })
 
-  await createSeedSaleTransaction({
+  const resellerVoucherSale = await createSeedSaleTransaction({
     tenantId: vendorTenant.id,
     walletId: tenantWallet.id,
     packageId: hourlyPackage.id,
     voucherId: vouchers[1].id,
+    agentId: cityReseller.id,
     type: BillingTransactionType.VOUCHER_SALE,
     channel: BillingChannel.VOUCHER,
     grossAmountUgx: 1000,
@@ -759,7 +1042,27 @@ async function main() {
     description: 'Agent sale of hourly hotspot voucher',
     customerReference: 'Agent counter',
     externalReference: 'VOUCHER-SALE-0002',
-    metadata: { batchNumber: batch.batchNumber, soldBy: vendorAdminUser.email },
+    metadata: { batchNumber: batch.batchNumber, soldBy: vendorAdminUser.email } as Prisma.InputJsonValue,
+  })
+
+  await createAgentCommission({
+    tenantId: vendorTenant.id,
+    agentId: cityReseller.id,
+    agentWalletId: cityResellerWallet.id,
+    sourceTransactionId: resellerVoucherSale.id,
+    basisAmountUgx: resellerVoucherSale.grossAmountUgx,
+    rateBps: cityReseller.commissionRateBps,
+    description: 'Commission accrued for reseller voucher sale',
+  })
+
+  await createAgentFloatTransfer({
+    tenantId: vendorTenant.id,
+    tenantWalletId: tenantWallet.id,
+    agentWalletId: campusAgentWallet.id,
+    agentId: campusAgent.id,
+    amountUgx: 1500,
+    description: 'Unused float returned by campus agent',
+    type: BillingTransactionType.AGENT_FLOAT_RETURN,
   })
 
   await prisma.voucher.update({
@@ -915,11 +1218,152 @@ async function main() {
     },
   })
 
+  const resellerCommission = await prisma.agentCommission.findUnique({
+    where: {
+      sourceTransactionId: resellerVoucherSale.id,
+    },
+  })
+
+  if (resellerCommission) {
+    const resellerSettlement = await prisma.settlement.create({
+      data: {
+        tenantId: vendorTenant.id,
+        agentId: cityReseller.id,
+        walletId: cityResellerWallet.id,
+        reference: 'SET-RSL-CBD-APR-2026',
+        status: SettlementStatus.READY,
+        periodStart: new Date('2026-04-06T00:00:00.000Z'),
+        periodEnd: new Date('2026-04-06T23:59:59.000Z'),
+        openingFloatUgx: 12000,
+        closingFloatUgx: 12070,
+        grossSalesUgx: resellerVoucherSale.grossAmountUgx,
+        commissionsUgx: resellerCommission.amountUgx,
+        payableAmountUgx: resellerCommission.amountUgx,
+        notes: 'Daily reseller commission closeout.',
+      },
+    })
+
+    await prisma.agentCommission.update({
+      where: { id: resellerCommission.id },
+      data: {
+        settlementId: resellerSettlement.id,
+      },
+    })
+
+    await prisma.$transaction(async (tx) => {
+      const amountUgx = resellerCommission.amountUgx
+      const ledgerTransaction = await tx.ledgerTransaction.create({
+        data: {
+          tenantId: vendorTenant.id,
+          walletId: cityResellerWallet.id,
+          reference: 'LEDGER-DIS-RSL-CBD-APR-2026',
+          type: LedgerTransactionType.DISBURSEMENT,
+          channel: BillingChannel.DISBURSEMENT,
+          description: 'Commission disbursement to city reseller',
+          grossAmountUgx: amountUgx,
+          feeAmountUgx: 0,
+          netAmountUgx: -amountUgx,
+          sourceType: 'AgentDisbursement',
+          sourceId: resellerSettlement.id,
+          metadata: {
+            agentId: cityReseller.id,
+            settlementId: resellerSettlement.id,
+          } as Prisma.InputJsonValue,
+          entries: {
+            create: [
+              {
+                tenantId: vendorTenant.id,
+                walletId: cityResellerWallet.id,
+                accountCode: 'agent_wallet',
+                direction: LedgerDirection.DEBIT,
+                amountUgx,
+                memo: 'Commission disbursement to city reseller',
+              },
+              {
+                tenantId: vendorTenant.id,
+                accountCode: 'disbursement_clearing',
+                direction: LedgerDirection.CREDIT,
+                amountUgx,
+                memo: 'Commission disbursement to city reseller',
+              },
+            ],
+          },
+        },
+      })
+
+      const disbursementTransaction = await tx.billingTransaction.create({
+        data: {
+          tenantId: vendorTenant.id,
+          walletId: cityResellerWallet.id,
+          agentId: cityReseller.id,
+          ledgerTransactionId: ledgerTransaction.id,
+          channel: BillingChannel.DISBURSEMENT,
+          type: BillingTransactionType.AGENT_DISBURSEMENT,
+          status: BillingTransactionStatus.COMPLETED,
+          grossAmountUgx: amountUgx,
+          feeAmountUgx: 0,
+          netAmountUgx: -amountUgx,
+          customerReference: cityReseller.phoneNumber,
+          externalReference: 'AGENT-DISBURSE-APR-2026-0001',
+          paymentProvider: 'Internal',
+          metadata: {
+            settlementId: resellerSettlement.id,
+          } as Prisma.InputJsonValue,
+        },
+      })
+
+      await tx.disbursement.create({
+        data: {
+          tenantId: vendorTenant.id,
+          agentId: cityReseller.id,
+          settlementId: resellerSettlement.id,
+          walletId: cityResellerWallet.id,
+          billingTransactionId: disbursementTransaction.id,
+          reference: 'DIS-RSL-CBD-APR-2026',
+          method: DisbursementMethod.MOBILE_MONEY,
+          status: DisbursementStatus.COMPLETED,
+          amountUgx,
+          destinationReference: cityReseller.phoneNumber,
+          providerReference: 'MM-DIS-APR-0001',
+          notes: 'Commission payout cleared to reseller wallet owner.',
+          metadata: {
+            settlementReference: resellerSettlement.reference,
+          } as Prisma.InputJsonValue,
+          completedAt: new Date('2026-04-06T18:30:00.000Z'),
+        },
+      })
+
+      await tx.wallet.update({
+        where: { id: cityResellerWallet.id },
+        data: {
+          balanceUgx: {
+            decrement: amountUgx,
+          },
+        },
+      })
+
+      await tx.settlement.update({
+        where: { id: resellerSettlement.id },
+        data: {
+          status: SettlementStatus.COMPLETED,
+        },
+      })
+
+      await tx.agentCommission.update({
+        where: { id: resellerCommission.id },
+        data: {
+          status: CommissionStatus.SETTLED,
+        },
+      })
+    })
+  }
+
   console.log('Seed complete', {
     superAdminUserId: superAdminUser.id,
     vendorAdminUserId: vendorAdminUser.id,
     vendorTenantId: vendorTenant.id,
     walletId: tenantWallet.id,
+    agents: [campusAgent.code, cityReseller.code],
     packages: [hourlyPackage.code, dailyPackage.code, weekendPackage.code],
     voucherBatch: batch.batchNumber,
     routers: [cityRouter.name, branchRouter.name],

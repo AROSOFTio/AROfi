@@ -18,6 +18,30 @@ type WalletAdjustmentPostingInput = {
   description: string
 }
 
+type FloatTransferPostingInput = {
+  tenantId: string
+  sourceWalletId: string
+  destinationWalletId: string
+  sourceAccountCode: string
+  destinationAccountCode: string
+  amountUgx: number
+  description: string
+}
+
+type CommissionPostingInput = {
+  tenantId: string
+  walletId: string
+  amountUgx: number
+  description: string
+}
+
+type DisbursementPostingInput = {
+  tenantId: string
+  walletId: string
+  amountUgx: number
+  description: string
+}
+
 @Injectable()
 export class BillingPostingService {
   constructor(private readonly feeEngineService: FeeEngineService) {}
@@ -86,6 +110,95 @@ export class BillingPostingService {
           accountCode: LEDGER_ACCOUNTS.adjustmentClearing,
           direction: clearingDirection,
           amountUgx: absoluteAmountUgx,
+          memo: input.description,
+        },
+      ],
+    }
+  }
+
+  buildFloatTransferPosting(input: FloatTransferPostingInput) {
+    return {
+      ledgerType: LedgerTransactionType.FLOAT_TRANSFER,
+      description: input.description,
+      channel: BillingChannel.FLOAT_TRANSFER,
+      grossAmountUgx: input.amountUgx,
+      feeAmountUgx: 0,
+      netAmountUgx: input.amountUgx,
+      sourceWalletDeltaUgx: -input.amountUgx,
+      destinationWalletDeltaUgx: input.amountUgx,
+      entries: [
+        {
+          tenantId: input.tenantId,
+          walletId: input.sourceWalletId,
+          accountCode: input.sourceAccountCode,
+          direction: LedgerDirection.DEBIT,
+          amountUgx: input.amountUgx,
+          memo: input.description,
+        },
+        {
+          tenantId: input.tenantId,
+          walletId: input.destinationWalletId,
+          accountCode: input.destinationAccountCode,
+          direction: LedgerDirection.CREDIT,
+          amountUgx: input.amountUgx,
+          memo: input.description,
+        },
+      ],
+    }
+  }
+
+  buildCommissionPosting(input: CommissionPostingInput) {
+    return {
+      ledgerType: LedgerTransactionType.COMMISSION,
+      description: input.description,
+      channel: BillingChannel.COMMISSION,
+      grossAmountUgx: input.amountUgx,
+      feeAmountUgx: 0,
+      netAmountUgx: input.amountUgx,
+      walletDeltaUgx: input.amountUgx,
+      entries: [
+        {
+          tenantId: input.tenantId,
+          accountCode: LEDGER_ACCOUNTS.commissionExpense,
+          direction: LedgerDirection.DEBIT,
+          amountUgx: input.amountUgx,
+          memo: input.description,
+        },
+        {
+          tenantId: input.tenantId,
+          walletId: input.walletId,
+          accountCode: LEDGER_ACCOUNTS.agentWallet,
+          direction: LedgerDirection.CREDIT,
+          amountUgx: input.amountUgx,
+          memo: input.description,
+        },
+      ],
+    }
+  }
+
+  buildDisbursementPosting(input: DisbursementPostingInput) {
+    return {
+      ledgerType: LedgerTransactionType.DISBURSEMENT,
+      description: input.description,
+      channel: BillingChannel.DISBURSEMENT,
+      grossAmountUgx: input.amountUgx,
+      feeAmountUgx: 0,
+      netAmountUgx: -input.amountUgx,
+      walletDeltaUgx: -input.amountUgx,
+      entries: [
+        {
+          tenantId: input.tenantId,
+          walletId: input.walletId,
+          accountCode: LEDGER_ACCOUNTS.agentWallet,
+          direction: LedgerDirection.DEBIT,
+          amountUgx: input.amountUgx,
+          memo: input.description,
+        },
+        {
+          tenantId: input.tenantId,
+          accountCode: LEDGER_ACCOUNTS.disbursementClearing,
+          direction: LedgerDirection.CREDIT,
+          amountUgx: input.amountUgx,
           memo: input.description,
         },
       ],

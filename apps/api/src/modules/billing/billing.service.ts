@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import {
+  AgentStatus,
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
+  CommissionStatus,
+  LedgerTransactionType,
   Prisma,
   WalletOwnerType,
 } from '@prisma/client'
@@ -11,11 +14,13 @@ import { PrismaService } from '../../prisma.service'
 import { BillingPostingService } from './billing-posting.service'
 import { AdjustWalletDto } from './dto/adjust-wallet.dto'
 import { RecordMobileMoneySaleDto } from './dto/record-mobile-money-sale.dto'
+import { FeeEngineService } from './fee-engine.service'
 
 type RecordSaleInput = {
   tenantId: string
   packageId: string
   voucherId?: string
+  agentId?: string
   channel: BillingChannel
   type: BillingTransactionType
   grossAmountUgx: number
@@ -56,6 +61,16 @@ export class BillingService {
         status: true,
       },
     },
+    agent: {
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        phoneNumber: true,
+        type: true,
+        status: true,
+      },
+    },
     ledgerTransaction: {
       select: {
         id: true,
@@ -68,12 +83,14 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly billingPostingService: BillingPostingService,
+    private readonly feeEngineService: FeeEngineService,
   ) {}
 
   async recordMobileMoneySale(dto: RecordMobileMoneySaleDto) {
     return this.recordSale({
       tenantId: dto.tenantId,
       packageId: dto.packageId,
+      agentId: dto.agentId,
       channel: BillingChannel.MOBILE_MONEY,
       type: BillingTransactionType.MOBILE_MONEY_SALE,
       grossAmountUgx: dto.grossAmountUgx,
@@ -119,6 +136,20 @@ export class BillingService {
       }
     }
 
+    if (input.agentId) {
+      const agent = await this.prisma.agent.findFirst({
+        where: {
+          id: input.agentId,
+          tenantId: input.tenantId,
+          status: AgentStatus.ACTIVE,
+        },
+      })
+
+      if (!agent) {
+        throw new NotFoundException('Active agent not found for tenant')
+      }
+    }
+
     return this.prisma.$transaction((tx) => this.recordSaleInTransaction(tx, input))
   }
 
@@ -161,10 +192,11 @@ export class BillingService {
       },
     })
 
-    return tx.billingTransaction.create({
+    const billingTransaction = await tx.billingTransaction.create({
       data: {
         tenantId: input.tenantId,
         walletId: wallet.id,
+        agentId: input.agentId,
         packageId: input.packageId,
         voucherId: input.voucherId,
         ledgerTransactionId: ledgerTransaction.id,
@@ -181,6 +213,10 @@ export class BillingService {
       },
       include: this.transactionInclude,
     })
+
+    await this.maybeAccrueAgentCommission(tx, billingTransaction, input.agentId)
+
+    return billingTransaction
   }
 
   async adjustWallet(dto: AdjustWalletDto) {
@@ -210,7 +246,7 @@ export class BillingService {
           feeAmountUgx: posting.feeAmountUgx,
           netAmountUgx: posting.netAmountUgx,
           sourceType: 'WalletAdjustment',
-          metadata: { description: dto.description },
+          metadata: { description: dto.description } as Prisma.InputJsonValue,
           entries: {
             create: posting.entries,
           },
@@ -238,7 +274,7 @@ export class BillingService {
           feeAmountUgx: posting.feeAmountUgx,
           netAmountUgx: posting.netAmountUgx,
           externalReference: `WALLET-ADJUST-${randomUUID()}`,
-          metadata: { description: dto.description },
+          metadata: { description: dto.description } as Prisma.InputJsonValue,
         },
         include: this.transactionInclude,
       })
@@ -253,7 +289,10 @@ export class BillingService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.wallet.findMany({
-        where: tenantId ? { tenantId } : undefined,
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          ownerType: WalletOwnerType.TENANT,
+        },
         include: {
           tenant: {
             select: {
@@ -395,6 +434,7 @@ export class BillingService {
       where: {
         tenantId,
         ownerType: WalletOwnerType.TENANT,
+        ownerReference: tenantId,
       },
     })
 
@@ -406,6 +446,169 @@ export class BillingService {
       data: {
         tenantId,
         ownerType: WalletOwnerType.TENANT,
+        ownerReference: tenantId,
+      },
+    })
+  }
+
+  private async findOrCreateAgentWallet(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    agentId: string,
+  ) {
+    const existingWallet = await tx.wallet.findFirst({
+      where: {
+        tenantId,
+        ownerType: WalletOwnerType.AGENT,
+        ownerReference: agentId,
+      },
+    })
+
+    if (existingWallet) {
+      return existingWallet
+    }
+
+    return tx.wallet.create({
+      data: {
+        tenantId,
+        ownerType: WalletOwnerType.AGENT,
+        ownerReference: agentId,
+        agentId,
+      },
+    })
+  }
+
+  private async maybeAccrueAgentCommission(
+    tx: Prisma.TransactionClient,
+    billingTransaction: {
+      id: string
+      tenantId: string
+      agentId?: string | null
+      externalReference?: string | null
+      grossAmountUgx: number
+      channel: BillingChannel
+      type: BillingTransactionType
+    },
+    agentId?: string,
+  ) {
+    const resolvedAgentId = agentId ?? billingTransaction.agentId
+
+    if (!resolvedAgentId) {
+      return
+    }
+
+    if (
+      billingTransaction.type !== BillingTransactionType.MOBILE_MONEY_SALE &&
+      billingTransaction.type !== BillingTransactionType.VOUCHER_SALE
+    ) {
+      return
+    }
+
+    const existingCommission = await tx.agentCommission.findUnique({
+      where: {
+        sourceTransactionId: billingTransaction.id,
+      },
+    })
+
+    if (existingCommission) {
+      return
+    }
+
+    const agent = await tx.agent.findFirst({
+      where: {
+        id: resolvedAgentId,
+        tenantId: billingTransaction.tenantId,
+        status: AgentStatus.ACTIVE,
+      },
+    })
+
+    if (!agent) {
+      throw new NotFoundException('Active agent not found for commission accrual')
+    }
+
+    const commissionAmountUgx = this.feeEngineService.calculateBasisPointAmount(
+      agent.commissionRateBps,
+      billingTransaction.grossAmountUgx,
+    )
+
+    if (commissionAmountUgx <= 0) {
+      return
+    }
+
+    const agentWallet = await this.findOrCreateAgentWallet(tx, billingTransaction.tenantId, agent.id)
+    const posting = this.billingPostingService.buildCommissionPosting({
+      tenantId: billingTransaction.tenantId,
+      walletId: agentWallet.id,
+      amountUgx: commissionAmountUgx,
+      description: `Agent commission for ${billingTransaction.type.toLowerCase()}`,
+    })
+
+    const ledgerTransaction = await tx.ledgerTransaction.create({
+      data: {
+        tenantId: billingTransaction.tenantId,
+        walletId: agentWallet.id,
+        reference: `LEDGER-AGENT-COMMISSION-${randomUUID()}`,
+        type: LedgerTransactionType.COMMISSION,
+        channel: posting.channel,
+        description: posting.description,
+        grossAmountUgx: posting.grossAmountUgx,
+        feeAmountUgx: posting.feeAmountUgx,
+        netAmountUgx: posting.netAmountUgx,
+        sourceType: 'AgentCommission',
+        sourceId: billingTransaction.id,
+        metadata: {
+          agentId: agent.id,
+          sourceTransactionId: billingTransaction.id,
+        } as Prisma.InputJsonValue,
+        entries: {
+          create: posting.entries,
+        },
+      },
+    })
+
+    await tx.wallet.update({
+      where: { id: agentWallet.id },
+      data: {
+        balanceUgx: {
+          increment: posting.walletDeltaUgx,
+        },
+      },
+    })
+
+    const payoutTransaction = await tx.billingTransaction.create({
+      data: {
+        tenantId: billingTransaction.tenantId,
+        walletId: agentWallet.id,
+        agentId: agent.id,
+        ledgerTransactionId: ledgerTransaction.id,
+        channel: BillingChannel.COMMISSION,
+        type: BillingTransactionType.AGENT_COMMISSION,
+        status: BillingTransactionStatus.COMPLETED,
+        grossAmountUgx: posting.grossAmountUgx,
+        feeAmountUgx: posting.feeAmountUgx,
+        netAmountUgx: posting.netAmountUgx,
+        customerReference: agent.phoneNumber,
+        externalReference: `AGENT-COMMISSION-${randomUUID()}`,
+        paymentProvider: 'Internal',
+        metadata: {
+          agentId: agent.id,
+          sourceTransactionId: billingTransaction.id,
+          commissionRateBps: agent.commissionRateBps,
+        } as Prisma.InputJsonValue,
+      },
+    })
+
+    await tx.agentCommission.create({
+      data: {
+        tenantId: billingTransaction.tenantId,
+        agentId: agent.id,
+        walletId: agentWallet.id,
+        sourceTransactionId: billingTransaction.id,
+        payoutTransactionId: payoutTransaction.id,
+        status: CommissionStatus.ACCRUED,
+        basisAmountUgx: billingTransaction.grossAmountUgx,
+        rateBps: agent.commissionRateBps,
+        amountUgx: commissionAmountUgx,
       },
     })
   }
