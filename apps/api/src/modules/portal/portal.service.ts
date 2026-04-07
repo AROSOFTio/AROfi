@@ -344,7 +344,7 @@ export class PortalService {
           : 0,
         recentSessionCount: recentSessions.length,
         pendingPayments: recentPayments.filter((payment) =>
-          new Set([PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.INDETERMINATE]).has(payment.status),
+          [PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.INDETERMINATE].includes(payment.status as any),
         ).length,
         completedPayments: recentPayments.filter((payment) => payment.status === PaymentStatus.COMPLETED).length,
         totalDataUsedMb: Math.round(totalDataUsedMb * 100) / 100,

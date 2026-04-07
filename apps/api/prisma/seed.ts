@@ -144,7 +144,7 @@ async function createAgentFloatTransfer(input: {
   agentId: string
   amountUgx: number
   description: string
-  type: BillingTransactionType.AGENT_FLOAT_TOPUP | BillingTransactionType.AGENT_FLOAT_RETURN
+  type: 'AGENT_FLOAT_TOPUP' | 'AGENT_FLOAT_RETURN'
 }) {
   const isTopUp = input.type === BillingTransactionType.AGENT_FLOAT_TOPUP
   const sourceWalletId = isTopUp ? input.tenantWalletId : input.agentWalletId
@@ -959,6 +959,8 @@ async function main() {
       packageId: dailyPackage.id,
       billingTransactionId: mobileMoneySale.id,
       status: PaymentStatus.COMPLETED,
+      provider: 'YoUganda',
+      network: 'MTN',
       amountUgx: 5000,
       phoneNumber: '256700111222',
       customerReference: '+256700111222',
