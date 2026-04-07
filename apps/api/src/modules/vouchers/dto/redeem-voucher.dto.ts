@@ -10,6 +10,10 @@ export class RedeemVoucherDto {
   customerReference?: string
 
   @IsOptional()
+  @IsString()
+  accessPhoneNumber?: string
+
+  @IsOptional()
   @IsUUID()
   hotspotId?: string
 

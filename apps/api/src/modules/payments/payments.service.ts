@@ -162,6 +162,9 @@ export class PaymentsService {
   async getPortalContext(tenantDomain?: string, phoneNumber?: string) {
     const tenant = await this.resolvePortalTenant(tenantDomain)
     const normalizedPhone = phoneNumber ? this.normalizePhoneNumber(phoneNumber) : null
+    const phoneVariants = normalizedPhone
+      ? Array.from(new Set([normalizedPhone, `+${normalizedPhone}`, `0${normalizedPhone.slice(3)}`]))
+      : []
 
     const [packages, activeActivation, latestPayment] = await Promise.all([
       this.prisma.package.findMany({
@@ -180,7 +183,18 @@ export class PaymentsService {
         ? this.prisma.packageActivation.findFirst({
             where: {
               tenantId: tenant.id,
-              accessPhoneNumber: normalizedPhone,
+              OR: [
+                {
+                  accessPhoneNumber: {
+                    in: phoneVariants,
+                  },
+                },
+                {
+                  customerReference: {
+                    in: phoneVariants,
+                  },
+                },
+              ],
               status: PackageActivationStatus.ACTIVE,
               endsAt: {
                 gt: new Date(),

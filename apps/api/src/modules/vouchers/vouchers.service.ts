@@ -319,6 +319,36 @@ export class VouchersService {
                 name: true,
               },
             },
+            package: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+            voucher: {
+              select: {
+                id: true,
+                code: true,
+              },
+            },
+            activation: {
+              include: {
+                package: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                  },
+                },
+                hotspot: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -332,6 +362,7 @@ export class VouchersService {
       return {
         voucher,
         redemption: voucher.redemption,
+        activation: voucher.redemption.activation,
       }
     }
 
@@ -340,6 +371,8 @@ export class VouchersService {
     }
 
     const redemptionReference = `VOUCHER-REDEEM-${voucher.id}`
+    const accessPhoneNumber =
+      dto.accessPhoneNumber ?? this.normalizePhoneNumber(dto.customerReference)
 
     return this.prisma.$transaction(async (tx) => {
       const updatedVoucher = await tx.voucher.update({
@@ -420,13 +453,14 @@ export class VouchersService {
         throw new NotFoundException('Package not found for voucher redemption')
       }
 
-      await this.packageActivationService.activateInTransaction(tx, {
+      const activation = await this.packageActivationService.activateInTransaction(tx, {
         tenantId: voucher.tenantId,
         packageId: voucher.packageId,
         voucherRedemptionId: redemption.id,
         hotspotId: dto.hotspotId,
         source: PackageActivationSource.VOUCHER,
         customerReference: dto.customerReference,
+        accessPhoneNumber,
         durationMinutes: packageRecord.durationMinutes,
         dataLimitMb: packageRecord.dataLimitMb,
         deviceLimit: packageRecord.deviceLimit,
@@ -443,8 +477,31 @@ export class VouchersService {
       return {
         voucher: updatedVoucher,
         redemption,
+        activation,
       }
     })
+  }
+
+  private normalizePhoneNumber(value?: string | null) {
+    if (!value) {
+      return undefined
+    }
+
+    const digits = value.replace(/\D/g, '')
+
+    if (/^256\d{9}$/.test(digits)) {
+      return digits
+    }
+
+    if (/^0\d{9}$/.test(digits)) {
+      return `256${digits.slice(1)}`
+    }
+
+    if (/^7\d{8}$/.test(digits)) {
+      return `256${digits}`
+    }
+
+    return undefined
   }
 
   private async refreshBatchStatus(batchId: string, tx?: Prisma.TransactionClient) {

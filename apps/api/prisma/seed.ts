@@ -7,6 +7,8 @@ import {
   PackageActivationStatus,
   PackageActivationSource,
   PackageStatus,
+  PaymentEventType,
+  PaymentStatus,
   Prisma,
   PrismaClient,
   RadiusEventType,
@@ -574,7 +576,7 @@ async function main() {
     'Opening float loaded for voucher operations',
   )
 
-  await createSeedSaleTransaction({
+  const mobileMoneySale = await createSeedSaleTransaction({
     tenantId: vendorTenant.id,
     walletId: tenantWallet.id,
     packageId: dailyPackage.id,
@@ -669,6 +671,82 @@ async function main() {
     },
   })
 
+  const mobileMoneyPayment = await prisma.payment.create({
+    data: {
+      tenantId: vendorTenant.id,
+      packageId: dailyPackage.id,
+      billingTransactionId: mobileMoneySale.id,
+      status: PaymentStatus.COMPLETED,
+      amountUgx: 5000,
+      phoneNumber: '256700111222',
+      customerReference: '+256700111222',
+      externalReference: 'YO-APR-2026-0001',
+      providerReference: 'YO-TXN-APR-0001',
+      providerStatus: 'SUCCEEDED',
+      statusMessage: 'Payment collected successfully',
+      requestPayload: {
+        network: 'MTN',
+        narrative: '24 Hours Unlimited internet package',
+      } as Prisma.InputJsonValue,
+      responsePayload: {
+        transactionStatus: 'SUCCEEDED',
+        transactionReference: 'YO-TXN-APR-0001',
+        statusCode: 0,
+      } as Prisma.InputJsonValue,
+      metadata: {
+        seeded: true,
+      } as Prisma.InputJsonValue,
+      initiatedAt: new Date('2026-04-07T05:00:00.000Z'),
+      completedAt: new Date('2026-04-07T05:00:25.000Z'),
+      createdAt: new Date('2026-04-07T05:00:00.000Z'),
+    },
+  })
+
+  const mobileMoneyActivation = await prisma.packageActivation.create({
+    data: {
+      tenantId: vendorTenant.id,
+      packageId: dailyPackage.id,
+      paymentId: mobileMoneyPayment.id,
+      hotspotId: nakawaHotspot.id,
+      source: PackageActivationSource.MOBILE_MONEY,
+      status: PackageActivationStatus.ACTIVE,
+      customerReference: '+256700111222',
+      accessPhoneNumber: '256700111222',
+      durationMinutes: dailyPackage.durationMinutes,
+      dataLimitMb: dailyPackage.dataLimitMb,
+      deviceLimit: dailyPackage.deviceLimit,
+      downloadSpeedKbps: dailyPackage.downloadSpeedKbps,
+      uploadSpeedKbps: dailyPackage.uploadSpeedKbps,
+      startedAt: new Date('2026-04-07T05:00:25.000Z'),
+      endsAt: new Date('2026-04-08T05:00:25.000Z'),
+      metadata: {
+        externalReference: mobileMoneyPayment.externalReference,
+        providerReference: mobileMoneyPayment.providerReference,
+      } as Prisma.InputJsonValue,
+    },
+  })
+
+  await prisma.paymentWebhook.create({
+    data: {
+      tenantId: vendorTenant.id,
+      paymentId: mobileMoneyPayment.id,
+      eventType: PaymentEventType.WEBHOOK_PROCESSED,
+      externalReference: mobileMoneyPayment.externalReference,
+      providerReference: mobileMoneyPayment.providerReference,
+      verificationStatus: 'accepted',
+      headers: {},
+      payload: {
+        transactionStatus: 'SUCCEEDED',
+        transactionReference: mobileMoneyPayment.providerReference,
+        amount: mobileMoneyPayment.amountUgx,
+      } as Prisma.InputJsonValue,
+      notes: 'Seeded successful payment callback',
+      isProcessed: true,
+      processedAt: new Date('2026-04-07T05:00:25.000Z'),
+      createdAt: new Date('2026-04-07T05:00:25.000Z'),
+    },
+  })
+
   await createSeedSaleTransaction({
     tenantId: vendorTenant.id,
     walletId: tenantWallet.id,
@@ -720,6 +798,7 @@ async function main() {
         tenantId: vendorTenant.id,
         routerId: branchRouter.id,
         hotspotId: nakawaHotspot.id,
+        activationId: mobileMoneyActivation.id,
         radiusSessionId: 'SESSION-APR-0002',
         status: SessionStatus.CLOSED,
         username: '256700111222',

@@ -1,5 +1,5 @@
 import PortalCheckout from '../components/PortalCheckout'
 
 export default function PortalPage() {
-  return <PortalCheckout />
+  return <PortalCheckout initialView="home" />
 }
