@@ -1,8 +1,8 @@
 export default function DashboardHome() {
   const stats = [
-    { label: 'Total Tenants', value: '-', color: 'blue', change: 'Vendors on platform' },
-    { label: 'Active Hotspots', value: '-', color: 'green', change: 'Live NAS points' },
-    { label: 'Revenue (Monthly)', value: 'UGX -', color: 'amber', change: 'Gross collections' },
+    { label: 'Revenue (Monthly)', value: 'UGX -', color: 'vibrant', change: 'Gross collections' },
+    { label: 'Total Tenants', value: '-', color: 'green', change: 'Vendors on platform' },
+    { label: 'Active Hotspots', value: '-', color: 'amber', change: 'Live NAS points' },
     { label: 'Active Sessions', value: '-', color: 'purple', change: 'Online right now' },
     { label: 'Vouchers Sold', value: '-', color: 'blue', change: 'This month' },
     { label: 'Mobile Money Txns', value: '-', color: 'green', change: 'Yo! Uganda payments' },
@@ -35,7 +35,7 @@ export default function DashboardHome() {
         {stats.map((s) => (
           <div key={s.label} className={`stat-card ${s.color}`}>
             <div className="stat-label">{s.label}</div>
-            <div className={`stat-value ${s.color}`}>{s.value}</div>
+            <div className={`stat-value ${s.color === 'vibrant' ? '' : s.color}`}>{s.value}</div>
             <div className="stat-change">{s.change}</div>
           </div>
         ))}
