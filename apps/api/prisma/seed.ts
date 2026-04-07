@@ -959,7 +959,7 @@ async function main() {
       packageId: dailyPackage.id,
       billingTransactionId: mobileMoneySale.id,
       status: PaymentStatus.COMPLETED,
-      provider: 'YoUganda',
+      provider: 'YO_UGANDA',
       network: 'MTN',
       amountUgx: 5000,
       phoneNumber: '256700111222',
