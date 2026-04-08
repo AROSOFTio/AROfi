@@ -52,8 +52,10 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <img src="/logo.png" alt="AROFi Logo" style={{ width: '100%', height: 'auto', marginBottom: '10px' }} />
-        <p>Hotspot Management Platform</p>
+        <div>
+          <h1>ARO<span>Fi</span></h1>
+          <p>Hotspot Management Platform</p>
+        </div>
       </div>
       {navItems.map((group) => (
         <div key={group.section} className="sidebar-section">
