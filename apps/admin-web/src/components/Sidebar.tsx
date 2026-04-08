@@ -6,7 +6,7 @@ const navItems = [
   {
     section: 'Overview',
     items: [
-      { href: '/', label: 'Dashboard', icon: <HomeIcon /> },
+      { href: '/dashboard', label: 'Dashboard', icon: <HomeIcon /> },
     ]
   },
   {
