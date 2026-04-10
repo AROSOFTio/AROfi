@@ -12,6 +12,7 @@ import { PortalModule } from './modules/portal/portal.module';
 import { RadiusModule } from './modules/radius/radius.module';
 import { RoutersModule } from './modules/routers/routers.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
+import { SystemModule } from './modules/system/system.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
@@ -27,6 +28,7 @@ import { PrismaModule } from './prisma.module';
     HotspotsModule,
     RoutersModule,
     SessionsModule,
+    SystemModule,
     RadiusModule,
     PackagesModule,
     PaymentsModule,

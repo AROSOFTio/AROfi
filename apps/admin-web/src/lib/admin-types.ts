@@ -668,3 +668,113 @@ export type SessionOverviewResponse = {
     totalDataMb: number
   }>
 }
+
+export type SystemOverviewResponse = {
+  summary: {
+    auditEntries: number
+    criticalAudits: number
+    warningOrExceededLimits: number
+    openSupportTickets: number
+    inProgressSupportTickets: number
+  }
+  audit: AuditLogResponse
+  featureLimits: FeatureLimitResponse
+  support: SupportTicketResponse
+}
+
+export type AuditLogResponse = {
+  summary: {
+    totalEntries: number
+    info: number
+    warning: number
+    error: number
+    critical: number
+  }
+  items: Array<{
+    id: string
+    action: string
+    entity: string
+    entityId?: string | null
+    severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL'
+    actorName?: string | null
+    actorEmail?: string | null
+    userId?: string | null
+    ipAddress?: string | null
+    userAgent?: string | null
+    createdAt: string
+    tenant?: TenantSummary | null
+    details?: Record<string, unknown> | null
+  }>
+}
+
+export type FeatureLimitResponse = {
+  summary: {
+    totalLimits: number
+    enabled: number
+    warning: number
+    exceeded: number
+  }
+  items: Array<{
+    id: string
+    tenantId?: string | null
+    code: string
+    name: string
+    category: string
+    description?: string | null
+    unit?: string | null
+    isEnabled: boolean
+    limitValue?: number | null
+    warningThresholdPct: number
+    hardLimit: boolean
+    notes?: string | null
+    createdAt: string
+    updatedAt: string
+    currentUsage: number
+    usagePercentage?: number | null
+    remaining?: number | null
+    health: 'disabled' | 'unlimited' | 'healthy' | 'warning' | 'exceeded' | 'blocked'
+    tenant?: TenantSummary | null
+  }>
+}
+
+export type SupportTicketResponse = {
+  summary: {
+    totalTickets: number
+    open: number
+    inProgress: number
+    pendingCustomer: number
+    resolved: number
+    critical: number
+  }
+  items: Array<{
+    id: string
+    tenantId: string
+    reference: string
+    subject: string
+    category: string
+    priority: string
+    status: string
+    channel: string
+    customerReference?: string | null
+    phoneNumber?: string | null
+    email?: string | null
+    openedBy?: string | null
+    assignedTo?: string | null
+    latestResponseAt?: string | null
+    resolvedAt?: string | null
+    createdAt: string
+    updatedAt: string
+    tenant?: TenantSummary | null
+    _count: {
+      messages: number
+    }
+    messages: Array<{
+      id: string
+      authorName: string
+      authorRole: string
+      body: string
+      isInternal: boolean
+      createdAt: string
+    }>
+  }>
+}

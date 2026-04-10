@@ -88,6 +88,8 @@ export function getStatusBadgeClass(status: string) {
     case 'PROCESSING':
     case 'INITIATED':
     case 'INDETERMINATE':
+    case 'WARNING':
+    case 'HIGH':
     case 'DEBIT':
     case 'SOLD':
     case 'SUSPENDED':
@@ -97,6 +99,9 @@ export function getStatusBadgeClass(status: string) {
       return 'badge badge-info'
     case 'ARCHIVED':
     case 'DISABLED':
+    case 'EXCEEDED':
+    case 'BLOCKED':
+    case 'CRITICAL':
     case 'FAILED':
     case 'REVERSED':
     case 'CANCELLED':
