@@ -83,7 +83,7 @@ export class PesapalGatewayService {
     const body = this.parseJsonObject(text)
 
     if (!response.ok) {
-      const message = (body?.error?.message as string) ?? (body?.message as string) ?? text
+      const message = this.readErrorMessage(body) ?? text
       throw new ServiceUnavailableException(`Pesapal checkout request failed: ${message}`)
     }
 
@@ -137,7 +137,7 @@ export class PesapalGatewayService {
     const body = this.parseJsonObject(text)
 
     if (!response.ok) {
-      const message = (body?.error?.message as string) ?? (body?.message as string) ?? text
+      const message = this.readErrorMessage(body) ?? text
       throw new ServiceUnavailableException(`Pesapal status check failed: ${message}`)
     }
 
@@ -210,7 +210,7 @@ export class PesapalGatewayService {
     const body = this.parseJsonObject(text)
 
     if (!response.ok) {
-      const message = (body?.error?.message as string) ?? text
+      const message = this.readErrorMessage(body) ?? text
       throw new ServiceUnavailableException(`Pesapal auth failed: ${message}`)
     }
 
@@ -283,6 +283,24 @@ export class PesapalGatewayService {
           return parsed
         }
       }
+    }
+
+    return undefined
+  }
+
+  private readErrorMessage(source: Record<string, unknown> | undefined) {
+    if (!source) {
+      return undefined
+    }
+
+    const direct = this.readString(source, ['message', 'errorMessage'])
+    if (direct) {
+      return direct
+    }
+
+    const nestedError = source['error']
+    if (nestedError && typeof nestedError === 'object' && !Array.isArray(nestedError)) {
+      return this.readString(nestedError as Record<string, unknown>, ['message', 'error', 'detail'])
     }
 
     return undefined
