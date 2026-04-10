@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { CreatePackageDto } from './dto/create-package.dto'
 import { CreatePackagePriceDto } from './dto/create-package-price.dto'
 import { PackagesService } from './packages.service'
 
+@UseGuards(JwtAuthGuard)
 @Controller('packages')
 export class PackagesController {
   constructor(private readonly packagesService: PackagesService) {}

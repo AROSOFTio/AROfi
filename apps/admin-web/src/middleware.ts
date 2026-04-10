@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-
-const authCookieName = 'arofi_admin_token'
+import { adminAuthCookieName } from './lib/admin-session'
 
 function isPublicPath(pathname: string) {
   return pathname === '/login' || pathname.startsWith('/_next') || pathname === '/favicon.ico'
@@ -9,14 +8,9 @@ function isPublicPath(pathname: string) {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const token = request.cookies.get(authCookieName)?.value
+  const token = request.cookies.get(adminAuthCookieName)?.value
 
   if (isPublicPath(pathname)) {
-    if (pathname === '/login' && token) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
-    }
     return NextResponse.next()
   }
 

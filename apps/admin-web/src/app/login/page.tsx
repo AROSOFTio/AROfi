@@ -1,20 +1,69 @@
 'use client'
 import { useEffect, useState } from 'react'
-
-const authCookieName = 'arofi_admin_token'
+import { useSearchParams } from 'next/navigation'
+import {
+  adminAuthCookieName,
+  clearBrowserAdminSession,
+  getBrowserAdminToken,
+} from '@/lib/admin-session'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const searchParams = useSearchParams()
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
+  const nextPath = (() => {
+    const requestedPath = searchParams.get('next')
+
+    if (!requestedPath || !requestedPath.startsWith('/')) {
+      return '/dashboard'
+    }
+
+    return requestedPath
+  })()
 
   useEffect(() => {
-    if (document.cookie.includes(`${authCookieName}=`)) {
-      window.location.href = '/dashboard'
+    let isMounted = true
+
+    async function validateExistingSession() {
+      const token = getBrowserAdminToken()
+      if (!token) {
+        return
+      }
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: 'no-store',
+        })
+
+        if (!isMounted) {
+          return
+        }
+
+        if (response.ok) {
+          window.location.href = nextPath
+          return
+        }
+
+        clearBrowserAdminSession()
+      } catch {
+        if (isMounted) {
+          clearBrowserAdminSession()
+        }
+      }
     }
-  }, [])
+
+    void validateExistingSession()
+
+    return () => {
+      isMounted = false
+    }
+  }, [apiBaseUrl, nextPath])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,9 +83,9 @@ export default function LoginPage() {
 
       const data = await res.json()
       const token = data.access_token as string
-      document.cookie = `${authCookieName}=${token}; Path=/; Max-Age=2592000; SameSite=Lax`
-      localStorage.setItem('access_token', data.access_token)
-      window.location.href = '/dashboard'
+      const secureFlag = window.location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `${adminAuthCookieName}=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secureFlag}`
+      window.location.href = nextPath
     } catch {
       setError('Invalid email or password. Please try again.')
     } finally {

@@ -3,6 +3,15 @@ export type TenantSummary = {
   name: string
 }
 
+export type AdminSessionResponse = {
+  user: {
+    id: string
+    email: string
+    role: string
+    tenantId?: string | null
+  }
+}
+
 export type TenantOverviewResponse = {
   summary: {
     totalTenants: number

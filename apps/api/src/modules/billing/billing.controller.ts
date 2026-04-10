@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { BillingService } from './billing.service'
 import { AdjustWalletDto } from './dto/adjust-wallet.dto'
 import { RecordMobileMoneySaleDto } from './dto/record-mobile-money-sale.dto'
 
+@UseGuards(JwtAuthGuard)
 @Controller('billing')
 export class BillingController {
   constructor(private readonly billingService: BillingService) {}

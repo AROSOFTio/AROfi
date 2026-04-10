@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto'
 import { UpdateFeatureLimitDto } from './dto/update-feature-limit.dto'
 import { UpdateSupportTicketDto } from './dto/update-support-ticket.dto'
 import { SystemService } from './system.service'
 
+@UseGuards(JwtAuthGuard)
 @Controller('system')
 export class SystemController {
   constructor(private readonly systemService: SystemService) {}

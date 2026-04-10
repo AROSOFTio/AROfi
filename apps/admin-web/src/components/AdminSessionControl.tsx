@@ -1,11 +1,10 @@
 'use client'
 
-const authCookieName = 'arofi_admin_token'
+import { clearBrowserAdminSession } from '@/lib/admin-session'
 
 export default function AdminSessionControl() {
   function handleLogout() {
-    document.cookie = `${authCookieName}=; Path=/; Max-Age=0; SameSite=Lax`
-    localStorage.removeItem('access_token')
+    clearBrowserAdminSession()
     window.location.href = '/login'
   }
 

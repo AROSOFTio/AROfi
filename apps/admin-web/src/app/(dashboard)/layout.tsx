@@ -1,4 +1,5 @@
-import { cookies } from 'next/headers'
+import { AdminSessionResponse } from '@/lib/admin-types'
+import { fetchApi } from '@/lib/api'
 import { redirect } from 'next/navigation'
 import AdminSessionControl from '../../components/AdminSessionControl'
 import Sidebar from '../../components/Sidebar'
@@ -11,11 +12,20 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic'
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const token = cookies().get('arofi_admin_token')?.value
-  if (!token) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  if (!session?.user) {
     redirect('/login')
   }
+
+  const initials = session.user.email
+    .split('@')[0]
+    .split(/[.\-_]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment[0]?.toUpperCase() ?? '')
+    .join('')
+    .slice(0, 2) || 'AD'
 
   return (
     <>
@@ -25,8 +35,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="topbar-title">AROFi Platform</span>
           <div className="topbar-actions">
             <ThemeToggle />
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>admin@arosoft.io</span>
-            <div className="avatar">SA</div>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{session.user.email}</span>
+            <div className="avatar">{initials}</div>
             <AdminSessionControl />
           </div>
         </header>

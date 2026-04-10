@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
@@ -6,6 +7,7 @@ import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VouchersService } from './vouchers.service'
 
+@UseGuards(JwtAuthGuard)
 @Controller('vouchers')
 export class VouchersController {
   constructor(private readonly vouchersService: VouchersService) {}

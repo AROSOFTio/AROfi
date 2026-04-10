@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { RecordRadiusAccountingEventDto } from './dto/record-radius-accounting-event.dto'
 import { RecordRadiusAuthEventDto } from './dto/record-radius-auth-event.dto'
 import { RadiusService } from './radius.service'
@@ -7,6 +8,7 @@ import { RadiusService } from './radius.service'
 export class RadiusController {
   constructor(private readonly radiusService: RadiusService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Get('overview')
   getOverview(@Query('tenantId') tenantId?: string) {
     return this.radiusService.getOverview(tenantId)

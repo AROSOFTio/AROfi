@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { AgentsService } from './agents.service'
 import { AgentFloatAdjustmentDto } from './dto/agent-float-adjustment.dto'
 import { CreateAgentDto } from './dto/create-agent.dto'
 import { CreateDisbursementDto } from './dto/create-disbursement.dto'
 import { CreateSettlementDto } from './dto/create-settlement.dto'
 
+@UseGuards(JwtAuthGuard)
 @Controller('agents')
 export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
 import { PaymentsService } from './payments.service'
 
@@ -6,6 +7,7 @@ import { PaymentsService } from './payments.service'
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Get('overview')
   getOverview(@Query('tenantId') tenantId?: string) {
     return this.paymentsService.getOverview(tenantId)

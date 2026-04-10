@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/auth.module'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { RoutersService } from './routers.service'
 
+@UseGuards(JwtAuthGuard)
 @Controller('routers')
 export class RoutersController {
   constructor(private readonly routersService: RoutersService) {}
