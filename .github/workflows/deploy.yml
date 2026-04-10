@@ -29,6 +29,9 @@ jobs:
 
             if [ -d ".git" ]; then
               echo "Using repository in /www/wwwroot"
+            elif [ -d "arofi.arosoft.io/.git" ]; then
+              cd /www/wwwroot/arofi.arosoft.io
+              echo "Using repository in /www/wwwroot/arofi.arosoft.io"
             elif [ -d "arofi-stack/.git" ]; then
               cd /www/wwwroot/arofi-stack
               echo "Using repository in /www/wwwroot/arofi-stack"
