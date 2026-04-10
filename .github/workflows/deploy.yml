@@ -24,8 +24,23 @@ jobs:
           script: |
             set -e
 
+            echo "=== Switching to deployment root ==="
+            cd /www/wwwroot
+
+            if [ -d ".git" ]; then
+              echo "Using repository in /www/wwwroot"
+            elif [ -d "arofi-stack/.git" ]; then
+              cd /www/wwwroot/arofi-stack
+              echo "Using repository in /www/wwwroot/arofi-stack"
+            elif [ -d "AROfi/.git" ]; then
+              cd /www/wwwroot/AROfi
+              echo "Using repository in /www/wwwroot/AROfi"
+            else
+              echo "No git repository found under /www/wwwroot"
+              exit 1
+            fi
+
             echo "=== Pulling latest code ==="
-            cd /www/wwwroot/arofi-stack
             git pull origin main
 
             echo "=== Building and restarting containers ==="
