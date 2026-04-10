@@ -1,5 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+const authCookieName = 'arofi_admin_token'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -7,6 +9,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
+
+  useEffect(() => {
+    if (document.cookie.includes(`${authCookieName}=`)) {
+      window.location.href = '/dashboard'
+    }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -25,8 +33,10 @@ export default function LoginPage() {
       }
 
       const data = await res.json()
+      const token = data.access_token as string
+      document.cookie = `${authCookieName}=${token}; Path=/; Max-Age=2592000; SameSite=Lax`
       localStorage.setItem('access_token', data.access_token)
-      window.location.href = '/'
+      window.location.href = '/dashboard'
     } catch {
       setError('Invalid email or password. Please try again.')
     } finally {

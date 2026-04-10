@@ -1,3 +1,4 @@
+import AdminSessionControl from '../../components/AdminSessionControl'
 import Sidebar from '../../components/Sidebar'
 import ThemeToggle from '../../components/ThemeToggle'
 
@@ -17,6 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ThemeToggle />
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>admin@arosoft.io</span>
             <div className="avatar">SA</div>
+            <AdminSessionControl />
           </div>
         </header>
         <div className="content">
