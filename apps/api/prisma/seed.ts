@@ -1,11 +1,13 @@
 import {
   AgentType,
+  AuditSeverity,
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
   CommissionStatus,
   DisbursementMethod,
   DisbursementStatus,
+  FeatureLimitCategory,
   LedgerDirection,
   LedgerTransactionType,
   PackageActivationStatus,
@@ -23,6 +25,9 @@ import {
   RouterStatus,
   SessionStatus,
   SettlementStatus,
+  SupportTicketChannel,
+  SupportTicketPriority,
+  SupportTicketStatus,
   VoucherBatchStatus,
   VoucherStatus,
   WalletOwnerType,
@@ -526,6 +531,9 @@ async function main() {
   await prisma.settlement.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.agentCommission.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.paymentWebhook.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.supportTicket.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.featureLimit.deleteMany({ where: { tenantId: vendorTenant.id } })
+  await prisma.auditLog.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.packageActivation.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.payment.deleteMany({ where: { tenantId: vendorTenant.id } })
   await prisma.voucherRedemption.deleteMany({ where: { tenantId: vendorTenant.id } })
@@ -687,6 +695,95 @@ async function main() {
       },
     },
     include: { prices: true },
+  })
+
+  await prisma.featureLimit.createMany({
+    data: [
+      {
+        tenantId: vendorTenant.id,
+        code: 'packages',
+        name: 'Package Catalog',
+        category: FeatureLimitCategory.CATALOG,
+        description: 'Maximum number of package SKUs available to the tenant.',
+        unit: 'packages',
+        isEnabled: true,
+        limitValue: 50,
+        warningThresholdPct: 80,
+        hardLimit: true,
+      },
+      {
+        tenantId: vendorTenant.id,
+        code: 'routers',
+        name: 'Managed Routers',
+        category: FeatureLimitCategory.NETWORK,
+        description: 'Maximum number of onboarded MikroTik devices.',
+        unit: 'routers',
+        isEnabled: true,
+        limitValue: 20,
+        warningThresholdPct: 80,
+        hardLimit: true,
+      },
+      {
+        tenantId: vendorTenant.id,
+        code: 'hotspots',
+        name: 'Hotspot Sites',
+        category: FeatureLimitCategory.NETWORK,
+        description: 'Maximum number of hotspot sites under management.',
+        unit: 'sites',
+        isEnabled: true,
+        limitValue: 25,
+        warningThresholdPct: 80,
+        hardLimit: true,
+      },
+      {
+        tenantId: vendorTenant.id,
+        code: 'agents',
+        name: 'Agents and Resellers',
+        category: FeatureLimitCategory.SALES,
+        description: 'Maximum number of agents and resellers onboarded.',
+        unit: 'agents',
+        isEnabled: true,
+        limitValue: 30,
+        warningThresholdPct: 75,
+        hardLimit: false,
+      },
+      {
+        tenantId: vendorTenant.id,
+        code: 'voucher_batches',
+        name: 'Voucher Batches',
+        category: FeatureLimitCategory.SALES,
+        description: 'Total voucher batches that can remain active.',
+        unit: 'batches',
+        isEnabled: true,
+        limitValue: 200,
+        warningThresholdPct: 85,
+        hardLimit: false,
+      },
+      {
+        tenantId: vendorTenant.id,
+        code: 'active_sessions',
+        name: 'Concurrent Sessions',
+        category: FeatureLimitCategory.OPERATIONS,
+        description: 'Soft ceiling for concurrently tracked online sessions.',
+        unit: 'sessions',
+        isEnabled: true,
+        limitValue: 5000,
+        warningThresholdPct: 70,
+        hardLimit: false,
+      },
+      {
+        tenantId: vendorTenant.id,
+        code: 'open_support_tickets',
+        name: 'Open Support Tickets',
+        category: FeatureLimitCategory.SUPPORT,
+        description: 'Target open support queue size for the tenant.',
+        unit: 'tickets',
+        isEnabled: true,
+        limitValue: 15,
+        warningThresholdPct: 80,
+        hardLimit: false,
+      },
+    ],
   })
 
   const metroCoreGroup = await prisma.routerGroup.create({
@@ -1365,6 +1462,170 @@ async function main() {
     })
   }
 
+  const onboardingTicket = await prisma.supportTicket.create({
+    data: {
+      tenantId: vendorTenant.id,
+      reference: 'SUP-APR-0001',
+      subject: 'Nakawa branch router onboarding needs AAA validation',
+      category: 'Router Setup',
+      priority: SupportTicketPriority.HIGH,
+      status: SupportTicketStatus.IN_PROGRESS,
+      channel: SupportTicketChannel.INTERNAL,
+      customerReference: 'Nakawa Branch Ops',
+      phoneNumber: cityReseller.phoneNumber,
+      email: cityReseller.email,
+      openedBy: cityReseller.name,
+      assignedTo: 'Network Support',
+      latestResponseAt: new Date('2026-04-07T07:18:00.000Z'),
+      messages: {
+        create: [
+          {
+            authorName: cityReseller.name,
+            authorRole: 'Reseller',
+            body: 'Need help validating RouterOS API reachability and the new RADIUS shared secret after branch recovery.',
+          },
+          {
+            authorName: 'Network Support',
+            authorRole: 'Support',
+            body: 'Connectivity is restored. Please rerun the health probe and confirm the client sends accounting-start events.',
+            isInternal: false,
+          },
+        ],
+      },
+    },
+    include: {
+      messages: true,
+    },
+  })
+
+  const paymentTicket = await prisma.supportTicket.create({
+    data: {
+      tenantId: vendorTenant.id,
+      reference: 'SUP-APR-0002',
+      subject: 'Customer mobile money payment was delayed before activation',
+      category: 'Payments',
+      priority: SupportTicketPriority.NORMAL,
+      status: SupportTicketStatus.RESOLVED,
+      channel: SupportTicketChannel.PORTAL,
+      customerReference: '+256700111222',
+      phoneNumber: '256700111222',
+      email: 'customer@citynet.ug',
+      openedBy: 'Portal Customer',
+      assignedTo: 'Billing Support',
+      latestResponseAt: new Date('2026-04-07T06:05:00.000Z'),
+      resolvedAt: new Date('2026-04-07T06:05:00.000Z'),
+      messages: {
+        create: [
+          {
+            authorName: 'Portal Customer',
+            authorRole: 'Customer',
+            body: 'Payment was received, but the package did not activate immediately.',
+          },
+          {
+            authorName: 'Billing Support',
+            authorRole: 'Support',
+            body: 'Activation was replayed after Yo Uganda status confirmation. Service is now active.',
+          },
+        ],
+      },
+    },
+    include: {
+      messages: true,
+    },
+  })
+
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        tenantId: vendorTenant.id,
+        userId: vendorAdminUser.id,
+        actorName: `${vendorAdminUser.firstName} ${vendorAdminUser.lastName}`,
+        actorEmail: vendorAdminUser.email,
+        action: 'CREATE',
+        entity: 'Router',
+        entityId: cityRouter.id,
+        severity: AuditSeverity.INFO,
+        details: {
+          router: cityRouter.name,
+          host: cityRouter.host,
+          event: 'Router onboarded with MikroTik API credentials',
+        } as Prisma.InputJsonValue,
+      },
+      {
+        tenantId: vendorTenant.id,
+        userId: vendorAdminUser.id,
+        actorName: `${vendorAdminUser.firstName} ${vendorAdminUser.lastName}`,
+        actorEmail: vendorAdminUser.email,
+        action: 'HEALTH_CHECK',
+        entity: 'Router',
+        entityId: branchRouter.id,
+        severity: AuditSeverity.WARNING,
+        details: {
+          router: branchRouter.name,
+          status: branchRouter.status,
+          message: branchRouter.healthMessage,
+        } as Prisma.InputJsonValue,
+      },
+      {
+        tenantId: vendorTenant.id,
+        userId: financeUser.id,
+        actorName: `${financeUser.firstName} ${financeUser.lastName}`,
+        actorEmail: financeUser.email,
+        action: 'SETTLEMENT_COMPLETED',
+        entity: 'Settlement',
+        entityId: 'SET-RSL-CBD-APR-2026',
+        severity: AuditSeverity.INFO,
+        details: {
+          agentCode: cityReseller.code,
+          disbursementReference: 'DIS-RSL-CBD-APR-2026',
+        } as Prisma.InputJsonValue,
+      },
+      {
+        tenantId: vendorTenant.id,
+        userId: vendorAdminUser.id,
+        actorName: 'AROFi Portal',
+        actorEmail: 'portal@arofi.local',
+        action: 'PAYMENT_WEBHOOK_PROCESSED',
+        entity: 'Payment',
+        entityId: mobileMoneyPayment.id,
+        severity: AuditSeverity.INFO,
+        details: {
+          externalReference: mobileMoneyPayment.externalReference,
+          status: mobileMoneyPayment.status,
+        } as Prisma.InputJsonValue,
+      },
+      {
+        tenantId: vendorTenant.id,
+        userId: vendorAdminUser.id,
+        actorName: 'Network Support',
+        actorEmail: 'support@arosoft.io',
+        action: 'SUPPORT_TICKET_UPDATED',
+        entity: 'SupportTicket',
+        entityId: onboardingTicket.id,
+        severity: AuditSeverity.WARNING,
+        details: {
+          reference: onboardingTicket.reference,
+          status: onboardingTicket.status,
+          assignedTo: onboardingTicket.assignedTo,
+        } as Prisma.InputJsonValue,
+      },
+      {
+        tenantId: vendorTenant.id,
+        userId: vendorAdminUser.id,
+        actorName: 'Billing Support',
+        actorEmail: 'support@arosoft.io',
+        action: 'SUPPORT_TICKET_RESOLVED',
+        entity: 'SupportTicket',
+        entityId: paymentTicket.id,
+        severity: AuditSeverity.INFO,
+        details: {
+          reference: paymentTicket.reference,
+          status: paymentTicket.status,
+        } as Prisma.InputJsonValue,
+      },
+    ],
+  })
+
   console.log('Seed complete', {
     superAdminUserId: superAdminUser.id,
     vendorAdminUserId: vendorAdminUser.id,
@@ -1374,6 +1635,7 @@ async function main() {
     packages: [hourlyPackage.code, dailyPackage.code, weekendPackage.code],
     voucherBatch: batch.batchNumber,
     routers: [cityRouter.name, branchRouter.name],
+    supportTickets: [onboardingTicket.reference, paymentTicket.reference],
   })
 }
 

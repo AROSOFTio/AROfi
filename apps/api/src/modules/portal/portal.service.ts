@@ -323,6 +323,11 @@ export class PortalService {
       (total, session) => total + this.toMegabytes(session.inputOctets + session.outputOctets),
       0,
     )
+    const pendingPaymentStatuses: PaymentStatus[] = [
+      PaymentStatus.INITIATED,
+      PaymentStatus.PENDING,
+      PaymentStatus.INDETERMINATE,
+    ]
 
     return {
       authenticatedAt: new Date().toISOString(),
@@ -343,9 +348,7 @@ export class PortalService {
           ? Math.max(0, Math.round((activeActivation.endsAt.getTime() - now.getTime()) / 60000))
           : 0,
         recentSessionCount: recentSessions.length,
-        pendingPayments: recentPayments.filter((payment) =>
-          [PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.INDETERMINATE].includes(payment.status as any),
-        ).length,
+        pendingPayments: recentPayments.filter((payment) => pendingPaymentStatuses.includes(payment.status)).length,
         completedPayments: recentPayments.filter((payment) => payment.status === PaymentStatus.COMPLETED).length,
         totalDataUsedMb: Math.round(totalDataUsedMb * 100) / 100,
       },
