@@ -1,13 +1,22 @@
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import AdminSessionControl from '../../components/AdminSessionControl'
 import Sidebar from '../../components/Sidebar'
 import ThemeToggle from '../../components/ThemeToggle'
 
 export const metadata = {
-  title: 'AROFi Admin – Hotspot Billing & Network Management',
+  title: 'AROFi Admin - Hotspot Billing & Network Management',
   description: 'Enterprise hotspot billing and network management platform. Built by AROSOFT Innovations Ltd.',
 }
 
+export const dynamic = 'force-dynamic'
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const token = cookies().get('arofi_admin_token')?.value
+  if (!token) {
+    redirect('/login')
+  }
+
   return (
     <>
       <Sidebar />
@@ -21,9 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <AdminSessionControl />
           </div>
         </header>
-        <div className="content">
-          {children}
-        </div>
+        <div className="content">{children}</div>
       </div>
     </>
   )
