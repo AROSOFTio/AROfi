@@ -3,6 +3,39 @@ export type TenantSummary = {
   name: string
 }
 
+export type TenantOverviewResponse = {
+  summary: {
+    totalTenants: number
+    withDomain: number
+    totalHotspots: number
+    totalRouters: number
+  }
+  items: TenantItem[]
+}
+
+export type TenantItem = {
+  id: string
+  name: string
+  domain?: string | null
+  logoUrl?: string | null
+  brandColor?: string | null
+  supportPhone?: string | null
+  supportEmail?: string | null
+  createdAt: string
+  updatedAt: string
+  wallet?: {
+    id: string
+    balanceUgx: number
+    currency: string
+  } | null
+  counts: {
+    users: number
+    hotspots: number
+    routers: number
+    packages: number
+  }
+}
+
 export type PackageCatalogResponse = {
   summary: {
     totalPackages: number
@@ -96,6 +129,39 @@ export type VouchersOverviewResponse = {
     } | null
     customerReference?: string | null
     createdAt: string
+  }>
+}
+
+export type VoucherTemplatesResponse = {
+  summary: {
+    totalTemplates: number
+    activeTemplates: number
+    defaultTemplates: number
+  }
+  items: Array<{
+    id: string
+    tenantId: string
+    packageId?: string | null
+    name: string
+    code: string
+    prefix: string
+    defaultQuantity: number
+    faceValueUgx?: number | null
+    expiresAfterDays?: number | null
+    isDefault: boolean
+    isActive: boolean
+    notes?: string | null
+    createdAt: string
+    updatedAt: string
+    tenant: TenantSummary
+    package?: {
+      id: string
+      name: string
+      code: string
+    } | null
+    _count?: {
+      batches: number
+    }
   }>
 }
 

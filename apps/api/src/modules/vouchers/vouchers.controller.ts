@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
+import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
+import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VouchersService } from './vouchers.service'
 
 @Controller('vouchers')
@@ -11,6 +13,21 @@ export class VouchersController {
   @Get('overview')
   getOverview(@Query('tenantId') tenantId?: string) {
     return this.vouchersService.getOverview(tenantId)
+  }
+
+  @Get('templates')
+  getTemplates(@Query('tenantId') tenantId?: string) {
+    return this.vouchersService.getTemplates(tenantId)
+  }
+
+  @Post('templates')
+  createTemplate(@Body() dto: CreateVoucherTemplateDto) {
+    return this.vouchersService.createTemplate(dto)
+  }
+
+  @Patch('templates/:templateId')
+  updateTemplate(@Param('templateId') templateId: string, @Body() dto: UpdateVoucherTemplateDto) {
+    return this.vouchersService.updateTemplate(templateId, dto)
   }
 
   @Post('batches')

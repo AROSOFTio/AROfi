@@ -1,7 +1,6 @@
 services:
   nginx:
     image: nginx:alpine
-    container_name: arofi-nginx
     restart: unless-stopped
     ports:
       - "8098:8098"
@@ -16,7 +15,6 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: arofi-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -34,7 +32,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: arofi-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
@@ -48,7 +45,6 @@ services:
 
   freeradius:
     image: freeradius/freeradius-server:latest-alpine
-    container_name: arofi-freeradius
     restart: unless-stopped
     ports:
       - "1812:1812/udp"
@@ -63,7 +59,6 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-    container_name: arofi-api
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-root}@postgres:5432/${POSTGRES_DB:-arofi_dev}?schema=public
@@ -71,6 +66,7 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:-change_this_in_production}
       - NODE_ENV=production
+      - PAYMENT_DEFAULT_PROVIDER=${PAYMENT_DEFAULT_PROVIDER:-PESAPAL}
       - YO_API_MODE=${YO_API_MODE:-live}
       - YO_API_BASE_URL=${YO_API_BASE_URL:-https://paymentsapi1.yo.co.ug/ybs/task.php}
       - YO_API_FALLBACK_URL=${YO_API_FALLBACK_URL:-https://paymentsapi2.yo.co.ug/ybs/task.php}
@@ -78,6 +74,13 @@ services:
       - YO_API_PASSWORD=${YO_API_PASSWORD:-}
       - YO_WEBHOOK_BASE_URL=${YO_WEBHOOK_BASE_URL:-https://arofi.arosoft.io/api/payments/webhooks/yo-uganda}
       - YO_WEBHOOK_TOKEN=${YO_WEBHOOK_TOKEN:-change_me_yo_webhook}
+      - PESAPAL_MODE=${PESAPAL_MODE:-live}
+      - PESAPAL_BASE_URL=${PESAPAL_BASE_URL:-}
+      - PESAPAL_CONSUMER_KEY=${PESAPAL_CONSUMER_KEY:-}
+      - PESAPAL_CONSUMER_SECRET=${PESAPAL_CONSUMER_SECRET:-}
+      - PESAPAL_IPN_ID=${PESAPAL_IPN_ID:-}
+      - PESAPAL_CALLBACK_URL=${PESAPAL_CALLBACK_URL:-https://arofi.arosoft.io/api/payments/webhooks/pesapal}
+      - PESAPAL_WEBHOOK_TOKEN=${PESAPAL_WEBHOOK_TOKEN:-change_me_pesapal_webhook}
       - ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:-change_this_router_secret}
       - RADIUS_SERVER_HOST=${RADIUS_SERVER_HOST:-freeradius}
       - RADIUS_PUBLIC_HOST=${RADIUS_PUBLIC_HOST:-95.111.234.34}
@@ -96,7 +99,6 @@ services:
     build:
       context: ./apps/admin-web
       dockerfile: Dockerfile
-    container_name: arofi-admin
     restart: unless-stopped
     environment:
       - API_SERVER_URL=http://api:3000/api
@@ -109,7 +111,6 @@ services:
     build:
       context: ./apps/portal-web
       dockerfile: Dockerfile
-    container_name: arofi-portal
     restart: unless-stopped
     environment:
       - API_SERVER_URL=http://api:3000/api

@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator'
+import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength, ValidateIf } from 'class-validator'
 
 export class CreateVoucherBatchDto {
   @IsUUID()
@@ -9,16 +9,22 @@ export class CreateVoucherBatchDto {
 
   @IsOptional()
   @IsUUID()
+  templateId?: string
+
+  @IsOptional()
+  @IsUUID()
   generatedByUserId?: string
 
+  @ValidateIf((object: CreateVoucherBatchDto) => !object.templateId)
   @IsString()
   @MinLength(2)
-  prefix: string
+  prefix?: string
 
+  @ValidateIf((object: CreateVoucherBatchDto) => !object.templateId)
   @IsInt()
   @Min(1)
   @Max(10000)
-  quantity: number
+  quantity?: number
 
   @IsOptional()
   @IsInt()

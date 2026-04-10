@@ -1,13 +1,9 @@
-import { Module, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service';
-
-@Injectable()
-export class TenantsService {
-  constructor(private prisma: PrismaService) {}
-  async findAll() { return []; }
-}
+import { Module } from '@nestjs/common'
+import { TenantsController } from './tenants.controller'
+import { TenantsService } from './tenants.service'
 
 @Module({
+  controllers: [TenantsController],
   providers: [TenantsService],
   exports: [TenantsService],
 })

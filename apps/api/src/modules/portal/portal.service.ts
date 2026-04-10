@@ -272,6 +272,10 @@ export class PortalService {
             id: true,
             name: true,
             domain: true,
+            logoUrl: true,
+            brandColor: true,
+            supportPhone: true,
+            supportEmail: true,
           },
         }),
         this.prisma.packageActivation.findFirst({
@@ -396,6 +400,7 @@ export class PortalService {
     id: string
     status: PaymentStatus
     provider: string
+    method: string
     network: string
     amountUgx: number
     phoneNumber: string
@@ -404,6 +409,7 @@ export class PortalService {
     providerReference: string | null
     providerStatus: string | null
     statusMessage: string | null
+    responsePayload: Prisma.JsonValue | null
     createdAt: Date
     completedAt: Date | null
     package: {
@@ -435,6 +441,7 @@ export class PortalService {
       id: payment.id,
       status: payment.status,
       provider: payment.provider,
+      method: payment.method,
       network: payment.network,
       amountUgx: payment.amountUgx,
       phoneNumber: payment.phoneNumber,
@@ -443,6 +450,8 @@ export class PortalService {
       providerReference: payment.providerReference,
       providerStatus: payment.providerStatus,
       statusMessage: payment.statusMessage,
+      checkoutUrl: this.extractCheckoutUrl(payment.responsePayload),
+      responsePayload: payment.responsePayload,
       createdAt: payment.createdAt,
       completedAt: payment.completedAt,
       package: payment.package,
@@ -683,5 +692,14 @@ export class PortalService {
 
   private toMegabytes(value: bigint) {
     return Math.round((Number(value) / (1024 * 1024)) * 100) / 100
+  }
+
+  private extractCheckoutUrl(payload: Prisma.JsonValue | null) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return null
+    }
+
+    const value = payload['checkoutUrl']
+    return typeof value === 'string' && value.trim().length > 0 ? value : null
   }
 }

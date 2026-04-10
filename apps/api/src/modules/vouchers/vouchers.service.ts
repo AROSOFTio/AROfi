@@ -12,8 +12,10 @@ import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
 import { PackageActivationService } from '../payments/package-activation.service'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
+import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
+import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VoucherCodeService } from './voucher-code.service'
 
 @Injectable()
@@ -160,23 +162,210 @@ export class VouchersService {
     }
   }
 
-  async createBatch(dto: CreateVoucherBatchDto) {
-    const pkg = await this.prisma.package.findUnique({
-      where: { id: dto.packageId },
+  async getTemplates(tenantId?: string) {
+    const items = await this.prisma.voucherTemplate.findMany({
+      where: tenantId ? { tenantId } : undefined,
       include: {
-        prices: {
-          orderBy: { startsAt: 'desc' },
-          take: 1,
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        package: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+        _count: {
+          select: {
+            batches: true,
+          },
+        },
+      },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+    })
+
+    return {
+      summary: {
+        totalTemplates: items.length,
+        activeTemplates: items.filter((template) => template.isActive).length,
+        defaultTemplates: items.filter((template) => template.isDefault).length,
+      },
+      items,
+    }
+  }
+
+  async createTemplate(dto: CreateVoucherTemplateDto) {
+    const [tenant, pkg] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { id: dto.tenantId } }),
+      dto.packageId ? this.prisma.package.findUnique({ where: { id: dto.packageId } }) : Promise.resolve(null),
+    ])
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found')
+    }
+
+    if (pkg && pkg.tenantId !== dto.tenantId) {
+      throw new BadRequestException('Package does not belong to the tenant')
+    }
+
+    if (dto.isDefault) {
+      await this.prisma.voucherTemplate.updateMany({
+        where: {
+          tenantId: dto.tenantId,
+          isDefault: true,
+        },
+        data: {
+          isDefault: false,
+        },
+      })
+    }
+
+    return this.prisma.voucherTemplate.create({
+      data: {
+        tenantId: dto.tenantId,
+        packageId: dto.packageId,
+        name: dto.name.trim(),
+        code: dto.code.trim().toUpperCase(),
+        prefix: dto.prefix.trim().toUpperCase(),
+        defaultQuantity: dto.defaultQuantity ?? 100,
+        faceValueUgx: dto.faceValueUgx,
+        expiresAfterDays: dto.expiresAfterDays,
+        isDefault: dto.isDefault ?? false,
+        isActive: dto.isActive ?? true,
+        notes: dto.notes?.trim(),
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        package: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
         },
       },
     })
+  }
+
+  async updateTemplate(templateId: string, dto: UpdateVoucherTemplateDto) {
+    const existing = await this.prisma.voucherTemplate.findUnique({
+      where: { id: templateId },
+    })
+
+    if (!existing) {
+      throw new NotFoundException('Voucher template not found')
+    }
+
+    if (dto.packageId) {
+      const pkg = await this.prisma.package.findUnique({ where: { id: dto.packageId } })
+      if (!pkg || pkg.tenantId !== existing.tenantId) {
+        throw new BadRequestException('Package does not belong to the template tenant')
+      }
+    }
+
+    if (dto.isDefault) {
+      await this.prisma.voucherTemplate.updateMany({
+        where: {
+          tenantId: existing.tenantId,
+          isDefault: true,
+          id: {
+            not: templateId,
+          },
+        },
+        data: {
+          isDefault: false,
+        },
+      })
+    }
+
+    return this.prisma.voucherTemplate.update({
+      where: { id: templateId },
+      data: {
+        packageId: dto.packageId,
+        name: dto.name?.trim(),
+        code: dto.code?.trim().toUpperCase(),
+        prefix: dto.prefix?.trim().toUpperCase(),
+        defaultQuantity: dto.defaultQuantity,
+        faceValueUgx: dto.faceValueUgx,
+        expiresAfterDays: dto.expiresAfterDays,
+        isDefault: dto.isDefault,
+        isActive: dto.isActive,
+        notes: dto.notes?.trim(),
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        package: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+    })
+  }
+
+  async createBatch(dto: CreateVoucherBatchDto) {
+    const [template, pkg] = await Promise.all([
+      dto.templateId
+        ? this.prisma.voucherTemplate.findUnique({
+            where: { id: dto.templateId },
+          })
+        : Promise.resolve(null),
+      this.prisma.package.findUnique({
+        where: { id: dto.packageId },
+        include: {
+          prices: {
+            orderBy: { startsAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+    ])
+
+    if (template && template.tenantId !== dto.tenantId) {
+      throw new BadRequestException('Voucher template does not belong to the tenant')
+    }
 
     if (!pkg || pkg.tenantId !== dto.tenantId) {
       throw new NotFoundException('Package not found for tenant')
     }
 
-    const batchNumber = this.voucherCodeService.generateBatchNumber(dto.prefix)
-    const faceValueUgx = dto.faceValueUgx ?? pkg.prices[0]?.amountUgx
+    if (template?.packageId && template.packageId !== dto.packageId) {
+      throw new BadRequestException('Template package does not match the selected package')
+    }
+
+    const resolvedPrefix = (dto.prefix ?? template?.prefix)?.toUpperCase()
+    const resolvedQuantity = dto.quantity ?? template?.defaultQuantity
+    const batchNumber = this.voucherCodeService.generateBatchNumber(resolvedPrefix ?? '')
+    const faceValueUgx = dto.faceValueUgx ?? template?.faceValueUgx ?? pkg.prices[0]?.amountUgx
+    const resolvedExpiresAt = dto.expiresAt
+      ? new Date(dto.expiresAt)
+      : template?.expiresAfterDays
+        ? new Date(Date.now() + template.expiresAfterDays * 24 * 60 * 60 * 1000)
+        : null
+
+    if (!resolvedPrefix) {
+      throw new BadRequestException('Prefix is required (direct input or template)')
+    }
+
+    if (!resolvedQuantity) {
+      throw new BadRequestException('Quantity is required (direct input or template)')
+    }
 
     if (!faceValueUgx) {
       throw new BadRequestException('Package has no active price configured')
@@ -187,26 +376,27 @@ export class VouchersService {
         data: {
           tenantId: dto.tenantId,
           packageId: dto.packageId,
+          templateId: template?.id,
           generatedByUserId: dto.generatedByUserId,
           batchNumber,
-          prefix: dto.prefix.toUpperCase(),
-          quantity: dto.quantity,
+          prefix: resolvedPrefix,
+          quantity: resolvedQuantity,
           faceValueUgx,
-          expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+          expiresAt: resolvedExpiresAt,
           status: VoucherBatchStatus.ACTIVE,
           notes: dto.notes,
         },
       })
 
       await tx.voucher.createMany({
-        data: Array.from({ length: dto.quantity }).map((_, index) => ({
+        data: Array.from({ length: resolvedQuantity }).map((_, index) => ({
           tenantId: dto.tenantId,
           batchId: batch.id,
           packageId: dto.packageId,
-          code: this.voucherCodeService.generateVoucherCode(dto.prefix, batchNumber, index + 1),
+          code: this.voucherCodeService.generateVoucherCode(resolvedPrefix, batchNumber, index + 1),
           serialNumber: this.voucherCodeService.generateSerialNumber(batchNumber, index + 1),
           faceValueUgx,
-          expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+          expiresAt: resolvedExpiresAt,
         })),
       })
 

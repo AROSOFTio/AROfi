@@ -35,6 +35,40 @@ export class PaymentsController {
     return this.paymentsService.handleYoWebhook(payload, headers, token, event, externalReference)
   }
 
+  @Get('webhooks/pesapal')
+  handlePesapalWebhookGet(
+    @Query() query: Record<string, string>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    return this.paymentsService.handlePesapalWebhook(
+      {},
+      headers,
+      query.token,
+      query.OrderTrackingId ?? query.orderTrackingId,
+      query.OrderMerchantReference ?? query.merchantReference ?? query.externalReference,
+      query.OrderNotificationType ?? query.event,
+    )
+  }
+
+  @Post('webhooks/pesapal')
+  handlePesapalWebhookPost(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('token') token?: string,
+    @Query('orderTrackingId') orderTrackingId?: string,
+    @Query('merchantReference') merchantReference?: string,
+    @Query('event') event?: string,
+  ) {
+    return this.paymentsService.handlePesapalWebhook(
+      payload,
+      headers,
+      token,
+      orderTrackingId,
+      merchantReference,
+      event,
+    )
+  }
+
   @Get(':paymentId')
   getPayment(@Param('paymentId') paymentId: string) {
     return this.paymentsService.getPayment(paymentId)

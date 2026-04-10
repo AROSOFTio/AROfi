@@ -3,6 +3,10 @@ export type PortalContextResponse = {
     id: string
     name: string
     domain?: string | null
+    logoUrl?: string | null
+    brandColor?: string | null
+    supportPhone?: string | null
+    supportEmail?: string | null
   }
   packages: PortalPackage[]
   activeActivation?: PortalActivation | null
@@ -47,6 +51,7 @@ export type PortalPayment = {
   id: string
   status: string
   provider: string
+  method: string
   network: string
   amountUgx: number
   phoneNumber: string
@@ -55,6 +60,8 @@ export type PortalPayment = {
   providerReference?: string | null
   providerStatus?: string | null
   statusMessage?: string | null
+  checkoutUrl?: string | null
+  responsePayload?: Record<string, unknown> | null
   createdAt: string
   completedAt?: string | null
   package: {
@@ -132,6 +139,10 @@ export type PortalCustomerSession = {
     id: string
     name: string
     domain?: string | null
+    logoUrl?: string | null
+    brandColor?: string | null
+    supportPhone?: string | null
+    supportEmail?: string | null
   }
   customer: {
     phoneNumber: string

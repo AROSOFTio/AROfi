@@ -16,6 +16,8 @@ import type {
 
 type PortalView = 'home' | 'login' | 'session'
 type MobileMoneyNetwork = 'MTN' | 'AIRTEL'
+type PaymentProviderOption = 'YO_UGANDA' | 'PESAPAL'
+type PaymentMethodOption = 'MOBILE_MONEY' | 'CARD'
 
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const portalStorageKey = 'arofi.portal.access_token'
@@ -75,6 +77,21 @@ async function readJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T
 }
 
+function resolveCheckoutUrl(payment: PortalPayment) {
+  if (payment.checkoutUrl) {
+    return payment.checkoutUrl
+  }
+
+  if (payment.responsePayload && typeof payment.responsePayload === 'object') {
+    const value = (payment.responsePayload as Record<string, unknown>).checkoutUrl
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value
+    }
+  }
+
+  return null
+}
+
 export default function PortalCheckout({ initialView = 'home' }: { initialView?: PortalView }) {
   const router = useRouter()
   const [context, setContext] = useState<PortalContextResponse | null>(null)
@@ -85,6 +102,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [phoneNumber, setPhoneNumber] = useState('')
   const [customerReference, setCustomerReference] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
+  const [paymentProvider, setPaymentProvider] = useState<PaymentProviderOption>('PESAPAL')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodOption>('MOBILE_MONEY')
   const [network, setNetwork] = useState<MobileMoneyNetwork>('MTN')
   const [isBooting, setIsBooting] = useState(true)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
@@ -105,6 +124,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const interval = window.setInterval(() => void pollPayment(currentPayment.id), 5000)
     return () => window.clearInterval(interval)
   }, [currentPayment])
+
+  useEffect(() => {
+    if (paymentProvider === 'YO_UGANDA' && paymentMethod !== 'MOBILE_MONEY') {
+      setPaymentMethod('MOBILE_MONEY')
+    }
+  }, [paymentProvider, paymentMethod])
 
   async function bootstrap() {
     setIsBooting(true)
@@ -243,7 +268,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
 
     if (!phoneNumber.trim()) {
-      setErrorMessage('Enter the phone number that will approve the mobile money prompt.')
+      setErrorMessage('Enter the customer phone number for payment verification and session matching.')
       return
     }
 
@@ -259,7 +284,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           packageId: selectedPackage.id,
           phoneNumber,
           customerReference: customerReference || phoneNumber,
-          network,
+          provider: paymentProvider,
+          method: paymentMethod,
+          network: paymentMethod === 'MOBILE_MONEY' ? network : undefined,
           idempotencyKey: crypto.randomUUID(),
         }),
       })
@@ -272,7 +299,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       const payment = body as PortalPayment
       setCurrentPayment(payment)
-      setStatusMessage('Payment prompt sent. Approve it on your phone to activate the package.')
+      const checkoutUrl = resolveCheckoutUrl(payment)
+
+      if (paymentProvider === 'PESAPAL' && checkoutUrl) {
+        setStatusMessage('Redirecting to secure Pesapal checkout...')
+        window.location.href = checkoutUrl
+        return
+      }
+
+      setStatusMessage('Payment request sent. Approve it on your phone to activate the package.')
       if (payment.activation) {
         await loginWithPhone(payment.phoneNumber, true)
       } else {
@@ -383,7 +418,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10">
-                <img src="/logo.png" alt="AROFi" className="h-9 w-auto" />
+                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-9 w-auto" />
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.22em] text-sky-200">Customer Portal</p>
@@ -393,6 +428,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
                   Buy packages, redeem vouchers, sign in with your phone number, and monitor your hotspot session from one mobile-friendly experience.
                 </p>
+                {(context?.tenant.supportPhone || context?.tenant.supportEmail) && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Support: {context?.tenant.supportPhone ?? context?.tenant.supportEmail}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -424,7 +464,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           <div className="grid gap-3 sm:grid-cols-3">
             <SummaryCard label="Live access" value={activeActivation ? 'Active' : 'Ready to buy'} helper={activeActivation ? formatDate(activeActivation.endsAt) : `${packages.length} package${packages.length === 1 ? '' : 's'} available`} />
-            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'MTN and Airtel supported'} />
+            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'MTN, Airtel, and card checkout supported'} />
             <SummaryCard label="Usage tracked" value={portalSession ? formatMegabytes(portalSession.summary.totalDataUsedMb) : '0 MB'} helper={portalSession ? `${portalSession.summary.recentSessionCount} recent sessions` : 'Login unlocks session insights'} />
           </div>
         </div>
@@ -482,23 +522,41 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Checkout</p>
-                      <h2 className="mt-2 text-xl font-semibold text-white">Pay with mobile money</h2>
+                      <h2 className="mt-2 text-xl font-semibold text-white">Pay with mobile money or card</h2>
                     </div>
                     <Receipt className="h-5 w-5 text-slate-500" />
                   </div>
                   <form onSubmit={handlePaymentSubmit} className="mt-5 space-y-4">
+                    <div>
+                      <label className="mb-2 block text-xs uppercase tracking-[0.15em] text-slate-500">Provider</label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <button type="button" onClick={() => setPaymentProvider('PESAPAL')} className={`rounded-2xl border px-4 py-3 text-sm ${paymentProvider === 'PESAPAL' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>Pesapal Checkout</button>
+                        <button type="button" onClick={() => setPaymentProvider('YO_UGANDA')} className={`rounded-2xl border px-4 py-3 text-sm ${paymentProvider === 'YO_UGANDA' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>Yo Uganda Prompt</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs uppercase tracking-[0.15em] text-slate-500">Method</label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <button type="button" onClick={() => setPaymentMethod('MOBILE_MONEY')} className={`rounded-2xl border px-4 py-3 text-sm ${paymentMethod === 'MOBILE_MONEY' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>Mobile Money</button>
+                        <button type="button" onClick={() => setPaymentMethod('CARD')} disabled={paymentProvider === 'YO_UGANDA'} className={`rounded-2xl border px-4 py-3 text-sm ${paymentMethod === 'CARD' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'} ${paymentProvider === 'YO_UGANDA' ? 'cursor-not-allowed opacity-50' : ''}`}>Card</button>
+                      </div>
+                    </div>
                     <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-400" />
                     <input value={customerReference} onChange={(event) => setCustomerReference(event.target.value)} placeholder="Customer reference" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-400" />
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <button type="button" onClick={() => setNetwork('MTN')} className={`rounded-2xl border px-4 py-3 text-sm ${network === 'MTN' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>MTN MoMo</button>
-                      <button type="button" onClick={() => setNetwork('AIRTEL')} className={`rounded-2xl border px-4 py-3 text-sm ${network === 'AIRTEL' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>Airtel Money</button>
-                    </div>
+                    {paymentMethod === 'MOBILE_MONEY' && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <button type="button" onClick={() => setNetwork('MTN')} className={`rounded-2xl border px-4 py-3 text-sm ${network === 'MTN' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>MTN MoMo</button>
+                        <button type="button" onClick={() => setNetwork('AIRTEL')} className={`rounded-2xl border px-4 py-3 text-sm ${network === 'AIRTEL' ? 'border-sky-400 bg-sky-500/10 text-white' : 'border-slate-700 bg-slate-950 text-slate-300'}`}>Airtel Money</button>
+                      </div>
+                    )}
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/55 p-4 text-sm text-slate-300">
-                      {selectedPackage ? `${selectedPackage.name} . ${formatCurrency(selectedPackage.amountUgx)} . ${formatDuration(selectedPackage.durationMinutes)}` : 'Choose a package first.'}
+                      {selectedPackage
+                        ? `${selectedPackage.name} . ${formatCurrency(selectedPackage.amountUgx)} . ${formatDuration(selectedPackage.durationMinutes)} . ${paymentProvider === 'PESAPAL' ? (paymentMethod === 'CARD' ? 'Pesapal Card Checkout' : `Pesapal ${network} Mobile Money`) : `Yo Uganda ${network}`}`
+                        : 'Choose a package first.'}
                     </div>
                     <button type="submit" disabled={isPaymentLoading || !selectedPackage} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
                       {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                      {isPaymentLoading ? 'Sending prompt...' : 'Pay now'}
+                      {isPaymentLoading ? 'Starting checkout...' : 'Pay now'}
                     </button>
                   </form>
                   {currentPayment && (
@@ -507,8 +565,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                         <div>
                           <div className="font-semibold text-white">{currentPayment.package.name}</div>
                           <div className="mt-1 text-slate-400">
-                            {formatCurrency(currentPayment.amountUgx)} . {currentPayment.phoneNumber}
+                            {formatCurrency(currentPayment.amountUgx)} . {currentPayment.phoneNumber} . {currentPayment.provider} . {currentPayment.method}
                           </div>
+                          {resolveCheckoutUrl(currentPayment) && (
+                            <a href={resolveCheckoutUrl(currentPayment) ?? '#'} className="mt-2 inline-flex text-xs font-semibold text-sky-200 underline">
+                              Open checkout page
+                            </a>
+                          )}
                         </div>
                         <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(currentPayment.status)}`}>
                           {currentPayment.status}
