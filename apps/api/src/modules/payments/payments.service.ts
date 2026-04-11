@@ -420,7 +420,7 @@ export class PaymentsService {
     }
   }
 
-  async getPayment(paymentId: string) {
+  async getPayment(paymentId: string, tenantId?: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
       include: this.paymentDetailInclude,
@@ -430,16 +430,24 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found')
     }
 
+    if (tenantId && payment.tenantId !== tenantId) {
+      throw new NotFoundException('Payment not found')
+    }
+
     return payment
   }
 
-  async checkPaymentStatus(paymentId: string) {
+  async checkPaymentStatus(paymentId: string, tenantId?: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
       include: this.paymentInclude,
     })
 
     if (!payment) {
+      throw new NotFoundException('Payment not found')
+    }
+
+    if (tenantId && payment.tenantId !== tenantId) {
       throw new NotFoundException('Payment not found')
     }
 

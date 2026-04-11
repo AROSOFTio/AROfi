@@ -49,7 +49,11 @@ export class WalletsService {
     }
   }
 
-  async getWallet(tenantId: string) {
+  async getWallet(tenantId: string, scopedTenantId?: string) {
+    if (scopedTenantId && scopedTenantId !== tenantId) {
+      return null
+    }
+
     return this.prisma.wallet.findFirst({
       where: {
         tenantId,

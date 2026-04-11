@@ -145,12 +145,16 @@ export class SystemService {
     }
   }
 
-  async updateFeatureLimit(limitId: string, dto: UpdateFeatureLimitDto) {
+  async updateFeatureLimit(limitId: string, dto: UpdateFeatureLimitDto, tenantId?: string) {
     const existing = await this.prisma.featureLimit.findUnique({
       where: { id: limitId },
     })
 
     if (!existing) {
+      throw new NotFoundException('Feature limit not found')
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
       throw new NotFoundException('Feature limit not found')
     }
 
@@ -257,12 +261,16 @@ export class SystemService {
     })
   }
 
-  async updateSupportTicket(ticketId: string, dto: UpdateSupportTicketDto) {
+  async updateSupportTicket(ticketId: string, dto: UpdateSupportTicketDto, tenantId?: string) {
     const existing = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
     })
 
     if (!existing) {
+      throw new NotFoundException('Support ticket not found')
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
       throw new NotFoundException('Support ticket not found')
     }
 
@@ -296,16 +304,21 @@ export class SystemService {
     })
   }
 
-  async addSupportTicketMessage(ticketId: string, dto: AddSupportTicketMessageDto) {
+  async addSupportTicketMessage(ticketId: string, dto: AddSupportTicketMessageDto, tenantId?: string) {
     const existing = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
       select: {
         id: true,
+        tenantId: true,
         status: true,
       },
     })
 
     if (!existing) {
+      throw new NotFoundException('Support ticket not found')
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
       throw new NotFoundException('Support ticket not found')
     }
 

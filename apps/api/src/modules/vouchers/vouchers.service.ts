@@ -256,12 +256,16 @@ export class VouchersService {
     })
   }
 
-  async updateTemplate(templateId: string, dto: UpdateVoucherTemplateDto) {
+  async updateTemplate(templateId: string, dto: UpdateVoucherTemplateDto, tenantId?: string) {
     const existing = await this.prisma.voucherTemplate.findUnique({
       where: { id: templateId },
     })
 
     if (!existing) {
+      throw new NotFoundException('Voucher template not found')
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
       throw new NotFoundException('Voucher template not found')
     }
 
@@ -429,7 +433,7 @@ export class VouchersService {
     })
   }
 
-  async recordSale(voucherId: string, dto: RecordVoucherSaleDto) {
+  async recordSale(voucherId: string, dto: RecordVoucherSaleDto, tenantId?: string) {
     const voucher = await this.prisma.voucher.findUnique({
       where: { id: voucherId },
       include: {
@@ -438,6 +442,10 @@ export class VouchersService {
     })
 
     if (!voucher) {
+      throw new NotFoundException('Voucher not found')
+    }
+
+    if (tenantId && voucher.tenantId !== tenantId) {
       throw new NotFoundException('Voucher not found')
     }
 
@@ -498,7 +506,7 @@ export class VouchersService {
     })
   }
 
-  async redeemVoucher(dto: RedeemVoucherDto) {
+  async redeemVoucher(dto: RedeemVoucherDto, tenantId?: string) {
     const voucher = await this.prisma.voucher.findUnique({
       where: { code: dto.code },
       include: {
@@ -546,6 +554,10 @@ export class VouchersService {
     })
 
     if (!voucher) {
+      throw new NotFoundException('Voucher not found')
+    }
+
+    if (tenantId && voucher.tenantId !== tenantId) {
       throw new NotFoundException('Voucher not found')
     }
 

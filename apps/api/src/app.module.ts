@@ -6,6 +6,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { HotspotsModule } from './modules/hotspots/hotspots.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PortalModule } from './modules/portal/portal.module';
@@ -24,6 +25,7 @@ import { PrismaModule } from './prisma.module';
     AgentsModule,
     AuthModule,
     UsersModule,
+    OnboardingModule,
     TenantsModule,
     HotspotsModule,
     RoutersModule,

@@ -1,19 +1,34 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
-import { JwtAuthGuard } from '../auth/auth.module'
+import {
+  AccessScopeService,
+  AuthenticatedAdminUser,
+  JwtAuthGuard,
+  PermissionsGuard,
+} from '../auth/auth.module'
+import { CurrentUser } from '../auth/current-user.decorator'
+import { RequirePermissions } from '../auth/permissions.decorator'
+import { PERMISSIONS } from '../auth/permissions.constants'
 import { WalletsService } from './wallets.service'
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('wallets')
 export class WalletsController {
-  constructor(private readonly walletsService: WalletsService) {}
+  constructor(
+    private readonly walletsService: WalletsService,
+    private readonly accessScope: AccessScopeService,
+  ) {}
 
+  @RequirePermissions(PERMISSIONS.billingRead)
   @Get()
-  listWallets(@Query('tenantId') tenantId?: string) {
-    return this.walletsService.listWallets(tenantId)
+  listWallets(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.walletsService.listWallets(scopedTenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.billingRead)
   @Get(':tenantId')
-  getWallet(@Param('tenantId') tenantId: string) {
-    return this.walletsService.getWallet(tenantId)
+  getWallet(@CurrentUser() user: AuthenticatedAdminUser, @Param('tenantId') tenantId: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.walletsService.getWallet(tenantId, scopedTenantId)
   }
 }

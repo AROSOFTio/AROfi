@@ -16,6 +16,15 @@ export function getBrowserAdminToken() {
   return decodeURIComponent(cookie.split('=').slice(1).join('='))
 }
 
+export function setBrowserAdminSession(token: string) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const secureFlag = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${adminAuthCookieName}=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secureFlag}`
+}
+
 export function clearBrowserAdminSession() {
   if (typeof document === 'undefined') {
     return

@@ -107,9 +107,13 @@ export class PackagesService {
     })
   }
 
-  async addPricing(packageId: string, dto: CreatePackagePriceDto) {
+  async addPricing(packageId: string, dto: CreatePackagePriceDto, tenantId?: string) {
     const pkg = await this.prisma.package.findUnique({ where: { id: packageId } })
     if (!pkg) {
+      throw new NotFoundException('Package not found')
+    }
+
+    if (tenantId && pkg.tenantId !== tenantId) {
       throw new NotFoundException('Package not found')
     }
 

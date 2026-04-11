@@ -1,16 +1,29 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards } from '@nestjs/common'
-import { JwtAuthGuard } from '../auth/auth.module'
+import {
+  AccessScopeService,
+  AuthenticatedAdminUser,
+  JwtAuthGuard,
+  PermissionsGuard,
+} from '../auth/auth.module'
+import { CurrentUser } from '../auth/current-user.decorator'
+import { RequirePermissions } from '../auth/permissions.decorator'
+import { PERMISSIONS } from '../auth/permissions.constants'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
 import { PaymentsService } from './payments.service'
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly accessScope: AccessScopeService,
+  ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.paymentsRead)
   @Get('overview')
-  getOverview(@Query('tenantId') tenantId?: string) {
-    return this.paymentsService.getOverview(tenantId)
+  getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.paymentsService.getOverview(scopedTenantId)
   }
 
   @Get('portal/context')
@@ -71,9 +84,12 @@ export class PaymentsController {
     )
   }
 
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.paymentsRead)
   @Get(':paymentId')
-  getPayment(@Param('paymentId') paymentId: string) {
-    return this.paymentsService.getPayment(paymentId)
+  getPayment(@CurrentUser() user: AuthenticatedAdminUser, @Param('paymentId') paymentId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.paymentsService.getPayment(paymentId, tenantId)
   }
 
   @Post(':paymentId/check-status')

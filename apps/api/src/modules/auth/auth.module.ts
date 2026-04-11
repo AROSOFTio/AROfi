@@ -18,7 +18,11 @@ import * as bcrypt from 'bcrypt'
 import { AuthGuard } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
 import { IsEmail, IsNotEmpty, IsString } from 'class-validator'
+import { PrismaModule } from '../../prisma.module'
 import { UsersModule, UsersService } from '../users/users.module'
+import { AccessScopeService } from './access-scope.service'
+import { PermissionsGuard } from './permissions.guard'
+import { RoleCatalogService } from './role-catalog.service'
 
 class LoginDto {
   @IsEmail()
@@ -40,7 +44,10 @@ export type AuthenticatedAdminUser = {
   id: string
   email: string
   role: string
+  permissions: string[]
   tenantId: string | null
+  tenantName: string | null
+  displayName: string
 }
 
 type AuthenticatedRequest = Request & {
@@ -52,9 +59,12 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly roleCatalogService: RoleCatalogService,
   ) {}
 
   async login(email: string, password: string) {
+    await this.roleCatalogService.ensureStandardRoles()
+
     const user = await this.usersService.findOneByEmail(email)
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials')
@@ -68,8 +78,12 @@ export class AuthService {
     const authenticatedUser = this.toAuthenticatedUser({
       id: user.id,
       email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
       roleName: user.role.name,
+      permissions: user.role.permissions,
       tenantId: user.tenantId,
+      tenantName: user.tenant?.name ?? null,
     })
 
     const payload: JwtPayload = {
@@ -94,22 +108,52 @@ export class AuthService {
     return this.toAuthenticatedUser({
       id: user.id,
       email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
       roleName: user.role.name,
+      permissions: user.role.permissions,
       tenantId: user.tenantId,
+      tenantName: user.tenant?.name ?? null,
     })
+  }
+
+  async issueSessionForUserId(userId: string) {
+    const authenticatedUser = await this.validateAccessTokenUser(userId)
+    const payload: JwtPayload = {
+      sub: authenticatedUser.id,
+      email: authenticatedUser.email,
+      role: authenticatedUser.role,
+      tenantId: authenticatedUser.tenantId,
+    }
+
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: authenticatedUser,
+    }
   }
 
   private toAuthenticatedUser(input: {
     id: string
     email: string
+    firstName?: string | null
+    lastName?: string | null
     roleName: string
+    permissions: string[]
     tenantId: string | null
+    tenantName: string | null
   }): AuthenticatedAdminUser {
+    const displayName = [input.firstName?.trim(), input.lastName?.trim()]
+      .filter((value): value is string => Boolean(value))
+      .join(' ')
+
     return {
       id: input.id,
       email: input.email,
       role: input.roleName,
+      permissions: input.permissions,
       tenantId: input.tenantId,
+      tenantName: input.tenantName,
+      displayName: displayName || input.email,
     }
   }
 }
@@ -156,6 +200,7 @@ export class AuthController {
 @Module({
   imports: [
     ConfigModule,
+    PrismaModule,
     UsersModule,
     PassportModule,
     JwtModule.registerAsync({
@@ -169,8 +214,15 @@ export class AuthController {
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard],
+  providers: [
+    AccessScopeService,
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    PermissionsGuard,
+    RoleCatalogService,
+  ],
   controllers: [AuthController],
-  exports: [AuthService, JwtAuthGuard],
+  exports: [AccessScopeService, AuthService, JwtAuthGuard, PermissionsGuard, RoleCatalogService],
 })
 export class AuthModule {}

@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import {
-  adminAuthCookieName,
   clearBrowserAdminSession,
   getBrowserAdminToken,
+  setBrowserAdminSession,
 } from '@/lib/admin-session'
 
 function resolveNextPath() {
@@ -87,8 +87,7 @@ export default function LoginPage() {
 
       const data = await res.json()
       const token = data.access_token as string
-      const secureFlag = window.location.protocol === 'https:' ? '; Secure' : ''
-      document.cookie = `${adminAuthCookieName}=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secureFlag}`
+      setBrowserAdminSession(token)
       window.location.href = nextPath
     } catch {
       setError('Invalid email or password. Please try again.')
@@ -162,6 +161,10 @@ export default function LoginPage() {
         </form>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
+          Need your own tenant workspace? <a href="/register" style={{ color: 'var(--green)', fontWeight: 600 }}>Create it here</a>
+        </p>
+
+        <p style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
           AROFi v1.0 | &copy; 2026 AROSOFT Innovations Ltd
         </p>
       </div>

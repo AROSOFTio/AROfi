@@ -1,13 +1,11 @@
-import { Module, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma.service';
-
-@Injectable()
-export class HotspotsService {
-  constructor(private prisma: PrismaService) {}
-  async findAll() { return []; }
-}
+import { Module } from '@nestjs/common'
+import { AuthModule } from '../auth/auth.module'
+import { HotspotsController } from './hotspots.controller'
+import { HotspotsService } from './hotspots.service'
 
 @Module({
+  imports: [AuthModule],
+  controllers: [HotspotsController],
   providers: [HotspotsService],
   exports: [HotspotsService],
 })

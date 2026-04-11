@@ -296,13 +296,17 @@ export class RoutersService {
     return this.getRouterSetup(router.id)
   }
 
-  async runHealthCheck(routerId: string) {
+  async runHealthCheck(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
       include: this.routerInclude,
     })
 
     if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
       throw new NotFoundException('Router not found')
     }
 
@@ -341,16 +345,20 @@ export class RoutersService {
       })
     })
 
-    return this.getRouterSetup(router.id)
+    return this.getRouterSetup(router.id, tenantId)
   }
 
-  async getRouterSetup(routerId: string) {
+  async getRouterSetup(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
       include: this.routerInclude,
     })
 
     if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
       throw new NotFoundException('Router not found')
     }
 

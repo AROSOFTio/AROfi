@@ -18,24 +18,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/login')
   }
 
-  const initials = session.user.email
-    .split('@')[0]
-    .split(/[.\-_]/)
+  const initials = session.user.displayName
+    .split(/[\s.\-_]+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((segment) => segment[0]?.toUpperCase() ?? '')
     .join('')
     .slice(0, 2) || 'AD'
 
+  const workspaceTitle = session.user.tenantName ? `${session.user.tenantName} Console` : 'AROFi Platform'
+
   return (
     <>
-      <Sidebar />
+      <Sidebar user={session.user} />
       <div className="main-content">
         <header className="topbar">
-          <span className="topbar-title">AROFi Platform</span>
+          <span className="topbar-title">{workspaceTitle}</span>
           <div className="topbar-actions">
             <ThemeToggle />
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{session.user.email}</span>
+            <div style={{ display: 'grid', gap: 2, textAlign: 'right' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{session.user.displayName}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{session.user.email}</span>
+            </div>
             <div className="avatar">{initials}</div>
             <AdminSessionControl />
           </div>

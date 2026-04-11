@@ -7,8 +7,9 @@ import { CreateTenantDto } from './dto/create-tenant.dto'
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(tenantId?: string) {
     const tenants = await this.prisma.tenant.findMany({
+      where: tenantId ? { id: tenantId } : undefined,
       include: {
         wallets: {
           where: {

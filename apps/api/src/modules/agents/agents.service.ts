@@ -272,9 +272,9 @@ export class AgentsService {
     })
   }
 
-  async loadFloat(agentId: string, dto: AgentFloatAdjustmentDto) {
+  async loadFloat(agentId: string, dto: AgentFloatAdjustmentDto, tenantId?: string) {
     return this.prisma.$transaction(async (tx) => {
-      const agent = await this.getAgentForUpdate(tx, agentId)
+      const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const tenantWallet = await this.findOrCreateTenantWallet(tx, agent.tenantId)
       const agentWallet = await this.findOrCreateAgentWallet(tx, agent)
 
@@ -370,9 +370,9 @@ export class AgentsService {
     })
   }
 
-  async returnFloat(agentId: string, dto: AgentFloatAdjustmentDto) {
+  async returnFloat(agentId: string, dto: AgentFloatAdjustmentDto, tenantId?: string) {
     return this.prisma.$transaction(async (tx) => {
-      const agent = await this.getAgentForUpdate(tx, agentId)
+      const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const tenantWallet = await this.findOrCreateTenantWallet(tx, agent.tenantId)
       const agentWallet = await this.findOrCreateAgentWallet(tx, agent)
       const accruedCommissionUgx = await this.getAccruedCommissionTotal(tx, agent.id)
@@ -466,9 +466,9 @@ export class AgentsService {
     })
   }
 
-  async createSettlement(agentId: string, dto: CreateSettlementDto) {
+  async createSettlement(agentId: string, dto: CreateSettlementDto, tenantId?: string) {
     return this.prisma.$transaction(async (tx) => {
-      const agent = await this.getAgentForUpdate(tx, agentId)
+      const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const wallet = await this.findOrCreateAgentWallet(tx, agent)
 
       const periodStart = dto.periodStart ? new Date(dto.periodStart) : undefined
@@ -547,9 +547,9 @@ export class AgentsService {
     })
   }
 
-  async createDisbursement(agentId: string, dto: CreateDisbursementDto) {
+  async createDisbursement(agentId: string, dto: CreateDisbursementDto, tenantId?: string) {
     return this.prisma.$transaction(async (tx) => {
-      const agent = await this.getAgentForUpdate(tx, agentId)
+      const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const wallet = await this.findOrCreateAgentWallet(tx, agent)
       const settlement = await this.resolveSettlement(tx, agent.id, dto.settlementId)
 
@@ -700,12 +700,20 @@ export class AgentsService {
     })
   }
 
-  private async getAgentForUpdate(tx: Prisma.TransactionClient, agentId: string) {
+  private async getAgentForUpdate(
+    tx: Prisma.TransactionClient,
+    agentId: string,
+    tenantId?: string,
+  ) {
     const agent = await tx.agent.findUnique({
       where: { id: agentId },
     })
 
     if (!agent) {
+      throw new NotFoundException('Agent not found')
+    }
+
+    if (tenantId && agent.tenantId !== tenantId) {
       throw new NotFoundException('Agent not found')
     }
 

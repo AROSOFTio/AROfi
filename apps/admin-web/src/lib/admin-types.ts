@@ -8,7 +8,47 @@ export type AdminSessionResponse = {
     id: string
     email: string
     role: string
+    permissions: string[]
     tenantId?: string | null
+    tenantName?: string | null
+    displayName: string
+  }
+}
+
+export type TenantRegistrationResponse = {
+  access_token: string
+  user: AdminSessionResponse['user']
+  tenant: {
+    id: string
+    name: string
+    domain?: string | null
+    brandColor?: string | null
+    supportPhone?: string | null
+    supportEmail?: string | null
+  }
+  starterWorkspace: {
+    wallet: {
+      id: string
+      balanceUgx: number
+      currency: string
+    }
+    primaryRouterGroup: {
+      id: string
+      name: string
+      code: string
+    }
+    primaryHotspot: {
+      id: string
+      name: string
+      secret?: string | null
+    }
+  }
+  onboarding: {
+    checklist: Array<{
+      title: string
+      description: string
+      path: string
+    }>
   }
 }
 
@@ -531,6 +571,42 @@ export type PaymentLogItem = {
     externalReference: string
     status: string
   } | null
+}
+
+export type HotspotOverviewResponse = {
+  summary: {
+    totalHotspots: number
+    configuredNas: number
+    linkedRouters: number
+    activeSessions: number
+    activeActivations: number
+    voucherRedemptions: number
+  }
+  items: HotspotItem[]
+}
+
+export type HotspotItem = {
+  id: string
+  name: string
+  nasIpAddress?: string | null
+  secretHint?: string | null
+  tenant: TenantSummary
+  routerCount: number
+  activeSessions: number
+  activationCount: number
+  activeActivations: number
+  voucherRedemptions: number
+  lastActivityAt?: string | null
+  createdAt: string
+  updatedAt: string
+  routers: Array<{
+    id: string
+    name: string
+    status: string
+    host: string
+    identity: string
+    siteLabel?: string | null
+  }>
 }
 
 export type RouterItem = {

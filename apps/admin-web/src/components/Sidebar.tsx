@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { AdminSessionResponse } from '@/lib/admin-types'
 
 const navItems = [
   {
@@ -12,55 +13,84 @@ const navItems = [
   {
     section: 'Network',
     items: [
-      { href: '/routers', label: 'Routers', icon: <RouterIcon /> },
-      { href: '/hotspots', label: 'Hotspots', icon: <HotspotIcon /> },
-      { href: '/packages', label: 'Packages', icon: <PackageIcon /> },
-      { href: '/sessions', label: 'Usage Analytics', icon: <ActivityIcon /> },
+      { href: '/routers', label: 'Routers', icon: <RouterIcon />, required: ['routers.read'] },
+      { href: '/hotspots', label: 'Hotspots', icon: <HotspotIcon />, required: ['hotspots.read'] },
+      { href: '/packages', label: 'Packages', icon: <PackageIcon />, required: ['packages.read'] },
+      { href: '/sessions', label: 'Usage Analytics', icon: <ActivityIcon />, required: ['sessions.read'] },
     ]
   },
   {
     section: 'Sales',
     items: [
-      { href: '/sales', label: 'Sales', icon: <PaymentIcon /> },
-      { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon /> },
-      { href: '/customers', label: 'Customers', icon: <UsersIcon /> },
-      { href: '/agents', label: 'Agents', icon: <AgentIcon /> },
+      { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'] },
+      { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon />, required: ['vouchers.read'] },
+      { href: '/customers', label: 'Customers', icon: <UsersIcon />, required: ['sessions.read'] },
+      { href: '/agents', label: 'Agents', icon: <AgentIcon />, required: ['agents.read'] },
     ]
   },
   {
     section: 'Finance',
     items: [
-      { href: '/transactions', label: 'Transactions', icon: <PaymentIcon /> },
-      { href: '/payments', label: 'Payment Logs', icon: <PaymentPulseIcon /> },
-      { href: '/billing', label: 'Billing & Wallet', icon: <BillingIcon /> },
-      { href: '/float', label: 'Float', icon: <FloatIcon /> },
-      { href: '/disbursements', label: 'Disbursements', icon: <SettlementIcon /> },
+      { href: '/transactions', label: 'Transactions', icon: <PaymentIcon />, required: ['billing.read'] },
+      { href: '/payments', label: 'Payment Logs', icon: <PaymentPulseIcon />, required: ['payments.read'] },
+      { href: '/billing', label: 'Billing & Wallet', icon: <BillingIcon />, required: ['billing.read'] },
+      { href: '/float', label: 'Float', icon: <FloatIcon />, required: ['agents.read'] },
+      { href: '/disbursements', label: 'Disbursements', icon: <SettlementIcon />, required: ['disbursements.read'] },
     ]
   },
   {
     section: 'System',
     items: [
-      { href: '/tenants', label: 'Tenants', icon: <TenantIcon /> },
-      { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon /> },
-      { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon /> },
-      { href: '/support', label: 'Support', icon: <SupportIcon /> },
-      { href: '/reports', label: 'Reports', icon: <ReportIcon /> },
-      { href: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+      { href: '/tenants', label: 'Tenants', icon: <TenantIcon />, required: ['tenants.read'], platformOnly: true },
+      { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'] },
+      { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'] },
+      { href: '/support', label: 'Support', icon: <SupportIcon />, required: ['support.read'] },
+      { href: '/reports', label: 'Reports', icon: <ReportIcon />, required: ['reports.read'] },
+      { href: '/settings', label: 'Settings', icon: <SettingsIcon />, required: ['settings.manage'] },
     ]
   },
 ]
 
-export default function Sidebar() {
+type SidebarUser = AdminSessionResponse['user']
+
+function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: boolean) {
+  if (platformOnly && user.tenantId) {
+    return false
+  }
+
+  if (required.length === 0) {
+    return true
+  }
+
+  return required.every((permission) => user.permissions.includes(permission) || user.permissions.includes('ALL'))
+}
+
+export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname()
+  const visibleGroups = navItems
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly)),
+    }))
+    .filter((group) => group.items.length > 0)
+
+  const workspaceLabel = user.tenantName ? `${user.tenantName} Workspace` : 'Platform Workspace'
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div>
           <h1>ARO<span>Fi</span></h1>
-          <p>Hotspot Management Platform</p>
+          <p>{workspaceLabel}</p>
+          <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{user.role}</span>
+            {user.tenantName && (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
+            )}
+          </div>
         </div>
       </div>
-      {navItems.map((group) => (
+      {visibleGroups.map((group) => (
         <div key={group.section} className="sidebar-section">
           <div className="sidebar-section-label">{group.section}</div>
           {group.items.map((item) => (

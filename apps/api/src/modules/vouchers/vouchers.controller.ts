@@ -1,5 +1,13 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
-import { JwtAuthGuard } from '../auth/auth.module'
+import {
+  AccessScopeService,
+  AuthenticatedAdminUser,
+  JwtAuthGuard,
+  PermissionsGuard,
+} from '../auth/auth.module'
+import { CurrentUser } from '../auth/current-user.decorator'
+import { RequirePermissions } from '../auth/permissions.decorator'
+import { PERMISSIONS } from '../auth/permissions.constants'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
@@ -7,43 +15,74 @@ import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VouchersService } from './vouchers.service'
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('vouchers')
 export class VouchersController {
-  constructor(private readonly vouchersService: VouchersService) {}
+  constructor(
+    private readonly vouchersService: VouchersService,
+    private readonly accessScope: AccessScopeService,
+  ) {}
 
+  @RequirePermissions(PERMISSIONS.vouchersRead)
   @Get('overview')
-  getOverview(@Query('tenantId') tenantId?: string) {
-    return this.vouchersService.getOverview(tenantId)
+  getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.vouchersService.getOverview(scopedTenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.vouchersRead)
   @Get('templates')
-  getTemplates(@Query('tenantId') tenantId?: string) {
-    return this.vouchersService.getTemplates(tenantId)
+  getTemplates(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.vouchersService.getTemplates(scopedTenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post('templates')
-  createTemplate(@Body() dto: CreateVoucherTemplateDto) {
-    return this.vouchersService.createTemplate(dto)
+  createTemplate(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateVoucherTemplateDto) {
+    const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
+    return this.vouchersService.createTemplate({
+      ...dto,
+      tenantId,
+    })
   }
 
+  @RequirePermissions(PERMISSIONS.vouchersManage)
   @Patch('templates/:templateId')
-  updateTemplate(@Param('templateId') templateId: string, @Body() dto: UpdateVoucherTemplateDto) {
-    return this.vouchersService.updateTemplate(templateId, dto)
+  updateTemplate(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('templateId') templateId: string,
+    @Body() dto: UpdateVoucherTemplateDto,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.vouchersService.updateTemplate(templateId, dto, tenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post('batches')
-  createBatch(@Body() dto: CreateVoucherBatchDto) {
-    return this.vouchersService.createBatch(dto)
+  createBatch(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateVoucherBatchDto) {
+    const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
+    return this.vouchersService.createBatch({
+      ...dto,
+      tenantId,
+    })
   }
 
+  @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post(':voucherId/sale')
-  recordSale(@Param('voucherId') voucherId: string, @Body() dto: RecordVoucherSaleDto) {
-    return this.vouchersService.recordSale(voucherId, dto)
+  recordSale(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('voucherId') voucherId: string,
+    @Body() dto: RecordVoucherSaleDto,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.vouchersService.recordSale(voucherId, dto, tenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post('redeem')
-  redeemVoucher(@Body() dto: RedeemVoucherDto) {
-    return this.vouchersService.redeemVoucher(dto)
+  redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.vouchersService.redeemVoucher(dto, tenantId)
   }
 }
