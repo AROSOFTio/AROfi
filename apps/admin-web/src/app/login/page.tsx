@@ -1,28 +1,32 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import {
   adminAuthCookieName,
   clearBrowserAdminSession,
   getBrowserAdminToken,
 } from '@/lib/admin-session'
 
+function resolveNextPath() {
+  if (typeof window === 'undefined') {
+    return '/dashboard'
+  }
+
+  const requestedPath = new URLSearchParams(window.location.search).get('next')
+
+  if (!requestedPath || !requestedPath.startsWith('/')) {
+    return '/dashboard'
+  }
+
+  return requestedPath
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const searchParams = useSearchParams()
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
-  const nextPath = (() => {
-    const requestedPath = searchParams.get('next')
-
-    if (!requestedPath || !requestedPath.startsWith('/')) {
-      return '/dashboard'
-    }
-
-    return requestedPath
-  })()
+  const nextPath = resolveNextPath()
 
   useEffect(() => {
     let isMounted = true
