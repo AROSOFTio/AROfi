@@ -1,10 +1,7 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
-import {
-  AccessScopeService,
-  AuthenticatedAdminUser,
-  JwtAuthGuard,
-  PermissionsGuard,
-} from '../auth/auth.module'
+import { AccessScopeService } from '../auth/access-scope.service'
+import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
+import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
@@ -36,3 +33,4 @@ export class HotspotsController {
     })
   }
 }
+
