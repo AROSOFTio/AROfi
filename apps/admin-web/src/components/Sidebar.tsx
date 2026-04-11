@@ -3,7 +3,20 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 
-const navItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: JSX.Element;
+  required?: string[];
+  platformOnly?: boolean;
+};
+
+type NavGroup = {
+  section: string;
+  items: NavItem[];
+};
+
+const navItems: NavGroup[] = [
   {
     section: 'Overview',
     items: [

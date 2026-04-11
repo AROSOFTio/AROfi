@@ -24,6 +24,8 @@ import { AccessScopeService } from './access-scope.service'
 import { PermissionsGuard } from './permissions.guard'
 import { RoleCatalogService } from './role-catalog.service'
 
+export { AccessScopeService, PermissionsGuard, RoleCatalogService }
+
 class LoginDto {
   @IsEmail()
   email: string
