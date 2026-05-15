@@ -1,7 +1,7 @@
 'use client'
 
-import { FormEvent, useEffect, useState } from 'react'
-import { TenantOverviewResponse } from '@/lib/admin-types'
+import { useEffect, useState, type FormEvent } from 'react'
+import type { TenantOverviewResponse } from '@/lib/admin-types'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate } from '@/lib/format'
 
@@ -28,6 +28,7 @@ export default function TenantsManager() {
   const [formState, setFormState] = useState<TenantFormState>(initialTenantForm)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -63,6 +64,7 @@ export default function TenantsManager() {
       })
       setSuccess('Tenant created successfully')
       setFormState(initialTenantForm)
+      setIsCreateModalOpen(false)
       await loadData()
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to create tenant')
@@ -80,48 +82,51 @@ export default function TenantsManager() {
           <h1 className="page-title">Tenants</h1>
           <p className="page-subtitle">Manage vendor tenants and their default operations wallet.</p>
         </div>
+        <button type="button" className="btn btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Add Tenant</button>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Add Tenant</span>
+      {isCreateModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <button type="button" className="modal-close" onClick={() => setIsCreateModalOpen(false)}>Close</button>
+            <div className="modal-kicker">Platform Tenant</div>
+            <h2 className="modal-title">Add Tenant</h2>
+            <form onSubmit={handleSubmit}>
+              <div className="stats-grid" style={{ marginBottom: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Tenant Name</label>
+                  <input className="form-input" value={formState.name} onChange={(event) => setFormState((previous) => ({ ...previous, name: event.target.value }))} placeholder="Kampala Downtown WiFi" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Domain (optional)</label>
+                  <input className="form-input" value={formState.domain} onChange={(event) => setFormState((previous) => ({ ...previous, domain: event.target.value }))} placeholder="tenant.example.com" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Logo URL (optional)</label>
+                  <input className="form-input" value={formState.logoUrl} onChange={(event) => setFormState((previous) => ({ ...previous, logoUrl: event.target.value }))} placeholder="https://cdn.example.com/logo.png" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Brand Color (optional)</label>
+                  <input className="form-input" value={formState.brandColor} onChange={(event) => setFormState((previous) => ({ ...previous, brandColor: event.target.value }))} placeholder="#0EA5E9" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Support Phone (optional)</label>
+                  <input className="form-input" value={formState.supportPhone} onChange={(event) => setFormState((previous) => ({ ...previous, supportPhone: event.target.value }))} placeholder="+256 700 000000" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Support Email (optional)</label>
+                  <input className="form-input" value={formState.supportEmail} onChange={(event) => setFormState((previous) => ({ ...previous, supportEmail: event.target.value }))} placeholder="support@tenant.com" />
+                </div>
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={submitting}>
+                {submitting ? 'Creating...' : 'Create Tenant'}
+              </button>
+              {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
+              {success && <p style={{ color: 'var(--success-fg)', marginTop: 10, fontSize: 13 }}>{success}</p>}
+            </form>
+          </div>
         </div>
-        <div className="content" style={{ paddingTop: 16 }}>
-          <form onSubmit={handleSubmit}>
-            <div className="stats-grid" style={{ marginBottom: 12 }}>
-              <div className="form-group">
-                <label className="form-label">Tenant Name</label>
-                <input className="form-input" value={formState.name} onChange={(event) => setFormState((previous) => ({ ...previous, name: event.target.value }))} placeholder="Kampala Downtown WiFi" required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Domain (optional)</label>
-                <input className="form-input" value={formState.domain} onChange={(event) => setFormState((previous) => ({ ...previous, domain: event.target.value }))} placeholder="tenant.example.com" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Logo URL (optional)</label>
-                <input className="form-input" value={formState.logoUrl} onChange={(event) => setFormState((previous) => ({ ...previous, logoUrl: event.target.value }))} placeholder="https://cdn.example.com/logo.png" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Brand Color (optional)</label>
-                <input className="form-input" value={formState.brandColor} onChange={(event) => setFormState((previous) => ({ ...previous, brandColor: event.target.value }))} placeholder="#0EA5E9" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Support Phone (optional)</label>
-                <input className="form-input" value={formState.supportPhone} onChange={(event) => setFormState((previous) => ({ ...previous, supportPhone: event.target.value }))} placeholder="+256 700 000000" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Support Email (optional)</label>
-                <input className="form-input" value={formState.supportEmail} onChange={(event) => setFormState((previous) => ({ ...previous, supportEmail: event.target.value }))} placeholder="support@tenant.com" />
-              </div>
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Creating...' : 'Create Tenant'}
-            </button>
-            {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
-            {success && <p style={{ color: 'var(--success-fg)', marginTop: 10, fontSize: 13 }}>{success}</p>}
-          </form>
-        </div>
-      </div>
+      )}
 
       <div className="card">
         <div className="card-header">

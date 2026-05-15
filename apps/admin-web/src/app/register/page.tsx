@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
+import { setBrowserAdminSession } from '@/lib/admin-session'
 
 type RegisterFormState = {
   tenantName: string
@@ -91,6 +92,7 @@ export default function RegisterPage() {
       }
 
       const registration = body as TenantRegistrationResponse
+      setBrowserAdminSession(registration.access_token)
       setSuccess(registration)
       setFormState(initialFormState)
     } catch (requestError) {
