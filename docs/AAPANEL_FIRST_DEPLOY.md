@@ -2,11 +2,17 @@
 
 Use these steps on the aaPanel server for `arofi.arosoft.io`.
 
-## 1. Upload the project
+## 1. Clone the project first
 
-Upload or clone this project into:
+Stay in your normal SSH user. Do not run `sudo su` or `sudo -i`; use `sudo` only on the commands that need server permissions.
+
+aaPanel may create `/www/wwwroot/arofi.arosoft.io` as an empty folder. Clone the GitHub repo into that folder before copying `.env`:
 
 ```sh
+cd /www/wwwroot
+if [ -d arofi.arosoft.io ]; then sudo mv arofi.arosoft.io arofi.arosoft.io.backup.$(date +%Y%m%d%H%M%S); fi
+sudo git clone https://github.com/AROSOFTio/AROfi.git arofi.arosoft.io
+sudo chown -R "$USER":"$USER" /www/wwwroot/arofi.arosoft.io
 cd /www/wwwroot/arofi.arosoft.io
 ```
 
@@ -24,8 +30,6 @@ sudo docker compose version
 ```
 
 ## 3. Create the production env file
-
-Stay in your normal SSH user. Do not run `sudo su` or `sudo -i`; use `sudo` only on the commands that need server permissions.
 
 ```sh
 cd /www/wwwroot/arofi.arosoft.io
