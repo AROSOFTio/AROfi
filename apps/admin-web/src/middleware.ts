@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 import { adminAuthCookieName } from './lib/admin-session'
 
 function isPublicPath(pathname: string) {
-  return pathname === '/login' || pathname.startsWith('/_next') || pathname === '/favicon.ico'
+  return pathname === '/login' || pathname === '/register' || pathname.startsWith('/_next') || pathname === '/favicon.ico'
 }
 
 export function middleware(request: NextRequest) {
