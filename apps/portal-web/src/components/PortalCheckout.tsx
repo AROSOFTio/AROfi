@@ -68,13 +68,13 @@ function statusTone(status?: string | null) {
   switch ((status ?? '').toUpperCase()) {
     case 'ACTIVE':
     case 'COMPLETED':
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700'
     case 'FAILED':
     case 'CANCELLED':
     case 'EXPIRED':
-      return 'border-rose-500/30 bg-rose-500/10 text-rose-100'
+      return 'border-rose-200 bg-rose-50 text-rose-700'
     default:
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+      return 'border-amber-200 bg-amber-50 text-amber-700'
   }
 }
 
@@ -507,7 +507,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <section className="rounded-[28px] border border-emerald-500/20 bg-slate-950/70 p-5 shadow-[0_24px_90px_rgba(2,8,23,0.45)] backdrop-blur sm:p-6">
+      <section className="rounded-[28px] border border-emerald-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6">
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -515,15 +515,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-emerald-200">AROFi Customer Portal</p>
-                <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-700">AROFi Customer Portal</p>
+                <h1 className="mt-2 text-2xl font-semibold text-slate-950 sm:text-3xl">
                   {context?.tenant.name ?? 'AROFi Hotspot Access'}
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                   Buy packages, redeem vouchers, sign in with your phone number, and monitor your hotspot session from one mobile-friendly experience.
                 </p>
                 {(context?.tenant.supportPhone || context?.tenant.supportEmail) && (
-                  <p className="mt-2 text-xs text-slate-400">
+                  <p className="mt-2 text-xs text-slate-500">
                     Support: {context?.tenant.supportPhone ?? context?.tenant.supportEmail}
                   </p>
                 )}
@@ -536,20 +536,20 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link href="/" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'home' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
+            <Link href="/" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'home' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
               Buy Access
             </Link>
-            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
+            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
               Login
             </Link>
-            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
+            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
               Session
             </Link>
             {portalSession && (
               <button
                 type="button"
                 onClick={() => void handleLogout()}
-                className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600"
               >
                 Sign Out
               </button>
@@ -565,23 +565,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       </section>
 
       {isBooting ? (
-        <div className="flex min-h-[220px] items-center justify-center rounded-[28px] border border-slate-800 bg-slate-950/60 text-sm text-slate-300">
+        <div className="flex min-h-[220px] items-center justify-center rounded-[28px] border border-slate-200 bg-white text-sm text-slate-600">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Loading portal...
         </div>
       ) : (
         <>
-          {errorMessage && <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{errorMessage}</div>}
-          {statusMessage && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{statusMessage}</div>}
-          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">Payment confirmed. Connecting you now...</div>}
-          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">Reconnecting your device to the internet...</div>}
+          {errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
+          {statusMessage && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
+          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Payment confirmed. Connecting you now...</div>}
+          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Reconnecting your device to the internet...</div>}
           {context?.returningDevice?.existingActiveAccess && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-50">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
               <div className="font-semibold">Welcome back. Your package is still active.</div>
-              <div className="mt-1 text-emerald-100">
+              <div className="mt-1 text-emerald-700">
                 {context.returningDevice.activation?.package.name ?? 'Active package'} expires {formatDate(context.returningDevice.activation?.endsAt)}.
               </div>
-              <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">
+              <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
                 <Wifi className="h-4 w-4" />
                 {connectionStatus === 'failed' ? 'Connect Now' : 'Reconnect to internet'}
               </button>
@@ -590,35 +590,35 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           {initialView === 'home' && (
             <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <section className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+              <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Packages</p>
-                    <h2 className="mt-2 text-xl font-semibold text-white">Choose your internet plan</h2>
+                    <h2 className="mt-2 text-xl font-semibold text-slate-950">Choose your internet plan</h2>
                   </div>
                   <Smartphone className="h-5 w-5 text-slate-500" />
                 </div>
 
                 <div className="mt-5 grid gap-3">
-                  {packages.length === 0 && <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No packages are published for this portal yet.</div>}
+                  {packages.length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No packages are published for this portal yet.</div>}
                   {packages.map((pkg) => (
                     <button
                       key={pkg.id}
                       type="button"
                       onClick={() => setSelectedPackage(pkg)}
-                      className={`rounded-2xl border p-4 text-left ${selectedPackage?.id === pkg.id ? 'border-emerald-400 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}
+                      className={`rounded-2xl border p-4 text-left ${selectedPackage?.id === pkg.id ? 'border-emerald-400 bg-emerald-500/10' : 'border-slate-200 bg-slate-50'}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="text-base font-semibold text-white">{pkg.name}</div>
+                          <div className="text-base font-semibold text-slate-950">{pkg.name}</div>
                           <div className="mt-1 text-xs uppercase tracking-[0.15em] text-slate-500">{pkg.code}</div>
-                          <div className="mt-2 text-sm text-slate-300">{pkg.description || 'Fast, secure hotspot internet access.'}</div>
-                          <div className="mt-3 text-xs text-slate-400">
+                          <div className="mt-2 text-sm text-slate-600">{pkg.description || 'Fast, secure hotspot internet access.'}</div>
+                          <div className="mt-3 text-xs text-slate-500">
                             {formatDuration(pkg.durationMinutes)} . {pkg.dataLimitMb ? `${pkg.dataLimitMb} MB` : 'Unlimited data'}
                             {pkg.deviceLimit ? ` . ${pkg.deviceLimit} device(s)` : ''}
                           </div>
                         </div>
-                        <div className="text-lg font-bold text-emerald-300">{formatCurrency(pkg.amountUgx)}</div>
+                        <div className="text-lg font-bold text-emerald-600">{formatCurrency(pkg.amountUgx)}</div>
                       </div>
                     </button>
                   ))}
@@ -626,22 +626,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </section>
 
               <div className="space-y-6">
-                <section className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+                <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Checkout</p>
-                      <h2 className="mt-2 text-xl font-semibold text-white">Pay with your phone</h2>
+                      <h2 className="mt-2 text-xl font-semibold text-slate-950">Pay with your phone</h2>
                     </div>
                     <Receipt className="h-5 w-5 text-slate-500" />
                   </div>
                   <form onSubmit={handlePaymentSubmit} className="mt-5 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/55 p-4 text-sm text-slate-300">
+                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                       {selectedPackage
                         ? `${selectedPackage.name} . ${formatCurrency(selectedPackage.amountUgx)} . ${formatDuration(selectedPackage.durationMinutes)}`
                         : 'Choose a package first.'}
                     </div>
-                    <button type="submit" disabled={isPaymentLoading || !selectedPackage} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
+                    <button type="submit" disabled={isPaymentLoading || !selectedPackage} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
                       {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                       {isPaymentLoading ? 'Sending prompt...' : selectedPackage ? `Pay ${formatCurrency(selectedPackage.amountUgx)}` : 'Pay now'}
                     </button>
@@ -649,18 +649,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <button
                         type="button"
                         onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)}
-                        className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm text-emerald-200 transition-colors hover:bg-emerald-500/20"
+                        className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm text-emerald-700 transition-colors hover:bg-emerald-500/20"
                       >
                         I approved payment - check status
                       </button>
                     )}
                   </form>
                   {currentPayment && (
-                    <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-4 text-sm text-slate-300">
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="font-semibold text-white">{currentPayment.package.name}</div>
-                          <div className="mt-1 text-slate-400">
+                          <div className="font-semibold text-slate-950">{currentPayment.package.name}</div>
+                          <div className="mt-1 text-slate-500">
                             {formatCurrency(currentPayment.amountUgx)} . {currentPayment.phoneNumber}
                           </div>
                         </div>
@@ -672,17 +672,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   )}
                 </section>
 
-                <section className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+                <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Voucher</p>
-                      <h2 className="mt-2 text-xl font-semibold text-white">Redeem existing code</h2>
+                      <h2 className="mt-2 text-xl font-semibold text-slate-950">Redeem existing code</h2>
                     </div>
                     <Ticket className="h-5 w-5 text-slate-500" />
                   </div>
                   <div className="mt-5 space-y-3">
-                    <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Voucher code" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
-                    <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 disabled:bg-slate-600 disabled:text-slate-200">
+                    <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Voucher code" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
+                    <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 disabled:bg-slate-300 disabled:text-slate-500">
                       {isVoucherLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />}
                       {isVoucherLoading ? 'Redeeming...' : 'Redeem voucher'}
                     </button>
@@ -694,33 +694,33 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           {initialView === 'login' && (
             <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Portal login</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Sign in with your access number</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">Sign in with your access number</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
                   Use the same phone number that paid for the package or redeemed the voucher. We'll load your current access and recent usage automatically.
                 </p>
                 <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                  <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
-                  <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
+                  <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
+                  <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
                     {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                     {isLoginLoading ? 'Signing in...' : 'Sign in'}
                   </button>
                 </form>
               </div>
 
-              <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Current customer state</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
                   {portalSession?.summary.hasActiveAccess ? 'Access is active' : 'No active portal session'}
                 </h2>
-                <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/45 p-4 text-sm text-slate-300">
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   {portalSession ? (
                     <>
                       <div>Phone: {portalSession.customer.phoneNumber}</div>
                       <div className="mt-2">Package: {portalSession.activeActivation?.package.name ?? 'Awaiting activation'}</div>
                       <div className="mt-2">Remaining time: {portalSession.summary.activeMinutesRemaining} min</div>
-                      <Link href="/session" className="mt-4 inline-flex items-center gap-2 font-semibold text-emerald-200">
+                      <Link href="/session" className="mt-4 inline-flex items-center gap-2 font-semibold text-emerald-700">
                         Open session dashboard
                         <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -735,14 +735,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           {initialView === 'session' && (
             <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Session overview</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
                   {portalSession ? 'Your active internet session' : 'Sign in to view your session'}
                 </h2>
                 {portalSession ? (
-                  <div className="mt-5 space-y-3 text-sm text-slate-300">
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+                  <div className="mt-5 space-y-3 text-sm text-slate-600">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div>Phone: {portalSession.customer.phoneNumber}</div>
                       <div className="mt-2">Package: {portalSession.activeActivation?.package.name ?? 'Awaiting activation'}</div>
                       <div className="mt-2">Expires: {portalSession.activeActivation ? formatDate(portalSession.activeActivation.endsAt) : 'N/A'}</div>
@@ -750,15 +750,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     </div>
 
                     {portalSession.recentSessions.map((session) => (
-                      <div key={session.id} className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4">
+                      <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="font-semibold text-white">{session.packageName}</div>
+                            <div className="font-semibold text-slate-950">{session.packageName}</div>
                             <div className="mt-1 text-xs text-slate-500">{formatDate(session.startedAt)}</div>
                           </div>
                           <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(session.status)}`}>{session.status}</span>
                         </div>
-                        <div className="mt-3 text-sm text-slate-400">
+                        <div className="mt-3 text-sm text-slate-500">
                           {formatMegabytes(session.dataUsedMb)} used . {session.hotspot?.name ?? 'Hotspot pending'}
                         </div>
                       </div>
@@ -766,8 +766,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   </div>
                 ) : (
                   <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
-                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
+                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
+                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
                       {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
                       {isLoginLoading ? 'Signing in...' : 'Load session'}
                     </button>
@@ -776,16 +776,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </div>
 
               <div className="space-y-6">
-                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+                <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Recent payments</p>
                   <div className="mt-5 space-y-3">
-                    {(portalSession?.recentPayments ?? []).length === 0 && <div className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4 text-sm text-slate-400">No recent mobile money payments were found for this phone number yet.</div>}
+                    {(portalSession?.recentPayments ?? []).length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No recent mobile money payments were found for this phone number yet.</div>}
                     {(portalSession?.recentPayments ?? []).map((payment) => (
-                      <div key={payment.id} className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4">
+                      <div key={payment.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="font-semibold text-white">{payment.package.name}</div>
-                            <div className="mt-1 text-sm text-slate-400">{formatCurrency(payment.amountUgx)} . {formatDate(payment.createdAt)}</div>
+                            <div className="font-semibold text-slate-950">{payment.package.name}</div>
+                            <div className="mt-1 text-sm text-slate-500">{formatCurrency(payment.amountUgx)} . {formatDate(payment.createdAt)}</div>
                           </div>
                           <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(payment.status)}`}>{payment.status}</span>
                         </div>
@@ -794,14 +794,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   </div>
                 </div>
 
-                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
+                <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Recent voucher redemptions</p>
                   <div className="mt-5 space-y-3">
-                    {(portalSession?.recentVoucherRedemptions ?? []).length === 0 && <div className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4 text-sm text-slate-400">Voucher redemption history will appear here after codes are used on this phone number.</div>}
+                    {(portalSession?.recentVoucherRedemptions ?? []).length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Voucher redemption history will appear here after codes are used on this phone number.</div>}
                     {(portalSession?.recentVoucherRedemptions ?? []).map((redemption) => (
-                      <div key={redemption.id} className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4">
-                        <div className="font-semibold text-white">{redemption.package.name}</div>
-                        <div className="mt-1 text-sm text-slate-400">Voucher {redemption.voucher.code} . {formatDate(redemption.createdAt)}</div>
+                      <div key={redemption.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="font-semibold text-slate-950">{redemption.package.name}</div>
+                        <div className="mt-1 text-sm text-slate-500">Voucher {redemption.voucher.code} . {formatDate(redemption.createdAt)}</div>
                       </div>
                     ))}
                   </div>
@@ -817,10 +817,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
 function SummaryCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/55 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div>
-      <div className="mt-2 text-lg font-semibold text-white">{value}</div>
-      <div className="mt-1 text-sm text-slate-400">{helper}</div>
+      <div className="mt-2 text-lg font-semibold text-slate-950">{value}</div>
+      <div className="mt-1 text-sm text-slate-500">{helper}</div>
     </div>
   )
 }
