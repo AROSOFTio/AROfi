@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import {
@@ -15,9 +16,12 @@ import {
 import { PrismaService } from '../../prisma.service'
 import { RecordRadiusAccountingEventDto } from './dto/record-radius-accounting-event.dto'
 import { RecordRadiusAuthEventDto } from './dto/record-radius-auth-event.dto'
+import { RadiusAuthorizationPolicyService } from './radius-authorization-policy.service'
 
 @Injectable()
 export class RadiusService {
+  private readonly logger = new Logger(RadiusService.name)
+
   private readonly authEventTypes = new Set<RadiusEventType>([
     RadiusEventType.ACCESS_ACCEPT,
     RadiusEventType.ACCESS_REJECT,
@@ -30,7 +34,10 @@ export class RadiusService {
     RadiusEventType.ACCOUNTING_STOP,
   ])
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authorizationPolicy: RadiusAuthorizationPolicyService,
+  ) {}
 
   async getOverview(tenantId?: string) {
     const startOfDay = new Date()
@@ -120,6 +127,22 @@ export class RadiusService {
 
     if (router && router.tenantId !== dto.tenantId) {
       throw new BadRequestException('Router does not belong to the tenant')
+    }
+
+    if (dto.accepted) {
+      const policyResult = await this.prisma.$transaction((tx) =>
+        this.authorizationPolicy.authorize(tx, {
+          username: dto.username,
+          macAddress: dto.macAddress,
+          routerId: router?.id ?? dto.routerId,
+          ipAddress: dto.ipAddress,
+        }),
+      )
+
+      if (!policyResult.accepted) {
+        this.logger.warn(`Auth policy rejected ${dto.username}: ${policyResult.reason}`)
+        return { action: 'reject', reason: policyResult.reason }
+      }
     }
 
     const existingSession =

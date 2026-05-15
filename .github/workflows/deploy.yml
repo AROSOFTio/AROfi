@@ -6,8 +6,41 @@ on:
       - main
 
 jobs:
+  build-verify:
+    name: Verify Builds Pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Verify API build
+        run: |
+          cd apps/api
+          npx prisma generate --schema=prisma/schema.prisma
+          npm run build
+
+      - name: Verify admin-web build
+        run: |
+          cd apps/admin-web
+          npm run build
+
+      - name: Verify portal-web build
+        run: |
+          cd apps/portal-web
+          npm run build
+
   deploy:
     name: Deploy to Production
+    needs: [build-verify]
     runs-on: ubuntu-latest
 
     steps:

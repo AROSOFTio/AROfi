@@ -22,7 +22,7 @@ export function setBrowserAdminSession(token: string) {
   }
 
   const secureFlag = window.location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${adminAuthCookieName}=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly${secureFlag}`
+  document.cookie = `${adminAuthCookieName}=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secureFlag}`
 }
 
 export function clearBrowserAdminSession() {

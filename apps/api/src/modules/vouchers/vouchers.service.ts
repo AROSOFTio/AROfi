@@ -840,7 +840,10 @@ export class VouchersService {
         },
       })
       await tx.voucher.updateMany({
-        where: { batchId: batch.id },
+        where: {
+          batchId: batch.id,
+          status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] },
+        },
         data: {
           status: VoucherStatus.PRINTED,
           lastPrintedAt: new Date(),

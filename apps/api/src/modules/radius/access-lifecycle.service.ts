@@ -10,7 +10,7 @@ import {
   SessionStatus,
   Prisma,
 } from '@prisma/client'
-import { spawn } from 'child_process'
+import { execSync, spawn } from 'child_process'
 import { PrismaService } from '../../prisma.service'
 import { RadiusCredentialService } from './radius-credential.service'
 
@@ -25,6 +25,18 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    if (process.env.RADIUS_DISCONNECT_ENABLED === 'true') {
+      try {
+        execSync('which radclient', { stdio: 'ignore' })
+      } catch {
+        this.logger.error(
+          'CRITICAL: RADIUS_DISCONNECT_ENABLED=true but radclient ' +
+            'binary is not found in PATH. Active session disconnect will ' +
+            'silently fail. Add freeradius-utils to the API Dockerfile.',
+        )
+      }
+    }
+
     if (process.env.ACCESS_WORKERS_ENABLED === 'false') {
       return
     }

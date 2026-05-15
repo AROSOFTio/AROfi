@@ -100,6 +100,32 @@ function resolveCheckoutUrl(payment: PortalPayment) {
   return null
 }
 
+function openPesapalPopup(
+  checkoutUrl: string,
+  onClosed: () => void,
+): boolean {
+  const width = 520
+  const height = 680
+  const left = window.screenX + (window.outerWidth - width) / 2
+  const top = window.screenY + (window.outerHeight - height) / 2
+  const popup = window.open(
+    checkoutUrl,
+    'pesapal_checkout',
+    `width=${width},height=${height},left=${left},top=${top},` +
+      `scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no`,
+  )
+  if (!popup || popup.closed) {
+    return false
+  }
+  const poll = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(poll)
+      onClosed()
+    }
+  }, 800)
+  return true
+}
+
 export default function PortalCheckout({ initialView = 'home' }: { initialView?: PortalView }) {
   const router = useRouter()
   const [context, setContext] = useState<PortalContextResponse | null>(null)
@@ -138,7 +164,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    const interval = window.setInterval(() => void pollPayment(currentPayment.id), 5000)
+    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 5000)
     return () => window.clearInterval(interval)
   }, [currentPayment])
 
@@ -303,8 +329,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  async function pollPayment(paymentId: string) {
-    const token = currentPayment?.statusToken
+  async function handleCheckPaymentStatus(paymentId: string, statusToken?: string | null) {
+    const token = statusToken ?? currentPayment?.statusToken
     const response = await fetch(`/api/payments/${paymentId}/check-status${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
       method: 'POST',
     })
@@ -375,8 +401,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       const checkoutUrl = resolveCheckoutUrl(payment)
 
       if (paymentProvider === 'PESAPAL' && checkoutUrl) {
-        setStatusMessage('Redirecting to secure Pesapal checkout...')
-        window.location.href = checkoutUrl
+        setStatusMessage('Complete your payment in the Pesapal window...')
+        const opened = openPesapalPopup(checkoutUrl, () => {
+          setStatusMessage('Checking payment status...')
+          void handleCheckPaymentStatus(payment.id, payment.statusToken)
+        })
+        if (!opened) {
+          window.location.assign(checkoutUrl)
+        }
         return
       }
 
@@ -677,6 +709,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                       {isPaymentLoading ? 'Starting checkout...' : 'Pay now'}
                     </button>
+                    {currentPayment && paymentProvider === 'PESAPAL' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)}
+                        className="mt-3 w-full rounded-xl border border-sky-500/40 bg-sky-500/10 py-2 text-sm text-sky-200 transition-colors hover:bg-sky-500/20"
+                      >
+                        I completed my payment — check status
+                      </button>
+                    )}
                   </form>
                   {currentPayment && (
                     <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-4 text-sm text-slate-300">

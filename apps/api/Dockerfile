@@ -15,7 +15,7 @@ RUN npm run build
 # Runtime stage
 FROM node:20-alpine
 WORKDIR /usr/src/app/apps/api
-RUN apk add --no-cache openssl libc6-compat
+RUN apk add --no-cache openssl libc6-compat freeradius-utils
 COPY --from=builder /usr/src/app/node_modules /usr/src/app/node_modules
 COPY --from=builder /usr/src/app/package.json /usr/src/app/package.json
 COPY --from=builder /usr/src/app/package-lock.json /usr/src/app/package-lock.json

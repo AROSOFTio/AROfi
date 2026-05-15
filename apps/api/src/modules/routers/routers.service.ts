@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import {
@@ -20,6 +21,8 @@ import { RouterCredentialsService } from './router-credentials.service'
 
 @Injectable()
 export class RoutersService {
+  private readonly logger = new Logger(RoutersService.name)
+
   private readonly authRadiusEventTypes = new Set<RadiusEventType>([
     RadiusEventType.ACCESS_ACCEPT,
     RadiusEventType.ACCESS_REJECT,
@@ -314,6 +317,8 @@ export class RoutersService {
       include: this.routerInclude,
     })
 
+    this.reloadFreeradiusNasClients()
+
     return this.getRouterSetup(router.id)
   }
 
@@ -465,7 +470,26 @@ export class RoutersService {
       },
     })
 
+    this.reloadFreeradiusNasClients()
+
     return this.getRouterSetup(router.id, tenantId)
+  }
+
+  private reloadFreeradiusNasClients(): void {
+    const { exec } = require('child_process')
+    exec(
+      'docker kill --signal=HUP $(docker ps -qf name=freeradius) 2>/dev/null || true',
+      (err: Error | null) => {
+        if (err) {
+          this.logger.warn(
+            'Could not send HUP to FreeRADIUS. New NAS client may ' +
+              'not be active until FreeRADIUS restarts. Error: ' + err.message,
+          )
+        } else {
+          this.logger.log('FreeRADIUS NAS client reload signal sent.')
+        }
+      },
+    )
   }
 
   private async getSetupDiagnostics(routerId: string) {

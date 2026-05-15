@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import {
   clearBrowserAdminSession,
   getBrowserAdminToken,
+  setBrowserAdminSession,
 } from '@/lib/admin-session'
 
 function resolveNextPath() {
@@ -81,6 +82,9 @@ export default function LoginPage() {
         throw new Error('Invalid credentials')
       }
 
+      const data = await res.json()
+      const token = data.access_token as string
+      setBrowserAdminSession(token)
       window.location.href = nextPath
     } catch {
       setError('Invalid email or password. Please try again.')
