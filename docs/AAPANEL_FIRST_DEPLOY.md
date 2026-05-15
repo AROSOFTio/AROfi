@@ -18,6 +18,22 @@ cd /www/wwwroot/arofi.arosoft.io
 
 The folder should contain `docker-compose.yml`, `apps/`, `config/`, `package.json`, and `.env.aapanel.example`.
 
+If you already created and edited `/www/wwwroot/arofi.arosoft.io/.env`, do not move or replace the folder. Pull the repo files into a temp folder, then sync them in without touching `.env`:
+
+```sh
+cd /www/wwwroot/arofi.arosoft.io
+sudo cp .env .env.backup.$(date +%Y%m%d%H%M%S)
+
+cd /tmp
+sudo rm -rf arofi-source
+sudo git clone https://github.com/AROSOFTio/AROfi.git arofi-source
+sudo rsync -a --exclude='.git' --exclude='.env' /tmp/arofi-source/ /www/wwwroot/arofi.arosoft.io/
+sudo chown -R "$USER":"$USER" /www/wwwroot/arofi.arosoft.io
+
+cd /www/wwwroot/arofi.arosoft.io
+ls scripts/deploy-aapanel.sh
+```
+
 ## 2. Install Docker in aaPanel
 
 In aaPanel, open `Docker` and install/enable Docker if it is not already running.
