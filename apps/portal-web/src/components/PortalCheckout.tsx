@@ -18,6 +18,13 @@ type PortalView = 'home' | 'login' | 'session'
 type MobileMoneyNetwork = 'MTN' | 'AIRTEL'
 type PaymentProviderOption = 'YO_UGANDA' | 'PESAPAL'
 type PaymentMethodOption = 'MOBILE_MONEY' | 'CARD'
+type HotspotParams = {
+  macAddress: string
+  clientIp: string
+  loginUrl: string
+  routerId: string
+  hotspotServerName: string
+}
 
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const portalStorageKey = 'arofi.portal.access_token'
@@ -111,6 +118,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [isLoginLoading, setIsLoginLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
+  const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
+    macAddress: '',
+    clientIp: '',
+    loginUrl: '',
+    routerId: '',
+    hotspotServerName: '',
+  })
 
   useEffect(() => {
     void bootstrap()
@@ -133,26 +147,53 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   async function bootstrap() {
     setIsBooting(true)
+    const detected = readHotspotParams()
+    setHotspotParams(detected)
     const storedToken = typeof window === 'undefined' ? null : window.localStorage.getItem(portalStorageKey)
 
     if (storedToken) {
       const session = await loadPortalSession(storedToken)
       if (session) {
-        await loadContext(session.customer.phoneNumber, storedToken)
+        await loadContext(session.customer.phoneNumber, storedToken, detected)
         setIsBooting(false)
         return
       }
     }
 
-    await loadContext()
+    await loadContext(undefined, undefined, detected)
     setIsBooting(false)
   }
 
-  async function loadContext(phone?: string, accessToken?: string | null) {
+  function readHotspotParams() {
+    if (typeof window === 'undefined') {
+      return {
+        macAddress: '',
+        clientIp: '',
+        loginUrl: '',
+        routerId: '',
+        hotspotServerName: '',
+      }
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    return {
+      macAddress: params.get('mac') ?? params.get('client_mac') ?? params.get('mac-address') ?? '',
+      clientIp: params.get('ip') ?? params.get('client_ip') ?? '',
+      loginUrl: params.get('link-login') ?? params.get('loginUrl') ?? params.get('link_login') ?? '',
+      routerId: params.get('routerId') ?? '',
+      hotspotServerName: params.get('server') ?? params.get('hotspot') ?? '',
+    }
+  }
+
+  async function loadContext(phone?: string, accessToken?: string | null, detectedParams = hotspotParams) {
     const params = new URLSearchParams()
     if (phone) {
       params.set('phoneNumber', phone)
     }
+    if (detectedParams.macAddress) params.set('mac', detectedParams.macAddress)
+    if (detectedParams.clientIp) params.set('ip', detectedParams.clientIp)
+    if (detectedParams.routerId) params.set('routerId', detectedParams.routerId)
+    if (detectedParams.loginUrl) params.set('loginUrl', detectedParams.loginUrl)
 
     const response = await fetch(`/api/portal/context${params.toString() ? `?${params}` : ''}`, {
       cache: 'no-store',
@@ -165,6 +206,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     const data = await readJson<PortalContextResponse>(response)
     setContext(data)
+    if (data.returningDevice?.existingActiveAccess) {
+      setStatusMessage('Welcome back. Your package is still active.')
+    }
     setCurrentPayment(data.latestPayment ?? null)
     setSelectedPackage((previous) => {
       if (previous) {
@@ -237,7 +281,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }
 
   async function pollPayment(paymentId: string) {
-    const response = await fetch(`/api/payments/${paymentId}/check-status`, {
+    const token = currentPayment?.statusToken
+    const response = await fetch(`/api/payments/${paymentId}/check-status${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
       method: 'POST',
     })
 
@@ -288,6 +333,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           method: paymentMethod,
           network: paymentMethod === 'MOBILE_MONEY' ? network : undefined,
           idempotencyKey: crypto.randomUUID(),
+          macAddress: hotspotParams.macAddress || undefined,
+          clientIp: hotspotParams.clientIp || undefined,
+          loginUrl: hotspotParams.loginUrl || undefined,
+          routerId: hotspotParams.routerId || undefined,
+          hotspotServerName: hotspotParams.hotspotServerName || undefined,
         }),
       })
 
@@ -339,6 +389,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           code: voucherCode.trim(),
           phoneNumber: phoneNumber || undefined,
           customerReference: customerReference || phoneNumber || undefined,
+          macAddress: hotspotParams.macAddress || undefined,
+          clientIp: hotspotParams.clientIp || undefined,
+          loginUrl: hotspotParams.loginUrl || undefined,
+          routerId: hotspotParams.routerId || undefined,
+          hotspotServerName: hotspotParams.hotspotServerName || undefined,
         }),
       })
 
@@ -406,6 +461,27 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     if (initialView === 'session') {
       router.push('/login')
     }
+  }
+
+  function connectNow() {
+    const reconnect = context?.returningDevice?.reconnect
+    if (!reconnect?.loginUrl || !reconnect.username || !reconnect.password) {
+      setErrorMessage('Reconnect is available, but this browser did not receive a MikroTik login URL. Reopen the captive portal from the WiFi network.')
+      return
+    }
+
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = reconnect.loginUrl
+    for (const [name, value] of Object.entries({ username: reconnect.username, password: reconnect.password })) {
+      const input = document.createElement('input')
+      input.type = 'hidden'
+      input.name = name
+      input.value = value ?? ''
+      form.appendChild(input)
+    }
+    document.body.appendChild(form)
+    form.submit()
   }
 
   const activeActivation = portalSession?.activeActivation ?? context?.activeActivation ?? null
@@ -479,6 +555,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         <>
           {errorMessage && <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{errorMessage}</div>}
           {statusMessage && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{statusMessage}</div>}
+          {context?.returningDevice?.existingActiveAccess && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-50">
+              <div className="font-semibold">Welcome back. Your package is still active.</div>
+              <div className="mt-1 text-emerald-100">
+                {context.returningDevice.activation?.package.name ?? 'Active package'} expires {formatDate(context.returningDevice.activation?.endsAt)}.
+              </div>
+              <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">
+                <Wifi className="h-4 w-4" />
+                Reconnect to internet
+              </button>
+            </div>
+          )}
 
           {initialView === 'home' && (
             <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">

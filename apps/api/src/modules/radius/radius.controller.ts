@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Param, Post, Query, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -14,6 +15,7 @@ export class RadiusController {
   constructor(
     private readonly radiusService: RadiusService,
     private readonly accessScope: AccessScopeService,
+    private readonly configService: ConfigService,
   ) {}
 
   @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -25,13 +27,40 @@ export class RadiusController {
   }
 
   @Post('auth-events')
-  recordAuthEvent(@Body() dto: RecordRadiusAuthEventDto) {
+  recordAuthEvent(@Body() dto: RecordRadiusAuthEventDto, @Headers('x-radius-api-key') apiKey?: string) {
+    this.assertInternalRadiusAccess(apiKey)
     return this.radiusService.recordAuthEvent(dto)
   }
 
   @Post('accounting-events')
-  recordAccountingEvent(@Body() dto: RecordRadiusAccountingEventDto) {
+  recordAccountingEvent(@Body() dto: RecordRadiusAccountingEventDto, @Headers('x-radius-api-key') apiKey?: string) {
+    this.assertInternalRadiusAccess(apiKey)
     return this.radiusService.recordAccountingEvent(dto)
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.settingsManage)
+  @Post('activations/:activationId/reset-device')
+  resetDeviceBinding(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('activationId') activationId: string,
+    @Body() body: { newMacAddress?: string; reason: string },
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.radiusService.resetDeviceBinding({
+      activationId,
+      tenantId,
+      adminUserId: user.id,
+      newMacAddress: body.newMacAddress,
+      reason: body.reason,
+    })
+  }
+
+  private assertInternalRadiusAccess(apiKey?: string) {
+    const configured = this.configService.get<string>('RADIUS_INTERNAL_API_KEY')
+    if (!configured || apiKey !== configured) {
+      throw new UnauthorizedException('RADIUS internal API key is required')
+    }
   }
 }
 

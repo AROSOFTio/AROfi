@@ -33,6 +33,11 @@ type RouterFormState = {
   sharedSecret: string
   siteLabel: string
   model: string
+  routerOsVersion: string
+  hotspotServerName: string
+  portalWalledGardenHosts: string
+  ttlAntiTetheringEnabled: boolean
+  scriptMode: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT'
   tags: string
 }
 
@@ -58,6 +63,11 @@ const initialRouterForm = (): RouterFormState => ({
   sharedSecret: generateSecret(),
   siteLabel: '',
   model: '',
+  routerOsVersion: '',
+  hotspotServerName: '',
+  portalWalledGardenHosts: '',
+  ttlAntiTetheringEnabled: false,
+  scriptMode: 'SAFE_EXISTING_ROUTER',
   tags: '',
 })
 
@@ -75,6 +85,10 @@ function parseOptionalInt(value: string) {
 }
 
 function parseTags(value: string) {
+  return value.split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+function parseHosts(value: string) {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
@@ -221,6 +235,11 @@ export default function RoutersManager() {
         sharedSecret: routerForm.sharedSecret.trim(),
         siteLabel: routerForm.siteLabel.trim() || undefined,
         model: routerForm.model.trim() || undefined,
+        routerOsVersion: routerForm.routerOsVersion.trim() || undefined,
+        hotspotServerName: routerForm.hotspotServerName.trim() || undefined,
+        portalWalledGardenHosts: parseHosts(routerForm.portalWalledGardenHosts),
+        ttlAntiTetheringEnabled: routerForm.ttlAntiTetheringEnabled,
+        scriptMode: routerForm.scriptMode,
         tags: parseTags(routerForm.tags),
       })
       setSelectedSetup(setup)
@@ -252,6 +271,40 @@ export default function RoutersManager() {
     } finally {
       setRunningHealthCheckId(null)
     }
+  }
+
+  async function handleRotateSecret(routerId: string) {
+    try {
+      setError(null)
+      setSuccess(null)
+      const setup = await clientPostApi<RouterSetupResponse>(`/routers/${routerId}/rotate-radius-secret`, {})
+      setSelectedSetup(setup)
+      setSuccess('RADIUS secret rotated. Paste the newly generated script into the router again.')
+      await loadData(routerId)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to rotate RADIUS secret')
+    }
+  }
+
+  async function copyScript() {
+    if (!selectedSetup?.provisioningScript) {
+      return
+    }
+    await navigator.clipboard.writeText(selectedSetup.provisioningScript)
+    setSuccess('RouterOS script copied to clipboard.')
+  }
+
+  function downloadScript() {
+    if (!selectedSetup?.provisioningScript) {
+      return
+    }
+    const blob = new Blob([selectedSetup.provisioningScript], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${selectedSetup.router.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-arofi-routeros.rsc`
+    anchor.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -326,6 +379,12 @@ export default function RoutersManager() {
             <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
               Secret hint {selectedSetup?.radiusClient?.sharedSecretHint ?? overview?.radiusFoundation.sharedSecretHint ?? 'Pending'}
             </div>
+            {selectedSetup?.router && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
+                <span className="badge badge-warning">Verified only after RADIUS/accounting traffic</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -366,6 +425,9 @@ export default function RoutersManager() {
             <span className="card-title">Provisioning Checklist</span>
           </div>
           <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
+              Open WinBox, WebFig, or SSH Terminal, paste the script, then press Enter. The router remains in waiting state until AROFi sees real RADIUS authentication or accounting traffic.
+            </div>
             {(selectedSetup?.onboardingChecklist ?? []).length === 0 && (
               <div className="empty-state">
                 <p>Register a router to receive MikroTik onboarding instructions.</p>
@@ -383,8 +445,21 @@ export default function RoutersManager() {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Provisioning Script</span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => void copyScript()} disabled={!selectedSetup?.provisioningScript}>Copy</button>
+              <button type="button" className="btn btn-ghost" onClick={downloadScript} disabled={!selectedSetup?.provisioningScript}>Download</button>
+              <button type="button" className="btn btn-ghost" onClick={() => selectedSetup && void handleRotateSecret(selectedSetup.router.id)} disabled={!selectedSetup}>Rotate Secret</button>
+            </div>
           </div>
           <div style={{ padding: 20 }}>
+            <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+              {(selectedSetup?.setupDiagnostics ?? []).map((check) => (
+                <div key={check.code} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{check.label}</span>
+                  <span className={check.ok ? 'badge badge-success' : 'badge badge-warning'}>{check.ok ? 'pass' : 'pending'}</span>
+                </div>
+              ))}
+            </div>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)', minHeight: 280 }}>
               {selectedSetup?.provisioningScript ?? 'The RouterOS setup script will appear here after your first MikroTik is registered.'}
             </pre>
@@ -434,18 +509,28 @@ function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showT
         <form onSubmit={onSubmit}>
           <div className="stats-grid" style={{ marginBottom: 12 }}>
             {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
-            <InputField label="Router Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="KLA-Core-RB951" required />
-            <InputField label="Identity" value={formState.identity} onChange={(value) => setFormState((previous) => ({ ...previous, identity: value }))} placeholder="KLA-ROUTER-001" />
-            <InputField label="Management Host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="192.168.88.1" required />
+            <InputField label="Router Display Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
+            <InputField label="Branch / Site Name" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Kiseka Arcade" />
+            <InputField label="HotSpot Network Name" value={formState.hotspotServerName} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotServerName: value }))} placeholder="hotspot1" />
+            <InputField label="RouterOS Major Version" value={formState.routerOsVersion} onChange={(value) => setFormState((previous) => ({ ...previous, routerOsVersion: value }))} placeholder="7" />
+            <SelectField label="Script Mode" value={formState.scriptMode} onChange={(value) => setFormState((previous) => ({ ...previous, scriptMode: value as RouterFormState['scriptMode'] }))} options={[{ value: 'SAFE_EXISTING_ROUTER', label: 'Safe existing router integration' }, { value: 'FRESH_FULL_HOTSPOT', label: 'Fresh router full HotSpot setup' }]} />
+            <InputField label="Management Host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Optional, for health checks" />
+            <InputField label="Identity" value={formState.identity} onChange={(value) => setFormState((previous) => ({ ...previous, identity: value }))} placeholder="Optional RouterOS identity" />
             <SelectField label="Connection Mode" value={formState.connectionMode} onChange={(value) => setFormState((previous) => ({ ...previous, connectionMode: value as RouterFormState['connectionMode'] }))} options={[{ value: 'ROUTEROS_API', label: 'RouterOS API' }, { value: 'ROUTEROS_API_SSL', label: 'RouterOS API SSL' }]} />
             <InputField label="API Port" value={formState.apiPort} onChange={(value) => setFormState((previous) => ({ ...previous, apiPort: value }))} placeholder="8728" />
             <SelectField label="Router Group" value={formState.groupId} onChange={(value) => setFormState((previous) => ({ ...previous, groupId: value }))} options={[{ value: '', label: 'No group yet' }, ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.code})` }))]} />
             <SelectField label="Hotspot Site" value={formState.hotspotId} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotId: value }))} options={[{ value: '', label: 'Link later' }, ...hotspots.map((hotspot) => ({ value: hotspot.id, label: hotspot.name }))]} />
-            <InputField label="Admin Username" value={formState.username} onChange={(value) => setFormState((previous) => ({ ...previous, username: value }))} placeholder="admin" required />
-            <InputField label="Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Router admin password" required />
-            <InputField label="RADIUS Shared Secret" value={formState.sharedSecret} onChange={(value) => setFormState((previous) => ({ ...previous, sharedSecret: value }))} placeholder="Shared secret" required />
-            <InputField label="Site Label" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Kiseka Arcade" />
+            <InputField label="Admin Username" value={formState.username} onChange={(value) => setFormState((previous) => ({ ...previous, username: value }))} placeholder="Optional, for health checks" />
+            <InputField label="Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Optional, encrypted at rest" />
+            <InputField label="RADIUS Shared Secret" value={formState.sharedSecret} onChange={(value) => setFormState((previous) => ({ ...previous, sharedSecret: value }))} placeholder="Generated automatically" />
             <InputField label="Model" value={formState.model} onChange={(value) => setFormState((previous) => ({ ...previous, model: value }))} placeholder="RB951Ui-2HnD" />
+          </div>
+          <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+            <InputField label="Extra Walled Garden Hosts" value={formState.portalWalledGardenHosts} onChange={(value) => setFormState((previous) => ({ ...previous, portalWalledGardenHosts: value }))} placeholder="portal.example.com, api.example.com" />
+            <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+              <input type="checkbox" checked={formState.ttlAntiTetheringEnabled} onChange={(event) => setFormState((previous) => ({ ...previous, ttlAntiTetheringEnabled: event.target.checked }))} />
+              Enable optional TTL anti-tethering rule. This reduces common sharing but cannot guarantee detection of every NAT tethering case.
+            </label>
           </div>
           <InputField label="Tags" value={formState.tags} onChange={(value) => setFormState((previous) => ({ ...previous, tags: value }))} placeholder="backbone, tower-a, hotspot-core" />
           <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -475,7 +560,7 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
                   <td>{router.tenant.name}</td>
                   <td>{router.hotspot?.name ?? router.siteLabel ?? 'Not linked'}</td>
                   <td><div style={{ fontFamily: 'monospace', fontSize: 12 }}>{router.host}:{router.apiPort}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{router.connectionMode.toLowerCase()}</div></td>
-                  <td><span className={getStatusBadgeClass(router.status)}>{router.status.toLowerCase()}</span><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{formatLatency(router.lastLatencyMs)}</div></td>
+                  <td><span className={getStatusBadgeClass(router.status)}>{router.status.toLowerCase()}</span><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{router.onboardingStatus ?? 'NOT_STARTED'}</div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{formatLatency(router.lastLatencyMs)}</div></td>
                   <td>{router.activeSessions}</td>
                   <td style={{ fontSize: 12 }}>{formatDate(router.lastSeenAt)}</td>
                   <td><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button type="button" className="btn btn-ghost" onClick={() => onLoadSetup(router.id)}>View Setup</button><button type="button" className="btn btn-ghost" onClick={() => onHealthCheck(router.id)} disabled={runningHealthCheckId === router.id}>{runningHealthCheckId === router.id ? 'Checking...' : 'Health Check'}</button></div></td>

@@ -46,4 +46,29 @@ export class InitiatePortalPaymentDto {
   @IsString()
   @MaxLength(120)
   sessionReference?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  macAddress?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  clientIp?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  routerId?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  hotspotServerName?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  loginUrl?: string
 }

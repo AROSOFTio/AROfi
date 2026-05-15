@@ -621,6 +621,16 @@ export type RouterItem = {
   model?: string | null
   serialNumber?: string | null
   routerOsVersion?: string | null
+  onboardingStatus?: string
+  verificationStatus?: string
+  registrationKey?: string
+  scriptGeneratedAt?: string | null
+  lastRadiusSignalAt?: string | null
+  lastAccountingSignalAt?: string | null
+  lastAuthSignalAt?: string | null
+  hotspotServerName?: string | null
+  portalWalledGardenHosts?: string[]
+  ttlAntiTetheringEnabled?: boolean
   status: string
   healthMessage?: string | null
   lastSeenAt?: string | null
@@ -714,6 +724,12 @@ export type RouterSetupResponse = {
   }
   onboardingChecklist: string[]
   provisioningScript: string
+  setupDiagnostics?: Array<{
+    code: string
+    label: string
+    ok: boolean
+    checkedAt?: string | null
+  }>
   radiusClient?: {
     id: string
     shortName: string

@@ -1,5 +1,6 @@
 import {
   RouterConnectionMode,
+  RouterScriptMode,
   RouterVendor,
 } from '@prisma/client'
 import {
@@ -39,9 +40,9 @@ export class CreateRouterDto {
   @IsEnum(RouterVendor)
   vendor?: RouterVendor
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  host: string
+  host?: string
 
   @IsOptional()
   @IsInt()
@@ -53,17 +54,21 @@ export class CreateRouterDto {
   @IsEnum(RouterConnectionMode)
   connectionMode?: RouterConnectionMode
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  username: string
+  username?: string
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  password: string
+  password?: string
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  sharedSecret: string
+  sharedSecret?: string
+
+  @IsOptional()
+  @IsEnum(RouterScriptMode)
+  scriptMode?: RouterScriptMode
 
   @IsOptional()
   @IsString()
@@ -80,6 +85,23 @@ export class CreateRouterDto {
   @IsOptional()
   @IsString()
   routerOsVersion?: string
+
+  @IsOptional()
+  @IsString()
+  radiusNasIpAddress?: string
+
+  @IsOptional()
+  @IsString()
+  hotspotServerName?: string
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @IsString({ each: true })
+  portalWalledGardenHosts?: string[]
+
+  @IsOptional()
+  ttlAntiTetheringEnabled?: boolean
 
   @IsOptional()
   @IsArray()

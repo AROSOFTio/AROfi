@@ -8,6 +8,7 @@ import {
   Prisma,
   RadiusClientStatus,
   RadiusEventType,
+  RouterOnboardingStatus,
   RouterStatus,
   SessionStatus,
 } from '@prisma/client'
@@ -114,9 +115,7 @@ export class RadiusService {
   }
 
   async recordAuthEvent(dto: RecordRadiusAuthEventDto) {
-    const router = dto.routerId
-      ? await this.prisma.router.findUnique({ where: { id: dto.routerId } })
-      : null
+    const router = await this.resolveRouter(dto.routerId, dto.nasIpAddress)
 
     if (router && router.tenantId !== dto.tenantId) {
       throw new BadRequestException('Router does not belong to the tenant')
@@ -140,7 +139,7 @@ export class RadiusService {
     const event = await this.prisma.radiusEvent.create({
       data: {
         tenantId: dto.tenantId,
-        routerId: dto.routerId,
+        routerId: router?.id ?? dto.routerId,
         hotspotId: dto.hotspotId,
         sessionId: existingSession?.id,
         eventType,
@@ -171,12 +170,19 @@ export class RadiusService {
       },
     })
 
-    if (dto.routerId) {
+    if (router?.id) {
       await this.prisma.router.update({
-        where: { id: dto.routerId },
+        where: { id: router.id },
         data: {
           status: RouterStatus.HEALTHY,
+          onboardingStatus: dto.accepted
+            ? RouterOnboardingStatus.VERIFIED_ONLINE
+            : RouterOnboardingStatus.RADIUS_SEEN,
+          verificationStatus: dto.accepted ? 'VERIFIED' : 'SCRIPT_GENERATED',
           lastSeenAt: now,
+          lastRadiusSignalAt: now,
+          lastAuthSignalAt: now,
+          verifiedAt: dto.accepted ? now : undefined,
           healthMessage: dto.accepted
             ? 'Recent RADIUS authentication accepted'
             : 'Recent RADIUS authentication rejected',
@@ -198,9 +204,7 @@ export class RadiusService {
     const now = new Date()
 
     return this.prisma.$transaction(async (tx) => {
-      const router = dto.routerId
-        ? await tx.router.findUnique({ where: { id: dto.routerId } })
-        : null
+      const router = await this.resolveRouterInTransaction(tx, dto.routerId, dto.nasIpAddress)
 
       if (router && router.tenantId !== dto.tenantId) {
         throw new BadRequestException('Router does not belong to the tenant')
@@ -228,7 +232,7 @@ export class RadiusService {
           },
         },
         update: {
-          routerId: dto.routerId,
+          routerId: router?.id ?? dto.routerId,
           hotspotId: dto.hotspotId ?? linkage.hotspotId,
           activationId: linkage.activationId,
           voucherRedemptionId: linkage.voucherRedemptionId,
@@ -248,7 +252,7 @@ export class RadiusService {
         },
         create: {
           tenantId: dto.tenantId,
-          routerId: dto.routerId,
+          routerId: router?.id ?? dto.routerId,
           hotspotId: dto.hotspotId ?? linkage.hotspotId,
           activationId: linkage.activationId,
           voucherRedemptionId: linkage.voucherRedemptionId,
@@ -304,7 +308,7 @@ export class RadiusService {
       const event = await tx.radiusEvent.create({
         data: {
           tenantId: dto.tenantId,
-          routerId: dto.routerId,
+          routerId: router?.id ?? dto.routerId,
           hotspotId: dto.hotspotId ?? linkage.hotspotId,
           sessionId: session.id,
           eventType: dto.eventType,
@@ -321,20 +325,29 @@ export class RadiusService {
         },
       })
 
-      if (dto.routerId) {
+      if (router?.id) {
         const activeSessionCount = await tx.networkSession.count({
           where: {
-            routerId: dto.routerId,
+            routerId: router.id,
             status: SessionStatus.ACTIVE,
           },
         })
 
         await tx.router.update({
-          where: { id: dto.routerId },
+          where: { id: router.id },
           data: {
             status: RouterStatus.HEALTHY,
+            onboardingStatus:
+              dto.eventType === RadiusEventType.ACCOUNTING_START ||
+              dto.eventType === RadiusEventType.ACCOUNTING_INTERIM
+                ? RouterOnboardingStatus.VERIFIED_ONLINE
+                : RouterOnboardingStatus.ACCOUNTING_SEEN,
+            verificationStatus: 'VERIFIED',
             lastSeenAt: now,
             lastHealthCheckAt: now,
+            lastRadiusSignalAt: now,
+            lastAccountingSignalAt: now,
+            verifiedAt: now,
             healthMessage: 'Recent RADIUS accounting traffic received',
             activeSessionCount,
           },
@@ -346,6 +359,102 @@ export class RadiusService {
         event,
         session,
       }
+    })
+  }
+
+  async resetDeviceBinding(input: {
+    activationId: string
+    tenantId?: string
+    adminUserId?: string
+    newMacAddress?: string
+    reason: string
+  }) {
+    if (!input.reason?.trim()) {
+      throw new BadRequestException('A support reason is required to reset a device binding')
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const activation = await tx.packageActivation.findUnique({
+        where: { id: input.activationId },
+        include: { tenant: { include: { tenantSettings: true } }, radiusCredential: true },
+      })
+
+      if (!activation || (input.tenantId && activation.tenantId !== input.tenantId)) {
+        throw new NotFoundException('Package activation not found')
+      }
+
+      const settings =
+        activation.tenant.tenantSettings ??
+        (await tx.tenantSetting.create({ data: { tenantId: activation.tenantId } }))
+
+      if (!settings.allowDeviceReset) {
+        await tx.deviceBindingReset.create({
+          data: {
+            tenantId: activation.tenantId,
+            activationId: activation.id,
+            adminUserId: input.adminUserId,
+            oldMacAddress: activation.boundMacAddress,
+            newMacAddress: input.newMacAddress,
+            reason: input.reason,
+            status: 'REJECTED',
+          },
+        })
+        throw new BadRequestException('Device binding resets are disabled for this tenant')
+      }
+
+      if (
+        settings.maxResetsPerActivation > 0 &&
+        activation.deviceResetCount >= settings.maxResetsPerActivation
+      ) {
+        throw new BadRequestException('The device reset limit has been reached for this activation')
+      }
+
+      const normalizedNewMac = this.normalizeMac(input.newMacAddress) ?? null
+
+      const updated = await tx.packageActivation.update({
+        where: { id: activation.id },
+        data: {
+          boundMacAddress: normalizedNewMac,
+          firstSeenAt: normalizedNewMac ? new Date() : null,
+          deviceResetCount: { increment: 1 },
+        },
+      })
+
+      if (activation.radiusCredential) {
+        await tx.radiusCredential.update({
+          where: { id: activation.radiusCredential.id },
+          data: { boundMacAddress: normalizedNewMac },
+        })
+      }
+
+      await tx.deviceBindingReset.create({
+        data: {
+          tenantId: activation.tenantId,
+          activationId: activation.id,
+          adminUserId: input.adminUserId,
+          oldMacAddress: activation.boundMacAddress,
+          newMacAddress: normalizedNewMac,
+          reason: input.reason,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: activation.tenantId,
+          userId: input.adminUserId,
+          action: 'activation.device_binding_reset',
+          entity: 'PackageActivation',
+          entityId: activation.id,
+          severity: 'WARNING',
+          details: this.toJsonValue({
+            oldMacAddress: activation.boundMacAddress,
+            newMacAddress: normalizedNewMac,
+            reason: input.reason,
+          }),
+        },
+      })
+
+      return updated
     })
   }
 
@@ -496,6 +605,54 @@ export class RadiusService {
     }
 
     return phoneNumber
+  }
+
+  private async resolveRouter(routerId?: string, nasIpAddress?: string | null) {
+    if (routerId) {
+      return this.prisma.router.findUnique({ where: { id: routerId } })
+    }
+
+    if (!nasIpAddress) {
+      return null
+    }
+
+    return this.prisma.router.findFirst({
+      where: {
+        OR: [
+          { radiusNasIpAddress: nasIpAddress },
+          { host: nasIpAddress },
+          { radiusClient: { ipAddress: nasIpAddress } },
+        ],
+      },
+    })
+  }
+
+  private async resolveRouterInTransaction(
+    tx: Prisma.TransactionClient,
+    routerId?: string,
+    nasIpAddress?: string | null,
+  ) {
+    if (routerId) {
+      return tx.router.findUnique({ where: { id: routerId } })
+    }
+
+    if (!nasIpAddress) {
+      return null
+    }
+
+    return tx.router.findFirst({
+      where: {
+        OR: [
+          { radiusNasIpAddress: nasIpAddress },
+          { host: nasIpAddress },
+          { radiusClient: { ipAddress: nasIpAddress } },
+        ],
+      },
+    })
+  }
+
+  private normalizeMac(value?: string | null) {
+    return value?.trim().toUpperCase().replace(/-/g, ':')
   }
 
   private parseNumber(value?: string) {

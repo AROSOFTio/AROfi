@@ -57,5 +57,12 @@ export class RoutersController {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.routersService.runHealthCheck(routerId, tenantId)
   }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post(':routerId/rotate-radius-secret')
+  rotateRadiusSecret(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.rotateRadiusSecret(routerId, tenantId)
+  }
 }
 

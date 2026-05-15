@@ -562,6 +562,29 @@ export class VouchersService {
     }
 
     if (voucher.status === VoucherStatus.REDEEMED && voucher.redemption) {
+      const redeemedMac = this.normalizeMac(voucher.redemption.boundMacAddress)
+      const observedMac = this.normalizeMac(dto.macAddress)
+      if (redeemedMac && observedMac && redeemedMac !== observedMac) {
+        const activation = voucher.redemption.activation
+        if (activation) {
+          await this.prisma.suspiciousAccessAttempt.create({
+            data: {
+              tenantId: voucher.tenantId,
+              activationId: activation.id,
+              type: 'SECOND_DEVICE',
+              username: voucher.code,
+              expectedMacAddress: redeemedMac,
+              observedMacAddress: observedMac,
+              routerId: dto.routerId,
+              ipAddress: dto.clientIp,
+              userAgent: dto.userAgent,
+              message: 'Redeemed voucher attempted from a second MAC address',
+            },
+          })
+        }
+        throw new BadRequestException('This voucher/package is already active on another device.')
+      }
+
       return {
         voucher,
         redemption: voucher.redemption,
@@ -569,8 +592,25 @@ export class VouchersService {
       }
     }
 
-    if (voucher.status !== VoucherStatus.SOLD) {
-      throw new BadRequestException('Voucher must be sold before redemption')
+    const settings = await this.prisma.tenantSetting.upsert({
+      where: { tenantId: voucher.tenantId },
+      update: {},
+      create: { tenantId: voucher.tenantId },
+    })
+
+    if (
+      voucher.status !== VoucherStatus.SOLD &&
+      !(settings.redeemableWhenGenerated && voucher.status === VoucherStatus.GENERATED)
+    ) {
+      throw new BadRequestException('Voucher is not redeemable in its current state')
+    }
+
+    if (voucher.expiresAt && voucher.expiresAt <= new Date()) {
+      await this.prisma.voucher.update({
+        where: { id: voucher.id },
+        data: { status: VoucherStatus.EXPIRED },
+      })
+      throw new BadRequestException('Voucher has expired')
     }
 
     const redemptionReference = `VOUCHER-REDEEM-${voucher.id}`
@@ -596,6 +636,12 @@ export class VouchersService {
           hotspotId: dto.hotspotId,
           customerReference: dto.customerReference,
           sessionReference: dto.sessionReference,
+          boundMacAddress: this.normalizeMac(dto.macAddress),
+          firstSeenIp: dto.clientIp,
+          firstSeenAt: dto.macAddress ? new Date() : undefined,
+          routerId: dto.routerId,
+          hotspotServerName: dto.hotspotServerName,
+          userAgent: dto.userAgent,
         },
         include: {
           hotspot: {
@@ -669,9 +715,19 @@ export class VouchersService {
         deviceLimit: packageRecord.deviceLimit,
         downloadSpeedKbps: packageRecord.downloadSpeedKbps,
         uploadSpeedKbps: packageRecord.uploadSpeedKbps,
+        radiusUsername: voucher.code,
+        radiusPassword: voucher.code,
+        boundMacAddress: dto.macAddress,
+        firstSeenIp: dto.clientIp,
+        routerId: dto.routerId,
+        hotspotServerName: dto.hotspotServerName,
         metadata: {
           voucherCode: voucher.code,
           sessionReference: dto.sessionReference,
+          macAddress: this.normalizeMac(dto.macAddress),
+          clientIp: dto.clientIp,
+          routerId: dto.routerId,
+          hotspotServerName: dto.hotspotServerName,
         } as Prisma.InputJsonValue,
       })
 
@@ -705,6 +761,10 @@ export class VouchersService {
     }
 
     return undefined
+  }
+
+  private normalizeMac(value?: string | null) {
+    return value?.trim().toUpperCase().replace(/-/g, ':')
   }
 
   private async refreshBatchStatus(batchId: string, tx?: Prisma.TransactionClient) {

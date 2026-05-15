@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
 import { BillingModule } from '../billing/billing.module'
+import { RadiusModule } from '../radius/radius.module'
 import { PaymentsController } from './payments.controller'
 import { PackageActivationService } from './package-activation.service'
 import { PesapalGatewayService } from './pesapal.gateway.service'
@@ -8,7 +9,7 @@ import { PaymentsService } from './payments.service'
 import { YoUgandaGatewayService } from './yo-uganda.gateway.service'
 
 @Module({
-  imports: [AuthModule, BillingModule],
+  imports: [AuthModule, BillingModule, RadiusModule],
   controllers: [PaymentsController],
   providers: [YoUgandaGatewayService, PesapalGatewayService, PackageActivationService, PaymentsService],
   exports: [PackageActivationService, PaymentsService, YoUgandaGatewayService, PesapalGatewayService],

@@ -1,8 +1,7 @@
-# AROFi Phase 4 bootstrap credentials.
-# Dynamic package, voucher, and customer sync can extend this file in later phases.
+# AROFi health-check credential only.
+# Production package and voucher credentials are provisioned dynamically into PostgreSQL
+# radcheck/radreply and enforced by FreeRADIUS SQL. Do not add customer vouchers here.
 
 arofi-health Cleartext-Password := "radius-health"
 	Reply-Message := "AROFi FreeRADIUS is online"
 
-HR1APR-0001 Cleartext-Password := "HR1APR-0001"
-	Reply-Message := "Voucher login bootstrap"

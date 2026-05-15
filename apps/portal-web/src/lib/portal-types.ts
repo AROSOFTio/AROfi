@@ -12,6 +12,18 @@ export type PortalContextResponse = {
   activeActivation?: PortalActivation | null
   latestPayment?: PortalPayment | null
   session?: PortalCustomerSession | null
+  returningDevice?: {
+    existingActiveAccess: boolean
+    reason?: string
+    message?: string
+    activation?: PortalActivation | null
+    reconnect?: {
+      loginUrl?: string | null
+      username?: string | null
+      password?: string | null
+      method: string
+    } | null
+  }
 }
 
 export type PortalPackage = {
@@ -60,6 +72,7 @@ export type PortalPayment = {
   providerReference?: string | null
   providerStatus?: string | null
   statusMessage?: string | null
+  statusToken?: string | null
   checkoutUrl?: string | null
   responsePayload?: Record<string, unknown> | null
   createdAt: string

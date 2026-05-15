@@ -24,4 +24,24 @@ export class RedeemVoucherDto {
   @IsOptional()
   @IsString()
   sessionReference?: string
+
+  @IsOptional()
+  @IsString()
+  macAddress?: string
+
+  @IsOptional()
+  @IsString()
+  clientIp?: string
+
+  @IsOptional()
+  @IsString()
+  routerId?: string
+
+  @IsOptional()
+  @IsString()
+  hotspotServerName?: string
+
+  @IsOptional()
+  @IsString()
+  userAgent?: string
 }

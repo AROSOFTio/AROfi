@@ -27,10 +27,12 @@ enum VoucherBatchStatus {
 
 enum VoucherStatus {
   GENERATED
+  PRINTED
   SOLD
   REDEEMED
   EXPIRED
   VOID
+  VOIDED
 }
 
 enum BillingChannel {
@@ -207,6 +209,54 @@ enum PackageActivationStatus {
   EXPIRED
   FAILED
   REVOKED
+  SUSPENDED
+}
+
+enum RouterVerificationStatus {
+  SCRIPT_GENERATED
+  OPERATOR_APPLIED
+  VERIFIED
+  FAILED
+}
+
+enum RouterOnboardingStatus {
+  NOT_STARTED
+  SCRIPT_GENERATED
+  WAITING_FOR_ROUTER
+  RADIUS_SEEN
+  ACCOUNTING_SEEN
+  VERIFIED_ONLINE
+  CONFIG_ERROR
+}
+
+enum RouterScriptMode {
+  SAFE_EXISTING_ROUTER
+  FRESH_FULL_HOTSPOT
+}
+
+enum RadiusCredentialStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+  REVOKED
+}
+
+enum DeviceBindingResetStatus {
+  COMPLETED
+  REJECTED
+}
+
+enum ReconnectionStatus {
+  ALLOWED
+  DENIED
+  STALE_SESSION_CLEARED
+  LOGIN_PAYLOAD_ISSUED
+}
+
+enum SuspiciousAccessAttemptType {
+  SECOND_DEVICE
+  CONCURRENT_SESSION
+  MISSING_MAC
 }
 
 enum AuditSeverity {
@@ -283,6 +333,12 @@ model Tenant {
   featureLimits       FeatureLimit[]
   supportTickets      SupportTicket[]
   auditLogs           AuditLog[]
+  radiusCredentials   RadiusCredential[]
+  deviceBindingResets DeviceBindingReset[]
+  reconnectionLogs    ReconnectionLog[]
+  suspiciousAttempts  SuspiciousAccessAttempt[]
+  voucherPrintLogs    VoucherPrintLog[]
+  tenantSettings      TenantSetting?
 }
 
 model Role {
@@ -396,6 +452,19 @@ model Router {
   lastLatencyMs         Int?
   activeSessionCount    Int                  @default(0)
   lastProvisionedAt     DateTime?
+  verificationStatus    RouterVerificationStatus @default(SCRIPT_GENERATED)
+  onboardingStatus      RouterOnboardingStatus @default(NOT_STARTED)
+  lastScriptMode        RouterScriptMode       @default(SAFE_EXISTING_ROUTER)
+  registrationKey       String                 @unique @default(uuid())
+  verifiedAt            DateTime?
+  scriptGeneratedAt     DateTime?
+  lastRadiusSignalAt    DateTime?
+  lastAccountingSignalAt DateTime?
+  lastAuthSignalAt      DateTime?
+  radiusNasIpAddress    String?
+  hotspotServerName     String?
+  portalWalledGardenHosts String[]
+  ttlAntiTetheringEnabled Boolean @default(false)
   tags                  String[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
@@ -593,9 +662,13 @@ model VoucherBatch {
   expiresAt         DateTime?
   status            VoucherBatchStatus @default(ACTIVE)
   notes             String?
+  lastPrintedAt     DateTime?
+  exportedAt        DateTime?
+  printCount        Int               @default(0)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   vouchers          Voucher[]
+  printLogs         VoucherPrintLog[]
 
   @@index([tenantId, createdAt])
 }
@@ -617,6 +690,9 @@ model Voucher {
   expiresAt           DateTime?
   soldToReference     String?
   customerReference   String?
+  printCount          Int                  @default(0)
+  lastPrintedAt       DateTime?
+  exportedAt          DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   billingTransactions BillingTransaction[]
@@ -739,6 +815,12 @@ model VoucherRedemption {
   hotspot           Hotspot?  @relation(fields: [hotspotId], references: [id])
   customerReference String?
   sessionReference  String?
+  boundMacAddress   String?
+  firstSeenIp       String?
+  firstSeenAt       DateTime?
+  userAgent         String?
+  routerId          String?
+  hotspotServerName String?
   createdAt         DateTime  @default(now())
   activation        PackageActivation?
   networkSessions   NetworkSession[]
@@ -765,6 +847,7 @@ model Payment {
   externalReference   String             @unique
   providerReference   String?            @unique
   idempotencyKey      String             @unique
+  statusToken         String?            @unique
   providerStatus      String?
   statusMessage       String?
   requestPayload      Json?
@@ -825,15 +908,207 @@ model PackageActivation {
   deviceLimit         Int?
   downloadSpeedKbps   Int?
   uploadSpeedKbps     Int?
+  radiusUsername      String?                @unique
+  radiusPassword      String?
+  boundMacAddress     String?
+  firstSeenIp         String?
+  firstSeenAt         DateTime?
+  routerId            String?
+  hotspotServerName   String?
+  lastReconnectAt     DateTime?
+  deviceResetCount    Int                    @default(0)
   startedAt           DateTime               @default(now())
   endsAt              DateTime
   metadata            Json?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
   sessions            NetworkSession[]
+  radiusCredential    RadiusCredential?
+  deviceBindingResets DeviceBindingReset[]
+  reconnectionLogs    ReconnectionLog[]
+  suspiciousAttempts  SuspiciousAccessAttempt[]
 
   @@index([tenantId, status, endsAt])
   @@index([accessPhoneNumber, status])
+  @@index([tenantId, boundMacAddress, status])
+  @@index([routerId, boundMacAddress])
+}
+
+model RadiusCredential {
+  id             String                 @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id])
+  activationId   String                 @unique
+  activation     PackageActivation      @relation(fields: [activationId], references: [id], onDelete: Cascade)
+  username       String                 @unique
+  password       String
+  status         RadiusCredentialStatus @default(ACTIVE)
+  boundMacAddress String?
+  routerId       String?
+  expiresAt      DateTime
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([tenantId, status, expiresAt])
+  @@index([boundMacAddress, status])
+}
+
+model DeviceBindingReset {
+  id             String                   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                   @relation(fields: [tenantId], references: [id])
+  activationId   String
+  activation     PackageActivation        @relation(fields: [activationId], references: [id])
+  adminUserId    String?
+  oldMacAddress  String?
+  newMacAddress  String?
+  reason         String
+  status         DeviceBindingResetStatus @default(COMPLETED)
+  createdAt      DateTime                 @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([activationId, createdAt])
+}
+
+model ReconnectionLog {
+  id             String             @id @default(uuid())
+  tenantId       String
+  tenant         Tenant             @relation(fields: [tenantId], references: [id])
+  activationId   String?
+  activation     PackageActivation? @relation(fields: [activationId], references: [id])
+  routerId       String?
+  macAddress     String?
+  ipAddress      String?
+  status         ReconnectionStatus
+  message        String?
+  payload        Json?
+  createdAt      DateTime           @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([activationId, createdAt])
+  @@index([routerId, macAddress])
+}
+
+model SuspiciousAccessAttempt {
+  id             String                      @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                      @relation(fields: [tenantId], references: [id])
+  activationId   String?
+  activation     PackageActivation?         @relation(fields: [activationId], references: [id])
+  type           SuspiciousAccessAttemptType
+  username       String?
+  expectedMacAddress String?
+  observedMacAddress String?
+  routerId       String?
+  ipAddress      String?
+  userAgent      String?
+  message        String
+  createdAt      DateTime                    @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([activationId, createdAt])
+}
+
+model VoucherPrintLog {
+  id          String       @id @default(uuid())
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  batchId     String
+  batch       VoucherBatch @relation(fields: [batchId], references: [id])
+  format      String
+  quantity    Int
+  actorUserId String?
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([batchId, createdAt])
+}
+
+model TenantSetting {
+  id                      String   @id @default(uuid())
+  tenantId                String   @unique
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id])
+  redeemableWhenGenerated Boolean  @default(true)
+  allowDeviceReset        Boolean  @default(false)
+  maxResetsPerActivation  Int      @default(0)
+  supportText             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model RadCheck {
+  id        Int    @id @default(autoincrement())
+  username  String @db.VarChar(64)
+  attribute String @db.VarChar(64)
+  op        String @default(":=") @db.VarChar(2)
+  value     String @db.VarChar(253)
+
+  @@map("radcheck")
+  @@index([username])
+}
+
+model RadReply {
+  id        Int    @id @default(autoincrement())
+  username  String @db.VarChar(64)
+  attribute String @db.VarChar(64)
+  op        String @default("=") @db.VarChar(2)
+  value     String @db.VarChar(253)
+
+  @@map("radreply")
+  @@index([username])
+}
+
+model RadAcct {
+  radacctid            BigInt    @id @default(autoincrement())
+  acctsessionid        String    @db.VarChar(64)
+  acctuniqueid         String    @unique @db.VarChar(32)
+  username             String?   @db.VarChar(64)
+  groupname            String?   @db.VarChar(64)
+  realm                String?   @db.VarChar(64)
+  nasipaddress         String?   @db.Inet
+  nasportid            String?   @db.VarChar(32)
+  nasporttype          String?   @db.VarChar(32)
+  acctstarttime        DateTime?
+  acctupdatetime       DateTime?
+  acctstoptime         DateTime?
+  acctinterval         Int?
+  acctsessiontime      Int?
+  acctauthentic        String?   @db.VarChar(32)
+  connectinfo_start    String?   @db.VarChar(128)
+  connectinfo_stop     String?   @db.VarChar(128)
+  acctinputoctets      BigInt?
+  acctoutputoctets     BigInt?
+  calledstationid      String?   @db.VarChar(50)
+  callingstationid     String?   @db.VarChar(50)
+  acctterminatecause   String?   @db.VarChar(32)
+  servicetype          String?   @db.VarChar(32)
+  framedprotocol       String?   @db.VarChar(32)
+  framedipaddress      String?   @db.Inet
+  framedipv6address    String?   @db.Inet
+  framedipv6prefix     String?   @db.Inet
+  framedinterfaceid    String?   @db.VarChar(44)
+  delegatedipv6prefix  String?   @db.Inet
+  class                String?   @db.VarChar(64)
+
+  @@map("radacct")
+  @@index([username])
+  @@index([acctsessionid])
+  @@index([acctstoptime])
+  @@index([callingstationid])
+}
+
+model RadPostAuth {
+  id        Int      @id @default(autoincrement())
+  username  String   @db.VarChar(64)
+  pass      String?  @db.VarChar(64)
+  reply     String?  @db.VarChar(32)
+  authdate  DateTime @default(now())
+  class     String?  @db.VarChar(64)
+
+  @@map("radpostauth")
+  @@index([username])
+  @@index([authdate])
 }
 
 model AgentCommission {

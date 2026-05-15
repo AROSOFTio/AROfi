@@ -1,0 +1,20 @@
+server inner-tunnel {
+	authorize {
+		files
+		sql
+	}
+
+	authenticate {
+		Auth-Type PAP {
+			pap
+		}
+	}
+
+	session {
+		sql
+	}
+
+	post-auth {
+		sql
+	}
+}

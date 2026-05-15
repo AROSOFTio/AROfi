@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
@@ -17,7 +18,7 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client'
-import { randomUUID } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
@@ -321,6 +322,11 @@ export class PaymentsService {
       provider,
       method,
       network,
+      macAddress: this.normalizeMac(dto.macAddress),
+      clientIp: dto.clientIp,
+      routerId: dto.routerId,
+      hotspotServerName: dto.hotspotServerName,
+      loginUrl: dto.loginUrl,
     })
 
     const payment = await this.prisma.payment.create({
@@ -336,6 +342,7 @@ export class PaymentsService {
         customerReference: dto.customerReference,
         externalReference,
         idempotencyKey,
+        statusToken: randomBytes(24).toString('base64url'),
         requestPayload: requestMetadata,
         metadata: requestMetadata,
       },
@@ -437,7 +444,7 @@ export class PaymentsService {
     return payment
   }
 
-  async checkPaymentStatus(paymentId: string, tenantId?: string) {
+  async checkPaymentStatus(paymentId: string, tenantId?: string, statusToken?: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
       include: this.paymentInclude,
@@ -449,6 +456,10 @@ export class PaymentsService {
 
     if (tenantId && payment.tenantId !== tenantId) {
       throw new NotFoundException('Payment not found')
+    }
+
+    if (!tenantId && (!payment.statusToken || payment.statusToken !== statusToken)) {
+      throw new ForbiddenException('Payment status token is required')
     }
 
     if (this.terminalPaymentStatuses.has(payment.status)) {
@@ -798,11 +809,20 @@ export class PaymentsService {
           deviceLimit: packageRecord.deviceLimit,
           downloadSpeedKbps: packageRecord.downloadSpeedKbps,
           uploadSpeedKbps: packageRecord.uploadSpeedKbps,
+          boundMacAddress: this.readMetadataString(payment.metadata, 'macAddress'),
+          firstSeenIp: this.readMetadataString(payment.metadata, 'clientIp'),
+          routerId: this.readMetadataString(payment.metadata, 'routerId'),
+          hotspotServerName: this.readMetadataString(payment.metadata, 'hotspotServerName'),
           metadata: this.toJsonValue({
             paymentId: payment.id,
             providerReference,
             provider: payment.provider,
             method: payment.method,
+            macAddress: this.readMetadataString(payment.metadata, 'macAddress'),
+            clientIp: this.readMetadataString(payment.metadata, 'clientIp'),
+            routerId: this.readMetadataString(payment.metadata, 'routerId'),
+            hotspotServerName: this.readMetadataString(payment.metadata, 'hotspotServerName'),
+            loginUrl: this.readMetadataString(payment.metadata, 'loginUrl'),
           }),
         })
 
@@ -1100,6 +1120,19 @@ export class PaymentsService {
     }
 
     throw new BadRequestException('Phone number must be a valid Uganda mobile number')
+  }
+
+  private normalizeMac(value?: string | null) {
+    return value?.trim().toUpperCase().replace(/-/g, ':')
+  }
+
+  private readMetadataString(metadata: Prisma.JsonValue | null, key: string) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return undefined
+    }
+
+    const value = metadata[key]
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
   }
 
   private resolvePaymentProvider(provider?: PaymentProvider) {

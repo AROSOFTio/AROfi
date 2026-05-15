@@ -6,9 +6,12 @@ import {
 import {
   RadiusEventType,
   RouterConnectionMode,
+  RouterOnboardingStatus,
+  RouterScriptMode,
   RouterStatus,
   SessionStatus,
 } from '@prisma/client'
+import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
@@ -253,7 +256,11 @@ export class RoutersService {
       throw new BadRequestException('Hotspot does not belong to the tenant')
     }
 
-    const sharedSecret = dto.sharedSecret.trim()
+    const registrationKey = randomUUID()
+    const sharedSecret = dto.sharedSecret?.trim() || this.generateSharedSecret()
+    const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
+    const username = dto.username?.trim() || 'admin'
+    const password = dto.password ?? ''
     const router = await this.prisma.router.create({
       data: {
         tenantId: dto.tenantId,
@@ -262,36 +269,38 @@ export class RoutersService {
         name: dto.name,
         identity: dto.identity ?? dto.name,
         vendor: dto.vendor,
-        host: dto.host,
+        host,
         apiPort:
           dto.apiPort ??
           (dto.connectionMode === RouterConnectionMode.ROUTEROS_API_SSL ? 8729 : 8728),
         connectionMode: dto.connectionMode ?? RouterConnectionMode.ROUTEROS_API,
-        username: dto.username,
-        passwordCiphertext: this.routerCredentialsService.encrypt(dto.password),
+        username,
+        passwordCiphertext: this.routerCredentialsService.encrypt(password),
         sharedSecretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
+        registrationKey,
+        onboardingStatus: RouterOnboardingStatus.SCRIPT_GENERATED,
+        lastScriptMode: dto.scriptMode ?? RouterScriptMode.SAFE_EXISTING_ROUTER,
+        scriptGeneratedAt: new Date(),
         siteLabel: dto.siteLabel,
         model: dto.model,
         serialNumber: dto.serialNumber,
         routerOsVersion: dto.routerOsVersion,
+        radiusNasIpAddress: dto.radiusNasIpAddress ?? dto.host,
+        hotspotServerName: dto.hotspotServerName,
+        portalWalledGardenHosts: dto.portalWalledGardenHosts ?? [],
+        ttlAntiTetheringEnabled: dto.ttlAntiTetheringEnabled ?? false,
         tags: dto.tags ?? [],
         radiusClient: {
           create: {
             tenantId: dto.tenantId,
             shortName: this.buildRadiusClientShortName(dto.name),
-            ipAddress: dto.host,
+            ipAddress: dto.radiusNasIpAddress ?? host,
             secretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
           },
         },
       },
       include: this.routerInclude,
     })
-
-    try {
-      await this.runHealthCheck(router.id)
-    } catch {
-      // Leave onboarding successful even if the router is not yet reachable.
-    }
 
     return this.getRouterSetup(router.id)
   }
@@ -372,13 +381,19 @@ export class RoutersService {
       provisioningScript: this.mikrotikService.buildProvisioningScript({
         routerName: router.name,
         identity: router.identity ?? router.name,
+        registrationKey: router.registrationKey,
         apiPort: router.apiPort,
         connectionMode: router.connectionMode,
         radiusHost: radiusServer.host,
         radiusAuthPort: radiusServer.authPort,
         radiusAccountingPort: radiusServer.accountingPort,
         sharedSecret,
+        hotspotServerName: router.hotspotServerName,
+        portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
+        ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
+        mode: router.lastScriptMode,
       }),
+      setupDiagnostics: await this.getSetupDiagnostics(router.id),
       radiusClient: router.radiusClient
         ? {
             id: router.radiusClient.id,
@@ -390,6 +405,90 @@ export class RoutersService {
           }
         : null,
     }
+  }
+
+  async rotateRadiusSecret(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+      include: this.routerInclude,
+    })
+
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const sharedSecret = this.generateSharedSecret()
+    await this.prisma.router.update({
+      where: { id: router.id },
+      data: {
+        sharedSecretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
+        onboardingStatus: RouterOnboardingStatus.SCRIPT_GENERATED,
+        verificationStatus: 'SCRIPT_GENERATED',
+        scriptGeneratedAt: new Date(),
+        radiusClient: {
+          update: {
+            secretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
+          },
+        },
+      },
+    })
+
+    return this.getRouterSetup(router.id, tenantId)
+  }
+
+  private async getSetupDiagnostics(routerId: string) {
+    const [router, authEvent, accountingEvent, acceptedAuth] = await Promise.all([
+      this.prisma.router.findUnique({ where: { id: routerId } }),
+      this.prisma.radiusEvent.findFirst({
+        where: {
+          routerId,
+          eventType: { in: [RadiusEventType.ACCESS_REQUEST, RadiusEventType.ACCESS_ACCEPT, RadiusEventType.ACCESS_REJECT] },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.radiusEvent.findFirst({
+        where: {
+          routerId,
+          eventType: { in: [RadiusEventType.ACCOUNTING_START, RadiusEventType.ACCOUNTING_INTERIM, RadiusEventType.ACCOUNTING_STOP] },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.radiusEvent.findFirst({
+        where: { routerId, eventType: RadiusEventType.ACCESS_ACCEPT },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ])
+
+    return [
+      {
+        code: 'radius_contact',
+        label: authEvent ? 'Router RADIUS traffic detected' : 'Router has not contacted RADIUS yet',
+        ok: Boolean(authEvent),
+        checkedAt: authEvent?.createdAt ?? router?.lastRadiusSignalAt ?? null,
+      },
+      {
+        code: 'accounting_contact',
+        label: accountingEvent ? 'Accounting traffic detected' : 'Accounting traffic has not been seen yet',
+        ok: Boolean(accountingEvent),
+        checkedAt: accountingEvent?.createdAt ?? router?.lastAccountingSignalAt ?? null,
+      },
+      {
+        code: 'portal_walled_garden',
+        label: 'Portal domain reachable through configured walled garden hosts',
+        ok: Boolean((router?.portalWalledGardenHosts ?? []).length > 0 || process.env.PORTAL_PUBLIC_HOST),
+        checkedAt: router?.scriptGeneratedAt ?? null,
+      },
+      {
+        code: 'test_auth',
+        label: acceptedAuth ? 'First test voucher/payment authenticated successfully' : 'No successful test authentication yet',
+        ok: Boolean(acceptedAuth),
+        checkedAt: acceptedAuth?.createdAt ?? null,
+      },
+    ]
   }
 
   private buildRadiusClientShortName(name: string) {
@@ -413,6 +512,16 @@ export class RoutersService {
     model: string | null
     serialNumber: string | null
     routerOsVersion: string | null
+    hotspotServerName?: string | null
+    portalWalledGardenHosts?: string[]
+    ttlAntiTetheringEnabled?: boolean
+    verificationStatus?: string
+    onboardingStatus?: string
+    registrationKey?: string
+    scriptGeneratedAt?: Date | null
+    lastRadiusSignalAt?: Date | null
+    lastAccountingSignalAt?: Date | null
+    lastAuthSignalAt?: Date | null
     status: RouterStatus
     healthMessage: string | null
     lastSeenAt: Date | null
@@ -465,6 +574,16 @@ export class RoutersService {
       model: router.model,
       serialNumber: router.serialNumber,
       routerOsVersion: router.routerOsVersion,
+      hotspotServerName: router.hotspotServerName,
+      portalWalledGardenHosts: router.portalWalledGardenHosts ?? [],
+      ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled ?? false,
+      verificationStatus: router.verificationStatus,
+      onboardingStatus: router.onboardingStatus,
+      registrationKey: router.registrationKey,
+      scriptGeneratedAt: router.scriptGeneratedAt,
+      lastRadiusSignalAt: router.lastRadiusSignalAt,
+      lastAccountingSignalAt: router.lastAccountingSignalAt,
+      lastAuthSignalAt: router.lastAuthSignalAt,
       status: router.status,
       healthMessage: router.healthMessage,
       lastSeenAt: router.lastSeenAt,
@@ -496,5 +615,21 @@ export class RoutersService {
           }
         : null,
     }
+  }
+
+  private generateSharedSecret() {
+    return randomBytes(18).toString('base64url')
+  }
+
+  private resolvePortalHosts(configured: string[]) {
+    const envHosts = [
+      process.env.PORTAL_PUBLIC_HOST,
+      process.env.API_PUBLIC_HOST,
+      process.env.PESAPAL_HOST,
+      'pay.pesapal.com',
+      'cybqa.pesapal.com',
+    ].filter((value): value is string => Boolean(value))
+
+    return Array.from(new Set([...configured, ...envHosts]))
   }
 }

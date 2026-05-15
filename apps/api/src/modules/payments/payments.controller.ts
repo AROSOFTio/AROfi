@@ -90,8 +90,8 @@ export class PaymentsController {
   }
 
   @Post(':paymentId/check-status')
-  checkPaymentStatus(@Param('paymentId') paymentId: string) {
-    return this.paymentsService.checkPaymentStatus(paymentId)
+  checkPaymentStatus(@Param('paymentId') paymentId: string, @Query('token') token?: string) {
+    return this.paymentsService.checkPaymentStatus(paymentId, undefined, token)
   }
 }
 

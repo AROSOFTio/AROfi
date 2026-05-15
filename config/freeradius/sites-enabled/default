@@ -1,0 +1,47 @@
+server default {
+	listen {
+		type = auth
+		ipaddr = *
+		port = 1812
+	}
+
+	listen {
+		type = acct
+		ipaddr = *
+		port = 1813
+	}
+
+	authorize {
+		preprocess
+		files
+		sql
+		expiration
+		logintime
+	}
+
+	authenticate {
+		Auth-Type PAP {
+			pap
+		}
+		Auth-Type CHAP {
+			chap
+		}
+	}
+
+	preacct {
+		preprocess
+		acct_unique
+	}
+
+	accounting {
+		sql
+	}
+
+	session {
+		sql
+	}
+
+	post-auth {
+		sql
+	}
+}

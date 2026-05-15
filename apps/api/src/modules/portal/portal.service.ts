@@ -9,6 +9,7 @@ import {
   PaymentStatus,
   Prisma,
   SessionStatus,
+  ReconnectionStatus,
 } from '@prisma/client'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
@@ -120,13 +121,20 @@ export class PortalService {
     private readonly vouchersService: VouchersService,
   ) {}
 
-  async getContext(tenantDomain?: string, phoneNumber?: string, authorization?: string) {
+  async getContext(
+    tenantDomain?: string,
+    phoneNumber?: string,
+    authorization?: string,
+    hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string },
+  ) {
     const context = await this.paymentsService.getPortalContext(tenantDomain, phoneNumber)
     const accessToken = this.extractBearerToken(authorization)
+    const returningDevice = await this.detectReturningDevice(context.tenant.id, hotspot)
 
     if (!accessToken) {
       return {
         ...context,
+        returningDevice,
         session: null,
       }
     }
@@ -134,11 +142,13 @@ export class PortalService {
     try {
       return {
         ...context,
+        returningDevice,
         session: await this.getSessionFromAccessToken(accessToken),
       }
     } catch {
       return {
         ...context,
+        returningDevice,
         session: null,
       }
     }
@@ -178,7 +188,7 @@ export class PortalService {
     return this.getSessionFromAccessToken(accessToken)
   }
 
-  async redeemVoucher(dto: PortalRedeemVoucherDto) {
+  async redeemVoucher(dto: PortalRedeemVoucherDto, userAgent?: string) {
     const phoneNumber =
       this.tryNormalizePhoneNumber(dto.phoneNumber) ??
       this.tryNormalizePhoneNumber(dto.customerReference)
@@ -190,6 +200,11 @@ export class PortalService {
       sessionReference: dto.sessionReference,
       customerReference,
       accessPhoneNumber: phoneNumber,
+      macAddress: dto.macAddress,
+      clientIp: dto.clientIp,
+      routerId: dto.routerId,
+      hotspotServerName: dto.hotspotServerName,
+      userAgent,
     })
 
     if (!phoneNumber) {
@@ -211,6 +226,35 @@ export class PortalService {
       ...result,
       accessToken,
       session: await this.getSessionFromAccessToken(accessToken),
+    }
+  }
+
+  async reconnect(input: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string }) {
+    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, input.routerId)
+
+    if (!activation) {
+      throw new NotFoundException('No active access was found for this device')
+    }
+
+    await this.clearStaleSessionIfNeeded(activation.id)
+    const payload = this.issueReconnectLoginPayload(activation, input.loginUrl)
+
+    await this.markReconnectionAttempt({
+      tenantId: activation.tenantId,
+      activationId: activation.id,
+      routerId: input.routerId,
+      macAddress: input.macAddress,
+      ipAddress: input.ipAddress,
+      status: ReconnectionStatus.LOGIN_PAYLOAD_ISSUED,
+      message: 'Reconnect login payload issued for returning device',
+      payload,
+    })
+
+    return {
+      existingActiveAccess: true,
+      message: 'Welcome back. Your package is still active.',
+      activation: this.mapActivation(activation),
+      reconnect: payload,
     }
   }
 
@@ -365,6 +409,129 @@ export class PortalService {
     }
   }
 
+  private async detectReturningDevice(
+    tenantId: string,
+    hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string },
+  ) {
+    const activation = await this.findActiveAccessByMacAndRouter(hotspot?.macAddress, hotspot?.routerId, tenantId)
+    if (!activation) {
+      return {
+        existingActiveAccess: false,
+        reason: hotspot?.macAddress ? 'No active access is bound to this device.' : 'MAC address was not provided by the hotspot.',
+      }
+    }
+
+    await this.clearStaleSessionIfNeeded(activation.id)
+    await this.markReconnectionAttempt({
+      tenantId: activation.tenantId,
+      activationId: activation.id,
+      routerId: hotspot?.routerId,
+      macAddress: hotspot?.macAddress,
+      ipAddress: hotspot?.ipAddress,
+      status: ReconnectionStatus.ALLOWED,
+      message: 'Returning device has active access',
+    })
+
+    return {
+      existingActiveAccess: true,
+      message: 'Welcome back. Your package is still active.',
+      activation: this.mapActivation(activation),
+      reconnect: this.issueReconnectLoginPayload(activation, hotspot?.loginUrl),
+    }
+  }
+
+  private async findActiveAccessByMacAndRouter(macAddress?: string | null, routerId?: string | null, tenantId?: string) {
+    const normalizedMac = this.normalizeMac(macAddress)
+    if (!normalizedMac) {
+      return null
+    }
+
+    return this.prisma.packageActivation.findFirst({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        status: PackageActivationStatus.ACTIVE,
+        endsAt: { gt: new Date() },
+        boundMacAddress: normalizedMac,
+        ...(routerId ? { OR: [{ routerId }, { routerId: null }] } : {}),
+      },
+      include: {
+        ...this.activationInclude,
+        radiusCredential: true,
+      },
+      orderBy: { endsAt: 'desc' },
+    })
+  }
+
+  private issueReconnectLoginPayload(
+    activation: {
+      radiusUsername: string | null
+      radiusPassword: string | null
+      radiusCredential?: { username: string; password: string } | null
+    },
+    loginUrl?: string | null,
+  ) {
+    return {
+      loginUrl: loginUrl || null,
+      username: activation.radiusCredential?.username ?? activation.radiusUsername,
+      password: activation.radiusCredential?.password ?? activation.radiusPassword,
+      method: 'mikrotik-hotspot-post',
+    }
+  }
+
+  private async markReconnectionAttempt(input: {
+    tenantId: string
+    activationId?: string
+    routerId?: string | null
+    macAddress?: string | null
+    ipAddress?: string | null
+    status: ReconnectionStatus
+    message?: string
+    payload?: unknown
+  }) {
+    await this.prisma.reconnectionLog.create({
+      data: {
+        tenantId: input.tenantId,
+        activationId: input.activationId,
+        routerId: input.routerId,
+        macAddress: this.normalizeMac(input.macAddress),
+        ipAddress: input.ipAddress,
+        status: input.status,
+        message: input.message,
+        payload: input.payload ? this.toJsonValue(input.payload) : undefined,
+      },
+    })
+  }
+
+  private async clearStaleSessionIfNeeded(activationId: string) {
+    const staleBefore = new Date(Date.now() - 15 * 60 * 1000)
+    const result = await this.prisma.networkSession.updateMany({
+      where: {
+        activationId,
+        status: SessionStatus.ACTIVE,
+        OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
+      },
+      data: {
+        status: SessionStatus.STALE,
+        endedAt: new Date(),
+      },
+    })
+
+    if (result.count > 0) {
+      const activation = await this.prisma.packageActivation.findUnique({ where: { id: activationId } })
+      if (activation) {
+        await this.markReconnectionAttempt({
+          tenantId: activation.tenantId,
+          activationId,
+          routerId: activation.routerId,
+          macAddress: activation.boundMacAddress,
+          ipAddress: activation.firstSeenIp,
+          status: ReconnectionStatus.STALE_SESSION_CLEARED,
+          message: `${result.count} stale session(s) cleared before reconnect`,
+        })
+      }
+    }
+  }
+
   private mapActivation(activation: {
     id: string
     status: string
@@ -409,6 +576,7 @@ export class PortalService {
     providerReference: string | null
     providerStatus: string | null
     statusMessage: string | null
+    statusToken?: string | null
     responsePayload: Prisma.JsonValue | null
     createdAt: Date
     completedAt: Date | null
@@ -450,6 +618,7 @@ export class PortalService {
       providerReference: payment.providerReference,
       providerStatus: payment.providerStatus,
       statusMessage: payment.statusMessage,
+      statusToken: payment.statusToken,
       checkoutUrl: this.extractCheckoutUrl(payment.responsePayload),
       responsePayload: payment.responsePayload,
       createdAt: payment.createdAt,
@@ -618,6 +787,10 @@ export class PortalService {
     throw new UnauthorizedException('Phone number must be a valid Uganda mobile number')
   }
 
+  private normalizeMac(value?: string | null) {
+    return value?.trim().toUpperCase().replace(/-/g, ':') || undefined
+  }
+
   private tryNormalizePhoneNumber(value?: string | null) {
     if (!value) {
       return undefined
@@ -683,11 +856,15 @@ export class PortalService {
   }
 
   private getTokenSecret() {
-    return (
+    const secret =
       this.configService.get<string>('PORTAL_TOKEN_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'change_this_in_production'
-    )
+      this.configService.get<string>('JWT_SECRET')
+
+    if (!secret) {
+      throw new UnauthorizedException('Portal token secret is not configured')
+    }
+
+    return secret
   }
 
   private toMegabytes(value: bigint) {
@@ -701,5 +878,9 @@ export class PortalService {
 
     const value = payload['checkoutUrl']
     return typeof value === 'string' && value.trim().length > 0 ? value : null
+  }
+
+  private toJsonValue(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue
   }
 }
