@@ -169,7 +169,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') ?? 'change_this_in_production',
+      secretOrKey: configService.get<string>('JWT_SECRET') ?? '',
     })
   }
 
@@ -209,9 +209,9 @@ export class AuthController {
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') ?? 'change_this_in_production',
+        secret: configService.get<string>('JWT_SECRET') ?? '',
         signOptions: {
-          expiresIn: '30d',
+          expiresIn: '8h',
         },
       }),
     }),

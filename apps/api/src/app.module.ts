@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Controller, Get, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -19,6 +19,14 @@ import { SystemModule } from './modules/system/system.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
+
+@Controller('health')
+export class HealthController {
+  @Get()
+  check() {
+    return { status: 'ok', timestamp: new Date().toISOString() }
+  }
+}
 
 @Module({
   imports: [
@@ -47,7 +55,7 @@ import { PrismaModule } from './prisma.module';
     BillingModule,
     WalletsModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,

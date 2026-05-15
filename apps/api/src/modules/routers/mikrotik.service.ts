@@ -103,7 +103,7 @@ export class MikrotikService {
     const secret =
       sharedSecret ??
       this.configService.get<string>('RADIUS_SHARED_SECRET') ??
-      'radius-secret'
+      ''
 
     return {
       host,

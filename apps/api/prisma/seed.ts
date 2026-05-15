@@ -413,6 +413,11 @@ async function createWalletAdjustment(
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('ERROR: Seed must not be run in production. Aborting.')
+    process.exit(1)
+  }
+
   console.log('Seeding AROFi billing and network core...')
 
   const [superAdminRole, vendorAdminRole, financeRole] = await Promise.all([
@@ -458,20 +463,20 @@ async function main() {
   })
 
   const [superAdminPassword, vendorPassword] = await Promise.all([
-    bcrypt.hash('supersecret', 10),
-    bcrypt.hash('vendorsecret', 10),
+    bcrypt.hash('dev-admin-password-change-me', 10),
+    bcrypt.hash('dev-vendor-password-change-me', 10),
   ])
 
   const [superAdminUser, vendorAdminUser] = await Promise.all([
     prisma.user.upsert({
-      where: { email: 'admin@arosoft.io' },
+      where: { email: 'admin@example.com' },
       update: {
         password: superAdminPassword,
         roleId: superAdminRole.id,
         tenantId: masterTenant.id,
       },
       create: {
-        email: 'admin@arosoft.io',
+        email: 'admin@example.com',
         password: superAdminPassword,
         firstName: 'System',
         lastName: 'Administrator',
@@ -618,7 +623,7 @@ async function main() {
       tenantId: vendorTenant.id,
       name: 'City Centre Hotspot',
       nasIpAddress: '10.10.0.1',
-      secret: 'radius-secret',
+      secret: 'dev_radius_shared_secret',
     },
   })
 
@@ -627,7 +632,7 @@ async function main() {
       tenantId: vendorTenant.id,
       name: 'Nakawa Lounge Hotspot',
       nasIpAddress: '10.10.0.2',
-      secret: 'radius-secret',
+      secret: 'dev_radius_shared_secret',
     },
   })
 
@@ -818,7 +823,7 @@ async function main() {
       connectionMode: RouterConnectionMode.ROUTEROS_API,
       username: 'arofi-sync',
       passwordCiphertext: encryptSeedValue('router-api-pass'),
-      sharedSecretCiphertext: encryptSeedValue('radius-secret'),
+      sharedSecretCiphertext: encryptSeedValue('dev_radius_shared_secret'),
       siteLabel: 'City Centre Arcade',
       model: 'CCR2004-1G-12S+2XS',
       serialNumber: 'ARO-CITY-001',
@@ -836,7 +841,7 @@ async function main() {
           tenantId: vendorTenant.id,
           shortName: 'city-centre-gateway',
           ipAddress: '10.10.0.1',
-          secretCiphertext: encryptSeedValue('radius-secret'),
+          secretCiphertext: encryptSeedValue('dev_radius_shared_secret'),
         },
       },
     },
@@ -854,7 +859,7 @@ async function main() {
       connectionMode: RouterConnectionMode.ROUTEROS_API,
       username: 'arofi-sync',
       passwordCiphertext: encryptSeedValue('router-edge-pass'),
-      sharedSecretCiphertext: encryptSeedValue('radius-secret'),
+      sharedSecretCiphertext: encryptSeedValue('dev_radius_shared_secret'),
       siteLabel: 'Nakawa Lounge',
       model: 'hEX S',
       serialNumber: 'ARO-NAKAWA-002',
@@ -872,7 +877,7 @@ async function main() {
           tenantId: vendorTenant.id,
           shortName: 'nakawa-edge',
           ipAddress: '10.10.0.2',
-          secretCiphertext: encryptSeedValue('radius-secret'),
+          secretCiphertext: encryptSeedValue('dev_radius_shared_secret'),
         },
       },
     },

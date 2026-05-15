@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-arofi_dev}
     volumes:
       - pg-data:/var/lib/postgresql/data
@@ -33,10 +33,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_redis}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_redis}
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change_me_redis} ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,8 +51,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-arofi_dev}
+      RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
     ports:
       - "1812:1812/udp"
       - "1813:1813/udp"
@@ -65,7 +69,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "printf 'User-Name = arofi-health\nUser-Password = radius-health\n' | radclient -x 127.0.0.1 auth radius-secret | grep -q 'Access-Accept'"]
+      test: ["CMD-SHELL", "printf 'User-Name = arofi-health\nUser-Password = radius-health\n' | radclient -x 127.0.0.1 auth $${RADIUS_SHARED_SECRET} | grep -q 'Access-Accept'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -74,15 +78,17 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-root}@postgres:5432/${POSTGRES_DB:-arofi_dev}?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-arofi_dev}?schema=public
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-change_this_in_production}
-      - PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:-change_this_portal_secret}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-change_me_redis}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:?PORTAL_TOKEN_SECRET is required}
       - NODE_ENV=production
       - PAYMENT_DEFAULT_PROVIDER=${PAYMENT_DEFAULT_PROVIDER:-PESAPAL}
       - YO_API_MODE=${YO_API_MODE:-live}
@@ -91,21 +97,21 @@ services:
       - YO_API_USERNAME=${YO_API_USERNAME:-}
       - YO_API_PASSWORD=${YO_API_PASSWORD:-}
       - YO_WEBHOOK_BASE_URL=${YO_WEBHOOK_BASE_URL:-https://arofi.arosoft.io/api/payments/webhooks/yo-uganda}
-      - YO_WEBHOOK_TOKEN=${YO_WEBHOOK_TOKEN:-change_me_yo_webhook}
+      - YO_WEBHOOK_TOKEN=${YO_WEBHOOK_TOKEN:?YO_WEBHOOK_TOKEN is required}
       - PESAPAL_MODE=${PESAPAL_MODE:-live}
       - PESAPAL_BASE_URL=${PESAPAL_BASE_URL:-}
       - PESAPAL_CONSUMER_KEY=${PESAPAL_CONSUMER_KEY:-}
       - PESAPAL_CONSUMER_SECRET=${PESAPAL_CONSUMER_SECRET:-}
       - PESAPAL_IPN_ID=${PESAPAL_IPN_ID:-}
       - PESAPAL_CALLBACK_URL=${PESAPAL_CALLBACK_URL:-https://arofi.arosoft.io/api/payments/webhooks/pesapal}
-      - PESAPAL_WEBHOOK_TOKEN=${PESAPAL_WEBHOOK_TOKEN:-change_me_pesapal_webhook}
-      - ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:-change_this_router_secret}
+      - PESAPAL_WEBHOOK_TOKEN=${PESAPAL_WEBHOOK_TOKEN:?PESAPAL_WEBHOOK_TOKEN is required}
+      - ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
       - RADIUS_SERVER_HOST=${RADIUS_SERVER_HOST:-freeradius}
       - RADIUS_PUBLIC_HOST=${RADIUS_PUBLIC_HOST:-95.111.234.34}
       - RADIUS_AUTH_PORT=${RADIUS_AUTH_PORT:-1812}
       - RADIUS_ACCOUNTING_PORT=${RADIUS_ACCOUNTING_PORT:-1813}
-      - RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:-radius-secret}
-      - RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:-change_me_radius_internal}
+      - RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+      - RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:9096}
       - ACCESS_WORKERS_ENABLED=${ACCESS_WORKERS_ENABLED:-true}
     depends_on:
@@ -113,6 +119,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
     networks:
       - arofi-net
 
@@ -125,6 +137,9 @@ services:
       - API_SERVER_URL=http://api:3000/api
       - NEXT_PUBLIC_API_URL=/api
       - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - arofi-net
 
@@ -137,6 +152,9 @@ services:
       - API_SERVER_URL=http://api:3000/api
       - NEXT_PUBLIC_API_URL=/api
       - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - arofi-net
 

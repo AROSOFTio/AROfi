@@ -287,6 +287,7 @@ export class BillingService {
         where: this.buildTenantWhere(tenantId),
         include: this.transactionInclude,
         orderBy: { createdAt: 'desc' },
+        take: 200,
       }),
       this.prisma.wallet.findMany({
         where: {
@@ -302,6 +303,7 @@ export class BillingService {
           },
         },
         orderBy: { updatedAt: 'desc' },
+        take: 200,
       }),
       this.prisma.ledgerEntry.findMany({
         where: this.buildTenantWhere(tenantId),

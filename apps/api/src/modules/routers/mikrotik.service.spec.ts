@@ -9,7 +9,7 @@ describe('MikrotikService', () => {
         RADIUS_PUBLIC_HOST: 'radius.example.com',
         RADIUS_AUTH_PORT: '1812',
         RADIUS_ACCOUNTING_PORT: '1813',
-        RADIUS_SHARED_SECRET: 'radius-secret',
+        RADIUS_SHARED_SECRET: 'dev_radius_shared_secret',
       }),
     )
 
@@ -29,7 +29,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('address=radius.example.com')
     expect(script).toContain('authentication-port=1812')
     expect(script).toContain('accounting-port=1813')
-    expect(script).toContain('secret="radius-secret"')
+    expect(script).toContain('secret="dev_radius_shared_secret"')
     expect(script).toContain('/radius remove [find where comment="AROFi')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')

@@ -121,6 +121,7 @@ export class PaymentsService {
         where: tenantId ? { tenantId } : undefined,
         include: this.paymentInclude,
         orderBy: { createdAt: 'desc' },
+        take: 200,
       }),
       this.prisma.paymentWebhook.findMany({
         where: tenantId ? { tenantId } : undefined,

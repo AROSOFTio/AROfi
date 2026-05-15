@@ -61,7 +61,7 @@ PESAPAL_WEBHOOK_TOKEN=change_this_pesapal_webhook_token
 # Router / Radius
 ROUTER_CREDENTIAL_SECRET=change_this_router_secret
 RADIUS_PUBLIC_HOST=your_server_public_ip
-RADIUS_SHARED_SECRET=radius-secret
+RADIUS_SHARED_SECRET=replace_with_random_radius_shared_secret
 ```
 
 ## Nginx and Reverse Proxy

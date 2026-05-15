@@ -42,6 +42,8 @@ function assertRequiredProductionConfig() {
 
   const required = [
     'DATABASE_URL',
+    'POSTGRES_PASSWORD',
+    'REDIS_PASSWORD',
     'JWT_SECRET',
     'PORTAL_TOKEN_SECRET',
     'ROUTER_CREDENTIAL_SECRET',
@@ -53,7 +55,14 @@ function assertRequiredProductionConfig() {
     required.push('PESAPAL_CONSUMER_KEY', 'PESAPAL_CONSUMER_SECRET', 'PESAPAL_IPN_ID')
   }
 
-  const missing = required.filter((key) => !process.env[key] || process.env[key]?.startsWith('change_'))
+  if (process.env.PESAPAL_MODE === 'sandbox') {
+    throw new Error('PESAPAL_MODE is set to sandbox in a production environment. Set it to live.')
+  }
+
+  const missing = required.filter((key) => {
+    const value = process.env[key]
+    return !value || value.startsWith('change_') || value.startsWith('replace_with')
+  })
   if (missing.length > 0) {
     throw new Error(`Missing required production configuration: ${missing.join(', ')}`)
   }

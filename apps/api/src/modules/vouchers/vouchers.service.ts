@@ -54,6 +54,7 @@ export class VouchersService {
           },
         },
         orderBy: { createdAt: 'desc' },
+        take: 200,
       }),
       this.prisma.billingTransaction.findMany({
         where: {
@@ -83,6 +84,7 @@ export class VouchersService {
           },
         },
         orderBy: { createdAt: 'desc' },
+        take: 200,
       }),
       this.prisma.voucherRedemption.findMany({
         where: tenantId ? { tenantId } : undefined,
@@ -114,6 +116,7 @@ export class VouchersService {
           },
         },
         orderBy: { createdAt: 'desc' },
+        take: 200,
       }),
       this.prisma.voucher.groupBy({
         by: ['status'],

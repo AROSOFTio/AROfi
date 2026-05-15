@@ -57,6 +57,7 @@ export class RadiusService {
         orderBy: {
           createdAt: 'desc',
         },
+        take: 200,
       }),
       this.prisma.radiusEvent.groupBy({
         by: ['eventType'],

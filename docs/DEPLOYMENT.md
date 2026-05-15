@@ -39,3 +39,19 @@ Allow UDP `1812` and `1813` from MikroTik routers to FreeRADIUS. Allow HTTPS to 
 ## Anti-Sharing Controls
 
 AROFi enforces MAC binding, `Simultaneous-Use := 1`, MikroTik `shared-users=1`, second-device rejection, and optional TTL rules. These reduce common sharing and tethering abuse. NAT-based tethering cannot be guaranteed to be detectable in every case by a captive portal billing platform alone.
+
+## Database Backup and Restore
+
+### Backup (run daily via cron)
+
+```sh
+docker compose exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+```
+
+### Restore
+
+```sh
+gunzip -c backup_YYYYMMDD_HHMMSS.sql.gz | docker compose exec -T postgres psql -U $POSTGRES_USER $POSTGRES_DB
+```
+
+Store backups offsite (S3, Google Cloud Storage, or similar). Test restore at least once before going live.

@@ -55,7 +55,7 @@ jobs:
             sleep 10
 
             echo "=== Applying database schema ==="
-            docker compose exec -T api npx prisma db push
+            docker compose exec -T api npx prisma migrate deploy
 
             echo "=== Cleaning up old images ==="
             docker image prune -f
