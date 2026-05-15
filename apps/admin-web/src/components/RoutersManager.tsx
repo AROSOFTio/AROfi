@@ -105,6 +105,7 @@ export default function RoutersManager() {
   const [submittingGroup, setSubmittingGroup] = useState(false)
   const [submittingRouter, setSubmittingRouter] = useState(false)
   const [runningHealthCheckId, setRunningHealthCheckId] = useState<string | null>(null)
+  const [showAdvancedRouterSettings, setShowAdvancedRouterSettings] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -410,6 +411,8 @@ export default function RoutersManager() {
           tenants={tenants}
           groups={groupsForTenant}
           hotspots={hotspotsForTenant}
+          showAdvanced={showAdvancedRouterSettings}
+          setShowAdvanced={setShowAdvancedRouterSettings}
         />
       </div>
 
@@ -504,7 +507,7 @@ function RouterGroupCard({ formState, setFormState, onSubmit, submitting, showTe
   )
 }
 
-function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showTenantSelector, tenants, groups, hotspots }: { formState: RouterFormState; setFormState: Dispatch<SetStateAction<RouterFormState>>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; submitting: boolean; showTenantSelector: boolean; tenants: TenantOverviewResponse['items']; groups: RouterOverviewResponse['groups']; hotspots: HotspotOverviewResponse['items'] }) {
+function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showTenantSelector, tenants, groups, hotspots, showAdvanced, setShowAdvanced }: { formState: RouterFormState; setFormState: Dispatch<SetStateAction<RouterFormState>>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; submitting: boolean; showTenantSelector: boolean; tenants: TenantOverviewResponse['items']; groups: RouterOverviewResponse['groups']; hotspots: HotspotOverviewResponse['items']; showAdvanced: boolean; setShowAdvanced: Dispatch<SetStateAction<boolean>> }) {
   return (
     <div className="card">
       <div className="card-header"><span className="card-title">Register MikroTik Router</span></div>
@@ -514,31 +517,43 @@ function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showT
             {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
             <InputField label="Router Display Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
             <InputField label="Branch / Site Name" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Kiseka Arcade" />
-            <InputField label="HotSpot Network Name" value={formState.hotspotServerName} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotServerName: value }))} placeholder="hotspot1" />
-            <InputField label="RouterOS Major Version" value={formState.routerOsVersion} onChange={(value) => setFormState((previous) => ({ ...previous, routerOsVersion: value }))} placeholder="7" />
+            <InputField label="Existing HotSpot Name" value={formState.hotspotServerName} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotServerName: value }))} placeholder="Leave blank to use hotspot1" />
             <SelectField label="Script Mode" value={formState.scriptMode} onChange={(value) => setFormState((previous) => ({ ...previous, scriptMode: value as RouterFormState['scriptMode'] }))} options={[{ value: 'SAFE_EXISTING_ROUTER', label: 'Safe existing router integration' }, { value: 'FRESH_FULL_HOTSPOT', label: 'Fresh router full HotSpot setup' }]} />
-            <InputField label="Management Host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Optional, for health checks" />
-            <InputField label="Identity" value={formState.identity} onChange={(value) => setFormState((previous) => ({ ...previous, identity: value }))} placeholder="Optional RouterOS identity" />
-            <SelectField label="Connection Mode" value={formState.connectionMode} onChange={(value) => setFormState((previous) => ({ ...previous, connectionMode: value as RouterFormState['connectionMode'] }))} options={[{ value: 'ROUTEROS_API', label: 'RouterOS API' }, { value: 'ROUTEROS_API_SSL', label: 'RouterOS API SSL' }]} />
-            <InputField label="API Port" value={formState.apiPort} onChange={(value) => setFormState((previous) => ({ ...previous, apiPort: value }))} placeholder="8728" />
             <SelectField label="Router Group" value={formState.groupId} onChange={(value) => setFormState((previous) => ({ ...previous, groupId: value }))} options={[{ value: '', label: 'No group yet' }, ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.code})` }))]} />
             <SelectField label="Hotspot Site" value={formState.hotspotId} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotId: value }))} options={[{ value: '', label: 'Link later' }, ...hotspots.map((hotspot) => ({ value: hotspot.id, label: hotspot.name }))]} />
-            <InputField label="Admin Username" value={formState.username} onChange={(value) => setFormState((previous) => ({ ...previous, username: value }))} placeholder="Optional, for health checks" />
-            <InputField label="Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Optional, encrypted at rest" />
-            <InputField label="RADIUS Shared Secret" value={formState.sharedSecret} onChange={(value) => setFormState((previous) => ({ ...previous, sharedSecret: value }))} placeholder="Generated automatically" />
-            <InputField label="Model" value={formState.model} onChange={(value) => setFormState((previous) => ({ ...previous, model: value }))} placeholder="RB951Ui-2HnD" />
           </div>
-          <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
-            <InputField label="Extra Walled Garden Hosts" value={formState.portalWalledGardenHosts} onChange={(value) => setFormState((previous) => ({ ...previous, portalWalledGardenHosts: value }))} placeholder="portal.example.com, api.example.com" />
-            <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-              <input type="checkbox" checked={formState.ttlAntiTetheringEnabled} onChange={(event) => setFormState((previous) => ({ ...previous, ttlAntiTetheringEnabled: event.target.checked }))} />
-              Enable optional TTL anti-tethering rule. This reduces common sharing but cannot guarantee detection of every NAT tethering case.
-            </label>
+          <div style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.5 }}>
+            Use safe mode when the router already has WAN/LAN and HotSpot configured. Use fresh mode only for a new router where the LAN bridge is named <code>bridge</code>.
           </div>
-          <InputField label="Tags" value={formState.tags} onChange={(value) => setFormState((previous) => ({ ...previous, tags: value }))} placeholder="backbone, tower-a, hotspot-core" />
+          <button type="button" className="btn btn-ghost" onClick={() => setShowAdvanced((previous) => !previous)} style={{ marginBottom: 12 }}>
+            {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+          </button>
+          {showAdvanced && (
+            <>
+              <div className="stats-grid" style={{ marginBottom: 12 }}>
+                <InputField label="Management Host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Optional, for health checks" />
+                <InputField label="Identity" value={formState.identity} onChange={(value) => setFormState((previous) => ({ ...previous, identity: value }))} placeholder="Optional RouterOS identity" />
+                <SelectField label="Connection Mode" value={formState.connectionMode} onChange={(value) => setFormState((previous) => ({ ...previous, connectionMode: value as RouterFormState['connectionMode'] }))} options={[{ value: 'ROUTEROS_API', label: 'RouterOS API' }, { value: 'ROUTEROS_API_SSL', label: 'RouterOS API SSL' }]} />
+                <InputField label="API Port" value={formState.apiPort} onChange={(value) => setFormState((previous) => ({ ...previous, apiPort: value }))} placeholder="8728" />
+                <InputField label="Admin Username" value={formState.username} onChange={(value) => setFormState((previous) => ({ ...previous, username: value }))} placeholder="Optional, for health checks" />
+                <InputField label="Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Optional, encrypted at rest" />
+                <InputField label="RADIUS Shared Secret" value={formState.sharedSecret} onChange={(value) => setFormState((previous) => ({ ...previous, sharedSecret: value }))} placeholder="Generated automatically" />
+                <InputField label="RouterOS Major Version" value={formState.routerOsVersion} onChange={(value) => setFormState((previous) => ({ ...previous, routerOsVersion: value }))} placeholder="Optional" />
+                <InputField label="Model" value={formState.model} onChange={(value) => setFormState((previous) => ({ ...previous, model: value }))} placeholder="RB951Ui-2HnD" />
+              </div>
+              <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+                <InputField label="Extra Walled Garden Hosts" value={formState.portalWalledGardenHosts} onChange={(value) => setFormState((previous) => ({ ...previous, portalWalledGardenHosts: value }))} placeholder="extra.example.com" />
+                <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  <input type="checkbox" checked={formState.ttlAntiTetheringEnabled} onChange={(event) => setFormState((previous) => ({ ...previous, ttlAntiTetheringEnabled: event.target.checked }))} />
+                  Enable optional TTL anti-tethering rule. This reduces common sharing but cannot guarantee detection of every NAT tethering case.
+                </label>
+              </div>
+              <InputField label="Tags" value={formState.tags} onChange={(value) => setFormState((previous) => ({ ...previous, tags: value }))} placeholder="backbone, tower-a, hotspot-core" />
+            </>
+          )}
           <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Registering...' : 'Register Router'}</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setFormState((previous) => ({ ...previous, sharedSecret: generateSecret() }))}>Regenerate Secret</button>
+            {showAdvanced && <button type="button" className="btn btn-ghost" onClick={() => setFormState((previous) => ({ ...previous, sharedSecret: generateSecret() }))}>Regenerate Secret</button>}
           </div>
         </form>
       </div>

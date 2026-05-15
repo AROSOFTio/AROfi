@@ -694,6 +694,7 @@ export class RoutersService {
       process.env.PORTAL_PUBLIC_HOST,
       process.env.API_PUBLIC_HOST,
       process.env.PESAPAL_HOST,
+      'arofi.arosoft.io',
       'pay.pesapal.com',
       'cybqa.pesapal.com',
     ].filter((value): value is string => Boolean(value))
