@@ -23,7 +23,5 @@ COPY --from=builder /usr/src/app/apps/api/dist ./dist
 COPY --from=builder /usr/src/app/apps/api/package.json ./
 COPY --from=builder /usr/src/app/apps/api/prisma ./prisma
 
-RUN ls -R dist
-
 EXPOSE 3000
-CMD ["node", "dist/src/main.js"]
+CMD ["sh", "-c", "if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]
