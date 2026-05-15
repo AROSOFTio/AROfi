@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import {
   clearBrowserAdminSession,
   getBrowserAdminToken,
-  setBrowserAdminSession,
 } from '@/lib/admin-session'
 
 function resolveNextPath() {
@@ -33,15 +32,11 @@ export default function LoginPage() {
 
     async function validateExistingSession() {
       const token = getBrowserAdminToken()
-      if (!token) {
-        return
-      }
 
       try {
         const response = await fetch(`${apiBaseUrl}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          credentials: 'include',
           cache: 'no-store',
         })
 
@@ -77,6 +72,7 @@ export default function LoginPage() {
     try {
       const res = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
@@ -85,9 +81,6 @@ export default function LoginPage() {
         throw new Error('Invalid credentials')
       }
 
-      const data = await res.json()
-      const token = data.access_token as string
-      setBrowserAdminSession(token)
       window.location.href = nextPath
     } catch {
       setError('Invalid email or password. Please try again.')
@@ -131,7 +124,7 @@ export default function LoginPage() {
             <input
               className="form-input"
               type="email"
-              placeholder="admin@arosoft.io"
+              placeholder="admin@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -161,7 +154,7 @@ export default function LoginPage() {
         </form>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-          Need your own tenant workspace? <a href="/register" style={{ color: 'var(--green)', fontWeight: 600 }}>Create it here</a>
+          Need a tenant workspace? Contact a platform administrator.
         </p>
 
         <p style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>

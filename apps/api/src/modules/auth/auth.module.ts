@@ -6,6 +6,7 @@ import {
   Module,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common'
@@ -14,6 +15,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
 import { PassportStrategy } from '@nestjs/passport'
 import type { Request } from 'express'
+import type { Response } from 'express'
 import * as bcrypt from 'bcrypt'
 import { AuthGuard } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
@@ -54,6 +56,26 @@ export type AuthenticatedAdminUser = {
 
 type AuthenticatedRequest = Request & {
   user: AuthenticatedAdminUser
+}
+
+const adminAuthCookieName = 'arofi_admin_token'
+
+function extractJwtFromCookie(request: Request) {
+  const cookieHeader = request.headers.cookie
+  if (!cookieHeader) {
+    return null
+  }
+
+  const cookie = cookieHeader
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${adminAuthCookieName}=`))
+
+  if (!cookie) {
+    return null
+  }
+
+  return decodeURIComponent(cookie.split('=').slice(1).join('='))
 }
 
 @Injectable()
@@ -167,7 +189,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly authService: AuthService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        extractJwtFromCookie,
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET') ?? '',
     })
@@ -186,8 +211,14 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password)
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response) {
+    const session = await this.authService.login(dto.email, dto.password)
+    const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+    response.setHeader(
+      'Set-Cookie',
+      `${adminAuthCookieName}=${encodeURIComponent(session.access_token)}; Path=/; Max-Age=28800; SameSite=Lax; HttpOnly${secureFlag}`,
+    )
+    return session
   }
 
   @UseGuards(JwtAuthGuard)

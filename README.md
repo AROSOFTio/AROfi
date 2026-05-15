@@ -22,7 +22,7 @@ docker compose build --no-cache
 docker compose up -d --remove-orphans
 
 # 3) Apply database schema
-docker compose exec -T api npx prisma db push
+docker compose exec -T api npx prisma migrate deploy
 
 # 4) Optional seed
 docker compose exec -T api npx prisma db seed

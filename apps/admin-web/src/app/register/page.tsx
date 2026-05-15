@@ -1,12 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import {
-  clearBrowserAdminSession,
-  getBrowserAdminToken,
-  setBrowserAdminSession,
-} from '@/lib/admin-session'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
 
 type RegisterFormState = {
@@ -44,47 +39,6 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState<TenantRegistrationResponse | null>(null)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
-  useEffect(() => {
-    let mounted = true
-
-    async function validateExistingSession() {
-      const token = getBrowserAdminToken()
-      if (!token) {
-        return
-      }
-
-      try {
-        const response = await fetch(`${apiBaseUrl}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: 'no-store',
-        })
-
-        if (!mounted) {
-          return
-        }
-
-        if (response.ok) {
-          window.location.href = '/dashboard'
-          return
-        }
-
-        clearBrowserAdminSession()
-      } catch {
-        if (mounted) {
-          clearBrowserAdminSession()
-        }
-      }
-    }
-
-    void validateExistingSession()
-
-    return () => {
-      mounted = false
-    }
-  }, [apiBaseUrl])
-
   const portalHint = useMemo(() => {
     const value = formState.desiredDomain.trim()
     if (!value) {
@@ -108,6 +62,7 @@ export default function RegisterPage() {
     try {
       const response = await fetch(`${apiBaseUrl}/onboarding/register`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -136,7 +91,6 @@ export default function RegisterPage() {
       }
 
       const registration = body as TenantRegistrationResponse
-      setBrowserAdminSession(registration.access_token)
       setSuccess(registration)
       setFormState(initialFormState)
     } catch (requestError) {

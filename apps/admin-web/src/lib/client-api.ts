@@ -9,6 +9,7 @@ const browserApiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 export async function clientFetchApi<T>(path: string): Promise<T> {
   const response = await fetch(`${browserApiBase}${path}`, {
     cache: 'no-store',
+    credentials: 'include',
     headers: buildAuthHeaders(),
   })
   return parseResponse<T>(response)
@@ -17,6 +18,7 @@ export async function clientFetchApi<T>(path: string): Promise<T> {
 export async function clientPostApi<T>(path: string, payload: unknown): Promise<T> {
   const response = await fetch(`${browserApiBase}${path}`, {
     method: 'POST',
+    credentials: 'include',
     headers: buildAuthHeaders({
       'Content-Type': 'application/json',
     }),

@@ -211,6 +211,7 @@ export default function VouchersManager() {
   async function downloadBatchFile(batchId: string, type: 'print.pdf' | 'export.csv') {
     const token = getBrowserAdminToken()
     const response = await fetch(`/api/vouchers/batches/${batchId}/${type}`, {
+      credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
     if (!response.ok) {
