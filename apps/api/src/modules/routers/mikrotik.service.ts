@@ -139,9 +139,7 @@ export class MikrotikService {
       `# 3. HotSpot profile integration. Calling-Station-Id must preserve client MAC for FreeRADIUS MAC binding.`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" comment="AROFi managed profile" }`,
       `/ip hotspot profile set "${profileName}" use-radius=yes radius-accounting=yes interim-update=5m login-by=http-chap,http-pap,cookie html-directory=hotspot radius-location-name="${this.escape(registrationKey)}" radius-location-id="${this.escape(registrationKey)}"`,
-      ...(input.hotspotServerName
-        ? [`/ip hotspot set [find name="${this.escape(input.hotspotServerName)}"] profile="${profileName}"`]
-        : []),
+      `:if ([:len [/ip hotspot find name="${this.escape(hotspotName)}"]] > 0) do={ /ip hotspot set [find name="${this.escape(hotspotName)}"] profile="${profileName}" } else={ :put "AROFi warning: HotSpot server ${this.escape(hotspotName)} was not found. Create it or rerun with fresh mode." }`,
       `/ip hotspot profile set "${profileName}" split-user-domain=no`,
       `/ip hotspot user profile set [find default=yes] shared-users=1`,
       ``,
@@ -170,11 +168,17 @@ export class MikrotikService {
       ...safeScript,
       ``,
       `# Fresh router HotSpot setup section. Review interface names before running on production routers.`,
-      `# This section creates HotSpot bindings only; it still does not reset unrelated configuration.`,
+      `# Assumption: ether1 is WAN/uplink and bridge is the customer LAN. Adjust before running if your ports are different.`,
+      `:if ([:len [/interface bridge find name="bridge"]] = 0) do={ /interface bridge add name=bridge comment="AROFi hotspot LAN bridge" }`,
+      `:foreach port in=[/interface ethernet find where name!="ether1"] do={ :local portName [/interface ethernet get $port name]; :if ([:len [/interface bridge port find interface=$portName]] = 0) do={ /interface bridge port add bridge=bridge interface=$portName comment="AROFi hotspot LAN" } }`,
+      `:if ([:len [/ip address find where address="10.50.0.1/24" interface="bridge"]] = 0) do={ /ip address add address=10.50.0.1/24 interface=bridge comment="AROFi hotspot gateway" }`,
       `:if ([:len [/ip pool find name="arofi-hotspot-pool"]] = 0) do={ /ip pool add name=arofi-hotspot-pool ranges=10.50.0.10-10.50.0.254 }`,
       `:if ([:len [/ip dhcp-server network find comment="AROFi hotspot network"]] = 0) do={ /ip dhcp-server network add address=10.50.0.0/24 gateway=10.50.0.1 dns-server=1.1.1.1,8.8.8.8 comment="AROFi hotspot network" }`,
+      `:if ([:len [/ip dhcp-server find name="arofi-hotspot-dhcp"]] = 0) do={ /ip dhcp-server add name=arofi-hotspot-dhcp interface=bridge address-pool=arofi-hotspot-pool disabled=no }`,
+      `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
+      `:if ([:len [/interface ethernet find name="ether1"]] > 0) do={ :if ([:len [/ip firewall nat find where comment="AROFi hotspot masquerade"]] = 0) do={ /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi hotspot masquerade" } }`,
       `:if ([:len [/ip hotspot find name="${this.escape(hotspotName)}"]] = 0) do={ /ip hotspot add name="${this.escape(hotspotName)}" interface=bridge address-pool=arofi-hotspot-pool profile="${profileName}" disabled=no }`,
-      `:put "AROFi fresh HotSpot section completed. Confirm interface=bridge matches your LAN bridge."`,
+      `:put "AROFi fresh HotSpot section completed. Confirm ether1 is WAN and bridge is LAN before serving customers."`,
     ].join('\n')
   }
 

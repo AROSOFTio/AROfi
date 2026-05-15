@@ -33,6 +33,33 @@ describe('MikrotikService', () => {
     expect(script).toContain('/radius remove [find where comment="AROFi')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
+    expect(script).toContain('/ip hotspot set [find name="hotspot1"] profile=')
+  })
+
+  it('builds a fuller fresh HotSpot setup with bridge, DHCP, DNS, NAT, and server binding', () => {
+    const service = new MikrotikService(new ConfigService({}))
+
+    const script = service.buildProvisioningScript({
+      routerName: 'Fresh Router',
+      identity: 'fresh-router',
+      registrationKey: 'fresh-router-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'fresh-router-secret',
+      hotspotServerName: 'ARO SpeedX',
+      mode: 'FRESH_FULL_HOTSPOT',
+    })
+
+    expect(script).toContain('/interface bridge add name=bridge')
+    expect(script).toContain('/interface bridge port add bridge=bridge')
+    expect(script).toContain('/ip address add address=10.50.0.1/24 interface=bridge')
+    expect(script).toContain('/ip dhcp-server add name=arofi-hotspot-dhcp')
+    expect(script).toContain('/ip dns set allow-remote-requests=yes')
+    expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade')
+    expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=bridge')
   })
 
   it('builds idempotent walled garden and optional TTL anti-tethering sections', () => {
