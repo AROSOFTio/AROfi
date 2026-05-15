@@ -15,7 +15,6 @@ export default async function SalesPage() {
           <h1 className="page-title">Sales</h1>
           <p className="page-subtitle">Gross collections, platform fees, and vendor net revenue across mobile money and vouchers.</p>
         </div>
-        <button className="btn btn-ghost">Export Sales</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

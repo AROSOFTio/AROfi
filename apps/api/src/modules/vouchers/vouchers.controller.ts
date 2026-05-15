@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -63,6 +64,34 @@ export class VouchersController {
       ...dto,
       tenantId,
     })
+  }
+
+  @RequirePermissions(PERMISSIONS.vouchersRead)
+  @Get('batches/:batchId/print.pdf')
+  async printBatchPdf(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('batchId') batchId: string,
+    @Res() response: Response,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    const file = await this.vouchersService.renderBatchPdf(batchId, tenantId, user.id)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
+  }
+
+  @RequirePermissions(PERMISSIONS.vouchersRead)
+  @Get('batches/:batchId/export.csv')
+  async exportBatchCsv(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('batchId') batchId: string,
+    @Res() response: Response,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    const file = await this.vouchersService.exportBatchCsv(batchId, tenantId)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)

@@ -16,7 +16,6 @@ export default async function DisbursementsPage() {
           <h1 className="page-title">Disbursements</h1>
           <p className="page-subtitle">Commission settlement runs, payable balances, and completed reseller payouts.</p>
         </div>
-        <button className="btn btn-primary">Run Settlement</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

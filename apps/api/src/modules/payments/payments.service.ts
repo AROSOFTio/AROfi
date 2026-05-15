@@ -304,6 +304,19 @@ export class PaymentsService {
     }
 
     const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber)
+    const settings = await this.prisma.tenantSetting.upsert({
+      where: { tenantId: pkg.tenantId },
+      update: {},
+      create: { tenantId: pkg.tenantId },
+    })
+    const normalizedMac = this.normalizeMac(dto.macAddress)
+
+    if (!settings.allowUnboundCaptiveAccess && !normalizedMac) {
+      throw new BadRequestException(
+        'We could not detect your device from the WiFi portal. Please reconnect to the WiFi network and try again.',
+      )
+    }
+
     const idempotencyKey = dto.idempotencyKey?.trim() || randomUUID()
     const existingPayment = await this.prisma.payment.findUnique({
       where: { idempotencyKey },
@@ -322,7 +335,7 @@ export class PaymentsService {
       provider,
       method,
       network,
-      macAddress: this.normalizeMac(dto.macAddress),
+      macAddress: normalizedMac,
       clientIp: dto.clientIp,
       routerId: dto.routerId,
       hotspotServerName: dto.hotspotServerName,
@@ -1123,7 +1136,16 @@ export class PaymentsService {
   }
 
   private normalizeMac(value?: string | null) {
-    return value?.trim().toUpperCase().replace(/-/g, ':')
+    if (!value) {
+      return undefined
+    }
+
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return undefined
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':')
   }
 
   private readMetadataString(metadata: Prisma.JsonValue | null, key: string) {

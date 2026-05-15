@@ -658,6 +658,13 @@ export type RouterItem = {
     status: string
     sharedSecretHint?: string | null
   } | null
+  nasClient?: {
+    id: number
+    nasname: string
+    shortname: string
+    type: string
+    enabled: boolean
+  } | null
   latestHealthCheck?: {
     id: string
     status: string
@@ -737,6 +744,13 @@ export type RouterSetupResponse = {
     status: string
     sharedSecretHint: string
     sharedSecret: string
+  } | null
+  nasClient?: {
+    id: number
+    nasname: string
+    shortname: string
+    type: string
+    enabled: boolean
   } | null
 }
 

@@ -1,12 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { ReactNode } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 
 type NavItem = {
   href: string;
   label: string;
-  icon: JSX.Element;
+  icon: ReactNode;
   required?: string[];
   platformOnly?: boolean;
 };
@@ -37,7 +38,6 @@ const navItems: NavGroup[] = [
     items: [
       { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'] },
       { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon />, required: ['vouchers.read'] },
-      { href: '/customers', label: 'Customers', icon: <UsersIcon />, required: ['sessions.read'] },
       { href: '/agents', label: 'Agents', icon: <AgentIcon />, required: ['agents.read'] },
     ]
   },
@@ -58,8 +58,6 @@ const navItems: NavGroup[] = [
       { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'] },
       { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'] },
       { href: '/support', label: 'Support', icon: <SupportIcon />, required: ['support.read'] },
-      { href: '/reports', label: 'Reports', icon: <ReportIcon />, required: ['reports.read'] },
-      { href: '/settings', label: 'Settings', icon: <SettingsIcon />, required: ['settings.manage'] },
     ]
   },
 ]

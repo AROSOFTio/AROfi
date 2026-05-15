@@ -210,6 +210,7 @@ enum PackageActivationStatus {
   FAILED
   REVOKED
   SUSPENDED
+  QUOTA_EXHAUSTED
 }
 
 enum RouterVerificationStatus {
@@ -257,6 +258,19 @@ enum SuspiciousAccessAttemptType {
   SECOND_DEVICE
   CONCURRENT_SESSION
   MISSING_MAC
+}
+
+enum DisconnectionStatus {
+  REQUESTED
+  SUCCESS
+  FAILED
+  NOT_SUPPORTED
+}
+
+enum DisconnectionMethod {
+  RADIUS_DISCONNECT
+  ROUTEROS_API
+  AUTH_DISABLE_ONLY
 }
 
 enum AuditSeverity {
@@ -328,6 +342,7 @@ model Tenant {
   routers             Router[]
   routerHealthChecks  RouterHealthCheck[]
   radiusClients       RadiusClient[]
+  nasClients          NasClient[]
   radiusEvents        RadiusEvent[]
   networkSessions     NetworkSession[]
   featureLimits       FeatureLimit[]
@@ -339,6 +354,7 @@ model Tenant {
   suspiciousAttempts  SuspiciousAccessAttempt[]
   voucherPrintLogs    VoucherPrintLog[]
   tenantSettings      TenantSetting?
+  disconnectionAttempts DisconnectionAttempt[]
 }
 
 model Role {
@@ -469,6 +485,7 @@ model Router {
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   radiusClient          RadiusClient?
+  nasClient             NasClient?
   healthChecks          RouterHealthCheck[]
   radiusEvents          RadiusEvent[]
   sessions              NetworkSession[]
@@ -701,6 +718,30 @@ model Voucher {
   @@index([tenantId, status])
 }
 
+model NasClient {
+  id          Int      @id @default(autoincrement())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  routerId    String?  @unique
+  router      Router?  @relation(fields: [routerId], references: [id])
+  nasname     String   @db.VarChar(128)
+  shortname   String   @db.VarChar(32)
+  type        String   @default("mikrotik") @db.VarChar(30)
+  ports       Int?
+  secret      String   @db.VarChar(60)
+  server      String?  @db.VarChar(64)
+  community   String?  @db.VarChar(50)
+  description String?  @db.VarChar(200)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("nas")
+  @@unique([nasname, shortname])
+  @@index([tenantId])
+  @@index([routerId])
+}
+
 model Wallet {
   id                  String               @id @default(uuid())
   tenantId            String
@@ -917,6 +958,8 @@ model PackageActivation {
   hotspotServerName   String?
   lastReconnectAt     DateTime?
   deviceResetCount    Int                    @default(0)
+  usedBytes           BigInt                 @default(0)
+  quotaExhaustedAt    DateTime?
   startedAt           DateTime               @default(now())
   endsAt              DateTime
   metadata            Json?
@@ -927,11 +970,35 @@ model PackageActivation {
   deviceBindingResets DeviceBindingReset[]
   reconnectionLogs    ReconnectionLog[]
   suspiciousAttempts  SuspiciousAccessAttempt[]
+  disconnectionAttempts DisconnectionAttempt[]
 
   @@index([tenantId, status, endsAt])
   @@index([accessPhoneNumber, status])
   @@index([tenantId, boundMacAddress, status])
   @@index([routerId, boundMacAddress])
+}
+
+model DisconnectionAttempt {
+  id             String              @id @default(uuid())
+  tenantId       String
+  tenant         Tenant              @relation(fields: [tenantId], references: [id])
+  activationId   String?
+  activation     PackageActivation?  @relation(fields: [activationId], references: [id])
+  sessionId      String?
+  method         DisconnectionMethod
+  status         DisconnectionStatus @default(REQUESTED)
+  routerId       String?
+  username       String?
+  macAddress     String?
+  radiusSessionId String?
+  message        String?
+  payload        Json?
+  attemptedAt    DateTime            @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, attemptedAt])
+  @@index([activationId, attemptedAt])
+  @@index([status, attemptedAt])
 }
 
 model RadiusCredential {
@@ -1032,6 +1099,8 @@ model TenantSetting {
   redeemableWhenGenerated Boolean  @default(true)
   allowDeviceReset        Boolean  @default(false)
   maxResetsPerActivation  Int      @default(0)
+  allowUnboundCaptiveAccess Boolean @default(false)
+  antiTetheringRuleEnabled Boolean  @default(false)
   supportText             String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

@@ -15,7 +15,6 @@ export default async function SupportPage() {
           <h1 className="page-title">Support</h1>
           <p className="page-subtitle">Ticket operations for customer incidents, payment escalations, and network issue tracking.</p>
         </div>
-        <button className="btn btn-primary">+ New Ticket</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

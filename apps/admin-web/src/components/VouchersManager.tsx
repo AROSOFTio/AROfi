@@ -9,6 +9,7 @@ import {
 } from '@/lib/admin-types'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import { getBrowserAdminToken } from '@/lib/admin-session'
 
 type TemplateFormState = {
   tenantId: string
@@ -205,6 +206,27 @@ export default function VouchersManager() {
     } finally {
       setSubmittingBatch(false)
     }
+  }
+
+  async function downloadBatchFile(batchId: string, type: 'print.pdf' | 'export.csv') {
+    const token = getBrowserAdminToken()
+    const response = await fetch(`/api/vouchers/batches/${batchId}/${type}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!response.ok) {
+      setError('Unable to download voucher batch file')
+      return
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const disposition = response.headers.get('content-disposition') ?? ''
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `vouchers.${type.endsWith('pdf') ? 'pdf' : 'csv'}`
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+    await loadData()
   }
 
   const summary = overview?.summary ?? {
@@ -485,12 +507,13 @@ export default function VouchersManager() {
                 <th>Redeemed</th>
                 <th>Status</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {!loading && voucherBatches.length === 0 && (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={10}>
                     <div className="empty-state">
                       <p>No voucher batches generated yet.</p>
                     </div>
@@ -513,6 +536,12 @@ export default function VouchersManager() {
                     <span className={getStatusBadgeClass(batch.status)}>{batch.status.toLowerCase()}</span>
                   </td>
                   <td style={{ fontSize: 12 }}>{formatDate(batch.createdAt)}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn btn-ghost" onClick={() => void downloadBatchFile(batch.id, 'print.pdf')}>Print PDF</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => void downloadBatchFile(batch.id, 'export.csv')}>CSV</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

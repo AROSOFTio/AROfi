@@ -6,7 +6,7 @@ sql {
 	login = "${env:POSTGRES_USER:-postgres}"
 	password = "${env:POSTGRES_PASSWORD:-root}"
 	radius_db = "${env:POSTGRES_DB:-arofi_dev}"
-	read_clients = no
+	read_clients = yes
 	client_table = "nas"
 	delete_stale_sessions = yes
 	pool {

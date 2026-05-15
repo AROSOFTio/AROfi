@@ -15,7 +15,6 @@ export default async function TransactionsPage() {
           <h1 className="page-title">Transactions</h1>
           <p className="page-subtitle">All billing events including sales, voucher redemptions, and wallet adjustments.</p>
         </div>
-        <button className="btn btn-ghost">Export Transactions</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

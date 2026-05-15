@@ -16,7 +16,6 @@ export default async function PaymentsPage() {
           <h1 className="page-title">Payment Logs</h1>
           <p className="page-subtitle">Yo Uganda collections, webhook processing, and auto-activation events across MTN and Airtel.</p>
         </div>
-        <button className="btn btn-ghost">Export Payment Logs</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

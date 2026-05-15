@@ -17,7 +17,6 @@ export default async function FloatPage() {
           <h1 className="page-title">Float</h1>
           <p className="page-subtitle">Tenant working capital, agent wallet balances, reserved commissions, and recent float movements.</p>
         </div>
-        <button className="btn btn-primary">Top Up Float</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

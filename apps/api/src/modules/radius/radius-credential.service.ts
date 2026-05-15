@@ -161,6 +161,7 @@ export class RadiusCredentialService {
   }
 
   private normalizeMac(value: string) {
-    return value.trim().toUpperCase().replace(/-/g, ':')
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    return compact.match(/.{1,2}/g)?.join(':') ?? value.trim().toUpperCase()
   }
 }

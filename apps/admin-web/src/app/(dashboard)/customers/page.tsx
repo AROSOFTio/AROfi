@@ -6,7 +6,6 @@ export default function CustomersPage() {
           <h1 className="page-title">Customers</h1>
           <p className="page-subtitle">Hotspot end-users across all tenants</p>
         </div>
-        <button className="btn btn-ghost">Export CSV</button>
       </div>
       <div className="card">
         <div className="card-header"><span className="card-title">All Customers</span></div>

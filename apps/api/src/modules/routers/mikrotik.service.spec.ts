@@ -30,5 +30,36 @@ describe('MikrotikService', () => {
     expect(script).toContain('authentication-port=1812')
     expect(script).toContain('accounting-port=1813')
     expect(script).toContain('secret="radius-secret"')
+    expect(script).toContain('/radius remove [find where comment="AROFi')
+    expect(script).toContain('shared-users=1')
+    expect(script).toContain('radius-accounting=yes')
+  })
+
+  it('builds idempotent walled garden and optional TTL anti-tethering sections', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        RADIUS_PUBLIC_HOST: 'radius.example.com',
+      }),
+    )
+
+    const script = service.buildProvisioningScript({
+      routerName: 'Branch Router',
+      identity: 'branch-router',
+      registrationKey: 'router-registration-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'unique-router-secret',
+      portalHosts: ['portal.arofi.test', 'pay.pesapal.com', 'portal.arofi.test'],
+      ttlAntiTetheringEnabled: true,
+    })
+
+    expect(script).toContain('/ip hotspot walled-garden remove [find where comment="AROFi portal/payment access"]')
+    expect(script.match(/dst-host="portal\.arofi\.test"/g)).toHaveLength(1)
+    expect(script).toContain('/ip firewall mangle remove [find where comment="AROFi optional TTL anti-tethering"]')
+    expect(script).toContain('new-ttl=set:1')
+    expect(script).toContain('cannot guarantee detection of every NAT tethering case')
   })
 })

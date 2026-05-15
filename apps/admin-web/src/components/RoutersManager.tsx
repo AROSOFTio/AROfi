@@ -379,6 +379,9 @@ export default function RoutersManager() {
             <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
               Secret hint {selectedSetup?.radiusClient?.sharedSecretHint ?? overview?.radiusFoundation.sharedSecretHint ?? 'Pending'}
             </div>
+            <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+              NAS client {selectedSetup?.nasClient ? `${selectedSetup.nasClient.nasname} (${selectedSetup.nasClient.enabled ? 'enabled' : 'disabled'})` : 'pending'}
+            </div>
             {selectedSetup?.router && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>

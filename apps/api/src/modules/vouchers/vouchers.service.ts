@@ -17,6 +17,7 @@ import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VoucherCodeService } from './voucher-code.service'
+import PDFDocument from 'pdfkit'
 
 @Injectable()
 export class VouchersService {
@@ -561,9 +562,11 @@ export class VouchersService {
       throw new NotFoundException('Voucher not found')
     }
 
+    const normalizedMac = this.normalizeMac(dto.macAddress)
+
     if (voucher.status === VoucherStatus.REDEEMED && voucher.redemption) {
       const redeemedMac = this.normalizeMac(voucher.redemption.boundMacAddress)
-      const observedMac = this.normalizeMac(dto.macAddress)
+      const observedMac = normalizedMac
       if (redeemedMac && observedMac && redeemedMac !== observedMac) {
         const activation = voucher.redemption.activation
         if (activation) {
@@ -598,9 +601,16 @@ export class VouchersService {
       create: { tenantId: voucher.tenantId },
     })
 
+    if (!settings.allowUnboundCaptiveAccess && !normalizedMac) {
+      throw new BadRequestException(
+        'We could not detect your device from the WiFi portal. Please reconnect to the WiFi network and try again.',
+      )
+    }
+
+    const redeemableGeneratedStates: VoucherStatus[] = [VoucherStatus.GENERATED, VoucherStatus.PRINTED];
     if (
       voucher.status !== VoucherStatus.SOLD &&
-      !(settings.redeemableWhenGenerated && voucher.status === VoucherStatus.GENERATED)
+      !(settings.redeemableWhenGenerated && redeemableGeneratedStates.includes(voucher.status))
     ) {
       throw new BadRequestException('Voucher is not redeemable in its current state')
     }
@@ -636,9 +646,9 @@ export class VouchersService {
           hotspotId: dto.hotspotId,
           customerReference: dto.customerReference,
           sessionReference: dto.sessionReference,
-          boundMacAddress: this.normalizeMac(dto.macAddress),
+          boundMacAddress: normalizedMac,
           firstSeenIp: dto.clientIp,
-          firstSeenAt: dto.macAddress ? new Date() : undefined,
+          firstSeenAt: normalizedMac ? new Date() : undefined,
           routerId: dto.routerId,
           hotspotServerName: dto.hotspotServerName,
           userAgent: dto.userAgent,
@@ -717,14 +727,14 @@ export class VouchersService {
         uploadSpeedKbps: packageRecord.uploadSpeedKbps,
         radiusUsername: voucher.code,
         radiusPassword: voucher.code,
-        boundMacAddress: dto.macAddress,
+        boundMacAddress: normalizedMac,
         firstSeenIp: dto.clientIp,
         routerId: dto.routerId,
         hotspotServerName: dto.hotspotServerName,
         metadata: {
           voucherCode: voucher.code,
           sessionReference: dto.sessionReference,
-          macAddress: this.normalizeMac(dto.macAddress),
+          macAddress: normalizedMac,
           clientIp: dto.clientIp,
           routerId: dto.routerId,
           hotspotServerName: dto.hotspotServerName,
@@ -763,8 +773,152 @@ export class VouchersService {
     return undefined
   }
 
+  async renderBatchPdf(batchId: string, tenantId?: string, actorUserId?: string) {
+    const batch = await this.prisma.voucherBatch.findUnique({
+      where: { id: batchId },
+      include: {
+        tenant: true,
+        package: { include: { prices: { orderBy: { startsAt: 'desc' }, take: 1 } } },
+        vouchers: { orderBy: { serialNumber: 'asc' } },
+      },
+    })
+
+    if (!batch || (tenantId && batch.tenantId !== tenantId)) {
+      throw new NotFoundException('Voucher batch not found')
+    }
+
+    const doc = new PDFDocument({ size: 'A4', margin: 32 })
+    const chunks: Buffer[] = []
+    doc.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    const done = new Promise<Buffer>((resolve) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)))
+    })
+
+    doc.fontSize(18).text(batch.tenant.name, { align: 'center' })
+    doc.fontSize(10).text(`Voucher batch ${batch.batchNumber}`, { align: 'center' })
+    doc.moveDown()
+
+    const cardWidth = 250
+    const cardHeight = 118
+    let x = 32
+    let y = doc.y
+
+    for (const voucher of batch.vouchers) {
+      if (y + cardHeight > doc.page.height - 32) {
+        doc.addPage()
+        x = 32
+        y = 32
+      }
+
+      doc.roundedRect(x, y, cardWidth, cardHeight, 6).stroke()
+      doc.fontSize(9).text(batch.tenant.name, x + 12, y + 10, { width: cardWidth - 24 })
+      doc.fontSize(15).text(voucher.code, x + 12, y + 28, { width: cardWidth - 24 })
+      doc.fontSize(9).text(`Package: ${batch.package.name}`, x + 12, y + 52)
+      doc.text(`Duration: ${batch.package.durationMinutes} minutes`, x + 12, y + 66)
+      doc.text(`Price: UGX ${batch.faceValueUgx.toLocaleString('en-UG')}`, x + 12, y + 80)
+      doc.text(`Support: ${batch.tenant.supportPhone ?? batch.tenant.supportEmail ?? 'Contact venue staff'}`, x + 12, y + 94, { width: cardWidth - 24 })
+
+      x += cardWidth + 22
+      if (x + cardWidth > doc.page.width - 32) {
+        x = 32
+        y += cardHeight + 18
+      }
+    }
+
+    doc.end()
+    const buffer = await done
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.voucherBatch.update({
+        where: { id: batch.id },
+        data: {
+          lastPrintedAt: new Date(),
+          printCount: { increment: 1 },
+        },
+      })
+      await tx.voucher.updateMany({
+        where: { batchId: batch.id },
+        data: {
+          status: VoucherStatus.PRINTED,
+          lastPrintedAt: new Date(),
+          printCount: { increment: 1 },
+        },
+      })
+      await tx.voucherPrintLog.create({
+        data: {
+          tenantId: batch.tenantId,
+          batchId: batch.id,
+          format: 'A4_PDF',
+          quantity: batch.vouchers.length,
+          actorUserId,
+          metadata: { batchNumber: batch.batchNumber },
+        },
+      })
+    })
+
+    return {
+      filename: `${batch.batchNumber}-vouchers.pdf`,
+      contentType: 'application/pdf',
+      buffer,
+    }
+  }
+
+  async exportBatchCsv(batchId: string, tenantId?: string) {
+    const batch = await this.prisma.voucherBatch.findUnique({
+      where: { id: batchId },
+      include: {
+        tenant: true,
+        package: true,
+        vouchers: { orderBy: { serialNumber: 'asc' } },
+      },
+    })
+
+    if (!batch || (tenantId && batch.tenantId !== tenantId)) {
+      throw new NotFoundException('Voucher batch not found')
+    }
+
+    const rows = [
+      ['serialNumber', 'code', 'status', 'package', 'durationMinutes', 'priceUgx', 'expiresAt'].join(','),
+      ...batch.vouchers.map((voucher) =>
+        [
+          voucher.serialNumber,
+          voucher.code,
+          voucher.status,
+          batch.package.name,
+          batch.package.durationMinutes,
+          voucher.faceValueUgx,
+          voucher.expiresAt?.toISOString() ?? '',
+        ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','),
+      ),
+    ]
+
+    await this.prisma.voucherBatch.update({
+      where: { id: batch.id },
+      data: { exportedAt: new Date() },
+    })
+    await this.prisma.voucher.updateMany({
+      where: { batchId: batch.id },
+      data: { exportedAt: new Date() },
+    })
+
+    return {
+      filename: `${batch.batchNumber}-vouchers.csv`,
+      contentType: 'text/csv',
+      buffer: Buffer.from(rows.join('\n'), 'utf8'),
+    }
+  }
+
   private normalizeMac(value?: string | null) {
-    return value?.trim().toUpperCase().replace(/-/g, ':')
+    if (!value) {
+      return undefined
+    }
+
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return undefined
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':')
   }
 
   private async refreshBatchStatus(batchId: string, tx?: Prisma.TransactionClient) {

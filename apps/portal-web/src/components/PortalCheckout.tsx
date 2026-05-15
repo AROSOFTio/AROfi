@@ -18,6 +18,7 @@ type PortalView = 'home' | 'login' | 'session'
 type MobileMoneyNetwork = 'MTN' | 'AIRTEL'
 type PaymentProviderOption = 'YO_UGANDA' | 'PESAPAL'
 type PaymentMethodOption = 'MOBILE_MONEY' | 'CARD'
+type ConnectionStatus = 'idle' | 'connecting' | 'reconnecting' | 'failed'
 type HotspotParams = {
   macAddress: string
   clientIp: string
@@ -118,6 +119,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [isLoginLoading, setIsLoginLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
+  const [autoConnectAttempted, setAutoConnectAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
     macAddress: '',
     clientIp: '',
@@ -144,6 +147,25 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setPaymentMethod('MOBILE_MONEY')
     }
   }, [paymentProvider, paymentMethod])
+
+  useEffect(() => {
+    if (!context?.returningDevice?.existingActiveAccess || autoConnectAttempted) {
+      return
+    }
+
+    setAutoConnectAttempted(true)
+    setConnectionStatus(portalSession ? 'reconnecting' : 'connecting')
+    setStatusMessage(portalSession ? 'Welcome back. Reconnecting you now...' : 'Access confirmed. Connecting you now...')
+    const timeout = window.setTimeout(() => {
+      setConnectionStatus('failed')
+      setErrorMessage('Automatic HotSpot login did not complete. Tap Connect Now to retry.')
+    }, 4500)
+    window.setTimeout(() => {
+      autoSubmitHotspotLogin(context.returningDevice?.reconnect)
+    }, 350)
+
+    return () => window.clearTimeout(timeout)
+  }, [context?.returningDevice?.existingActiveAccess, autoConnectAttempted, portalSession])
 
   async function bootstrap() {
     setIsBooting(true)
@@ -208,6 +230,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setContext(data)
     if (data.returningDevice?.existingActiveAccess) {
       setStatusMessage('Welcome back. Your package is still active.')
+      setAutoConnectAttempted(false)
     }
     setCurrentPayment(data.latestPayment ?? null)
     setSelectedPackage((previous) => {
@@ -463,10 +486,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  function connectNow() {
-    const reconnect = context?.returningDevice?.reconnect
+  function autoSubmitHotspotLogin(reconnect = context?.returningDevice?.reconnect) {
     if (!reconnect?.loginUrl || !reconnect.username || !reconnect.password) {
       setErrorMessage('Reconnect is available, but this browser did not receive a MikroTik login URL. Reopen the captive portal from the WiFi network.')
+      setConnectionStatus('failed')
       return
     }
 
@@ -482,6 +505,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
     document.body.appendChild(form)
     form.submit()
+  }
+
+  function connectNow() {
+    setConnectionStatus('reconnecting')
+    setErrorMessage('')
+    autoSubmitHotspotLogin()
   }
 
   const activeActivation = portalSession?.activeActivation ?? context?.activeActivation ?? null
@@ -555,6 +584,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         <>
           {errorMessage && <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{errorMessage}</div>}
           {statusMessage && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{statusMessage}</div>}
+          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">Payment confirmed. Connecting you now...</div>}
+          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">Reconnecting your device to the internet...</div>}
           {context?.returningDevice?.existingActiveAccess && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-50">
               <div className="font-semibold">Welcome back. Your package is still active.</div>
@@ -563,7 +594,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </div>
               <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">
                 <Wifi className="h-4 w-4" />
-                Reconnect to internet
+                {connectionStatus === 'failed' ? 'Connect Now' : 'Reconnect to internet'}
               </button>
             </div>
           )}

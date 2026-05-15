@@ -354,6 +354,21 @@ export class RadiusService {
         })
       }
 
+      if (session.activationId) {
+        const activationSessions = await tx.networkSession.findMany({
+          where: { activationId: session.activationId },
+          select: { inputOctets: true, outputOctets: true },
+        })
+        const usedBytes = activationSessions.reduce(
+          (total, item) => total + item.inputOctets + item.outputOctets,
+          BigInt(0),
+        )
+        await tx.packageActivation.update({
+          where: { id: session.activationId },
+          data: { usedBytes },
+        })
+      }
+
       return {
         recorded: true,
         event,

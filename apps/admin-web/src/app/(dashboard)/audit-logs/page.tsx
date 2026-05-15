@@ -15,7 +15,6 @@ export default async function AuditLogsPage() {
           <h1 className="page-title">Audit Logs</h1>
           <p className="page-subtitle">Security-sensitive actions, platform events, and operator activity traces across the system.</p>
         </div>
-        <button className="btn btn-ghost">Export Audit Trail</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

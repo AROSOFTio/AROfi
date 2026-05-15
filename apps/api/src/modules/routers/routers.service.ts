@@ -63,6 +63,7 @@ export class RoutersService {
         secretCiphertext: true,
       },
     },
+    nasClient: true,
     sessions: {
       where: {
         status: SessionStatus.ACTIVE,
@@ -298,6 +299,17 @@ export class RoutersService {
             secretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
           },
         },
+        nasClient: {
+          create: {
+            tenantId: dto.tenantId,
+            nasname: dto.radiusNasIpAddress ?? host,
+            shortname: this.buildRadiusClientShortName(dto.name),
+            type: 'mikrotik',
+            secret: sharedSecret,
+            description: `AROFi dynamic NAS client for ${dto.name}`,
+            enabled: true,
+          },
+        },
       },
       include: this.routerInclude,
     })
@@ -404,6 +416,15 @@ export class RoutersService {
             sharedSecret,
           }
         : null,
+      nasClient: router.nasClient
+        ? {
+            id: router.nasClient.id,
+            nasname: router.nasClient.nasname,
+            shortname: router.nasClient.shortname,
+            type: router.nasClient.type,
+            enabled: router.nasClient.enabled,
+          }
+        : null,
     }
   }
 
@@ -432,6 +453,13 @@ export class RoutersService {
         radiusClient: {
           update: {
             secretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
+          },
+        },
+        nasClient: {
+          update: {
+            secret: sharedSecret,
+            enabled: true,
+            description: `AROFi dynamic NAS client for ${router.name}`,
           },
         },
       },
@@ -551,6 +579,13 @@ export class RoutersService {
       status: string
       secretCiphertext: string
     } | null
+    nasClient?: {
+      id: number
+      nasname: string
+      shortname: string
+      type: string
+      enabled: boolean
+    } | null
     sessions: Array<{
       id: string
     }>
@@ -603,6 +638,15 @@ export class RoutersService {
             sharedSecretHint: this.routerCredentialsService.maskCiphertext(
               router.radiusClient.secretCiphertext,
             ),
+          }
+        : null,
+      nasClient: router.nasClient
+        ? {
+            id: router.nasClient.id,
+            nasname: router.nasClient.nasname,
+            shortname: router.nasClient.shortname,
+            type: router.nasClient.type,
+            enabled: router.nasClient.enabled,
           }
         : null,
       latestHealthCheck: router.healthChecks[0]

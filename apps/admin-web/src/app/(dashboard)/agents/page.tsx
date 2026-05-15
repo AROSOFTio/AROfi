@@ -17,7 +17,6 @@ export default async function AgentsPage() {
           <h1 className="page-title">Agents</h1>
           <p className="page-subtitle">Resellers, field float positions, accrued commissions, and payout history across tenant operations.</p>
         </div>
-        <button className="btn btn-primary">+ Add Agent</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

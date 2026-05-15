@@ -137,7 +137,8 @@ export class MikrotikService {
       `/radius add service=hotspot address=${input.radiusHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=3s comment="AROFi ${this.escape(registrationKey)}"`,
       ``,
       `# 3. HotSpot profile integration. Calling-Station-Id must preserve client MAC for FreeRADIUS MAC binding.`,
-      `/ip hotspot profile add name="${profileName}" use-radius=yes radius-accounting=yes interim-update=5m login-by=http-chap,http-pap,cookie html-directory=hotspot radius-location-name="${this.escape(registrationKey)}" radius-location-id="${this.escape(registrationKey)}" comment="AROFi managed profile"`,
+      `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" comment="AROFi managed profile" }`,
+      `/ip hotspot profile set "${profileName}" use-radius=yes radius-accounting=yes interim-update=5m login-by=http-chap,http-pap,cookie html-directory=hotspot radius-location-name="${this.escape(registrationKey)}" radius-location-id="${this.escape(registrationKey)}"`,
       ...(input.hotspotServerName
         ? [`/ip hotspot set [find name="${this.escape(input.hotspotServerName)}"] profile="${profileName}"`]
         : []),
@@ -150,6 +151,7 @@ export class MikrotikService {
         ? [
             ``,
             `# Optional anti-tethering control. This reduces common phone hotspot sharing but cannot guarantee detection of every NAT tethering case.`,
+            `/ip firewall mangle remove [find where comment="AROFi optional TTL anti-tethering"]`,
             `/ip firewall mangle add chain=forward action=change-ttl new-ttl=set:1 passthrough=yes comment="AROFi optional TTL anti-tethering"`,
           ]
         : []),
@@ -189,10 +191,18 @@ export class MikrotikService {
   }
 
   private buildWalledGarden(hosts: string[]) {
-    return Array.from(new Set(hosts.filter(Boolean))).map(
-      (host) =>
-        `/ip hotspot walled-garden add dst-host="${this.escape(host)}" action=allow comment="AROFi portal/payment access"`,
-    )
+    const normalizedHosts = Array.from(new Set(hosts.filter(Boolean)))
+    if (normalizedHosts.length === 0) {
+      return []
+    }
+
+    return [
+      `/ip hotspot walled-garden remove [find where comment="AROFi portal/payment access"]`,
+      ...normalizedHosts.map(
+        (host) =>
+          `/ip hotspot walled-garden add dst-host="${this.escape(host)}" action=allow comment="AROFi portal/payment access"`,
+      ),
+    ]
   }
 
   private escape(value: string) {

@@ -23,7 +23,6 @@ export default async function FeatureLimitsPage() {
           <h1 className="page-title">Feature Limits</h1>
           <p className="page-subtitle">Tenant usage caps, warning thresholds, and operational capacity signals.</p>
         </div>
-        <button className="btn btn-ghost">Refresh Usage</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
