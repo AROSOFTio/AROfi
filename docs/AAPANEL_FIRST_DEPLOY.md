@@ -19,16 +19,18 @@ In aaPanel, open `Docker` and install/enable Docker if it is not already running
 Check from SSH:
 
 ```sh
-docker --version
-docker compose version
+sudo docker --version
+sudo docker compose version
 ```
 
 ## 3. Create the production env file
 
+Stay in your normal SSH user. Do not run `sudo su` or `sudo -i`; use `sudo` only on the commands that need server permissions.
+
 ```sh
 cd /www/wwwroot/arofi.arosoft.io
-cp .env.aapanel.example .env
-nano .env
+sudo cp .env.aapanel.example .env
+sudo nano .env
 ```
 
 Replace all `CHANGE_ME...` values. Also add real Pesapal and Yo Uganda credentials before live payments.
@@ -59,14 +61,14 @@ openssl rand -hex 32
 
 ```sh
 cd /www/wwwroot/arofi.arosoft.io
-chmod +x scripts/deploy-aapanel.sh
-./scripts/deploy-aapanel.sh
+sudo chmod +x scripts/deploy-aapanel.sh
+sudo ./scripts/deploy-aapanel.sh
 ```
 
 Only seed demo data when you really want demo records:
 
 ```sh
-./scripts/deploy-aapanel.sh --seed
+sudo ./scripts/deploy-aapanel.sh --seed
 ```
 
 ## 5. Point aaPanel site to Docker
@@ -97,8 +99,8 @@ Only open `3799/udp` if `RADIUS_DISCONNECT_ENABLED=true`.
 
 ```sh
 cd /www/wwwroot/arofi.arosoft.io
-docker compose ps
-docker compose logs -f --tail=200 api nginx
+sudo docker compose ps
+sudo docker compose logs -f --tail=200 api nginx
 curl -I http://127.0.0.1:9096
 ```
 
@@ -114,6 +116,6 @@ https://arofi.arosoft.io/api     Backend API
 
 ```sh
 cd /www/wwwroot/arofi.arosoft.io
-git pull origin main
-./scripts/deploy-aapanel.sh
+sudo git pull origin main
+sudo ./scripts/deploy-aapanel.sh
 ```
