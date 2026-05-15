@@ -507,15 +507,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <section className="rounded-[28px] border border-sky-500/20 bg-slate-950/70 p-5 shadow-[0_24px_90px_rgba(2,8,23,0.45)] backdrop-blur sm:p-6">
+      <section className="rounded-[28px] border border-emerald-500/20 bg-slate-950/70 p-5 shadow-[0_24px_90px_rgba(2,8,23,0.45)] backdrop-blur sm:p-6">
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10">
-                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-9 w-auto" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10">
+                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-sky-200">Customer Portal</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-200">AROFi Customer Portal</p>
                 <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
                   {context?.tenant.name ?? 'AROFi Hotspot Access'}
                 </h1>
@@ -536,13 +536,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link href="/" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'home' ? 'border-sky-400/50 bg-sky-500/15 text-sky-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
+            <Link href="/" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'home' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
               Buy Access
             </Link>
-            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-sky-400/50 bg-sky-500/15 text-sky-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
+            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
               Login
             </Link>
-            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-sky-400/50 bg-sky-500/15 text-sky-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
+            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-300'}`}>
               Session
             </Link>
             {portalSession && (
@@ -573,8 +573,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         <>
           {errorMessage && <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{errorMessage}</div>}
           {statusMessage && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{statusMessage}</div>}
-          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">Payment confirmed. Connecting you now...</div>}
-          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">Reconnecting your device to the internet...</div>}
+          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">Payment confirmed. Connecting you now...</div>}
+          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">Reconnecting your device to the internet...</div>}
           {context?.returningDevice?.existingActiveAccess && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-50">
               <div className="font-semibold">Welcome back. Your package is still active.</div>
@@ -606,7 +606,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       key={pkg.id}
                       type="button"
                       onClick={() => setSelectedPackage(pkg)}
-                      className={`rounded-2xl border p-4 text-left ${selectedPackage?.id === pkg.id ? 'border-sky-400 bg-sky-500/10' : 'border-slate-800 bg-slate-900/40'}`}
+                      className={`rounded-2xl border p-4 text-left ${selectedPackage?.id === pkg.id ? 'border-emerald-400 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/40'}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -618,7 +618,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                             {pkg.deviceLimit ? ` . ${pkg.deviceLimit} device(s)` : ''}
                           </div>
                         </div>
-                        <div className="text-lg font-bold text-sky-300">{formatCurrency(pkg.amountUgx)}</div>
+                        <div className="text-lg font-bold text-emerald-300">{formatCurrency(pkg.amountUgx)}</div>
                       </div>
                     </button>
                   ))}
@@ -635,13 +635,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     <Receipt className="h-5 w-5 text-slate-500" />
                   </div>
                   <form onSubmit={handlePaymentSubmit} className="mt-5 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-400" />
+                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/55 p-4 text-sm text-slate-300">
                       {selectedPackage
                         ? `${selectedPackage.name} . ${formatCurrency(selectedPackage.amountUgx)} . ${formatDuration(selectedPackage.durationMinutes)}`
                         : 'Choose a package first.'}
                     </div>
-                    <button type="submit" disabled={isPaymentLoading || !selectedPackage} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
+                    <button type="submit" disabled={isPaymentLoading || !selectedPackage} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
                       {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                       {isPaymentLoading ? 'Sending prompt...' : selectedPackage ? `Pay ${formatCurrency(selectedPackage.amountUgx)}` : 'Pay now'}
                     </button>
@@ -649,7 +649,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <button
                         type="button"
                         onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)}
-                        className="mt-3 w-full rounded-xl border border-sky-500/40 bg-sky-500/10 py-2 text-sm text-sky-200 transition-colors hover:bg-sky-500/20"
+                        className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm text-emerald-200 transition-colors hover:bg-emerald-500/20"
                       >
                         I approved payment - check status
                       </button>
@@ -681,7 +681,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     <Ticket className="h-5 w-5 text-slate-500" />
                   </div>
                   <div className="mt-5 space-y-3">
-                    <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Voucher code" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-400" />
+                    <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Voucher code" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
                     <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 disabled:bg-slate-600 disabled:text-slate-200">
                       {isVoucherLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />}
                       {isVoucherLoading ? 'Redeeming...' : 'Redeem voucher'}
@@ -701,8 +701,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   Use the same phone number that paid for the package or redeemed the voucher. We'll load your current access and recent usage automatically.
                 </p>
                 <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                  <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-400" />
-                  <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
+                  <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
+                  <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
                     {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                     {isLoginLoading ? 'Signing in...' : 'Sign in'}
                   </button>
@@ -720,7 +720,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <div>Phone: {portalSession.customer.phoneNumber}</div>
                       <div className="mt-2">Package: {portalSession.activeActivation?.package.name ?? 'Awaiting activation'}</div>
                       <div className="mt-2">Remaining time: {portalSession.summary.activeMinutesRemaining} min</div>
-                      <Link href="/session" className="mt-4 inline-flex items-center gap-2 font-semibold text-sky-200">
+                      <Link href="/session" className="mt-4 inline-flex items-center gap-2 font-semibold text-emerald-200">
                         Open session dashboard
                         <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -766,8 +766,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   </div>
                 ) : (
                   <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-400" />
-                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
+                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400" />
+                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-700">
                       {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
                       {isLoginLoading ? 'Signing in...' : 'Load session'}
                     </button>

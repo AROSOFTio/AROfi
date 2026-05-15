@@ -568,8 +568,18 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 .home-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 22px;
   font-weight: 800;
+}
+
+.home-brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 12px;
 }
 
 .home-brand span,

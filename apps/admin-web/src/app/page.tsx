@@ -19,7 +19,10 @@ export default function RootPage() {
   return (
     <main className="home-shell">
       <nav className="home-nav">
-        <div className="home-brand"><span>ARO</span>Fi</div>
+        <div className="home-brand">
+          <img src="/logo.png" alt="AROFi" />
+          <span>AROFi</span>
+        </div>
         <div className="home-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
           <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started</button>
@@ -40,7 +43,7 @@ export default function RootPage() {
           </div>
         </div>
         <div className="home-panel" aria-hidden="true">
-          <div className="home-panel-row"><Wifi /> Live captive portal</div>
+          <div className="home-panel-row"><Wifi /> AROFi live captive portal</div>
           <div className="home-panel-metric">UGX 2.8M</div>
           <div className="home-panel-muted">Revenue tracked across vouchers, agents, and mobile money.</div>
           <div className="home-panel-grid">
