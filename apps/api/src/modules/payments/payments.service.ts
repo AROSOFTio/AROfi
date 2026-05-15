@@ -1163,7 +1163,7 @@ export class PaymentsService {
       return provider
     }
 
-    const configured = (this.configService.get<string>('PAYMENT_DEFAULT_PROVIDER') ?? 'YO_UGANDA').toUpperCase()
+    const configured = (this.configService.get<string>('PAYMENT_DEFAULT_PROVIDER') ?? 'PESAPAL').toUpperCase()
     return configured === PaymentProvider.PESAPAL ? PaymentProvider.PESAPAL : PaymentProvider.YO_UGANDA
   }
 

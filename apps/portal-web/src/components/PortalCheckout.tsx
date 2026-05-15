@@ -348,7 +348,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           packageId: selectedPackage.id,
           phoneNumber: normalizedPhone,
           customerReference: customerReference || normalizedPhone,
-          provider: 'YO_UGANDA',
+          provider: 'PESAPAL',
           method: 'MOBILE_MONEY',
           network: detectNetwork(normalizedPhone),
           idempotencyKey: crypto.randomUUID(),
