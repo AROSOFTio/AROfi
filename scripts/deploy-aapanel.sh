@@ -80,16 +80,16 @@ require_env_value PORTAL_TOKEN_SECRET
 require_env_value ROUTER_CREDENTIAL_SECRET
 require_env_value RADIUS_SHARED_SECRET
 require_env_value RADIUS_INTERNAL_API_KEY
-require_env_value YO_WEBHOOK_TOKEN
-require_env_value PESAPAL_WEBHOOK_TOKEN
 
 if [ "${payment_provider:-PESAPAL}" = "PESAPAL" ]; then
   require_env_value PESAPAL_CONSUMER_KEY
   require_env_value PESAPAL_CONSUMER_SECRET
   require_env_value PESAPAL_IPN_ID
+  require_env_value PESAPAL_WEBHOOK_TOKEN
 else
   require_env_value YO_API_USERNAME
   require_env_value YO_API_PASSWORD
+  require_env_value YO_WEBHOOK_TOKEN
 fi
 
 echo "Pulling public images..."
