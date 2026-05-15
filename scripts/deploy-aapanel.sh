@@ -98,11 +98,14 @@ compose pull --ignore-buildable || true
 echo "Building AROFi images..."
 compose build --no-cache
 
-echo "Starting AROFi stack..."
-compose up -d --remove-orphans
+echo "Starting database services..."
+compose up -d postgres redis
 
 echo "Applying database migrations..."
-compose exec -T api npx prisma migrate deploy
+compose run --rm api npx prisma migrate deploy
+
+echo "Starting AROFi stack..."
+compose up -d --remove-orphans
 
 if [ "$SEED_DATABASE" = "true" ]; then
   echo "Seeding database..."
