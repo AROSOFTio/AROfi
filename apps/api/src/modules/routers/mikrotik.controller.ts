@@ -1,4 +1,4 @@
-import { Controller, Get, Header, NotFoundException, Param } from '@nestjs/common';
+import { Controller, Get, Header, NotFoundException, Param, Req } from '@nestjs/common';
 import { RoutersService } from './routers.service';
 
 @Controller('mikrotik')
@@ -13,5 +13,30 @@ export class MikrotikController {
       throw new NotFoundException('Router provisioning script not found');
     }
     return script;
+  }
+
+  @Get('provisioned/:key')
+  async markProvisioned(@Param('key') key: string, @Req() request: any) {
+    const sourceIp = this.resolveSourceIp(request);
+    const result = await this.routersService.markRouterProvisionedByKey(key, sourceIp);
+    if (!result) {
+      throw new NotFoundException('Router registration key not found');
+    }
+    return result;
+  }
+
+  private resolveSourceIp(request: any) {
+    const forwardedFor = request.headers?.['x-forwarded-for'];
+    const firstForwardedIp = Array.isArray(forwardedFor)
+      ? forwardedFor[0]
+      : forwardedFor?.split(',')[0]?.trim();
+
+    return (
+      firstForwardedIp ||
+      request.headers?.['x-real-ip'] ||
+      request.ip ||
+      request.socket?.remoteAddress ||
+      ''
+    ).replace(/^::ffff:/, '');
   }
 }

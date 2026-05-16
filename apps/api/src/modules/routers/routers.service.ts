@@ -152,7 +152,53 @@ export class RoutersService {
       }),
     ])
 
-    const mappedRouters = routers.map((router) => this.mapRouter(router))
+    const routerNasCandidates = Array.from(
+      new Set(routers.flatMap((router) => this.getRouterNasCandidates(router)).filter(Boolean)),
+    )
+    const recentAccountingRows = routerNasCandidates.length
+      ? await this.prisma.radAcct.findMany({
+          where: {
+            nasipaddress: { in: routerNasCandidates },
+            OR: [
+              { acctupdatetime: { gte: startOfDay } },
+              { acctstarttime: { gte: startOfDay } },
+              { acctstoptime: { gte: startOfDay } },
+            ],
+          },
+          orderBy: { radacctid: 'desc' },
+          take: 500,
+        })
+      : []
+    const activeAccountingByNas = new Map<string, number>()
+    for (const row of recentAccountingRows) {
+      if (!row.nasipaddress || row.acctstoptime) {
+        continue
+      }
+      activeAccountingByNas.set(row.nasipaddress, (activeAccountingByNas.get(row.nasipaddress) ?? 0) + 1)
+    }
+
+    const radAcctNasIps = new Set(recentAccountingRows.map((row) => row.nasipaddress).filter(Boolean))
+    const mappedRouters = routers.map((router) => {
+      const mapped = this.mapRouter(router)
+      const nasCandidates = this.getRouterNasCandidates(router)
+      const hasRadAcct = nasCandidates.some((candidate) => radAcctNasIps.has(candidate))
+      const activeRadAcctSessions = nasCandidates.reduce(
+        (total, candidate) => total + (activeAccountingByNas.get(candidate) ?? 0),
+        0,
+      )
+
+      if (!hasRadAcct) {
+        return mapped
+      }
+
+      return {
+        ...mapped,
+        status: RouterStatus.HEALTHY,
+        healthMessage: 'Recent FreeRADIUS accounting seen in radacct',
+        lastSeenAt: mapped.lastSeenAt ?? new Date(),
+        activeSessions: Math.max(mapped.activeSessions, activeRadAcctSessions),
+      }
+    })
     const latencyValues = mappedRouters
       .map((router) => router.lastLatencyMs)
       .filter((value): value is number => typeof value === 'number')
@@ -210,7 +256,7 @@ export class RoutersService {
         sharedSecretHint: this.routerCredentialsService.mask(radiusServer.sharedSecret),
         clientsConfigured: mappedRouters.filter((router) => router.radiusClient).length,
         authEventsToday,
-        accountingEventsToday,
+        accountingEventsToday: accountingEventsToday + recentAccountingRows.length,
       },
     }
   }
@@ -336,6 +382,35 @@ export class RoutersService {
       throw new NotFoundException('Router not found')
     }
 
+    if (this.isPendingSelfServiceHost(router.host)) {
+      const now = new Date()
+      const message =
+        'No reachable RouterOS management host is configured. RADIUS can still verify from live auth/accounting traffic, but API health checks need TCP 8728/8729 port forwarding or a reachable VPN/private IP.'
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.routerHealthCheck.create({
+          data: {
+            tenantId: router.tenantId,
+            routerId: router.id,
+            status: RouterStatus.PENDING,
+            message,
+            activeUsers: router.activeSessionCount,
+          },
+        })
+
+        await tx.router.update({
+          where: { id: router.id },
+          data: {
+            status: RouterStatus.PENDING,
+            healthMessage: message,
+            lastHealthCheckAt: now,
+          },
+        })
+      })
+
+      return this.getRouterSetup(router.id, tenantId)
+    }
+
     const probe = await this.mikrotikService.probeConnection(router.host, router.apiPort)
     const now = new Date()
 
@@ -374,6 +449,60 @@ export class RoutersService {
     return this.getRouterSetup(router.id, tenantId)
   }
 
+  async markRouterProvisionedByKey(key: string, sourceIp: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+      include: this.routerInclude,
+    })
+
+    if (!router) {
+      return null
+    }
+
+    const normalizedSourceIp = sourceIp.trim()
+    const now = new Date()
+    const shouldReplaceManagementHost = this.isPendingSelfServiceHost(router.host)
+
+    const updated = await this.prisma.router.update({
+      where: { id: router.id },
+      data: {
+        host: shouldReplaceManagementHost && normalizedSourceIp ? normalizedSourceIp : router.host,
+        radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
+        onboardingStatus: RouterOnboardingStatus.SCRIPT_GENERATED,
+        lastProvisionedAt: now,
+        healthMessage: normalizedSourceIp
+          ? `Provisioning callback received from ${normalizedSourceIp}. Restart FreeRADIUS if this is the first time this NAS IP was learned.`
+          : 'Provisioning callback received, but source IP could not be detected.',
+        radiusClient: normalizedSourceIp
+          ? {
+              update: {
+                ipAddress: normalizedSourceIp,
+              },
+            }
+          : undefined,
+        nasClient: normalizedSourceIp
+          ? {
+              update: {
+                nasname: normalizedSourceIp,
+                enabled: true,
+              },
+            }
+          : undefined,
+      },
+      include: this.routerInclude,
+    })
+
+    return {
+      ok: true,
+      routerId: updated.id,
+      learnedNasIpAddress: normalizedSourceIp || null,
+      managementHost: updated.host,
+      message: normalizedSourceIp
+        ? `AROFi learned router source IP ${normalizedSourceIp}. If RADIUS was already running before this callback, restart FreeRADIUS once.`
+        : 'AROFi received the callback, but could not detect the router source IP.',
+    }
+  }
+
   async getRouterSetup(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
@@ -409,6 +538,7 @@ export class RoutersService {
         portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
         mode: router.lastScriptMode,
+        portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
       }),
       setupDiagnostics: await this.getSetupDiagnostics(router.id),
       radiusClient: router.radiusClient
@@ -459,6 +589,7 @@ export class RoutersService {
       portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
       mode: router.lastScriptMode,
+      portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
     })
   }
 
@@ -522,8 +653,13 @@ export class RoutersService {
   }
 
   private async getSetupDiagnostics(routerId: string) {
-    const [router, authEvent, accountingEvent, acceptedAuth] = await Promise.all([
-      this.prisma.router.findUnique({ where: { id: routerId } }),
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+      include: { radiusClient: true },
+    })
+    const nasCandidates = router ? this.getRouterNasCandidates(router) : []
+
+    const [authEvent, accountingEvent, acceptedAuth, radAcct] = await Promise.all([
       this.prisma.radiusEvent.findFirst({
         where: {
           routerId,
@@ -542,6 +678,12 @@ export class RoutersService {
         where: { routerId, eventType: RadiusEventType.ACCESS_ACCEPT },
         orderBy: { createdAt: 'desc' },
       }),
+      nasCandidates.length
+        ? this.prisma.radAcct.findFirst({
+            where: { nasipaddress: { in: nasCandidates } },
+            orderBy: { radacctid: 'desc' },
+          })
+        : Promise.resolve(null),
     ])
 
     return [
@@ -553,9 +695,12 @@ export class RoutersService {
       },
       {
         code: 'accounting_contact',
-        label: accountingEvent ? 'Accounting traffic detected' : 'Accounting traffic has not been seen yet',
-        ok: Boolean(accountingEvent),
-        checkedAt: accountingEvent?.createdAt ?? router?.lastAccountingSignalAt ?? null,
+        label:
+          accountingEvent || radAcct
+            ? 'Accounting traffic detected'
+            : 'Accounting traffic has not been seen yet',
+        ok: Boolean(accountingEvent || radAcct),
+        checkedAt: accountingEvent?.createdAt ?? radAcct?.acctupdatetime ?? radAcct?.acctstarttime ?? router?.lastAccountingSignalAt ?? null,
       },
       {
         code: 'portal_walled_garden',
@@ -579,6 +724,24 @@ export class RoutersService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 32)
+  }
+
+  private isPendingSelfServiceHost(host: string) {
+    return /^pending-[a-z0-9-]+\.self-service$/i.test(host)
+  }
+
+  private getRouterNasCandidates(router: {
+    host?: string | null
+    radiusNasIpAddress?: string | null
+    radiusClient?: { ipAddress?: string | null } | null
+  }) {
+    return Array.from(
+      new Set(
+        [router.radiusNasIpAddress, router.radiusClient?.ipAddress, router.host]
+          .filter((value): value is string => Boolean(value))
+          .filter((value) => !this.isPendingSelfServiceHost(value)),
+      ),
+    )
   }
 
   private mapRouter(router: {

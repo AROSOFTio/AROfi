@@ -127,6 +127,14 @@ export class MikrotikService {
       `# Router: ${this.escape(input.routerName.slice(0, 30))}`,
       `# Registration key: ${this.escape(registrationKey)}`,
       ``,
+      `# 0. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
+      `:do {`,
+      `  /tool fetch url="${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}" mode=https keep-result=no`,
+      `  :put "AROFi provisioning callback sent."`,
+      `} on-error={`,
+      `  :put "Warning: AROFi provisioning callback failed. Check router internet/DNS/HTTPS."`,
+      `}`,
+      ``,
       `# 1. Identity and RouterOS API service`,
       `/system identity set name="${this.escape(input.identity.slice(0, 30))}"`,
       `/ip service enable ${apiService}`,
@@ -166,6 +174,10 @@ export class MikrotikService {
       ``,
       `# 4. Walled garden for portal and payment access`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
+      ``,
+      `# 4b. Portal URL for customer devices. If you still use MikroTik default login.html,`,
+      `# upload/replace hotspot/login.html so it redirects users to:`,
+      `# ${this.resolvePortalBaseUrl(input.portalBaseUrl)}?mac=\\$(mac)&ip=\\$(ip)&link-login=\\$(link-login-only)&server=\\$(server-name)`,
       ...(input.ttlAntiTetheringEnabled
         ? [
             ``,
@@ -230,13 +242,13 @@ export class MikrotikService {
 
   getOnboardingChecklist(routerName: string) {
     return [
-      `Reach the RouterOS API for ${routerName} on the configured management IP and port.`,
-      'Paste the provisioning script into the MikroTik terminal or apply it over WinBox.',
-      'Confirm the router can reach the VPS on UDP 1812 and UDP 1813.',
-      'Confirm the portal and Pesapal hosts are reachable through the HotSpot walled garden before payment.',
-      'Run a health check from AROFi to validate API reachability.',
-      'Send one access request and one accounting packet to verify AAA flow.',
-      'Test one paid user, a same-MAC reconnect, and a second-MAC rejection.',
+      `Paste/import the provisioning script into ${routerName} from WinBox, WebFig, or SSH Terminal.`,
+      'Confirm the script prints "AROFi provisioning callback sent." If it fails, the router has no HTTPS/DNS internet path to AROFi.',
+      'If the router is behind another modem/router, forward UDP 1812 and 1813 traffic outbound to the VPS. No inbound forwarding is needed for RADIUS.',
+      'For AROFi API health checks only, forward TCP 8728/8729 from the public management IP to the MikroTik, or enter a reachable VPN/private management IP.',
+      'Restart FreeRADIUS after the first callback if the router was registered without a real public NAS IP: docker compose restart freeradius.',
+      'Replace or redirect the MikroTik HotSpot login page to the AROFi portal URL shown in the script comment.',
+      'Run one real customer login/payment/voucher test so MikroTik sends Access-Request and Accounting-Start packets.',
     ]
   }
 
@@ -258,5 +270,26 @@ export class MikrotikService {
 
   private escape(value: string) {
     return value.replace(/"/g, '\\"')
+  }
+
+  private resolveApiBaseUrl() {
+    const host =
+      this.configService.get<string>('API_PUBLIC_HOST') ||
+      this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
+      'arofi.arosoft.io'
+    return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
+  }
+
+  private resolvePortalBaseUrl(configured?: string | null) {
+    if (configured) {
+      return configured.replace(/\/$/, '')
+    }
+
+    const host =
+      this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
+      this.configService.get<string>('API_PUBLIC_HOST') ||
+      'arofi.arosoft.io'
+
+    return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}/portal`
   }
 }

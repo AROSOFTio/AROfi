@@ -134,7 +134,7 @@ export default function RoutersManager() {
       { title: 'Hotspot site', ready: (hotspots?.items.length ?? 0) > 0 },
       { title: 'Router group', ready: (overview?.groups.length ?? 0) > 0 },
       { title: 'First router', ready: (overview?.routers.length ?? 0) > 0 },
-      { title: 'Health check', ready: (overview?.summary.healthyRouters ?? 0) > 0 },
+      { title: 'RADIUS/API verification', ready: (overview?.summary.healthyRouters ?? 0) > 0 },
     ],
     [hotspots, overview],
   )
@@ -387,7 +387,8 @@ export default function RoutersManager() {
             {selectedSetup?.router && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
-                <span className="badge badge-warning">Verified only after RADIUS/accounting traffic</span>
+                <span className="badge badge-warning">API health needs reachable TCP {selectedSetup.router.apiPort}</span>
+                <span className="badge badge-warning">RADIUS live needs UDP 1812/1813 traffic</span>
               </div>
             )}
           </div>
@@ -433,7 +434,7 @@ export default function RoutersManager() {
           </div>
           <div style={{ padding: 20, display: 'grid', gap: 10 }}>
             <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
-              Open WinBox, WebFig, or SSH Terminal, paste the script, then press Enter. The router remains in waiting state until AROFi sees real RADIUS authentication or accounting traffic.
+              Open WinBox, WebFig, or SSH Terminal, paste the script, then press Enter. The script now calls AROFi back so the platform can learn the router public/NAT IP. AROFi becomes live only after real RADIUS authentication or accounting traffic is received.
             </div>
             {(selectedSetup?.onboardingChecklist ?? []).length === 0 && (
               <div className="empty-state">
@@ -472,6 +473,15 @@ export default function RoutersManager() {
                 ? `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="a.rsc" mode=https; /import file-name="a.rsc"; /file remove "a.rsc"`
                 : 'The RouterOS setup script will appear here after your first MikroTik is registered.'}
             </pre>
+            {selectedSetup?.router && (
+              <div style={{ marginTop: 14, display: 'grid', gap: 8, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.55 }}>
+                <strong style={{ color: 'var(--text-primary)' }}>Manual checks after script import</strong>
+                <span>1. If the script says callback failed, fix router DNS/internet, then import again.</span>
+                <span>2. If the router was registered without a real NAS/public IP, restart FreeRADIUS once on the VPS: <code>sudo docker compose restart freeradius</code>.</span>
+                <span>3. If the router is behind a Savana/ISP router, API health check needs port forwarding TCP {selectedSetup.router.apiPort} to the MikroTik, or it will stay offline even when RADIUS works.</span>
+                <span>4. Customers must hit the AROFi portal. Replace/redirect MikroTik <code>hotspot/login.html</code> to <code>https://arofi.arosoft.io/portal</code> with MAC/IP/login URL parameters.</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -580,7 +590,13 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
                   <td><div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{router.name}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{router.identity} {router.model ? `| ${router.model}` : ''}</div></td>
                   <td>{router.tenant.name}</td>
                   <td>{router.hotspot?.name ?? router.siteLabel ?? 'Not linked'}</td>
-                  <td><div style={{ fontFamily: 'monospace', fontSize: 12 }}>{router.host}:{router.apiPort}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{router.connectionMode.toLowerCase()}</div></td>
+                  <td>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{router.host}:{router.apiPort}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{router.connectionMode.toLowerCase()}</div>
+                    {router.host.includes('.self-service') && (
+                      <div style={{ fontSize: 12, color: 'var(--warning-fg)', marginTop: 4 }}>Waiting for script callback to learn NAS IP</div>
+                    )}
+                  </td>
                   <td><span className={getStatusBadgeClass(router.status)}>{router.status.toLowerCase()}</span><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{router.onboardingStatus ?? 'NOT_STARTED'}</div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{formatLatency(router.lastLatencyMs)}</div></td>
                   <td>{router.activeSessions}</td>
                   <td style={{ fontSize: 12 }}>{formatDate(router.lastSeenAt)}</td>

@@ -33,7 +33,8 @@ describe('MikrotikService', () => {
     expect(script).toContain('/radius remove [find where comment="AROFi')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
-    expect(script).toContain('/ip hotspot set [find name="hotspot1"] profile=')
+    expect(script).toContain('/api/mikrotik/provisioned/')
+    expect(script).toContain('/ip hotspot set [find name="hotspot1"] \\')
   })
 
   it('builds a fuller fresh HotSpot setup with bridge, DHCP, DNS, NAT, and server binding', () => {
@@ -56,9 +57,9 @@ describe('MikrotikService', () => {
     expect(script).toContain('/interface bridge add name=bridge')
     expect(script).toContain('/interface bridge port add bridge=bridge')
     expect(script).toContain('/ip address add address=10.50.0.1/24 interface=bridge')
-    expect(script).toContain('/ip dhcp-server add name=arofi-hotspot-dhcp')
+    expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade')
+    expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 \\')
     expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=bridge')
   })
 
@@ -83,10 +84,10 @@ describe('MikrotikService', () => {
       ttlAntiTetheringEnabled: true,
     })
 
-    expect(script).toContain('/ip hotspot walled-garden remove [find where comment="AROFi portal/payment access"]')
+    expect(script).toContain('/ip hotspot walled-garden remove [find comment="AROFi portal"]')
     expect(script.match(/dst-host="portal\.arofi\.test"/g)).toHaveLength(1)
-    expect(script).toContain('/ip firewall mangle remove [find where comment="AROFi optional TTL anti-tethering"]')
+    expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
     expect(script).toContain('new-ttl=set:1')
-    expect(script).toContain('cannot guarantee detection of every NAT tethering case')
+    expect(script).toContain('AROFi anti-tether')
   })
 })
