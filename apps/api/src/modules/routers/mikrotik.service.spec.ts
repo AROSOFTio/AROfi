@@ -33,6 +33,8 @@ describe('MikrotikService', () => {
     expect(script).toContain('/radius remove [find where comment="AROFi')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
+    expect(script).toContain('radius-interim-update=5m')
+    expect(script).toContain('mode=http keep-result=no')
     expect(script).toContain('/api/mikrotik/provisioned/')
     expect(script).toContain('/ip hotspot set [find name="hotspot1"] \\')
   })

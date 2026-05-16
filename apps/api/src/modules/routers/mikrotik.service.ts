@@ -121,6 +121,7 @@ export class MikrotikService {
     const profileName = `arofi-${registrationKey.slice(0, 8)}`
     const hotspotName = input.hotspotServerName || input.hotspotNetworkName || 'hotspot1'
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
+    const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
 
     const safeScript = [
       `# AROFi MikroTik onboarding script`,
@@ -133,7 +134,12 @@ export class MikrotikService {
       `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
       `  :put "AROFi provisioning callback sent."`,
       `} on-error={`,
-      `  :put "Warning: AROFi provisioning callback failed. Check router internet/DNS/HTTPS."`,
+      `  :do {`,
+      `    /tool fetch url="${fallbackCallbackUrl}" mode=http keep-result=no`,
+      `    :put "AROFi provisioning callback sent by HTTP fallback."`,
+      `  } on-error={`,
+      `    :put "Warning: AROFi provisioning callback failed. Check ether1 internet, DNS, HTTPS, and port 4012."`,
+      `  }`,
       `}`,
       ``,
       `# 1. Identity and RouterOS API service`,
@@ -151,11 +157,11 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile integration`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={`,
-      `  /ip hotspot profile add name="${profileName}" comment="AROFi managed"`,
+      `  /ip hotspot profile add name="${profileName}" hotspot-address=10.50.0.1`,
       `}`,
       `/ip hotspot profile set [find name="${profileName}"] use-radius=yes`,
       `/ip hotspot profile set [find name="${profileName}"] radius-accounting=yes`,
-      `/ip hotspot profile set [find name="${profileName}"] interim-update=5m`,
+      `/ip hotspot profile set [find name="${profileName}"] radius-interim-update=5m`,
       `/ip hotspot profile set [find name="${profileName}"] html-directory=hotspot`,
       `/ip hotspot profile set [find name="${profileName}"] \\`,
       `  login-by=http-chap,http-pap,cookie`,
@@ -250,7 +256,12 @@ export class MikrotikService {
       `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
       `  :put "AROFi provisioning callback sent after WAN setup."`,
       `} on-error={`,
-      `  :put "Warning: AROFi callback still failed after WAN setup. Check ether1 internet, DNS, and HTTPS."`,
+      `  :do {`,
+      `    /tool fetch url="${fallbackCallbackUrl}" mode=http keep-result=no`,
+      `    :put "AROFi provisioning callback sent after WAN setup by HTTP fallback."`,
+      `  } on-error={`,
+      `    :put "Warning: AROFi callback still failed after WAN setup. Check ether1 internet, DNS, HTTPS, and VPS port 4012."`,
+      `  }`,
       `}`,
       `:put "AROFi fresh setup completed."`,
     ].join('\n')
@@ -307,5 +318,20 @@ export class MikrotikService {
       'arofi.arosoft.io'
 
     return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}/portal`
+  }
+
+  private resolveHttpCallbackBaseUrl() {
+    const configured = this.configService.get<string>('MIKROTIK_CALLBACK_HTTP_URL')
+    if (configured) {
+      return configured.replace(/\/$/, '')
+    }
+
+    const host =
+      this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
+      this.configService.get<string>('API_PUBLIC_HOST') ||
+      this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
+      'arofi.arosoft.io'
+
+    return `http://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}:4012`
   }
 }
