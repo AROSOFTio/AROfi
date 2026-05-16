@@ -595,6 +595,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           {initialView === 'home' && (
             <section className="mx-auto w-full max-w-[430px] rounded-lg border border-slate-200 bg-slate-50 px-5 py-5 shadow-sm sm:px-6">
+              <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
               <div className="text-center">
                 <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="mx-auto mb-2 h-10 w-auto" />
                 <h1 className="text-2xl font-extrabold text-emerald-600 sm:text-3xl">
