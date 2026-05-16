@@ -26,4 +26,4 @@ RUN test -f prisma/migrations/20260515172000_radius_access_router_onboarding/mig
   && test -f prisma/migrations/20260515193000_dynamic_nas_quota_disconnect/migration.sql
 
 EXPOSE 3000
-CMD ["sh", "-c", "if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]
+CMD ["sh", "-c", "npx prisma migrate deploy && if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi"]

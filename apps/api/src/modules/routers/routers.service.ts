@@ -433,6 +433,35 @@ export class RoutersService {
     }
   }
 
+  async getProvisioningScriptByKey(key: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
+
+    return this.mikrotikService.buildProvisioningScript({
+      routerName: router.name,
+      identity: router.identity ?? router.name,
+      registrationKey: router.registrationKey,
+      apiPort: router.apiPort,
+      connectionMode: router.connectionMode,
+      radiusHost: radiusServer.host,
+      radiusAuthPort: radiusServer.authPort,
+      radiusAccountingPort: radiusServer.accountingPort,
+      sharedSecret,
+      hotspotServerName: router.hotspotServerName,
+      portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
+      ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
+      mode: router.lastScriptMode,
+    })
+  }
+
   async rotateRadiusSecret(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },

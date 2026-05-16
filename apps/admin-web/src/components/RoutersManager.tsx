@@ -291,7 +291,8 @@ export default function RoutersManager() {
     if (!selectedSetup?.provisioningScript) {
       return
     }
-    await navigator.clipboard.writeText(selectedSetup.provisioningScript)
+    const cmd = `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="a.rsc" mode=https; /import file-name="a.rsc"; /file remove "a.rsc"`
+    await navigator.clipboard.writeText(cmd)
     setSuccess('RouterOS script copied to clipboard.')
   }
 
@@ -467,7 +468,9 @@ export default function RoutersManager() {
               ))}
             </div>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)', minHeight: 280 }}>
-              {selectedSetup?.provisioningScript ?? 'The RouterOS setup script will appear here after your first MikroTik is registered.'}
+              {selectedSetup?.router.registrationKey 
+                ? `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="a.rsc" mode=https; /import file-name="a.rsc"; /file remove "a.rsc"`
+                : 'The RouterOS setup script will appear here after your first MikroTik is registered.'}
             </pre>
           </div>
         </div>
