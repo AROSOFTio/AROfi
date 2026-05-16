@@ -426,6 +426,15 @@ export class PaymentsService {
         },
       })
 
+      const failedPayment = await this.prisma.payment.findUnique({
+        where: { id: payment.id },
+        include: this.paymentDetailInclude,
+      })
+
+      if (failedPayment) {
+        return failedPayment
+      }
+
       throw error
     }
   }

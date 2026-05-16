@@ -372,6 +372,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       const payment = body as PortalPayment
       setCurrentPayment(payment)
 
+      if (payment.status === 'FAILED') {
+        setErrorMessage(payment.statusMessage ?? 'The payment request could not be started. Check payment gateway settings.')
+        return
+      }
+
       setStatusMessage('Payment request sent. Approve it on your phone to activate the package.')
       if (payment.activation) {
         await loginWithPhone(payment.phoneNumber, true)
