@@ -96,7 +96,7 @@ sudo ./scripts/deploy-aapanel.sh --seed
 In aaPanel, open the website `arofi.arosoft.io`, then add a reverse proxy:
 
 ```text
-Proxy target: http://127.0.0.1:9096
+Proxy target: http://127.0.0.1:4012
 Send domain:  arofi.arosoft.io
 ```
 
@@ -121,7 +121,7 @@ Only open `3799/udp` if `RADIUS_DISCONNECT_ENABLED=true`.
 cd /www/wwwroot/arofi.arosoft.io
 sudo docker compose ps
 sudo docker compose logs -f --tail=200 api nginx
-curl -I http://127.0.0.1:9096
+curl -I http://127.0.0.1:4012
 ```
 
 Routes:

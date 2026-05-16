@@ -66,10 +66,10 @@ RADIUS_SHARED_SECRET=replace_with_random_radius_shared_secret
 
 ## Nginx and Reverse Proxy
 
-- Docker Nginx listens on host port `9096`.
+- Docker Nginx listens on host port `4012`.
 - In aaPanel (or host Nginx/Apache), reverse proxy target should be:
 
-`http://127.0.0.1:9096`
+`http://127.0.0.1:4012`
 
 Routing inside container Nginx:
 - `/` -> admin web

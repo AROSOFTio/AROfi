@@ -117,8 +117,8 @@ compose ps
 
 echo
 echo "Done. In aaPanel, reverse proxy arofi.arosoft.io to:"
-echo "  http://127.0.0.1:9096"
+echo "  http://127.0.0.1:4012"
 echo
 echo "Useful checks:"
 echo "  docker compose logs -f --tail=200 api nginx"
-echo "  curl -I http://127.0.0.1:9096"
+echo "  curl -I http://127.0.0.1:4012"
