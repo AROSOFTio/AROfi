@@ -305,18 +305,7 @@ export class PaymentsService {
     }
 
     const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber)
-    const settings = await this.prisma.tenantSetting.upsert({
-      where: { tenantId: pkg.tenantId },
-      update: {},
-      create: { tenantId: pkg.tenantId },
-    })
     const normalizedMac = this.normalizeMac(dto.macAddress)
-
-    if (!settings.allowUnboundCaptiveAccess && !normalizedMac) {
-      throw new BadRequestException(
-        'We could not detect your device from the WiFi portal. Please reconnect to the WiFi network and try again.',
-      )
-    }
 
     const idempotencyKey = dto.idempotencyKey?.trim() || randomUUID()
     const existingPayment = await this.prisma.payment.findUnique({

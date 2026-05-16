@@ -604,12 +604,6 @@ export class VouchersService {
       create: { tenantId: voucher.tenantId },
     })
 
-    if (!settings.allowUnboundCaptiveAccess && !normalizedMac) {
-      throw new BadRequestException(
-        'We could not detect your device from the WiFi portal. Please reconnect to the WiFi network and try again.',
-      )
-    }
-
     const redeemableGeneratedStates: VoucherStatus[] = [VoucherStatus.GENERATED, VoucherStatus.PRINTED];
     if (
       voucher.status !== VoucherStatus.SOLD &&
