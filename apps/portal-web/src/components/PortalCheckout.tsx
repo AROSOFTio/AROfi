@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Loader2, LogIn, Receipt, Smartphone, Ticket, Wifi } from 'lucide-react'
+import { ArrowRight, Loader2, LogIn, Ticket, Wifi } from 'lucide-react'
 import type {
   PortalContextResponse,
   PortalCustomerSession,
@@ -46,14 +46,16 @@ function formatDate(value?: string | null) {
 
 function formatDuration(minutes: number) {
   if (minutes >= 1440 && minutes % 1440 === 0) {
-    return `${minutes / 1440} day`
+    const days = minutes / 1440
+    return `${days} ${days === 1 ? 'Day' : 'Days'}`
   }
 
   if (minutes >= 60 && minutes % 60 === 0) {
-    return `${minutes / 60} hour`
+    const hours = minutes / 60
+    return `${hours} ${hours === 1 ? 'Hour' : 'Hours'}`
   }
 
-  return `${minutes} min`
+  return `${minutes} Min`
 }
 
 function formatMegabytes(value: number) {
@@ -110,6 +112,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [portalSession, setPortalSession] = useState<PortalCustomerSession | null>(null)
   const [portalToken, setPortalToken] = useState<string | null>(null)
   const [selectedPackage, setSelectedPackage] = useState<PortalPackage | null>(null)
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [currentPayment, setCurrentPayment] = useState<PortalPayment | null>(null)
   const [phoneNumber, setPhoneNumber] = useState('')
   const [customerReference, setCustomerReference] = useState('')
@@ -507,6 +510,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      {initialView !== 'home' && (
       <section className="rounded-[28px] border border-emerald-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6">
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
@@ -536,7 +540,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link href="/" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'home' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+            <Link href="/" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
               Buy Access
             </Link>
             <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
@@ -563,6 +567,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           </div>
         </div>
       </section>
+      )}
 
       {isBooting ? (
         <div className="flex min-h-[220px] items-center justify-center rounded-[28px] border border-slate-200 bg-white text-sm text-slate-600">
@@ -589,107 +594,87 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           )}
 
           {initialView === 'home' && (
-            <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Packages</p>
-                    <h2 className="mt-2 text-xl font-semibold text-slate-950">Choose your internet plan</h2>
-                  </div>
-                  <Smartphone className="h-5 w-5 text-slate-500" />
-                </div>
-
-                <div className="mt-5 grid gap-3">
-                  {packages.length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No packages are published for this portal yet.</div>}
-                  {packages.map((pkg) => (
-                    <button
-                      key={pkg.id}
-                      type="button"
-                      onClick={() => setSelectedPackage(pkg)}
-                      className={`rounded-2xl border p-4 text-left ${selectedPackage?.id === pkg.id ? 'border-emerald-400 bg-emerald-500/10' : 'border-slate-200 bg-slate-50'}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="text-base font-semibold text-slate-950">{pkg.name}</div>
-                          <div className="mt-1 text-xs uppercase tracking-[0.15em] text-slate-500">{pkg.code}</div>
-                          <div className="mt-2 text-sm text-slate-600">{pkg.description || 'Fast, secure hotspot internet access.'}</div>
-                          <div className="mt-3 text-xs text-slate-500">
-                            {formatDuration(pkg.durationMinutes)} . {pkg.dataLimitMb ? `${pkg.dataLimitMb} MB` : 'Unlimited data'}
-                            {pkg.deviceLimit ? ` . ${pkg.deviceLimit} device(s)` : ''}
-                          </div>
-                        </div>
-                        <div className="text-lg font-bold text-emerald-600">{formatCurrency(pkg.amountUgx)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <div className="space-y-6">
-                <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Checkout</p>
-                      <h2 className="mt-2 text-xl font-semibold text-slate-950">Pay with your phone</h2>
-                    </div>
-                    <Receipt className="h-5 w-5 text-slate-500" />
-                  </div>
-                  <form onSubmit={handlePaymentSubmit} className="mt-5 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                      {selectedPackage
-                        ? `${selectedPackage.name} . ${formatCurrency(selectedPackage.amountUgx)} . ${formatDuration(selectedPackage.durationMinutes)}`
-                        : 'Choose a package first.'}
-                    </div>
-                    <button type="submit" disabled={isPaymentLoading || !selectedPackage} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
-                      {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                      {isPaymentLoading ? 'Sending prompt...' : selectedPackage ? `Pay ${formatCurrency(selectedPackage.amountUgx)}` : 'Pay now'}
-                    </button>
-                    {currentPayment && (
-                      <button
-                        type="button"
-                        onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)}
-                        className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm text-emerald-700 transition-colors hover:bg-emerald-500/20"
-                      >
-                        I approved payment - check status
-                      </button>
-                    )}
-                  </form>
-                  {currentPayment && (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="font-semibold text-slate-950">{currentPayment.package.name}</div>
-                          <div className="mt-1 text-slate-500">
-                            {formatCurrency(currentPayment.amountUgx)} . {currentPayment.phoneNumber}
-                          </div>
-                        </div>
-                        <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(currentPayment.status)}`}>
-                          {currentPayment.status}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </section>
-
-                <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Voucher</p>
-                      <h2 className="mt-2 text-xl font-semibold text-slate-950">Redeem existing code</h2>
-                    </div>
-                    <Ticket className="h-5 w-5 text-slate-500" />
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Voucher code" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
-                    <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 disabled:bg-slate-300 disabled:text-slate-500">
-                      {isVoucherLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />}
-                      {isVoucherLoading ? 'Redeeming...' : 'Redeem voucher'}
-                    </button>
-                  </div>
-                </section>
+            <section className="mx-auto w-full max-w-[430px] rounded-lg border border-slate-200 bg-slate-50 px-5 py-5 shadow-sm sm:px-6">
+              <div className="text-center">
+                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="mx-auto mb-2 h-10 w-auto" />
+                <h1 className="text-2xl font-extrabold text-emerald-600 sm:text-3xl">
+                  {context?.tenant.name ?? 'AROFi Hotspot'}
+                </h1>
               </div>
-            </div>
+
+              <div className="mt-5 flex gap-2">
+                <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
+                <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className="rounded-lg bg-emerald-500 px-5 py-3 text-sm font-bold text-white disabled:bg-slate-300">
+                  {isVoucherLoading ? '...' : 'Login'}
+                </button>
+              </div>
+
+              <Link href="/login" className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-medium text-sky-700">
+                <LogIn className="h-3 w-3" />
+                Already bought? Find My Voucher
+              </Link>
+
+              <p className="mt-5 text-center text-sm text-slate-700">Select a package and pay with Mobile Money</p>
+
+              <div className="mt-6 grid gap-3">
+                {packages.length === 0 && <div className="rounded-lg border border-slate-300 bg-white p-4 text-sm text-slate-500">No packages are published for this portal yet.</div>}
+                {packages.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPackage(pkg)
+                      setCheckoutOpen(true)
+                      setCurrentPayment(null)
+                    }}
+                    className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-left shadow-sm"
+                  >
+                    <span>
+                      <span className="block text-base font-bold text-slate-700">{pkg.name}</span>
+                      <span className="block text-xs text-slate-500">{formatDuration(pkg.durationMinutes)}</span>
+                    </span>
+                    <span className="text-sm font-extrabold text-emerald-600">{formatCurrency(pkg.amountUgx)}</span>
+                    <span className="rounded-xl border border-green-700/50 bg-green-500 px-4 py-2 text-sm font-extrabold text-white shadow-sm">BUY</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-6 rounded-lg border border-slate-300 bg-white px-4 py-4 text-center">
+                <div className="text-sm font-bold text-slate-700">We accept:</div>
+                <div className="mt-2 text-sm font-extrabold text-emerald-600">Mobile Money via Pesapal</div>
+              </div>
+
+              <div className="mt-6 border-t border-slate-300 pt-5 text-center text-xs text-slate-700">
+                <div>Need help? Contact support:</div>
+                <div className="mt-2 font-bold text-emerald-600">{context?.tenant.supportPhone ?? context?.tenant.supportEmail ?? 'Support contact pending'}</div>
+              </div>
+
+              {checkoutOpen && selectedPackage && (
+                <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 px-4">
+                  <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-extrabold text-slate-950">Pay {formatCurrency(selectedPackage.amountUgx)}</h2>
+                        <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} - {formatDuration(selectedPackage.durationMinutes)}</p>
+                      </div>
+                      <button type="button" onClick={() => setCheckoutOpen(false)} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Close</button>
+                    </div>
+                    <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
+                      <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
+                      <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
+                        {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                        {isPaymentLoading ? 'Sending prompt...' : 'Send payment prompt'}
+                      </button>
+                      {currentPayment && (
+                        <button type="button" onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-50 py-2 text-sm font-bold text-emerald-700">
+                          I approved payment - check status
+                        </button>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           {initialView === 'login' && (
