@@ -120,6 +120,7 @@ export class MikrotikService {
     const registrationKey = input.registrationKey ?? 'manual-test-router'
     const profileName = `arofi-${registrationKey.slice(0, 8)}`
     const hotspotName = input.hotspotServerName || input.hotspotNetworkName || 'hotspot1'
+    const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
 
     const safeScript = [
       `# AROFi MikroTik onboarding script`,
@@ -129,7 +130,7 @@ export class MikrotikService {
       ``,
       `# 0. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
       `:do {`,
-      `  /tool fetch url="${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}" mode=https keep-result=no`,
+      `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
       `  :put "AROFi provisioning callback sent."`,
       `} on-error={`,
       `  :put "Warning: AROFi provisioning callback failed. Check router internet/DNS/HTTPS."`,
@@ -202,6 +203,14 @@ export class MikrotikService {
       ...safeScript,
       ``,
       `# Fresh router HotSpot setup section`,
+      `# WAN: fresh routers usually receive internet from the upstream/Savana modem on ether1.`,
+      `:if ([:len [/interface ethernet find name="ether1"]] > 0) do={`,
+      `  :if ([:len [/ip dhcp-client find interface="ether1"]] = 0) do={`,
+      `    /ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"`,
+      `  } else={`,
+      `    /ip dhcp-client enable [find interface="ether1"]`,
+      `  }`,
+      `}`,
       `:if ([:len [/interface bridge find name="bridge"]] = 0) do={`,
       `  /interface bridge add name=bridge comment="AROFi LAN bridge"`,
       `}`,
@@ -235,6 +244,13 @@ export class MikrotikService {
       `:if ([:len [/ip hotspot find name="${this.escape(hotspotName)}"]] = 0) do={`,
       `  /ip hotspot add name="${this.escape(hotspotName)}" interface=bridge \\`,
       `    address-pool=arofi-pool profile="${profileName}" disabled=no`,
+      `}`,
+      `:delay 8s`,
+      `:do {`,
+      `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
+      `  :put "AROFi provisioning callback sent after WAN setup."`,
+      `} on-error={`,
+      `  :put "Warning: AROFi callback still failed after WAN setup. Check ether1 internet, DNS, and HTTPS."`,
       `}`,
       `:put "AROFi fresh setup completed."`,
     ].join('\n')

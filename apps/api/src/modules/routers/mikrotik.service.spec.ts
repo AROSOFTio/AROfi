@@ -55,6 +55,8 @@ describe('MikrotikService', () => {
     })
 
     expect(script).toContain('/interface bridge add name=bridge')
+    expect(script).toContain('/ip dhcp-client add interface=ether1')
+    expect(script).toContain('AROFi provisioning callback sent after WAN setup')
     expect(script).toContain('/interface bridge port add bridge=bridge')
     expect(script).toContain('/ip address add address=10.50.0.1/24 interface=bridge')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
