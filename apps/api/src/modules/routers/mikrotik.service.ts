@@ -122,25 +122,13 @@ export class MikrotikService {
     const hotspotName = input.hotspotServerName || input.hotspotNetworkName || 'hotspot1'
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
+    const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
 
     const safeScript = [
       `# AROFi MikroTik onboarding script`,
       `# Mode: ${input.mode ?? 'SAFE_EXISTING_ROUTER'}`,
       `# Router: ${this.escape(input.routerName.slice(0, 30))}`,
       `# Registration key: ${this.escape(registrationKey)}`,
-      ``,
-      `# 0. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
-      `:do {`,
-      `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
-      `  :put "AROFi provisioning callback sent."`,
-      `} on-error={`,
-      `  :do {`,
-      `    /tool fetch url="${fallbackCallbackUrl}" mode=http keep-result=no`,
-      `    :put "AROFi provisioning callback sent by HTTP fallback."`,
-      `  } on-error={`,
-      `    :put "Warning: AROFi provisioning callback failed. Check ether1 internet, DNS, HTTPS, and port 4012."`,
-      `  }`,
-      `}`,
       ``,
       `# 1. Identity and RouterOS API service`,
       `/system identity set name="${this.escape(input.identity.slice(0, 30))}"`,
@@ -189,11 +177,16 @@ export class MikrotikService {
       `# 5. Router AAA accounting`,
       `/user aaa set use-radius=yes accounting=yes default-group=read`,
       `/snmp set enabled=yes`,
-      `:put "AROFi router configured."`,
     ]
 
     if (input.mode !== 'FRESH_FULL_HOTSPOT') {
-      return safeScript.join('\n')
+      return [
+        ...safeScript,
+        ``,
+        `# 6. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
+        ...callbackScript,
+        `:put "AROFi router configured."`,
+      ].join('\n')
     }
 
     return [
@@ -202,6 +195,9 @@ export class MikrotikService {
       `# Fresh router HotSpot setup section`,
       `# WAN: fresh routers usually receive internet from the upstream/Savana modem on ether1.`,
       `:if ([:len [/interface ethernet find name="ether1"]] > 0) do={`,
+      `  :foreach wanBridgePort in=[/interface bridge port find interface=ether1] do={`,
+      `    /interface bridge port remove $wanBridgePort`,
+      `  }`,
       `  :if ([:len [/ip dhcp-client find interface="ether1"]] = 0) do={`,
       `    /ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"`,
       `  } else={`,
@@ -241,18 +237,9 @@ export class MikrotikService {
       `:if ([:len [/ip hotspot find name="${this.escape(hotspotName)}"]] = 0) do={`,
       `  /ip hotspot add name="${this.escape(hotspotName)}" interface=bridge address-pool=arofi-pool profile="${profileName}" disabled=no`,
       `}`,
-      `:delay 8s`,
-      `:do {`,
-      `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
-      `  :put "AROFi provisioning callback sent after WAN setup."`,
-      `} on-error={`,
-      `  :do {`,
-      `    /tool fetch url="${fallbackCallbackUrl}" mode=http keep-result=no`,
-      `    :put "AROFi provisioning callback sent after WAN setup by HTTP fallback."`,
-      `  } on-error={`,
-      `    :put "Warning: AROFi callback still failed after WAN setup. Check ether1 internet, DNS, HTTPS, and VPS port 4012."`,
-      `  }`,
-      `}`,
+      ``,
+      `# 6. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
+      ...callbackScript,
       `:put "AROFi fresh setup completed."`,
     ].join('\n')
   }
@@ -281,6 +268,23 @@ export class MikrotikService {
         (host) =>
           `/ip hotspot walled-garden add dst-host="${this.escape(host)}" action=allow comment="AROFi portal"`,
       ),
+    ]
+  }
+
+  private buildProvisioningCallbackScript(callbackUrl: string, fallbackCallbackUrl: string) {
+    return [
+      `:delay 3s`,
+      `:do {`,
+      `  /tool fetch url="${callbackUrl}" mode=https keep-result=no`,
+      `  :put "AROFi provisioning callback sent."`,
+      `} on-error={`,
+      `  :do {`,
+      `    /tool fetch url="${fallbackCallbackUrl}" mode=http keep-result=no`,
+      `    :put "AROFi provisioning callback sent by HTTP fallback."`,
+      `  } on-error={`,
+      `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
+      `  }`,
+      `}`,
     ]
   }
 

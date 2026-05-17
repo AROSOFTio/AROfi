@@ -36,7 +36,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('radius-interim-update=5m')
     expect(script).toContain('mode=http keep-result=no')
     expect(script).toContain('/api/mikrotik/provisioned/')
-    expect(script).toContain('/ip hotspot set [find name="hotspot1"] \\')
+    expect(script).toContain('/ip hotspot set [find name="hotspot1"] profile="arofi-')
   })
 
   it('builds a fuller fresh HotSpot setup with bridge, DHCP, DNS, NAT, and server binding', () => {
@@ -57,13 +57,14 @@ describe('MikrotikService', () => {
     })
 
     expect(script).toContain('/interface bridge add name=bridge')
+    expect(script).toContain('/interface bridge port remove $wanBridgePort')
     expect(script).toContain('/ip dhcp-client add interface=ether1')
-    expect(script).toContain('AROFi provisioning callback sent after WAN setup')
+    expect(script).toContain('AROFi provisioning callback sent')
     expect(script).toContain('/interface bridge port add bridge=bridge')
     expect(script).toContain('/ip address add address=10.50.0.1/24 interface=bridge')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 \\')
+    expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade')
     expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=bridge')
   })
 

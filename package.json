@@ -12,6 +12,9 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
+  "dependencies": {
+    "rxjs": "^7.8.1"
+  },
   "devDependencies": {
     "turbo": "latest",
     "prettier": "^3.2.5"
