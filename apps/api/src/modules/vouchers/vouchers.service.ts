@@ -104,8 +104,10 @@ export class VouchersService {
           vouchers: {
             select: {
               id: true,
+              code: true,
               status: true,
             },
+            orderBy: { createdAt: 'asc' },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -213,6 +215,11 @@ export class VouchersService {
           soldCount,
           redeemedCount,
           remainingCount: generatedCount,
+          previewVouchers: batch.vouchers.slice(0, 24).map((voucher) => ({
+            id: voucher.id,
+            code: voucher.code,
+            status: voucher.status,
+          })),
           createdAt: batch.createdAt,
         }
       }),

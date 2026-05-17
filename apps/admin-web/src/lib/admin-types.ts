@@ -142,6 +142,11 @@ export type VouchersOverviewResponse = {
     soldCount: number
     redeemedCount: number
     remainingCount: number
+    previewVouchers: Array<{
+      id: string
+      code: string
+      status: string
+    }>
     createdAt: string
   }>
   recentSales: Array<{
