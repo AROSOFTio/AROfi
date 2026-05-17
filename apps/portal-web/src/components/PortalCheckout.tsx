@@ -218,6 +218,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [statusMessage, setStatusMessage] = useState('')
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
   const [autoConnectAttempted, setAutoConnectAttempted] = useState(false)
+  const [qrVoucherCode, setQrVoucherCode] = useState('')
+  const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
     macAddress: '',
     clientIp: '',
@@ -227,8 +229,26 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   })
 
   useEffect(() => {
+    const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+    const voucherFromQr = searchParams?.get('voucher') ?? searchParams?.get('code')
+    if (voucherFromQr) {
+      const code = voucherFromQr.trim()
+      setVoucherCode(code)
+      setQrVoucherCode(code)
+      setQrVoucherRedeemAttempted(false)
+      setStatusMessage('Voucher loaded from QR. Connecting this device...')
+    }
     void bootstrap()
   }, [])
+
+  useEffect(() => {
+    if (!qrVoucherCode || qrVoucherRedeemAttempted || isBooting || isVoucherLoading) {
+      return
+    }
+
+    setQrVoucherRedeemAttempted(true)
+    void handleVoucherRedeem(qrVoucherCode)
+  }, [qrVoucherCode, qrVoucherRedeemAttempted, isBooting, isVoucherLoading])
 
   useEffect(() => {
     if (!currentPayment || !pendingStatuses.includes(currentPayment.status)) {
@@ -481,11 +501,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  async function handleVoucherRedeem() {
+  async function handleVoucherRedeem(overrideCode?: string) {
     setErrorMessage('')
     setStatusMessage('')
 
-    if (!voucherCode.trim()) {
+    const codeToRedeem = (overrideCode ?? voucherCode).trim()
+    if (!codeToRedeem) {
       setErrorMessage('Enter your voucher code before redeeming.')
       return
     }
@@ -499,7 +520,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          code: voucherCode.trim(),
+          code: codeToRedeem,
           phoneNumber: phoneNumber || undefined,
           customerReference: customerReference || phoneNumber || undefined,
           macAddress: hotspotParams.macAddress || undefined,

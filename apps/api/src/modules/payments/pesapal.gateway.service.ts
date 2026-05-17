@@ -172,7 +172,7 @@ export class PesapalGatewayService {
   }
 
   private getBaseUrl() {
-    const explicit = this.configService.get<string>('PESAPAL_BASE_URL')
+    const explicit = this.normalizePesapalBaseUrl(this.configService.get<string>('PESAPAL_BASE_URL'))
     if (explicit) {
       return explicit
     }
@@ -183,6 +183,17 @@ export class PesapalGatewayService {
     }
 
     return 'https://pay.pesapal.com/v3'
+  }
+
+  private normalizePesapalBaseUrl(value?: string) {
+    const configured = value?.trim()
+    if (!configured) {
+      return undefined
+    }
+
+    const withoutEnvKey = configured.replace(/^PESAPAL_BASE_URL=/i, '').trim()
+    const withoutTrailingPath = withoutEnvKey.replace(/\/api\/Auth\/RequestToken\/?$/i, '')
+    return withoutTrailingPath.replace(/\/$/, '')
   }
 
   private async requestToken() {

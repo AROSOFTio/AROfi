@@ -18,6 +18,7 @@ import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VoucherCodeService } from './voucher-code.service'
 import PDFDocument from 'pdfkit'
+import * as QRCode from 'qrcode'
 
 type VoucherPdfTemplate = 'emerald' | 'midnight' | 'royal' | 'sunrise' | 'mono'
 
@@ -36,7 +37,7 @@ const voucherPdfTemplates: Record<
     label: 'Emerald Premium',
     accent: '#10B981',
     accentDark: '#047857',
-    background: '#F0FDF4',
+    background: '#FFFFFB',
     muted: '#64748B',
     ink: '#0F172A',
   },
@@ -44,7 +45,7 @@ const voucherPdfTemplates: Record<
     label: 'Midnight Luxe',
     accent: '#38BDF8',
     accentDark: '#075985',
-    background: '#EFF6FF',
+    background: '#FFFFFB',
     muted: '#475569',
     ink: '#020617',
   },
@@ -52,7 +53,7 @@ const voucherPdfTemplates: Record<
     label: 'Royal Blue',
     accent: '#2563EB',
     accentDark: '#1E3A8A',
-    background: '#EEF2FF',
+    background: '#FFFFFB',
     muted: '#64748B',
     ink: '#0F172A',
   },
@@ -60,7 +61,7 @@ const voucherPdfTemplates: Record<
     label: 'Sunrise Gold',
     accent: '#F59E0B',
     accentDark: '#92400E',
-    background: '#FFFBEB',
+    background: '#FFFFFB',
     muted: '#78716C',
     ink: '#1C1917',
   },
@@ -68,7 +69,7 @@ const voucherPdfTemplates: Record<
     label: 'Clean Mono',
     accent: '#111827',
     accentDark: '#030712',
-    background: '#F8FAFC',
+    background: '#FFFFFB',
     muted: '#64748B',
     ink: '#0F172A',
   },
@@ -869,6 +870,8 @@ export class VouchersService {
         y = pageMargin
       }
 
+      const qrPng = await this.generateVoucherQrPng(voucher.code)
+
       this.drawVoucherCard(doc, {
         x,
         y,
@@ -881,6 +884,7 @@ export class VouchersService {
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
         support: batch.tenant.supportPhone ?? batch.tenant.supportEmail ?? 'Contact venue staff',
+        qrPng,
       })
 
       x += cardWidth + cardGap
@@ -966,23 +970,47 @@ export class VouchersService {
       amountUgx: number
       voucherCode: string
       support: string
+      qrPng: Buffer
     },
   ) {
     const { x, y, width, height, template } = input
     doc.save()
-    doc.roundedRect(x, y, width, height, 7).fillAndStroke(template.background, '#CBD5E1')
-    doc.roundedRect(x, y, width, 18, 7).fill(template.accentDark)
-    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('AROFi', x + 8, y + 5, { width: 40 })
-    doc.fillColor('#FFFFFF').fontSize(5).font('Helvetica').text('HOTSPOT ACCESS', x + 48, y + 6, { width: width - 56, align: 'right' })
-    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(9).text(input.tenantName, x + 8, y + 24, { width: width - 16, ellipsis: true })
-    doc.fillColor(template.accentDark).fontSize(15).text(input.voucherCode, x + 8, y + 38, { width: width - 16, align: 'center' })
-    doc.moveTo(x + 10, y + 58).lineTo(x + width - 10, y + 58).strokeColor('#CBD5E1').lineWidth(0.5).stroke()
-    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(7).text(input.packageName, x + 8, y + 63, { width: width * 0.54, ellipsis: true })
-    doc.fillColor(template.accentDark).fontSize(7).text(`UGX ${input.amountUgx.toLocaleString('en-UG')}`, x + width * 0.58, y + 63, { width: width * 0.36, align: 'right' })
-    doc.fillColor(template.muted).font('Helvetica').fontSize(6).text(this.formatVoucherDuration(input.durationMinutes), x + 8, y + 74, { width: width * 0.45 })
-    doc.text(`Help: ${input.support}`, x + width * 0.42, y + 74, { width: width * 0.52, align: 'right', ellipsis: true })
-    doc.fillColor(template.muted).fontSize(5).text('Powered by AROSOFT . arosoft.io', x + 8, y + height - 10, { width: width - 16, align: 'center', link: 'https://arosoft.io' })
+    doc.roundedRect(x, y, width, height, 6).fillAndStroke(template.background, '#D7DEE8')
+    doc.rect(x, y, width, 16).fill(template.accentDark)
+    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('AROFi', x + 7, y + 5, { width: 42 })
+    doc.fillColor('#FFFFFF').fontSize(5).font('Helvetica-Bold').text('SCAN TO CONNECT', x + 48, y + 6, { width: width - 55, align: 'right' })
+
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(8).text(input.tenantName, x + 7, y + 21, { width: width - 14, ellipsis: true })
+    doc.fillColor(template.accentDark).fontSize(13).text(input.voucherCode, x + 7, y + 33, { width: width - 14, align: 'center' })
+    doc.moveTo(x + 8, y + 49).lineTo(x + width - 8, y + 49).strokeColor('#D7DEE8').lineWidth(0.5).stroke()
+
+    const qrSize = 30
+    doc.image(input.qrPng, x + 8, y + 53, { width: qrSize, height: qrSize })
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(7).text(input.packageName, x + 44, y + 55, { width: width - 52, ellipsis: true })
+    doc.fillColor(template.accentDark).fontSize(7).text(`UGX ${input.amountUgx.toLocaleString('en-UG')}`, x + 44, y + 66, { width: width - 52 })
+    doc.fillColor(template.muted).font('Helvetica').fontSize(6).text(this.formatVoucherDuration(input.durationMinutes), x + 44, y + 77, { width: width - 52 })
+    doc.fillColor(template.muted).fontSize(4.8).text('Scan QR or enter code in the portal', x + 8, y + height - 12, { width: width - 16, align: 'center' })
+    doc.fillColor(template.muted).fontSize(4.5).text('Powered by AROSOFT . arosoft.io', x + 8, y + height - 6, { width: width - 16, align: 'center', link: 'https://arosoft.io' })
     doc.restore()
+  }
+
+  private async generateVoucherQrPng(voucherCode: string) {
+    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode), {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 112,
+      color: {
+        dark: '#0F172A',
+        light: '#FFFFFF',
+      },
+    })
+    return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64')
+  }
+
+  private buildVoucherPortalUrl(voucherCode: string) {
+    const host = process.env.PORTAL_PUBLIC_HOST ?? process.env.API_PUBLIC_HOST ?? 'arofi.arosoft.io'
+    const normalizedHost = host.startsWith('http://') || host.startsWith('https://') ? host : `https://${host}`
+    return `${normalizedHost.replace(/\/$/, '')}/portal?voucher=${encodeURIComponent(voucherCode)}`
   }
 
   private formatVoucherDuration(minutes: number) {

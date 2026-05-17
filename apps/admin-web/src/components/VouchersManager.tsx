@@ -139,10 +139,59 @@ export default function VouchersManager() {
   const [submittingBatch, setSubmittingBatch] = useState(false)
   const [printBatch, setPrintBatch] = useState<VouchersOverviewResponse['batches'][number] | null>(null)
   const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(printTemplates[0].id)
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null)
+  const [previewPdfLoading, setPreviewPdfLoading] = useState(false)
 
   useEffect(() => {
     void loadData()
   }, [])
+
+  useEffect(() => {
+    let active = true
+
+    if (!printBatch) {
+      setPreviewPdfUrl((previous) => {
+        if (previous) {
+          URL.revokeObjectURL(previous)
+        }
+        return null
+      })
+      return () => {
+        active = false
+      }
+    }
+
+    setPreviewPdfLoading(true)
+    setError(null)
+
+    void fetchBatchFileBlob(printBatch.id, 'print.pdf', selectedPrintTemplateId)
+      .then(({ blob }) => {
+        if (!active) {
+          return
+        }
+        const nextUrl = URL.createObjectURL(blob)
+        setPreviewPdfUrl((previous) => {
+          if (previous) {
+            URL.revokeObjectURL(previous)
+          }
+          return nextUrl
+        })
+      })
+      .catch((requestError) => {
+        if (active) {
+          setError(requestError instanceof Error ? requestError.message : 'Unable to load voucher PDF preview')
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setPreviewPdfLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [printBatch, selectedPrintTemplateId])
 
   const tenantPackages = useMemo(
     () => packages.filter((pkg) => pkg.tenant.id === batchForm.tenantId),
@@ -266,6 +315,23 @@ export default function VouchersManager() {
   }
 
   async function downloadBatchFile(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string) {
+    setError(null)
+    setSuccess(null)
+    const { blob, filename } = await fetchBatchFileBlob(batchId, type, templateId)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setSuccess(`${filename} download started.`)
+    await loadData()
+  }
+
+  async function fetchBatchFileBlob(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string) {
     const token = getBrowserAdminToken()
     const templateQuery = type === 'print.pdf' && templateId ? `?template=${encodeURIComponent(templateId)}` : ''
     const response = await fetch(`/api/vouchers/batches/${batchId}/${type}${templateQuery}`, {
@@ -273,19 +339,14 @@ export default function VouchersManager() {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
     if (!response.ok) {
-      setError('Unable to download voucher batch file')
-      return
+      const contentType = response.headers.get('content-type') ?? ''
+      const body = contentType.includes('application/json') ? await response.json().catch(() => null) : null
+      throw new Error(body?.message ?? 'Unable to load voucher batch file')
     }
     const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
     const disposition = response.headers.get('content-disposition') ?? ''
     const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `vouchers.${type.endsWith('pdf') ? 'pdf' : 'csv'}`
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = filename
-    anchor.click()
-    URL.revokeObjectURL(url)
-    await loadData()
+    return { blob, filename }
   }
 
   const summary = overview?.summary ?? {
@@ -657,16 +718,43 @@ export default function VouchersManager() {
       </div>
 
       {printBatch && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal-card" style={{ width: 'min(1180px, calc(100vw - 32px))', maxHeight: '92vh', overflowY: 'auto' }}>
+        <div className="modal-overlay" role="dialog" aria-modal="true" style={{ background: 'rgba(15, 23, 42, 0.52)' }}>
+          <div
+            className="modal-card"
+            style={{
+              width: 'min(1220px, calc(100vw - 32px))',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              background: '#fffffb',
+              boxShadow: '0 24px 80px rgba(15, 23, 42, 0.22)',
+            }}
+          >
             <button type="button" className="modal-close" onClick={() => setPrintBatch(null)}>Close</button>
             <div className="modal-kicker">Voucher Print Sheet</div>
-            <h2 className="modal-title">Preview AROFi PDF Template</h2>
-            <p className="page-subtitle" style={{ marginBottom: 18 }}>
-              {printBatch.batchNumber} shows real voucher cards on an A4 preview. Choose a template, then download.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px, 0.68fr) minmax(340px, 1.32fr)', gap: 18 }}>
-              <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 18 }}>
+              <div>
+                <h2 className="modal-title">Preview AROFi PDF Template</h2>
+                <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                  {printBatch.batchNumber} uses real voucher codes from this batch. Scan QR to open the portal with the voucher ready.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void downloadBatchFile(printBatch.id, 'print.pdf', selectedPrintTemplateId)}
+              >
+                Download PDF
+              </button>
+            </div>
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  overflowX: 'auto',
+                  paddingBottom: 4,
+                }}
+              >
                 {printTemplates.map((template) => {
                   const selected = selectedPrintTemplateId === template.id
                   return (
@@ -677,10 +765,13 @@ export default function VouchersManager() {
                       style={{
                         cursor: 'pointer',
                         padding: 14,
+                        minWidth: 210,
                         textAlign: 'left',
                         borderColor: selected ? template.color : 'var(--border)',
-                        borderTop: `4px solid ${template.color}`,
-                        boxShadow: selected ? `0 10px 30px ${template.color}26` : undefined,
+                        borderLeft: `5px solid ${template.color}`,
+                        borderTop: '1px solid var(--border)',
+                        background: selected ? '#f8fffb' : '#fffffb',
+                        boxShadow: selected ? '0 10px 24px rgba(15, 23, 42, 0.08)' : undefined,
                       }}
                       onClick={() => setSelectedPrintTemplateId(template.id)}
                     >
@@ -693,114 +784,38 @@ export default function VouchersManager() {
                     </button>
                   )
                 })}
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    void downloadBatchFile(printBatch.id, 'print.pdf', selectedPrintTemplateId)
-                    setPrintBatch(null)
-                  }}
-                >
-                  Download PDF
-                </button>
               </div>
-              <VoucherA4Preview
-                batch={printBatch}
-                template={printTemplates.find((template) => template.id === selectedPrintTemplateId) ?? printTemplates[0]}
-              />
+              <div
+                style={{
+                  minHeight: '68vh',
+                  border: '1px solid #d7dee8',
+                  borderRadius: 12,
+                  background: '#fffffb',
+                  overflow: 'hidden',
+                }}
+              >
+                {previewPdfLoading && (
+                  <div className="empty-state" style={{ height: '68vh' }}>
+                    <p>Loading real PDF preview...</p>
+                  </div>
+                )}
+                {!previewPdfLoading && previewPdfUrl && (
+                  <iframe
+                    src={previewPdfUrl}
+                    title={`PDF preview for ${printBatch.batchNumber}`}
+                    style={{ display: 'block', width: '100%', height: '68vh', border: 0, background: '#fffffb' }}
+                  />
+                )}
+                {!previewPdfLoading && !previewPdfUrl && (
+                  <div className="empty-state" style={{ height: '68vh' }}>
+                    <p>PDF preview could not be loaded. Use Download PDF after checking the API is healthy.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
     </>
-  )
-}
-
-function VoucherA4Preview({
-  batch,
-  template,
-}: {
-  batch: VouchersOverviewResponse['batches'][number]
-  template: PrintTemplate
-}) {
-  const previewCodes =
-    batch.previewVouchers.length > 0
-      ? batch.previewVouchers
-      : Array.from({ length: Math.min(batch.quantity, 24) }, (_, index) => ({
-          id: `${batch.id}-${index}`,
-          code: `${batch.prefix}${String(index + 1).padStart(4, '0')}`,
-          status: 'GENERATED',
-        }))
-
-  const visibleCodes = previewCodes.slice(0, Math.min(batch.quantity, 24))
-
-  return (
-    <div>
-      <div style={{ marginBottom: 8, color: 'var(--text-2)', fontSize: 13 }}>
-        A4 preview: showing {visibleCodes.length} voucher{visibleCodes.length === 1 ? '' : 's'}
-        {batch.quantity > visibleCodes.length ? ` of ${batch.quantity} on the first sheet` : ''}.
-      </div>
-      <div
-        style={{
-          aspectRatio: '210 / 297',
-          width: '100%',
-          maxHeight: 650,
-          overflow: 'hidden',
-          border: '1px solid var(--border)',
-          background: '#fff',
-          boxShadow: '0 18px 60px rgba(15, 23, 42, 0.18)',
-          padding: 14,
-        }}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-          {visibleCodes.map((voucher) => (
-            <div
-              key={voucher.id}
-              style={{
-                minHeight: 82,
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                background: template.bg,
-                overflow: 'hidden',
-                color: template.ink,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                  background: template.dark,
-                  color: '#fff',
-                  padding: '5px 7px',
-                  fontSize: 7,
-                  fontWeight: 800,
-                  letterSpacing: 0.6,
-                }}
-              >
-                <span>AROFi</span>
-                <span>HOTSPOT ACCESS</span>
-              </div>
-              <div style={{ padding: '6px 8px 5px' }}>
-                <div style={{ fontSize: 8, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {batch.tenant.name}
-                </div>
-                <div style={{ color: template.dark, fontSize: 14, fontWeight: 900, textAlign: 'center', margin: '4px 0' }}>
-                  {voucher.code}
-                </div>
-                <div style={{ height: 1, background: '#cbd5e1', margin: '4px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 7, fontWeight: 800 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batch.package.name}</span>
-                  <span style={{ color: template.dark }}>{formatCurrency(batch.faceValueUgx)}</span>
-                </div>
-                <div style={{ marginTop: 3, color: template.muted, fontSize: 6, textAlign: 'center' }}>
-                  Powered by AROSOFT . arosoft.io
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   )
 }
