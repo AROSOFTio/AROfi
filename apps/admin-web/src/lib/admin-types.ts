@@ -63,6 +63,29 @@ export type TenantOverviewResponse = {
   items: TenantItem[]
 }
 
+export type UsersOverviewResponse = {
+  roles: Array<{
+    id: string
+    name: string
+    permissions: string[]
+  }>
+  users: Array<{
+    id: string
+    email: string
+    firstName?: string | null
+    lastName?: string | null
+    isActive: boolean
+    createdAt: string
+    updatedAt: string
+    tenant?: TenantSummary | null
+    role: {
+      id: string
+      name: string
+      permissions: string[]
+    }
+  }>
+}
+
 export type TenantItem = {
   id: string
   name: string

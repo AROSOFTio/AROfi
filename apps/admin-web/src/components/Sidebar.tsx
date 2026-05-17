@@ -54,6 +54,7 @@ const navItems: NavGroup[] = [
   {
     section: 'System',
     items: [
+      { href: '/users', label: 'Users & Roles', icon: <UsersIcon />, required: ['users.read'] },
       { href: '/tenants', label: 'Tenants', icon: <TenantIcon />, required: ['tenants.read'], platformOnly: true },
       { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'] },
       { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'] },

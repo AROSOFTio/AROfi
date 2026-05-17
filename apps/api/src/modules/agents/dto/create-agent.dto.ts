@@ -1,9 +1,11 @@
 import { AgentType } from '@prisma/client'
+import { Type } from 'class-transformer'
 import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 
 export class CreateAgentDto {
+  @IsOptional()
   @IsUUID()
-  tenantId: string
+  tenantId?: string
 
   @IsString()
   @IsNotEmpty()
@@ -30,12 +32,14 @@ export class CreateAgentDto {
   territory?: string
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   @Max(10000)
   commissionRateBps?: number
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   @Max(100000000)

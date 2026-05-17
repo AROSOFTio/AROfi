@@ -1,3 +1,4 @@
+import RegisterAgentPanel from '@/components/RegisterAgentPanel'
 import { AgentsOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
@@ -17,6 +18,7 @@ export default async function AgentsPage() {
           <h1 className="page-title">Agents</h1>
           <p className="page-subtitle">Resellers, field float positions, accrued commissions, and payout history across tenant operations.</p>
         </div>
+        <RegisterAgentPanel />
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
