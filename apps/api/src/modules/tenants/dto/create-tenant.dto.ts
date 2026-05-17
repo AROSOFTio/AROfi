@@ -24,6 +24,11 @@ export class CreateTenantDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^(classic|fresh|midnight|sunrise|minimal)$/)
+  portalTemplate?: string
+
+  @IsOptional()
+  @IsString()
   @MaxLength(32)
   supportPhone?: string
 

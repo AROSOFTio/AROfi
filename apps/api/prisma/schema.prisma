@@ -316,6 +316,7 @@ model Tenant {
   domain              String?              @unique
   logoUrl             String?
   brandColor          String?
+  portalTemplate      String   @default("classic")
   supportPhone        String?
   supportEmail        String?
   createdAt           DateTime             @default(now())

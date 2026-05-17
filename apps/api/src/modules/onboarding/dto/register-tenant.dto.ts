@@ -44,6 +44,11 @@ export class RegisterTenantDto {
   @Matches(/^#?[0-9a-fA-F]{6}$/)
   brandColor?: string
 
+  @IsOptional()
+  @IsString()
+  @Matches(/^(classic|fresh|midnight|sunrise|minimal)$/)
+  portalTemplate?: string
+
   @IsString()
   @MinLength(8)
   @MaxLength(120)

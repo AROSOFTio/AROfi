@@ -5,6 +5,7 @@ export type PortalContextResponse = {
     domain?: string | null
     logoUrl?: string | null
     brandColor?: string | null
+    portalTemplate?: string | null
     supportPhone?: string | null
     supportEmail?: string | null
   }

@@ -19,6 +19,61 @@ import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VoucherCodeService } from './voucher-code.service'
 import PDFDocument from 'pdfkit'
 
+type VoucherPdfTemplate = 'emerald' | 'midnight' | 'royal' | 'sunrise' | 'mono'
+
+const voucherPdfTemplates: Record<
+  VoucherPdfTemplate,
+  {
+    label: string
+    accent: string
+    accentDark: string
+    background: string
+    muted: string
+    ink: string
+  }
+> = {
+  emerald: {
+    label: 'Emerald Premium',
+    accent: '#10B981',
+    accentDark: '#047857',
+    background: '#F0FDF4',
+    muted: '#64748B',
+    ink: '#0F172A',
+  },
+  midnight: {
+    label: 'Midnight Luxe',
+    accent: '#38BDF8',
+    accentDark: '#075985',
+    background: '#EFF6FF',
+    muted: '#475569',
+    ink: '#020617',
+  },
+  royal: {
+    label: 'Royal Blue',
+    accent: '#2563EB',
+    accentDark: '#1E3A8A',
+    background: '#EEF2FF',
+    muted: '#64748B',
+    ink: '#0F172A',
+  },
+  sunrise: {
+    label: 'Sunrise Gold',
+    accent: '#F59E0B',
+    accentDark: '#92400E',
+    background: '#FFFBEB',
+    muted: '#78716C',
+    ink: '#1C1917',
+  },
+  mono: {
+    label: 'Clean Mono',
+    accent: '#111827',
+    accentDark: '#030712',
+    background: '#F8FAFC',
+    muted: '#64748B',
+    ink: '#0F172A',
+  },
+}
+
 @Injectable()
 export class VouchersService {
   constructor(
@@ -770,7 +825,7 @@ export class VouchersService {
     return undefined
   }
 
-  async renderBatchPdf(batchId: string, tenantId?: string, actorUserId?: string) {
+  async renderBatchPdf(batchId: string, tenantId?: string, actorUserId?: string, templateId?: string) {
     const batch = await this.prisma.voucherBatch.findUnique({
       where: { id: batchId },
       include: {
@@ -784,42 +839,64 @@ export class VouchersService {
       throw new NotFoundException('Voucher batch not found')
     }
 
-    const doc = new PDFDocument({ size: 'A4', margin: 32 })
+    const templateKey = this.resolveVoucherPdfTemplate(templateId)
+    const template = voucherPdfTemplates[templateKey]
+    const doc = new PDFDocument({ size: 'A4', margin: 18, bufferPages: true })
     const chunks: Buffer[] = []
     doc.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
     const done = new Promise<Buffer>((resolve) => {
       doc.on('end', () => resolve(Buffer.concat(chunks)))
     })
 
-    doc.fontSize(18).text(batch.tenant.name, { align: 'center' })
-    doc.fontSize(10).text(`Voucher batch ${batch.batchNumber}`, { align: 'center' })
-    doc.moveDown()
-
-    const cardWidth = 250
-    const cardHeight = 118
-    let x = 32
-    let y = doc.y
+    const pageMargin = 18
+    const cardGap = 8
+    const cardWidth = (doc.page.width - pageMargin * 2 - cardGap * 2) / 3
+    const cardHeight = 92
+    let x = pageMargin
+    let y = pageMargin
 
     for (const voucher of batch.vouchers) {
-      if (y + cardHeight > doc.page.height - 32) {
+      if (y + cardHeight > doc.page.height - pageMargin) {
         doc.addPage()
-        x = 32
-        y = 32
+        x = pageMargin
+        y = pageMargin
       }
 
-      doc.roundedRect(x, y, cardWidth, cardHeight, 6).stroke()
-      doc.fontSize(9).text(batch.tenant.name, x + 12, y + 10, { width: cardWidth - 24 })
-      doc.fontSize(15).text(voucher.code, x + 12, y + 28, { width: cardWidth - 24 })
-      doc.fontSize(9).text(`Package: ${batch.package.name}`, x + 12, y + 52)
-      doc.text(`Duration: ${batch.package.durationMinutes} minutes`, x + 12, y + 66)
-      doc.text(`Price: UGX ${batch.faceValueUgx.toLocaleString('en-UG')}`, x + 12, y + 80)
-      doc.text(`Support: ${batch.tenant.supportPhone ?? batch.tenant.supportEmail ?? 'Contact venue staff'}`, x + 12, y + 94, { width: cardWidth - 24 })
+      this.drawVoucherCard(doc, {
+        x,
+        y,
+        width: cardWidth,
+        height: cardHeight,
+        template,
+        tenantName: batch.tenant.name,
+        packageName: batch.package.name,
+        durationMinutes: batch.package.durationMinutes,
+        amountUgx: batch.faceValueUgx,
+        voucherCode: voucher.code,
+        support: batch.tenant.supportPhone ?? batch.tenant.supportEmail ?? 'Contact venue staff',
+      })
 
-      x += cardWidth + 22
-      if (x + cardWidth > doc.page.width - 32) {
-        x = 32
-        y += cardHeight + 18
+      x += cardWidth + cardGap
+      if (x + cardWidth > doc.page.width - pageMargin) {
+        x = pageMargin
+        y += cardHeight + cardGap
       }
+    }
+
+    const pageRange = doc.bufferedPageRange()
+    for (let pageIndex = 0; pageIndex < pageRange.count; pageIndex += 1) {
+      doc.switchToPage(pageIndex)
+      doc.fontSize(6).fillColor('#64748B')
+      doc.text(
+        `AROFi vouchers . ${template.label} . Powered by AROSOFT Innovations Ltd . https://arosoft.io`,
+        pageMargin,
+        doc.page.height - 12,
+        {
+          width: doc.page.width - pageMargin * 2,
+          align: 'center',
+          link: 'https://arosoft.io',
+        },
+      )
     }
 
     doc.end()
@@ -851,16 +928,66 @@ export class VouchersService {
           format: 'A4_PDF',
           quantity: batch.vouchers.length,
           actorUserId,
-          metadata: { batchNumber: batch.batchNumber },
+          metadata: { batchNumber: batch.batchNumber, template: templateKey },
         },
       })
     })
 
     return {
-      filename: `${batch.batchNumber}-vouchers.pdf`,
+      filename: `${batch.batchNumber}-${templateKey}-vouchers.pdf`,
       contentType: 'application/pdf',
       buffer,
     }
+  }
+
+  private resolveVoucherPdfTemplate(templateId?: string): VoucherPdfTemplate {
+    const normalized = (templateId ?? '').toLowerCase()
+    return normalized in voucherPdfTemplates ? (normalized as VoucherPdfTemplate) : 'emerald'
+  }
+
+  private drawVoucherCard(
+    doc: PDFKit.PDFDocument,
+    input: {
+      x: number
+      y: number
+      width: number
+      height: number
+      template: (typeof voucherPdfTemplates)[VoucherPdfTemplate]
+      tenantName: string
+      packageName: string
+      durationMinutes: number
+      amountUgx: number
+      voucherCode: string
+      support: string
+    },
+  ) {
+    const { x, y, width, height, template } = input
+    doc.save()
+    doc.roundedRect(x, y, width, height, 7).fillAndStroke(template.background, '#CBD5E1')
+    doc.roundedRect(x, y, width, 18, 7).fill(template.accentDark)
+    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('AROFi', x + 8, y + 5, { width: 40 })
+    doc.fillColor('#FFFFFF').fontSize(5).font('Helvetica').text('HOTSPOT ACCESS', x + 48, y + 6, { width: width - 56, align: 'right' })
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(9).text(input.tenantName, x + 8, y + 24, { width: width - 16, ellipsis: true })
+    doc.fillColor(template.accentDark).fontSize(15).text(input.voucherCode, x + 8, y + 38, { width: width - 16, align: 'center' })
+    doc.moveTo(x + 10, y + 58).lineTo(x + width - 10, y + 58).strokeColor('#CBD5E1').lineWidth(0.5).stroke()
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(7).text(input.packageName, x + 8, y + 63, { width: width * 0.54, ellipsis: true })
+    doc.fillColor(template.accentDark).fontSize(7).text(`UGX ${input.amountUgx.toLocaleString('en-UG')}`, x + width * 0.58, y + 63, { width: width * 0.36, align: 'right' })
+    doc.fillColor(template.muted).font('Helvetica').fontSize(6).text(this.formatVoucherDuration(input.durationMinutes), x + 8, y + 74, { width: width * 0.45 })
+    doc.text(`Help: ${input.support}`, x + width * 0.42, y + 74, { width: width * 0.52, align: 'right', ellipsis: true })
+    doc.fillColor(template.muted).fontSize(5).text('Powered by AROSOFT . arosoft.io', x + 8, y + height - 10, { width: width - 16, align: 'center', link: 'https://arosoft.io' })
+    doc.restore()
+  }
+
+  private formatVoucherDuration(minutes: number) {
+    if (minutes >= 1440 && minutes % 1440 === 0) {
+      const days = minutes / 1440
+      return `${days} ${days === 1 ? 'day' : 'days'}`
+    }
+    if (minutes >= 60 && minutes % 60 === 0) {
+      const hours = minutes / 60
+      return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+    }
+    return `${minutes} min`
   }
 
   async exportBatchCsv(batchId: string, tenantId?: string) {

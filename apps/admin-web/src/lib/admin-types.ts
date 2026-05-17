@@ -23,6 +23,7 @@ export type TenantRegistrationResponse = {
     name: string
     domain?: string | null
     brandColor?: string | null
+    portalTemplate?: string | null
     supportPhone?: string | null
     supportEmail?: string | null
   }
@@ -68,6 +69,7 @@ export type TenantItem = {
   domain?: string | null
   logoUrl?: string | null
   brandColor?: string | null
+  portalTemplate?: string | null
   supportPhone?: string | null
   supportEmail?: string | null
   createdAt: string

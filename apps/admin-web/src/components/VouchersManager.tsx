@@ -61,6 +61,39 @@ const initialBatchForm: BatchFormState = {
   notes: '',
 }
 
+const printTemplates = [
+  {
+    id: 'emerald',
+    name: 'Emerald Premium',
+    description: 'Clean AROFi green cards for general voucher sales.',
+    color: '#10B981',
+  },
+  {
+    id: 'midnight',
+    name: 'Midnight Luxe',
+    description: 'Dark blue premium style for VIP and high-value stock.',
+    color: '#38BDF8',
+  },
+  {
+    id: 'royal',
+    name: 'Royal Blue',
+    description: 'Corporate blue sheet with strong voucher-code contrast.',
+    color: '#2563EB',
+  },
+  {
+    id: 'sunrise',
+    name: 'Sunrise Gold',
+    description: 'Warm gold style for promos and agent sales.',
+    color: '#F59E0B',
+  },
+  {
+    id: 'mono',
+    name: 'Clean Mono',
+    description: 'Minimal black-and-white design for low-ink printing.',
+    color: '#111827',
+  },
+]
+
 function parseOptionalInt(value: string) {
   if (!value.trim()) {
     return undefined
@@ -82,6 +115,7 @@ export default function VouchersManager() {
   const [success, setSuccess] = useState<string | null>(null)
   const [submittingTemplate, setSubmittingTemplate] = useState(false)
   const [submittingBatch, setSubmittingBatch] = useState(false)
+  const [printBatch, setPrintBatch] = useState<VouchersOverviewResponse['batches'][number] | null>(null)
 
   useEffect(() => {
     void loadData()
@@ -208,9 +242,10 @@ export default function VouchersManager() {
     }
   }
 
-  async function downloadBatchFile(batchId: string, type: 'print.pdf' | 'export.csv') {
+  async function downloadBatchFile(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string) {
     const token = getBrowserAdminToken()
-    const response = await fetch(`/api/vouchers/batches/${batchId}/${type}`, {
+    const templateQuery = type === 'print.pdf' && templateId ? `?template=${encodeURIComponent(templateId)}` : ''
+    const response = await fetch(`/api/vouchers/batches/${batchId}/${type}${templateQuery}`, {
       credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
@@ -539,7 +574,7 @@ export default function VouchersManager() {
                   <td style={{ fontSize: 12 }}>{formatDate(batch.createdAt)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button type="button" className="btn btn-ghost" onClick={() => void downloadBatchFile(batch.id, 'print.pdf')}>Print PDF</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setPrintBatch(batch)}>Print PDF</button>
                       <button type="button" className="btn btn-ghost" onClick={() => void downloadBatchFile(batch.id, 'export.csv')}>CSV</button>
                     </div>
                   </td>
@@ -588,6 +623,45 @@ export default function VouchersManager() {
           </table>
         </div>
       </div>
+
+      {printBatch && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <button type="button" className="modal-close" onClick={() => setPrintBatch(null)}>Close</button>
+            <div className="modal-kicker">Voucher Print Sheet</div>
+            <h2 className="modal-title">Choose AROFi PDF Template</h2>
+            <p className="page-subtitle" style={{ marginBottom: 18 }}>
+              {printBatch.batchNumber} will print on A4 with 3 columns and over 10 vouchers per page.
+            </p>
+            <div className="stats-grid" style={{ gap: 12 }}>
+              {printTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  className="card"
+                  style={{
+                    cursor: 'pointer',
+                    padding: 16,
+                    textAlign: 'left',
+                    borderTop: `4px solid ${template.color}`,
+                  }}
+                  onClick={() => {
+                    void downloadBatchFile(printBatch.id, 'print.pdf', template.id)
+                    setPrintBatch(null)
+                  }}
+                >
+                  <div style={{ color: 'var(--text-1)', fontWeight: 800, marginBottom: 6 }}>
+                    {template.name}
+                  </div>
+                  <div style={{ color: 'var(--text-2)', fontSize: 13 }}>
+                    {template.description}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

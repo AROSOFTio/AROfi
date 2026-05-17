@@ -10,6 +10,7 @@ type TenantFormState = {
   domain: string
   logoUrl: string
   brandColor: string
+  portalTemplate: string
   supportPhone: string
   supportEmail: string
 }
@@ -19,6 +20,7 @@ const initialTenantForm: TenantFormState = {
   domain: '',
   logoUrl: '',
   brandColor: '',
+  portalTemplate: 'classic',
   supportPhone: '',
   supportEmail: '',
 }
@@ -59,6 +61,7 @@ export default function TenantsManager() {
         domain: formState.domain.trim() || undefined,
         logoUrl: formState.logoUrl.trim() || undefined,
         brandColor: formState.brandColor.trim() || undefined,
+        portalTemplate: formState.portalTemplate,
         supportPhone: formState.supportPhone.trim() || undefined,
         supportEmail: formState.supportEmail.trim() || undefined,
       })
@@ -110,6 +113,16 @@ export default function TenantsManager() {
                   <input className="form-input" value={formState.brandColor} onChange={(event) => setFormState((previous) => ({ ...previous, brandColor: event.target.value }))} placeholder="#0EA5E9" />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Portal Template</label>
+                  <select className="form-input" value={formState.portalTemplate} onChange={(event) => setFormState((previous) => ({ ...previous, portalTemplate: event.target.value }))}>
+                    <option value="classic">Classic Card</option>
+                    <option value="fresh">Fresh Green</option>
+                    <option value="midnight">Midnight Premium</option>
+                    <option value="sunrise">Sunrise Promo</option>
+                    <option value="minimal">Minimal White</option>
+                  </select>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Support Phone (optional)</label>
                   <input className="form-input" value={formState.supportPhone} onChange={(event) => setFormState((previous) => ({ ...previous, supportPhone: event.target.value }))} placeholder="+256 700 000000" />
                 </div>
@@ -141,6 +154,7 @@ export default function TenantsManager() {
                 <th>Packages</th>
                 <th>Hotspots</th>
                 <th>Routers</th>
+                <th>Portal</th>
                 <th>Balance (UGX)</th>
                 <th>Support</th>
                 <th>Created</th>
@@ -149,7 +163,7 @@ export default function TenantsManager() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="empty-state">
                       <p>Loading tenants...</p>
                     </div>
@@ -158,7 +172,7 @@ export default function TenantsManager() {
               )}
               {!loading && items.length === 0 && (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="empty-state">
                       <p>No tenants registered yet.</p>
                     </div>
@@ -172,6 +186,7 @@ export default function TenantsManager() {
                   <td>{tenant.counts.packages}</td>
                   <td>{tenant.counts.hotspots}</td>
                   <td>{tenant.counts.routers}</td>
+                  <td>{tenant.portalTemplate ?? 'classic'}</td>
                   <td>{formatCurrency(tenant.wallet?.balanceUgx ?? 0)}</td>
                   <td>{tenant.supportPhone ?? tenant.supportEmail ?? 'N/A'}</td>
                   <td style={{ fontSize: 12 }}>{formatDate(tenant.createdAt)}</td>

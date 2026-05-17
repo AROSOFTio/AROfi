@@ -318,6 +318,7 @@ export class PortalService {
             domain: true,
             logoUrl: true,
             brandColor: true,
+            portalTemplate: true,
             supportPhone: true,
             supportEmail: true,
           },

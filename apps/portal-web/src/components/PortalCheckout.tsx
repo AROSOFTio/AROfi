@@ -16,6 +16,7 @@ import type {
 type PortalView = 'home' | 'login' | 'session'
 type MobileMoneyNetwork = 'MTN' | 'AIRTEL'
 type ConnectionStatus = 'idle' | 'connecting' | 'reconnecting' | 'failed'
+type PortalTemplateId = 'classic' | 'fresh' | 'midnight' | 'sunrise' | 'minimal'
 type HotspotParams = {
   macAddress: string
   clientIp: string
@@ -26,6 +27,94 @@ type HotspotParams = {
 
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const portalStorageKey = 'arofi.portal.access_token'
+const portalTemplateStyles: Record<
+  PortalTemplateId,
+  {
+    shell: string
+    logoBox: string
+    title: string
+    panel: string
+    input: string
+    button: string
+    link: string
+    packageCard: string
+    packagePrice: string
+    buyPill: string
+    accept: string
+    support: string
+  }
+> = {
+  classic: {
+    shell: 'rounded-lg border border-slate-200 bg-slate-50 px-5 py-5 shadow-sm sm:px-6',
+    logoBox: '',
+    title: 'text-emerald-600',
+    panel: 'border-slate-300 bg-white',
+    input: 'border-slate-300 bg-white focus:border-emerald-500',
+    button: 'bg-emerald-500 text-white disabled:bg-slate-300',
+    link: 'border-sky-200 bg-sky-50 text-sky-700',
+    packageCard: 'border-slate-300 bg-white',
+    packagePrice: 'text-emerald-600',
+    buyPill: 'border-green-700/50 bg-green-500 text-white',
+    accept: 'border-slate-300 bg-white',
+    support: 'text-emerald-600',
+  },
+  fresh: {
+    shell: 'rounded-2xl border border-emerald-200 bg-white px-5 py-5 shadow-[0_18px_60px_rgba(16,185,129,0.12)] sm:px-6',
+    logoBox: 'rounded-2xl bg-emerald-50 px-3 py-2',
+    title: 'text-emerald-700',
+    panel: 'border-emerald-200 bg-emerald-50/50',
+    input: 'border-emerald-200 bg-white focus:border-emerald-500',
+    button: 'bg-emerald-600 text-white disabled:bg-slate-300',
+    link: 'border-emerald-200 bg-white text-emerald-700',
+    packageCard: 'border-emerald-200 bg-white',
+    packagePrice: 'text-emerald-700',
+    buyPill: 'border-emerald-700 bg-emerald-600 text-white',
+    accept: 'border-emerald-200 bg-white',
+    support: 'text-emerald-700',
+  },
+  midnight: {
+    shell: 'rounded-2xl border border-sky-900 bg-slate-950 px-5 py-5 shadow-[0_22px_70px_rgba(2,6,23,0.25)] sm:px-6',
+    logoBox: 'rounded-2xl bg-white px-3 py-2',
+    title: 'text-sky-300',
+    panel: 'border-sky-900 bg-slate-900',
+    input: 'border-sky-800 bg-slate-900 text-white placeholder:text-slate-500 focus:border-sky-400',
+    button: 'bg-sky-500 text-slate-950 disabled:bg-slate-700',
+    link: 'border-sky-800 bg-slate-900 text-sky-200',
+    packageCard: 'border-sky-800 bg-slate-900 text-white',
+    packagePrice: 'text-sky-300',
+    buyPill: 'border-sky-300 bg-sky-400 text-slate-950',
+    accept: 'border-sky-800 bg-slate-900 text-white',
+    support: 'text-sky-300',
+  },
+  sunrise: {
+    shell: 'rounded-2xl border border-amber-200 bg-orange-50 px-5 py-5 shadow-[0_18px_60px_rgba(245,158,11,0.14)] sm:px-6',
+    logoBox: 'rounded-2xl bg-white px-3 py-2',
+    title: 'text-amber-700',
+    panel: 'border-amber-200 bg-white',
+    input: 'border-amber-200 bg-white focus:border-amber-500',
+    button: 'bg-amber-500 text-white disabled:bg-slate-300',
+    link: 'border-amber-200 bg-white text-amber-700',
+    packageCard: 'border-amber-200 bg-white',
+    packagePrice: 'text-amber-700',
+    buyPill: 'border-amber-700 bg-amber-500 text-white',
+    accept: 'border-amber-200 bg-white',
+    support: 'text-amber-700',
+  },
+  minimal: {
+    shell: 'rounded-none border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6',
+    logoBox: '',
+    title: 'text-slate-950',
+    panel: 'border-slate-200 bg-white',
+    input: 'border-slate-300 bg-white focus:border-slate-700',
+    button: 'bg-slate-950 text-white disabled:bg-slate-300',
+    link: 'border-slate-200 bg-slate-50 text-slate-700',
+    packageCard: 'border-slate-200 bg-white',
+    packagePrice: 'text-slate-950',
+    buyPill: 'border-slate-950 bg-slate-950 text-white',
+    accept: 'border-slate-200 bg-white',
+    support: 'text-slate-950',
+  },
+}
 
 function formatCurrency(value: number) {
   return `UGX ${new Intl.NumberFormat('en-UG').format(value)}`
@@ -89,6 +178,10 @@ function normalizePhone(value: string) {
   if (digits.startsWith('256')) return digits
   if (digits.startsWith('0')) return `256${digits.slice(1)}`
   return digits
+}
+
+function resolvePortalTemplate(template?: string | null): PortalTemplateId {
+  return template && template in portalTemplateStyles ? (template as PortalTemplateId) : 'classic'
 }
 
 function detectNetwork(phone: string): MobileMoneyNetwork | undefined {
@@ -512,6 +605,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   const activeActivation = portalSession?.activeActivation ?? context?.activeActivation ?? null
   const packages = context?.packages ?? []
+  const portalStyle = portalTemplateStyles[resolvePortalTemplate(context?.tenant.portalTemplate)]
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -599,31 +693,33 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           )}
 
           {initialView === 'home' && (
-            <section className="mx-auto w-full max-w-[430px] rounded-lg border border-slate-200 bg-slate-50 px-5 py-5 shadow-sm sm:px-6">
+            <section className={`mx-auto w-full max-w-[430px] ${portalStyle.shell}`}>
               <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
               <div className="text-center">
-                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="mx-auto mb-2 h-10 w-auto" />
-                <h1 className="text-2xl font-extrabold text-emerald-600 sm:text-3xl">
+                <div className={`mx-auto mb-2 w-fit ${portalStyle.logoBox}`}>
+                  <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
+                </div>
+                <h1 className={`text-2xl font-extrabold sm:text-3xl ${portalStyle.title}`}>
                   {context?.tenant.name ?? 'AROFi Hotspot'}
                 </h1>
               </div>
 
               <div className="mt-5 flex gap-2">
-                <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
-                <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className="rounded-lg bg-emerald-500 px-5 py-3 text-sm font-bold text-white disabled:bg-slate-300">
+                <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`} />
+                <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className={`rounded-lg px-5 py-3 text-sm font-bold ${portalStyle.button}`}>
                   {isVoucherLoading ? '...' : 'Login'}
                 </button>
               </div>
 
-              <Link href="/login" className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-medium text-sky-700">
+              <Link href="/login" className={`mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border px-4 py-2 text-xs font-medium ${portalStyle.link}`}>
                 <LogIn className="h-3 w-3" />
                 Already bought? Find My Voucher
               </Link>
 
-              <p className="mt-5 text-center text-sm text-slate-700">Select a package and pay with Mobile Money</p>
+              <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
 
               <div className="mt-6 grid gap-3">
-                {packages.length === 0 && <div className="rounded-lg border border-slate-300 bg-white p-4 text-sm text-slate-500">No packages are published for this portal yet.</div>}
+                {packages.length === 0 && <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>No packages are published for this portal yet.</div>}
                 {packages.map((pkg) => (
                   <button
                     key={pkg.id}
@@ -633,26 +729,26 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       setCheckoutOpen(true)
                       setCurrentPayment(null)
                     }}
-                    className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-left shadow-sm"
+                    className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-4 py-3 text-left shadow-sm ${portalStyle.packageCard}`}
                   >
                     <span>
-                      <span className="block text-base font-bold text-slate-700">{pkg.name}</span>
-                      <span className="block text-xs text-slate-500">{formatDuration(pkg.durationMinutes)}</span>
+                      <span className={`block text-base font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>{pkg.name}</span>
+                      <span className={`block text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-400' : 'text-slate-500'}`}>{formatDuration(pkg.durationMinutes)}</span>
                     </span>
-                    <span className="text-sm font-extrabold text-emerald-600">{formatCurrency(pkg.amountUgx)}</span>
-                    <span className="rounded-xl border border-green-700/50 bg-green-500 px-4 py-2 text-sm font-extrabold text-white shadow-sm">BUY</span>
+                    <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{formatCurrency(pkg.amountUgx)}</span>
+                    <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>BUY</span>
                   </button>
                 ))}
               </div>
 
-              <div className="mt-6 rounded-lg border border-slate-300 bg-white px-4 py-4 text-center">
-                <div className="text-sm font-bold text-slate-700">We accept:</div>
-                <div className="mt-2 text-sm font-extrabold text-emerald-600">Mobile Money via Pesapal</div>
+              <div className={`mt-6 rounded-lg border px-4 py-4 text-center ${portalStyle.accept}`}>
+                <div className={`text-sm font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>We accept:</div>
+                <div className={`mt-2 text-sm font-extrabold ${portalStyle.packagePrice}`}>Mobile Money via Pesapal</div>
               </div>
 
-              <div className="mt-6 border-t border-slate-300 pt-5 text-center text-xs text-slate-700">
+              <div className={`mt-6 border-t border-slate-300 pt-5 text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-700'}`}>
                 <div>Need help? Contact support:</div>
-                <div className="mt-2 font-bold text-emerald-600">{context?.tenant.supportPhone ?? context?.tenant.supportEmail ?? 'Support contact pending'}</div>
+                <div className={`mt-2 font-bold ${portalStyle.support}`}>{context?.tenant.supportPhone ?? context?.tenant.supportEmail ?? 'Support contact pending'}</div>
               </div>
 
               {checkoutOpen && selectedPackage && (
