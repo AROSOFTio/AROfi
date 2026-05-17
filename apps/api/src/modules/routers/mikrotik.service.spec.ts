@@ -31,6 +31,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('accounting-port=1813')
     expect(script).toContain('secret="dev_radius_shared_secret"')
     expect(script).toContain('/radius remove [find where comment="AROFi')
+    expect(script).toContain('/radius remove [find address=radius.example.com]')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=5m')

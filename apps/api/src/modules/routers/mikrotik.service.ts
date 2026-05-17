@@ -137,6 +137,7 @@ export class MikrotikService {
       ``,
       `# 2. RADIUS server for HotSpot auth and acct`,
       `/radius remove [find where comment="AROFi ${this.escape(registrationKey)}"]`,
+      `/radius remove [find address=${input.radiusHost}]`,
       `/radius add service=hotspot address=${input.radiusHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=3s comment="AROFi ${this.escape(registrationKey)}"`,
       ``,
       `# 3. HotSpot profile integration`,
