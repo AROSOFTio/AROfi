@@ -199,6 +199,28 @@ function detectNetwork(phone: string): MobileMoneyNetwork | undefined {
   return undefined
 }
 
+function extractCheckoutUrl(payment: PortalPayment) {
+  if (payment.checkoutUrl) {
+    return payment.checkoutUrl
+  }
+
+  const payload = payment.responsePayload
+  const direct = payload?.checkoutUrl
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim()
+  }
+
+  const gateway = payload?.gateway
+  if (gateway && typeof gateway === 'object' && !Array.isArray(gateway)) {
+    const nested = (gateway as Record<string, unknown>).checkoutUrl
+    if (typeof nested === 'string' && nested.trim()) {
+      return nested.trim()
+    }
+  }
+
+  return null
+}
+
 export default function PortalCheckout({ initialView = 'home' }: { initialView?: PortalView }) {
   const router = useRouter()
   const [context, setContext] = useState<PortalContextResponse | null>(null)
@@ -442,7 +464,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setStatusMessage('')
 
     if (!selectedPackage) {
-      setErrorMessage('Choose a package before sending the payment prompt.')
+      setErrorMessage('Choose a package before continuing to payment.')
       return
     }
 
@@ -490,7 +512,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         return
       }
 
-      setStatusMessage('Payment request sent. Approve it on your phone to activate the package.')
+      const checkoutUrl = extractCheckoutUrl(payment)
+      if (checkoutUrl) {
+        setStatusMessage('Opening Pesapal checkout. Complete the mobile money or card payment there.')
+        if (typeof window !== 'undefined') {
+          window.location.assign(checkoutUrl)
+        }
+        return
+      }
+
+      setStatusMessage('Payment created, but Pesapal did not return a checkout page. Check the payment status or Pesapal settings.')
       if (payment.activation) {
         await loginWithPhone(payment.phoneNumber, true)
       } else {
@@ -682,7 +713,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           <div className="grid gap-3 sm:grid-cols-3">
             <SummaryCard label="Live access" value={activeActivation ? 'Active' : 'Ready to buy'} helper={activeActivation ? formatDate(activeActivation.endsAt) : `${packages.length} package${packages.length === 1 ? '' : 's'} available`} />
-            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'Mobile money prompt sent to your phone'} />
+            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'Pesapal checkout opens after phone entry'} />
             <SummaryCard label="Usage tracked" value={portalSession ? formatMegabytes(portalSession.summary.totalDataUsedMb) : '0 MB'} helper={portalSession ? `${portalSession.summary.recentSessionCount} recent sessions` : 'Login unlocks session insights'} />
           </div>
         </div>
@@ -786,11 +817,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
                       <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
                         {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                        {isPaymentLoading ? 'Sending prompt...' : 'Send payment prompt'}
+                        {isPaymentLoading ? 'Opening Pesapal...' : 'Continue to Pesapal'}
                       </button>
                       {currentPayment && (
                         <button type="button" onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-50 py-2 text-sm font-bold text-emerald-700">
-                          I approved payment - check status
+                          Check payment status
                         </button>
                       )}
                     </form>

@@ -55,8 +55,12 @@ function assertRequiredProductionConfig() {
     required.push('PESAPAL_CONSUMER_KEY', 'PESAPAL_CONSUMER_SECRET', 'PESAPAL_IPN_ID')
   }
 
-  if (process.env.PESAPAL_MODE === 'sandbox') {
+  const pesapalMode = (process.env.PESAPAL_MODE ?? 'live').toLowerCase()
+  if (pesapalMode === 'sandbox') {
     throw new Error('PESAPAL_MODE is set to sandbox in a production environment. Set it to live.')
+  }
+  if (pesapalMode === 'mock') {
+    throw new Error('PESAPAL_MODE is set to mock in a production environment. Set it to live for real payments.')
   }
 
   const missing = required.filter((key) => {

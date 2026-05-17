@@ -168,7 +168,10 @@ export class PesapalGatewayService {
   }
 
   private isMockMode() {
-    return (this.configService.get<string>('PESAPAL_MODE') ?? 'live').toLowerCase() === 'mock'
+    return (
+      (this.configService.get<string>('NODE_ENV') ?? 'development') !== 'production' &&
+      (this.configService.get<string>('PESAPAL_MODE') ?? 'live').toLowerCase() === 'mock'
+    )
   }
 
   private getBaseUrl() {

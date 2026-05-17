@@ -3,9 +3,9 @@ sql {
 	dialect = "postgresql"
 	server = "postgres"
 	port = 5432
-	login = "${env:POSTGRES_USER:-postgres}"
-	password = "${env:POSTGRES_PASSWORD:-root}"
-	radius_db = "${env:POSTGRES_DB:-arofi_dev}"
+	login = "$ENV{POSTGRES_USER}"
+	password = "$ENV{POSTGRES_PASSWORD}"
+	radius_db = "$ENV{POSTGRES_DB}"
 	read_clients = yes
 	client_table = "nas"
 	delete_stale_sessions = yes
