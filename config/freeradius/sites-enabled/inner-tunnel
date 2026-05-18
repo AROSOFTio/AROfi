@@ -1,7 +1,9 @@
 server inner-tunnel {
 	authorize {
+		chap
 		files
 		sql
+		pap
 	}
 
 	authenticate {

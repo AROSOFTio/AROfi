@@ -13,10 +13,12 @@ server default {
 
 	authorize {
 		preprocess
+		chap
 		files
 		sql
 		expiration
 		logintime
+		pap
 	}
 
 	authenticate {

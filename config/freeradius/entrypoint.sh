@@ -2,6 +2,9 @@
 set -eu
 
 ln -sf /etc/raddb/mods-available/sql /etc/raddb/mods-enabled/sql
+if [ -e /etc/raddb/mods-available/acct_unique ]; then
+  ln -sf /etc/raddb/mods-available/acct_unique /etc/raddb/mods-enabled/acct_unique
+fi
 
 SERVER_BIN=""
 
