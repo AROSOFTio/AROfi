@@ -104,6 +104,8 @@ services:
       - PESAPAL_CONSUMER_SECRET=${PESAPAL_CONSUMER_SECRET:-}
       - PESAPAL_IPN_ID=${PESAPAL_IPN_ID:-}
       - PESAPAL_CALLBACK_URL=${PESAPAL_CALLBACK_URL:-https://arofi.arosoft.io/api/payments/webhooks/pesapal}
+      - PESAPAL_BROWSER_CALLBACK_URL=${PESAPAL_BROWSER_CALLBACK_URL:-https://arofi.arosoft.io/portal/payment-return}
+      - PESAPAL_IPN_URL=${PESAPAL_IPN_URL:-https://arofi.arosoft.io/api/payments/webhooks/pesapal}
       - PESAPAL_WEBHOOK_TOKEN=${PESAPAL_WEBHOOK_TOKEN:-}
       - PESAPAL_HOST=${PESAPAL_HOST:-pay.pesapal.com}
       - ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}

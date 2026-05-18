@@ -64,6 +64,11 @@ export class InitiatePortalPaymentDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(128)
+  routerKey?: string
+
+  @IsOptional()
+  @IsString()
   @MaxLength(120)
   hotspotServerName?: string
 

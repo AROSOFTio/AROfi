@@ -37,7 +37,7 @@ type RouterFormState = {
   hotspotServerName: string
   portalWalledGardenHosts: string
   ttlAntiTetheringEnabled: boolean
-  scriptMode: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT'
+  scriptMode: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT' | 'FRESH_FULL_CAPTIVE_WIFI'
   tags: string
 }
 
@@ -67,7 +67,7 @@ const initialRouterForm = (): RouterFormState => ({
   hotspotServerName: '',
   portalWalledGardenHosts: '',
   ttlAntiTetheringEnabled: false,
-  scriptMode: 'SAFE_EXISTING_ROUTER',
+  scriptMode: 'FRESH_FULL_CAPTIVE_WIFI',
   tags: '',
 })
 
@@ -296,6 +296,25 @@ export default function RoutersManager() {
     setSuccess('RouterOS script copied to clipboard.')
   }
 
+  async function copyRouterAccessDetails() {
+    if (!selectedSetup?.router) {
+      return
+    }
+
+    const router = selectedSetup.router
+    const lines = [
+      `Router: ${router.name}`,
+      `Host/IP: ${router.host}`,
+      `RouterOS API: ${router.host}:${router.apiPort}`,
+      `WinBox: ${router.host}:8291`,
+      `Status: ${router.managementApiReachable ? 'API reachable' : 'API management not reachable from AROFi'}`,
+      'Password: stored encrypted in AROFi and not copied here',
+    ]
+
+    await navigator.clipboard.writeText(lines.join('\n'))
+    setSuccess('Router management connection details copied without password.')
+  }
+
   function downloadScript() {
     if (!selectedSetup?.provisioningScript) {
       return
@@ -385,10 +404,31 @@ export default function RoutersManager() {
               NAS client {selectedSetup?.nasClient ? `${selectedSetup.nasClient.nasname} (${selectedSetup.nasClient.enabled ? 'enabled' : 'disabled'})` : 'pending'}
             </div>
             {selectedSetup?.router && (
+              <div style={{ display: 'grid', gap: 6, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-muted)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <strong style={{ color: 'var(--text-primary)', fontSize: 13 }}>Remote management details</strong>
+                  <button type="button" className="btn btn-ghost" onClick={() => void copyRouterAccessDetails()}>Copy details</button>
+                </div>
+                <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>Host/IP: {selectedSetup.router.host}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>API: {selectedSetup.router.host}:{selectedSetup.router.apiPort} | WinBox: {selectedSetup.router.host}:8291</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Router passwords stay encrypted and are never copied into this panel.</div>
+              </div>
+            )}
+            {selectedSetup?.router && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
-                <span className="badge badge-warning">API health needs reachable TCP {selectedSetup.router.apiPort}</span>
-                <span className="badge badge-warning">RADIUS live needs UDP 1812/1813 traffic</span>
+                <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.provisioningCallbackReceived ? 'Script callback received' : 'Waiting for script callback'}
+                </span>
+                <span className={selectedSetup.router.radiusAuthSeen ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.radiusAuthSeen ? 'RADIUS auth seen' : 'RADIUS auth not seen'}
+                </span>
+                <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.accountingSeen ? 'Accounting seen' : 'Accounting not seen'}
+                </span>
+                <span className={selectedSetup.router.managementApiReachable ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.managementApiReachable ? 'Management API reachable' : `API mgmt needs TCP ${selectedSetup.router.apiPort}`}
+                </span>
               </div>
             )}
           </div>
@@ -478,8 +518,8 @@ export default function RoutersManager() {
                 <strong style={{ color: 'var(--text-primary)' }}>Manual checks after script import</strong>
                 <span>1. If the script says callback failed, fix router DNS/internet, then import again.</span>
                 <span>2. If the router was registered without a real NAS/public IP, restart FreeRADIUS once on the VPS: <code>sudo docker compose restart freeradius</code>.</span>
-                <span>3. If the router is behind a Savana/ISP router, API health check needs port forwarding TCP {selectedSetup.router.apiPort} to the MikroTik, or it will stay offline even when RADIUS works.</span>
-                <span>4. Customers must hit the AROFi portal. Replace/redirect MikroTik <code>hotspot/login.html</code> to <code>https://arofi.arosoft.io/portal</code> with MAC/IP/login URL parameters.</span>
+                <span>3. If the router is behind a Savana/ISP router, API health check needs port forwarding TCP {selectedSetup.router.apiPort} to the MikroTik, or use a reachable VPN/private IP. HotSpot and RADIUS can still work without this.</span>
+                <span>4. The script installs MikroTik <code>hotspot/login.html</code> automatically. If the script warns that install failed, fix router internet/DNS/HTTPS, then import it again.</span>
               </div>
             )}
           </div>
@@ -530,13 +570,13 @@ function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showT
             {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
             <InputField label="Router Display Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
             <InputField label="Branch / Site Name" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Kiseka Arcade" />
-            <InputField label="Existing HotSpot Name" value={formState.hotspotServerName} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotServerName: value }))} placeholder="Leave blank to use hotspot1" />
-            <SelectField label="Script Mode" value={formState.scriptMode} onChange={(value) => setFormState((previous) => ({ ...previous, scriptMode: value as RouterFormState['scriptMode'] }))} options={[{ value: 'SAFE_EXISTING_ROUTER', label: 'Safe existing router integration' }, { value: 'FRESH_FULL_HOTSPOT', label: 'Fresh router full HotSpot setup' }]} />
+            <InputField label="HotSpot Server Name" value={formState.hotspotServerName} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotServerName: value }))} placeholder="Leave blank to use AROFi" />
+            <SelectField label="Script Mode" value={formState.scriptMode} onChange={(value) => setFormState((previous) => ({ ...previous, scriptMode: value as RouterFormState['scriptMode'] }))} options={[{ value: 'FRESH_FULL_CAPTIVE_WIFI', label: 'Fresh full captive Wi-Fi (open SSID)' }, { value: 'SAFE_EXISTING_ROUTER', label: 'Safe existing HotSpot integration' }, { value: 'FRESH_FULL_HOTSPOT', label: 'Legacy fresh HotSpot setup' }]} />
             <SelectField label="Router Group" value={formState.groupId} onChange={(value) => setFormState((previous) => ({ ...previous, groupId: value }))} options={[{ value: '', label: 'No group yet' }, ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.code})` }))]} />
             <SelectField label="Hotspot Site" value={formState.hotspotId} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotId: value }))} options={[{ value: '', label: 'Link later' }, ...hotspots.map((hotspot) => ({ value: hotspot.id, label: hotspot.name }))]} />
           </div>
           <div style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.5 }}>
-            Use safe mode when the router already has WAN/LAN and HotSpot configured. Use fresh mode only for a new router where the LAN bridge is named <code>bridge</code>.
+            Fresh full captive Wi-Fi configures WAN on ether1, creates an open SSID, installs the AROFi HotSpot redirect page, and binds HotSpot to RADIUS. Use safe mode only when an operator already built the MikroTik HotSpot manually.
           </div>
           <button type="button" className="btn btn-ghost" onClick={() => setShowAdvanced((previous) => !previous)} style={{ marginBottom: 12 }}>
             {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
@@ -597,7 +637,25 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
                       <div style={{ fontSize: 12, color: 'var(--warning-fg)', marginTop: 4 }}>Waiting for script callback to learn NAS IP</div>
                     )}
                   </td>
-                  <td><span className={getStatusBadgeClass(router.status)}>{router.status.toLowerCase()}</span><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{router.onboardingStatus ?? 'NOT_STARTED'}</div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{formatLatency(router.lastLatencyMs)}</div></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span className={router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>
+                        {router.provisioningCallbackReceived ? 'callback' : 'no callback'}
+                      </span>
+                      <span className={router.radiusAuthSeen ? 'badge badge-success' : 'badge badge-warning'}>
+                        {router.radiusAuthSeen ? 'auth' : 'no auth'}
+                      </span>
+                      <span className={router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>
+                        {router.accountingSeen ? 'acct' : 'no acct'}
+                      </span>
+                      <span className={router.managementApiReachable ? 'badge badge-success' : 'badge badge-warning'}>
+                        {router.managementApiReachable ? 'api reachable' : 'api mgmt unreachable'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{router.onboardingStatus ?? 'NOT_STARTED'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{router.managementApiMessage ?? router.healthMessage ?? 'HotSpot/RADIUS can work even if management API is unreachable.'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{formatLatency(router.lastLatencyMs)}</div>
+                  </td>
                   <td>{router.activeSessions}</td>
                   <td style={{ fontSize: 12 }}>{formatDate(router.lastSeenAt)}</td>
                   <td><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button type="button" className="btn btn-ghost" onClick={() => onLoadSetup(router.id)}>View Setup</button><button type="button" className="btn btn-ghost" onClick={() => onHealthCheck(router.id)} disabled={runningHealthCheckId === router.id}>{runningHealthCheckId === router.id ? 'Checking...' : 'Health Check'}</button></div></td>

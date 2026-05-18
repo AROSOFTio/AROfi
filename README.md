@@ -55,6 +55,8 @@ PESAPAL_MODE=live
 PESAPAL_CONSUMER_KEY=your_pesapal_consumer_key
 PESAPAL_CONSUMER_SECRET=your_pesapal_consumer_secret
 PESAPAL_IPN_ID=your_pesapal_ipn_id
+PESAPAL_BROWSER_CALLBACK_URL=https://arofi.arosoft.io/portal/payment-return
+PESAPAL_IPN_URL=https://arofi.arosoft.io/api/payments/webhooks/pesapal
 PESAPAL_CALLBACK_URL=https://arofi.arosoft.io/api/payments/webhooks/pesapal
 PESAPAL_WEBHOOK_TOKEN=change_this_pesapal_webhook_token
 
@@ -82,3 +84,21 @@ Routing inside container Nginx:
 - Pesapal webhook: `GET/POST /api/payments/webhooks/pesapal`
 
 Both support token verification via `YO_WEBHOOK_TOKEN` / `PESAPAL_WEBHOOK_TOKEN`.
+
+## Fresh MikroTik Acceptance Flow
+
+Use **Fresh full captive Wi-Fi** only on a router where AROFi is allowed to configure LAN/Wi-Fi/HotSpot.
+
+1. Register the MikroTik in AROFi with script mode `FRESH_FULL_CAPTIVE_WIFI`.
+2. Copy the one-line RouterOS command from Routers -> View Setup and paste it into MikroTik Terminal.
+3. Confirm the terminal prints `AROFi HotSpot login.html installed` and `AROFi provisioning callback sent`.
+4. On the router, confirm an open SSID appears using the registered site/router name.
+5. Connect a phone to that open SSID. MikroTik should open `hotspot/login.html`, which redirects to `/portal` with `mac`, `ip`, `link-login`, `server`, and `routerKey`.
+6. Buy a package. Pesapal returns the browser to `/portal/payment-return`, where AROFi checks payment status.
+7. When payment is completed, AROFi creates RADIUS credentials with `Session-Timeout` from the package duration and posts them to MikroTik `link-login-only`.
+8. Dashboard should then show these independently: script callback received, RADIUS auth seen, accounting seen, and management API reachable/unreachable.
+
+Real-world limits:
+- If the MikroTik is behind an upstream modem, RouterOS API health checks require TCP 8728/8729 port forwarding or VPN. HotSpot/RADIUS can still work without API reachability.
+- Some RouterOS device-mode restrictions require physical confirmation and reboot before HotSpot or Wi-Fi changes are accepted.
+- Unknown or unsupported Wi-Fi packages/interface layouts may need manual Wi-Fi setup, but Ethernet captive portal and RADIUS can still work.

@@ -318,6 +318,7 @@ export class PaymentsService {
     }
 
     const externalReference = this.buildExternalReference()
+    const routerContext = await this.resolveRouterContext(pkg.tenantId, dto.routerId, dto.routerKey)
     const requestMetadata = this.toJsonValue({
       hotspotName: dto.hotspotName,
       sessionReference: dto.sessionReference,
@@ -327,7 +328,8 @@ export class PaymentsService {
       network,
       macAddress: normalizedMac,
       clientIp: dto.clientIp,
-      routerId: dto.routerId,
+      routerId: routerContext.routerId,
+      routerKey: dto.routerKey,
       hotspotServerName: dto.hotspotServerName,
       loginUrl: dto.loginUrl,
     })
@@ -362,7 +364,7 @@ export class PaymentsService {
               narrative: `${pkg.name} internet package`,
               method,
               network,
-              callbackUrl: this.buildPesapalCallbackUrl(externalReference),
+              callbackUrl: this.buildPesapalBrowserCallbackUrl(payment.id, payment.statusToken, externalReference),
             })
           : await this.yoUgandaGatewayService.initiateCollection({
               amountUgx: activePrice.amountUgx,
@@ -833,6 +835,7 @@ export class PaymentsService {
             macAddress: this.readMetadataString(payment.metadata, 'macAddress'),
             clientIp: this.readMetadataString(payment.metadata, 'clientIp'),
             routerId: this.readMetadataString(payment.metadata, 'routerId'),
+            routerKey: this.readMetadataString(payment.metadata, 'routerKey'),
             hotspotServerName: this.readMetadataString(payment.metadata, 'hotspotServerName'),
             loginUrl: this.readMetadataString(payment.metadata, 'loginUrl'),
           }),
@@ -904,6 +907,34 @@ export class PaymentsService {
     return tenant
   }
 
+  private async resolveRouterContext(tenantId: string, routerId?: string, routerKey?: string) {
+    if (!routerKey) {
+      return { routerId }
+    }
+
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: routerKey },
+      select: {
+        id: true,
+        tenantId: true,
+      },
+    })
+
+    if (!router) {
+      throw new NotFoundException('Router registration context was not found')
+    }
+
+    if (router.tenantId !== tenantId) {
+      throw new BadRequestException('Router registration context does not belong to this tenant portal')
+    }
+
+    if (routerId && routerId !== router.id) {
+      throw new BadRequestException('Router ID does not match the portal router key')
+    }
+
+    return { routerId: router.id }
+  }
+
   private buildWebhookUrl(event: 'instant' | 'failure', externalReference: string) {
     const baseUrl = this.configService.get<string>('YO_WEBHOOK_BASE_URL')
 
@@ -924,8 +955,10 @@ export class PaymentsService {
     return url.toString()
   }
 
-  private buildPesapalCallbackUrl(externalReference: string) {
-    const configured = this.configService.get<string>('PESAPAL_CALLBACK_URL')
+  private buildPesapalBrowserCallbackUrl(paymentId: string, statusToken: string | null, externalReference: string) {
+    const configured =
+      this.configService.get<string>('PESAPAL_BROWSER_CALLBACK_URL') ??
+      this.buildDefaultPortalReturnUrl()
 
     if (!configured) {
       return undefined
@@ -933,18 +966,29 @@ export class PaymentsService {
 
     try {
       const url = new URL(configured)
-      const token = this.configService.get<string>('PESAPAL_WEBHOOK_TOKEN')
-
+      url.searchParams.set('paymentId', paymentId)
       url.searchParams.set('externalReference', externalReference)
 
-      if (token) {
-        url.searchParams.set('token', token)
+      if (statusToken) {
+        url.searchParams.set('token', statusToken)
       }
 
       return url.toString()
     } catch {
       return undefined
     }
+  }
+
+  private buildDefaultPortalReturnUrl() {
+    const host =
+      this.configService.get<string>('PORTAL_PUBLIC_HOST') ??
+      this.configService.get<string>('API_PUBLIC_HOST')
+
+    if (!host) {
+      return undefined
+    }
+
+    return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}/portal/payment-return`
   }
 
   private verifyWebhookToken(token?: string) {

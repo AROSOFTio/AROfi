@@ -15,6 +15,16 @@ export class MikrotikController {
     return script;
   }
 
+  @Get('login-html/:key')
+  @Header('Content-Type', 'text/html')
+  async getLoginHtml(@Param('key') key: string) {
+    const html = await this.routersService.getMikrotikLoginHtmlByKey(key);
+    if (!html) {
+      throw new NotFoundException('Router login.html not found');
+    }
+    return html;
+  }
+
   @Get('provisioned/:key')
   async markProvisioned(@Param('key') key: string, @Req() request: any) {
     const sourceIp = this.resolveSourceIp(request);

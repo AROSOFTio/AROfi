@@ -22,11 +22,13 @@ type HotspotParams = {
   clientIp: string
   loginUrl: string
   routerId: string
+  routerKey: string
   hotspotServerName: string
 }
 
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const portalStorageKey = 'arofi.portal.access_token'
+const paymentReturnStorageKey = 'arofi.portal.payment_return'
 const portalTemplateStyles: Record<
   PortalTemplateId,
   {
@@ -247,8 +249,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     clientIp: '',
     loginUrl: '',
     routerId: '',
+    routerKey: '',
     hotspotServerName: '',
   })
+  const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -282,6 +286,21 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [currentPayment])
 
   useEffect(() => {
+    if (isBooting || paymentReturnHandled || typeof window === 'undefined') {
+      return
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const paymentId = params.get('paymentId')
+    if (!paymentId) {
+      return
+    }
+
+    setPaymentReturnHandled(true)
+    void handlePaymentReturn(paymentId, params.get('token'))
+  }, [isBooting, paymentReturnHandled])
+
+  useEffect(() => {
     if (!context?.returningDevice?.existingActiveAccess || autoConnectAttempted) {
       return
     }
@@ -302,7 +321,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   async function bootstrap() {
     setIsBooting(true)
-    const detected = readHotspotParams()
+    const detected = mergeHotspotParams(readStoredPaymentReturn()?.hotspotParams, readHotspotParams())
     setHotspotParams(detected)
     const storedToken = typeof window === 'undefined' ? null : window.localStorage.getItem(portalStorageKey)
 
@@ -326,6 +345,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         clientIp: '',
         loginUrl: '',
         routerId: '',
+        routerKey: '',
         hotspotServerName: '',
       }
     }
@@ -336,7 +356,50 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       clientIp: params.get('ip') ?? params.get('client_ip') ?? '',
       loginUrl: params.get('link-login') ?? params.get('loginUrl') ?? params.get('link_login') ?? '',
       routerId: params.get('routerId') ?? '',
+      routerKey: params.get('routerKey') ?? '',
       hotspotServerName: params.get('server') ?? params.get('hotspot') ?? '',
+    }
+  }
+
+  function mergeHotspotParams(stored?: Partial<HotspotParams> | null, detected?: HotspotParams) {
+    const fallback = detected ?? {
+      macAddress: '',
+      clientIp: '',
+      loginUrl: '',
+      routerId: '',
+      routerKey: '',
+      hotspotServerName: '',
+    }
+
+    return {
+      macAddress: fallback.macAddress || stored?.macAddress || '',
+      clientIp: fallback.clientIp || stored?.clientIp || '',
+      loginUrl: fallback.loginUrl || stored?.loginUrl || '',
+      routerId: fallback.routerId || stored?.routerId || '',
+      routerKey: fallback.routerKey || stored?.routerKey || '',
+      hotspotServerName: fallback.hotspotServerName || stored?.hotspotServerName || '',
+    }
+  }
+
+  function readStoredPaymentReturn() {
+    if (typeof window === 'undefined') {
+      return null
+    }
+
+    const value = window.localStorage.getItem(paymentReturnStorageKey)
+    if (!value) {
+      return null
+    }
+
+    try {
+      return JSON.parse(value) as {
+        paymentId?: string
+        statusToken?: string | null
+        phoneNumber?: string
+        hotspotParams?: Partial<HotspotParams>
+      }
+    } catch {
+      return null
     }
   }
 
@@ -348,6 +411,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     if (detectedParams.macAddress) params.set('mac', detectedParams.macAddress)
     if (detectedParams.clientIp) params.set('ip', detectedParams.clientIp)
     if (detectedParams.routerId) params.set('routerId', detectedParams.routerId)
+    if (detectedParams.routerKey) params.set('routerKey', detectedParams.routerKey)
+    if (detectedParams.hotspotServerName) params.set('server', detectedParams.hotspotServerName)
     if (detectedParams.loginUrl) params.set('loginUrl', detectedParams.loginUrl)
 
     const response = await fetch(`/api/portal/context${params.toString() ? `?${params}` : ''}`, {
@@ -406,7 +471,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     return session
   }
 
-  async function loginWithPhone(phone: string, navigateToSession = false) {
+  async function loginWithPhone(phone: string, navigateToSession = false, detectedParams = hotspotParams) {
     const response = await fetch('/api/portal/login', {
       method: 'POST',
       headers: {
@@ -428,7 +493,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setPortalSession(loginResponse.session)
     setPhoneNumber(loginResponse.session.customer.phoneNumber)
     setCustomerReference(loginResponse.session.customer.customerReference ?? '')
-    await loadContext(loginResponse.session.customer.phoneNumber, loginResponse.accessToken)
+    await loadContext(loginResponse.session.customer.phoneNumber, loginResponse.accessToken, detectedParams)
     setStatusMessage('Portal login successful. Your access details are now available.')
 
     if (navigateToSession) {
@@ -450,12 +515,25 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setCurrentPayment(payment)
 
     if (payment.activation) {
-      await loginWithPhone(payment.phoneNumber, initialView !== 'home')
+      await loginWithPhone(payment.phoneNumber, initialView !== 'home', hotspotParams)
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(paymentReturnStorageKey)
+      }
     } else if (payment.status === 'FAILED') {
       setErrorMessage(payment.statusMessage ?? 'The payment did not complete successfully.')
     }
 
-    await loadContext(payment.phoneNumber, portalToken)
+    await loadContext(payment.phoneNumber, portalToken, hotspotParams)
+  }
+
+  async function handlePaymentReturn(paymentId: string, statusToken?: string | null) {
+    const stored = readStoredPaymentReturn()
+    const token = statusToken ?? stored?.statusToken ?? currentPayment?.statusToken
+    if (stored?.phoneNumber && !phoneNumber) {
+      setPhoneNumber(stored.phoneNumber)
+    }
+    setStatusMessage('Payment returned from Pesapal. Checking status and preparing HotSpot login...')
+    await handleCheckPaymentStatus(paymentId, token)
   }
 
   async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
@@ -494,6 +572,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           clientIp: hotspotParams.clientIp || undefined,
           loginUrl: hotspotParams.loginUrl || undefined,
           routerId: hotspotParams.routerId || undefined,
+          routerKey: hotspotParams.routerKey || undefined,
           hotspotServerName: hotspotParams.hotspotServerName || undefined,
         }),
       })
@@ -516,6 +595,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       if (checkoutUrl) {
         setStatusMessage('Opening Pesapal checkout. Complete the mobile money or card payment there.')
         if (typeof window !== 'undefined') {
+          window.localStorage.setItem(
+            paymentReturnStorageKey,
+            JSON.stringify({
+              paymentId: payment.id,
+              statusToken: payment.statusToken,
+              phoneNumber: normalizedPhone,
+              hotspotParams,
+            }),
+          )
           window.location.assign(checkoutUrl)
         }
         return
@@ -523,9 +611,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       setStatusMessage('Payment created, but Pesapal did not return a checkout page. Check the payment status or Pesapal settings.')
       if (payment.activation) {
-        await loginWithPhone(payment.phoneNumber, true)
+        await loginWithPhone(payment.phoneNumber, true, hotspotParams)
       } else {
-        await loadContext(payment.phoneNumber, portalToken)
+        await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       }
     } finally {
       setIsPaymentLoading(false)
@@ -558,6 +646,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           clientIp: hotspotParams.clientIp || undefined,
           loginUrl: hotspotParams.loginUrl || undefined,
           routerId: hotspotParams.routerId || undefined,
+          routerKey: hotspotParams.routerKey || undefined,
           hotspotServerName: hotspotParams.hotspotServerName || undefined,
         }),
       })
@@ -580,12 +669,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         setPortalSession(redemption.session)
         setPhoneNumber(redemption.session.customer.phoneNumber)
         setCustomerReference(redemption.session.customer.customerReference ?? '')
-        await loadContext(redemption.session.customer.phoneNumber, redemption.accessToken)
+        await loadContext(redemption.session.customer.phoneNumber, redemption.accessToken, hotspotParams)
         router.push('/session')
       } else if (phoneNumber) {
-        await loadContext(phoneNumber, portalToken)
+        await loadContext(phoneNumber, portalToken, hotspotParams)
       } else {
-        await loadContext()
+        await loadContext(undefined, undefined, hotspotParams)
       }
     } finally {
       setIsVoucherLoading(false)
@@ -605,7 +694,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setIsLoginLoading(true)
 
     try {
-      await loginWithPhone(phoneNumber, initialView !== 'home')
+      await loginWithPhone(phoneNumber, initialView !== 'home', hotspotParams)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Portal login failed.')
     } finally {
@@ -621,7 +710,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setPortalSession(null)
     setCurrentPayment(null)
     setStatusMessage('Portal session signed out.')
-    await loadContext()
+    await loadContext(undefined, undefined, hotspotParams)
 
     if (initialView === 'session') {
       router.push('/login')

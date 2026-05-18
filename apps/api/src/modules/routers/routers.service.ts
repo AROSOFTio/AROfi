@@ -468,7 +468,7 @@ export class RoutersService {
       data: {
         host: shouldReplaceManagementHost && normalizedSourceIp ? normalizedSourceIp : router.host,
         radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
-        onboardingStatus: RouterOnboardingStatus.SCRIPT_GENERATED,
+        onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
         lastProvisionedAt: now,
         healthMessage: normalizedSourceIp
           ? `Provisioning callback received from ${normalizedSourceIp}. Restart FreeRADIUS if this is the first time this NAS IP was learned.`
@@ -491,6 +491,8 @@ export class RoutersService {
       },
       include: this.routerInclude,
     })
+
+    this.reloadFreeradiusNasClients()
 
     return {
       ok: true,
@@ -539,6 +541,7 @@ export class RoutersService {
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
         mode: router.lastScriptMode,
         portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
+        hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,
       }),
       setupDiagnostics: await this.getSetupDiagnostics(router.id),
       radiusClient: router.radiusClient
@@ -590,7 +593,23 @@ export class RoutersService {
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
       mode: router.lastScriptMode,
       portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
+      hotspotNetworkName: router.siteLabel ?? router.name,
     })
+  }
+
+  async getMikrotikLoginHtmlByKey(key: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    return this.mikrotikService.buildLoginHtml(
+      router.registrationKey,
+      `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
+    )
   }
 
   async rotateRadiusSecret(routerId: string, tenantId?: string) {
@@ -655,7 +674,13 @@ export class RoutersService {
   private async getSetupDiagnostics(routerId: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
-      include: { radiusClient: true },
+      include: {
+        radiusClient: true,
+        healthChecks: {
+          orderBy: { checkedAt: 'desc' },
+          take: 1,
+        },
+      },
     })
     const nasCandidates = router ? this.getRouterNasCandidates(router) : []
 
@@ -687,6 +712,28 @@ export class RoutersService {
     ])
 
     return [
+      {
+        code: 'provisioning_callback',
+        label: router?.lastProvisionedAt
+          ? 'Provisioning callback received'
+          : 'Script generated; waiting for router callback',
+        ok: Boolean(router?.lastProvisionedAt),
+        checkedAt: router?.lastProvisionedAt ?? router?.scriptGeneratedAt ?? null,
+      },
+      {
+        code: 'management_api',
+        label:
+          router?.healthChecks[0] &&
+          (router.healthChecks[0].status === RouterStatus.HEALTHY ||
+            router.healthChecks[0].status === RouterStatus.DEGRADED)
+            ? 'RouterOS management API reachable'
+            : 'Management API not reachable - hotspot/RADIUS may still be working',
+        ok:
+          Boolean(router?.healthChecks[0]) &&
+          (router?.healthChecks[0]?.status === RouterStatus.HEALTHY ||
+            router?.healthChecks[0]?.status === RouterStatus.DEGRADED),
+        checkedAt: router?.healthChecks[0]?.checkedAt ?? null,
+      },
       {
         code: 'radius_contact',
         label: authEvent ? 'Router RADIUS traffic detected' : 'Router has not contacted RADIUS yet',
@@ -763,6 +810,7 @@ export class RoutersService {
     onboardingStatus?: string
     registrationKey?: string
     scriptGeneratedAt?: Date | null
+    lastProvisionedAt?: Date | null
     lastRadiusSignalAt?: Date | null
     lastAccountingSignalAt?: Date | null
     lastAuthSignalAt?: Date | null
@@ -832,9 +880,19 @@ export class RoutersService {
       onboardingStatus: router.onboardingStatus,
       registrationKey: router.registrationKey,
       scriptGeneratedAt: router.scriptGeneratedAt,
+      lastProvisionedAt: router.lastProvisionedAt,
       lastRadiusSignalAt: router.lastRadiusSignalAt,
       lastAccountingSignalAt: router.lastAccountingSignalAt,
       lastAuthSignalAt: router.lastAuthSignalAt,
+      provisioningCallbackReceived: Boolean(router.lastProvisionedAt),
+      radiusAuthSeen: Boolean(router.lastAuthSignalAt),
+      accountingSeen: Boolean(router.lastAccountingSignalAt),
+      managementApiReachable:
+        router.healthChecks[0]?.status === RouterStatus.HEALTHY ||
+        router.healthChecks[0]?.status === RouterStatus.DEGRADED,
+      managementApiMessage:
+        router.healthChecks[0]?.message ??
+        'Management API has not been checked. HotSpot/RADIUS can still work without public API reachability.',
       status: router.status,
       healthMessage: router.healthMessage,
       lastSeenAt: router.lastSeenAt,

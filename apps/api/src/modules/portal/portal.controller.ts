@@ -14,6 +14,8 @@ export class PortalController {
     @Query('mac') macAddress?: string,
     @Query('ip') ipAddress?: string,
     @Query('routerId') routerId?: string,
+    @Query('routerKey') routerKey?: string,
+    @Query('server') hotspotServerName?: string,
     @Query('loginUrl') loginUrl?: string,
     @Headers('authorization') authorization?: string,
   ) {
@@ -21,6 +23,8 @@ export class PortalController {
       macAddress,
       ipAddress,
       routerId,
+      routerKey,
+      hotspotServerName,
       loginUrl,
     })
   }
@@ -41,7 +45,17 @@ export class PortalController {
   }
 
   @Post('reconnect')
-  reconnect(@Body() dto: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string }) {
+  reconnect(
+    @Body()
+    dto: {
+      macAddress?: string
+      ipAddress?: string
+      routerId?: string
+      routerKey?: string
+      hotspotServerName?: string
+      loginUrl?: string
+    },
+  ) {
     return this.portalService.reconnect(dto)
   }
 }

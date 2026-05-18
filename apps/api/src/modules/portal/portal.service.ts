@@ -125,11 +125,24 @@ export class PortalService {
     tenantDomain?: string,
     phoneNumber?: string,
     authorization?: string,
-    hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string },
+    hotspot?: {
+      macAddress?: string
+      ipAddress?: string
+      routerId?: string
+      routerKey?: string
+      hotspotServerName?: string
+      loginUrl?: string
+    },
   ) {
-    const context = await this.paymentsService.getPortalContext(tenantDomain, phoneNumber)
+    const resolvedHotspot = await this.resolveHotspotContext(hotspot)
+    const resolvedTenantDomain =
+      'tenantDomain' in resolvedHotspot ? resolvedHotspot.tenantDomain : undefined
+    const context = await this.paymentsService.getPortalContext(
+      tenantDomain ?? resolvedTenantDomain,
+      phoneNumber,
+    )
     const accessToken = this.extractBearerToken(authorization)
-    const returningDevice = await this.detectReturningDevice(context.tenant.id, hotspot)
+    const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot)
 
     if (!accessToken) {
       return {
@@ -189,6 +202,14 @@ export class PortalService {
   }
 
   async redeemVoucher(dto: PortalRedeemVoucherDto, userAgent?: string) {
+    const resolvedHotspot = await this.resolveHotspotContext({
+      macAddress: dto.macAddress,
+      ipAddress: dto.clientIp,
+      routerId: dto.routerId,
+      routerKey: dto.routerKey,
+      hotspotServerName: dto.hotspotServerName,
+      loginUrl: dto.loginUrl,
+    })
     const phoneNumber =
       this.tryNormalizePhoneNumber(dto.phoneNumber) ??
       this.tryNormalizePhoneNumber(dto.customerReference)
@@ -202,8 +223,8 @@ export class PortalService {
       accessPhoneNumber: phoneNumber,
       macAddress: dto.macAddress,
       clientIp: dto.clientIp,
-      routerId: dto.routerId,
-      hotspotServerName: dto.hotspotServerName,
+      routerId: resolvedHotspot.routerId,
+      hotspotServerName: resolvedHotspot.hotspotServerName,
       userAgent,
     })
 
@@ -229,8 +250,16 @@ export class PortalService {
     }
   }
 
-  async reconnect(input: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string }) {
-    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, input.routerId)
+  async reconnect(input: {
+    macAddress?: string
+    ipAddress?: string
+    routerId?: string
+    routerKey?: string
+    hotspotServerName?: string
+    loginUrl?: string
+  }) {
+    const resolvedHotspot = await this.resolveHotspotContext(input)
+    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, resolvedHotspot.routerId)
 
     if (!activation) {
       throw new NotFoundException('No active access was found for this device')
@@ -242,7 +271,7 @@ export class PortalService {
     await this.markReconnectionAttempt({
       tenantId: activation.tenantId,
       activationId: activation.id,
-      routerId: input.routerId,
+      routerId: resolvedHotspot.routerId,
       macAddress: input.macAddress,
       ipAddress: input.ipAddress,
       status: ReconnectionStatus.LOGIN_PAYLOAD_ISSUED,
@@ -438,6 +467,43 @@ export class PortalService {
       message: 'Welcome back. Your package is still active.',
       activation: this.mapActivation(activation),
       reconnect: this.issueReconnectLoginPayload(activation, hotspot?.loginUrl),
+    }
+  }
+
+  private async resolveHotspotContext(hotspot?: {
+    macAddress?: string
+    ipAddress?: string
+    routerId?: string
+    routerKey?: string
+    hotspotServerName?: string
+    loginUrl?: string
+  }) {
+    if (!hotspot?.routerKey) {
+      return hotspot ?? {}
+    }
+
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: hotspot.routerKey },
+      select: {
+        id: true,
+        hotspotServerName: true,
+        tenant: {
+          select: {
+            domain: true,
+          },
+        },
+      },
+    })
+
+    if (!router) {
+      return hotspot
+    }
+
+    return {
+      ...hotspot,
+      routerId: hotspot.routerId || router.id,
+      hotspotServerName: hotspot.hotspotServerName || router.hotspotServerName || undefined,
+      tenantDomain: router.tenant.domain ?? undefined,
     }
   }
 

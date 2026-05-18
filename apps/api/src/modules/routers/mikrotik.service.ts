@@ -19,7 +19,7 @@ type ProvisioningInput = {
   hotspotServerName?: string | null
   portalHosts?: string[]
   ttlAntiTetheringEnabled?: boolean
-  mode?: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT'
+  mode?: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT' | 'FRESH_FULL_CAPTIVE_WIFI'
   hotspotNetworkName?: string | null
   portalBaseUrl?: string | null
 }
@@ -120,9 +120,15 @@ export class MikrotikService {
     const registrationKey = input.registrationKey ?? 'manual-test-router'
     const profileName = `arofi-${registrationKey.slice(0, 8)}`
     const hotspotName = input.hotspotServerName || input.hotspotNetworkName || 'hotspot1'
+    const ssid = input.hotspotNetworkName || hotspotName || 'AROFi Free WiFi'
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
+    const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
+    const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
+    const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl)
+    const isFreshCaptiveWifi =
+      input.mode === 'FRESH_FULL_CAPTIVE_WIFI' || input.mode === 'FRESH_FULL_HOTSPOT'
 
     const safeScript = [
       `# AROFi MikroTik onboarding script`,
@@ -163,9 +169,9 @@ export class MikrotikService {
       `# 4. Walled garden for portal and payment access`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
       ``,
-      `# 4b. Portal URL for customer devices. If you still use MikroTik default login.html,`,
-      `# upload/replace hotspot/login.html so it redirects users to:`,
-      `# ${this.resolvePortalBaseUrl(input.portalBaseUrl)}?mac=\\$(mac)&ip=\\$(ip)&link-login=\\$(link-login-only)&server=\\$(server-name)`,
+      `# 4b. Install AROFi captive portal redirect page`,
+      ...loginHtmlInstallScript,
+      `/ip hotspot profile set [find name="${profileName}"] html-directory=hotspot`,
       ...(input.ttlAntiTetheringEnabled
         ? [
             ``,
@@ -180,7 +186,7 @@ export class MikrotikService {
       `/snmp set enabled=yes`,
     ]
 
-    if (input.mode !== 'FRESH_FULL_HOTSPOT') {
+    if (!isFreshCaptiveWifi) {
       return [
         ...safeScript,
         ``,
@@ -194,6 +200,7 @@ export class MikrotikService {
       ...safeScript,
       ``,
       `# Fresh router HotSpot setup section`,
+      `# This mode creates an OPEN captive Wi-Fi SSID. Do not use it on a production router with existing Wi-Fi security unless you intend to replace it.`,
       `# WAN: fresh routers usually receive internet from the upstream/Savana modem on ether1.`,
       `:if ([:len [/interface ethernet find name="ether1"]] > 0) do={`,
       `  :foreach wanBridgePort in=[/interface bridge port find interface=ether1] do={`,
@@ -214,6 +221,11 @@ export class MikrotikService {
       `    /interface bridge port add bridge=bridge interface=$pId`,
       `  }`,
       `}`,
+      ``,
+      `# Fresh captive Wi-Fi setup. Supports RouterOS v7 /interface wifi and legacy /interface wireless.`,
+      ...this.buildOpenWifiScript(ssid),
+      ``,
+      `# Device-mode note: if RouterOS blocks HotSpot/Wi-Fi changes, confirm the device-mode prompt physically and reboot, then import this script again.`,
       `:if ([:len [/ip address find address="10.50.0.1/24"]] = 0) do={`,
       `  /ip address add address=10.50.0.1/24 interface=bridge`,
       `}`,
@@ -249,10 +261,10 @@ export class MikrotikService {
     return [
       `Paste/import the provisioning script into ${routerName} from WinBox, WebFig, or SSH Terminal.`,
       'Confirm the script prints "AROFi provisioning callback sent." If it fails, the router has no HTTPS/DNS internet path to AROFi.',
+      'Fresh captive Wi-Fi mode should create an OPEN SSID and install hotspot/login.html automatically. If no SSID appears, the router has no supported /interface wifi or /interface wireless interface.',
       'If the router is behind another modem/router, forward UDP 1812 and 1813 traffic outbound to the VPS. No inbound forwarding is needed for RADIUS.',
-      'For AROFi API health checks only, forward TCP 8728/8729 from the public management IP to the MikroTik, or enter a reachable VPN/private management IP.',
+      'For AROFi API management checks only, forward TCP 8728/8729 from the public management IP to the MikroTik, or enter a reachable VPN/private IP. HotSpot/RADIUS can work even when this is not reachable.',
       'Restart FreeRADIUS after the first callback if the router was registered without a real public NAS IP: docker compose restart freeradius.',
-      'Replace or redirect the MikroTik HotSpot login page to the AROFi portal URL shown in the script comment.',
       'Run one real customer login/payment/voucher test so MikroTik sends Access-Request and Accounting-Start packets.',
     ]
   }
@@ -289,8 +301,99 @@ export class MikrotikService {
     ]
   }
 
+  private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string) {
+    return [
+      `:do {`,
+      `  /tool fetch url="${loginHtmlUrl}" mode=https dst-path="hotspot/login.html"`,
+      `  :put "AROFi HotSpot login.html installed."`,
+      `} on-error={`,
+      `  :do {`,
+      `    /tool fetch url="${fallbackLoginHtmlUrl}" mode=http dst-path="hotspot/login.html"`,
+      `    :put "AROFi HotSpot login.html installed by HTTP fallback."`,
+      `  } on-error={`,
+      `    :put "Warning: could not install AROFi hotspot/login.html. Customers will not auto-open the AROFi portal until this file is installed."`,
+      `  }`,
+      `}`,
+    ]
+  }
+
+  buildLoginHtml(registrationKey: string, portalBaseUrl?: string | null) {
+    const target = this.resolvePortalBaseUrl(portalBaseUrl)
+    const escapedTarget = this.escapeHtml(target)
+    const escapedKey = this.escapeHtml(registrationKey)
+
+    return [
+      '<!doctype html>',
+      '<html>',
+      '<head>',
+      '  <meta charset="utf-8">',
+      '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+      '  <title>Opening AROFi Portal</title>',
+      '</head>',
+      '<body>',
+      '  <p>Opening AROFi portal...</p>',
+      '  <script>',
+      `    var target = "${escapedTarget}";`,
+      '    var params = new URLSearchParams();',
+      '    params.set("mac", "$(mac)");',
+      '    params.set("ip", "$(ip)");',
+      '    params.set("link-login", "$(link-login-only)");',
+      '    params.set("server", "$(server-name)");',
+      `    params.set("routerKey", "${escapedKey}");`,
+      '    window.location.replace(target + "?" + params.toString());',
+      '  </script>',
+      '</body>',
+      '</html>',
+    ].join('\n')
+  }
+
+  private buildOpenWifiScript(ssid: string) {
+    const escapedSsid = this.escape(ssid.slice(0, 32) || 'AROFi Free WiFi')
+
+    return [
+      `:local arofiSsid "${escapedSsid}"`,
+      `:local arofiWifiConfigured false`,
+      `:do {`,
+      `  :foreach wifiIf in=[/interface wifi find] do={`,
+      `    :do { /interface wifi set $wifiIf disabled=no configuration.mode=ap configuration.ssid=$arofiSsid security.authentication-types="" } on-error={`,
+      `      :do { /interface wifi set $wifiIf disabled=no mode=ap ssid=$arofiSsid } on-error={ :put "Warning: could not fully configure RouterOS wifi interface." }`,
+      `    }`,
+      `    :local wifiName [/interface wifi get $wifiIf name]`,
+      `    :if ([:len [/interface bridge port find interface=$wifiName]] = 0) do={`,
+      `      /interface bridge port add bridge=bridge interface=$wifiName`,
+      `    }`,
+      `    :set arofiWifiConfigured true`,
+      `  }`,
+      `} on-error={`,
+      `  :put "AROFi: /interface wifi menu not available; trying legacy wireless."`,
+      `}`,
+      `:do {`,
+      `  :if ([:len [/interface wireless security-profiles find name="arofi-open"]] = 0) do={`,
+      `    /interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""`,
+      `  }`,
+      `  :foreach wlanIf in=[/interface wireless find] do={`,
+      `    /interface wireless set $wlanIf disabled=no mode=ap-bridge ssid=$arofiSsid security-profile=arofi-open`,
+      `    :local wlanName [/interface wireless get $wlanIf name]`,
+      `    :if ([:len [/interface bridge port find interface=$wlanName]] = 0) do={`,
+      `      /interface bridge port add bridge=bridge interface=$wlanName`,
+      `    }`,
+      `    :set arofiWifiConfigured true`,
+      `  }`,
+      `} on-error={`,
+      `  :put "AROFi: legacy /interface wireless menu not available."`,
+      `}`,
+      `:if ($arofiWifiConfigured = false) do={`,
+      `  :put "Warning: no supported MikroTik Wi-Fi interface was found. Ethernet captive portal still works; configure wireless manually or use a supported RouterOS Wi-Fi package."`,
+      `}`,
+    ]
+  }
+
   private escape(value: string) {
     return value.replace(/"/g, '\\"')
+  }
+
+  private escapeHtml(value: string) {
+    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
   }
 
   private resolveApiBaseUrl() {

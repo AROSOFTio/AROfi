@@ -655,9 +655,15 @@ export type RouterItem = {
   verificationStatus?: string
   registrationKey?: string
   scriptGeneratedAt?: string | null
+  lastProvisionedAt?: string | null
   lastRadiusSignalAt?: string | null
   lastAccountingSignalAt?: string | null
   lastAuthSignalAt?: string | null
+  provisioningCallbackReceived?: boolean
+  radiusAuthSeen?: boolean
+  accountingSeen?: boolean
+  managementApiReachable?: boolean
+  managementApiMessage?: string | null
   hotspotServerName?: string | null
   portalWalledGardenHosts?: string[]
   ttlAntiTetheringEnabled?: boolean
