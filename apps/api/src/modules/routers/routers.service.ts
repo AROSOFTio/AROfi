@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import {
+  Prisma,
   RadiusEventType,
   RouterConnectionMode,
   RouterOnboardingStatus,
@@ -461,47 +462,121 @@ export class RoutersService {
 
     const normalizedSourceIp = sourceIp.trim()
     const now = new Date()
-    const shouldReplaceManagementHost = this.isPendingSelfServiceHost(router.host)
+    const baseWarning = normalizedSourceIp
+      ? ''
+      : 'Provisioning callback received, but source IP could not be detected.'
 
-    const updated = await this.prisma.router.update({
-      where: { id: router.id },
-      data: {
-        host: shouldReplaceManagementHost && normalizedSourceIp ? normalizedSourceIp : router.host,
-        radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
-        onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
-        lastProvisionedAt: now,
-        healthMessage: normalizedSourceIp
-          ? `Provisioning callback received from ${normalizedSourceIp}. Restart FreeRADIUS if this is the first time this NAS IP was learned.`
-          : 'Provisioning callback received, but source IP could not be detected.',
-        radiusClient: normalizedSourceIp
-          ? {
-              update: {
-                ipAddress: normalizedSourceIp,
-              },
-            }
-          : undefined,
-        nasClient: normalizedSourceIp
-          ? {
-              update: {
-                nasname: normalizedSourceIp,
-                enabled: true,
-              },
-            }
-          : undefined,
-      },
-      include: this.routerInclude,
-    })
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const warnings: string[] = baseWarning ? [baseWarning] : []
+        let managementHost = router.host
+        const shouldReplaceManagementHost =
+          Boolean(normalizedSourceIp) && this.isPendingSelfServiceHost(router.host)
 
-    this.reloadFreeradiusNasClients()
+        if (shouldReplaceManagementHost) {
+          const duplicateHost = await tx.router.findFirst({
+            where: {
+              tenantId: router.tenantId,
+              host: normalizedSourceIp,
+              id: { not: router.id },
+            },
+            select: { id: true, name: true },
+          })
 
-    return {
-      ok: true,
-      routerId: updated.id,
-      learnedNasIpAddress: normalizedSourceIp || null,
-      managementHost: updated.host,
-      message: normalizedSourceIp
-        ? `AROFi learned router source IP ${normalizedSourceIp}. If RADIUS was already running before this callback, restart FreeRADIUS once.`
-        : 'AROFi received the callback, but could not detect the router source IP.',
+          if (duplicateHost) {
+            warnings.push(
+              `Learned NAS IP ${normalizedSourceIp}, but management host was not changed because tenant router ${duplicateHost.name} already uses that host.`,
+            )
+          } else {
+            managementHost = normalizedSourceIp
+          }
+        }
+
+        const healthMessage = normalizedSourceIp
+          ? [
+              `Provisioning callback received from ${normalizedSourceIp}.`,
+              managementHost === router.host && shouldReplaceManagementHost
+                ? 'Management host kept as pending value because learned IP is already assigned in this tenant.'
+                : 'RADIUS NAS IP learned.',
+              'Restart FreeRADIUS if this is the first time this NAS IP was learned.',
+            ].join(' ')
+          : baseWarning
+
+        const updatedRouter = await tx.router.update({
+          where: { id: router.id },
+          data: {
+            host: managementHost,
+            radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
+            onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
+            lastProvisionedAt: now,
+            healthMessage,
+          },
+          select: { id: true, host: true, tenantId: true, name: true },
+        })
+
+        if (normalizedSourceIp) {
+          await this.upsertRadiusClientForProvisionedRouter(tx, router, normalizedSourceIp)
+          const nasWarning = await this.upsertNasClientForProvisionedRouter(
+            tx,
+            router,
+            normalizedSourceIp,
+          )
+          if (nasWarning) {
+            warnings.push(nasWarning)
+          }
+        }
+
+        return {
+          routerId: updatedRouter.id,
+          managementHost: updatedRouter.host,
+          warning: warnings.length ? warnings.join(' ') : undefined,
+        }
+      })
+
+      this.reloadFreeradiusNasClients()
+
+      return {
+        ok: true,
+        callbackReceived: true,
+        routerId: result.routerId,
+        learnedNasIpAddress: normalizedSourceIp || null,
+        managementHost: result.managementHost,
+        ...(result.warning ? { warning: result.warning } : {}),
+      }
+    } catch (error) {
+      this.logger.error(
+        `MikroTik provisioning callback failed for router ${router.id} (${key}) from ${normalizedSourceIp || 'unknown IP'}`,
+        error instanceof Error ? error.stack : String(error),
+      )
+
+      try {
+        await this.prisma.router.update({
+          where: { id: router.id },
+          data: {
+            radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
+            onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
+            lastProvisionedAt: now,
+            healthMessage:
+              'Provisioning callback received, but AROFi could not fully update router/NAS records. Check API logs for the database error.',
+          },
+        })
+        this.reloadFreeradiusNasClients()
+      } catch (fallbackError) {
+        this.logger.error(
+          `Fallback provisioning callback update failed for router ${router.id} (${key})`,
+          fallbackError instanceof Error ? fallbackError.stack : String(fallbackError),
+        )
+      }
+
+      return {
+        ok: true,
+        callbackReceived: true,
+        routerId: router.id,
+        learnedNasIpAddress: normalizedSourceIp || null,
+        managementHost: router.host,
+        warning:
+          'AROFi received the provisioning callback, but could not fully update router/NAS records. Check API logs for the database error.',
+      }
     }
   }
 
@@ -669,6 +744,142 @@ export class RoutersService {
         }
       },
     )
+  }
+
+  private async upsertRadiusClientForProvisionedRouter(
+    tx: Prisma.TransactionClient,
+    router: {
+      id: string
+      tenantId: string
+      name: string
+      sharedSecretCiphertext: string
+      radiusClient?: { id: string; shortName: string; secretCiphertext: string } | null
+    },
+    ipAddress: string,
+  ) {
+    if (router.radiusClient) {
+      await tx.radiusClient.update({
+        where: { id: router.radiusClient.id },
+        data: {
+          ipAddress,
+          secretCiphertext: router.radiusClient.secretCiphertext || router.sharedSecretCiphertext,
+        },
+      })
+      return
+    }
+
+    await tx.radiusClient.upsert({
+      where: { routerId: router.id },
+      update: {
+        ipAddress,
+        secretCiphertext: router.sharedSecretCiphertext,
+      },
+      create: {
+        tenantId: router.tenantId,
+        routerId: router.id,
+        shortName: this.buildRadiusClientShortName(router.name),
+        ipAddress,
+        secretCiphertext: router.sharedSecretCiphertext,
+      },
+    })
+  }
+
+  private async upsertNasClientForProvisionedRouter(
+    tx: Prisma.TransactionClient,
+    router: {
+      id: string
+      tenantId: string
+      name: string
+      sharedSecretCiphertext: string
+      nasClient?: { id: number; shortname: string } | null
+      radiusClient?: { shortName: string } | null
+    },
+    nasIpAddress: string,
+  ) {
+    const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const preferredShortname =
+      router.nasClient?.shortname ||
+      router.radiusClient?.shortName ||
+      this.buildRadiusClientShortName(router.name)
+
+    if (router.nasClient) {
+      const conflict = await tx.nasClient.findFirst({
+        where: {
+          nasname: nasIpAddress,
+          shortname: preferredShortname,
+          id: { not: router.nasClient.id },
+        },
+        select: { id: true, routerId: true, nasname: true, shortname: true },
+      })
+
+      if (conflict) {
+        await tx.nasClient.update({
+          where: { id: router.nasClient.id },
+          data: {
+            enabled: true,
+            secret: sharedSecret,
+            description: `AROFi dynamic NAS client for ${router.name}; learned NAS IP ${nasIpAddress} conflicted with existing NAS row ${conflict.id}`,
+          },
+        })
+        return `NAS client IP ${nasIpAddress} was not changed because another NAS row already uses ${nasIpAddress}/${preferredShortname}.`
+      }
+
+      await tx.nasClient.update({
+        where: { id: router.nasClient.id },
+        data: {
+          nasname: nasIpAddress,
+          shortname: preferredShortname,
+          secret: sharedSecret,
+          enabled: true,
+          description: `AROFi dynamic NAS client for ${router.name}`,
+        },
+      })
+      return undefined
+    }
+
+    const existingByUnique = await tx.nasClient.findUnique({
+      where: {
+        nasname_shortname: {
+          nasname: nasIpAddress,
+          shortname: preferredShortname,
+        },
+      },
+      select: { id: true, routerId: true },
+    })
+
+    if (existingByUnique) {
+      if (!existingByUnique.routerId) {
+        await tx.nasClient.update({
+          where: { id: existingByUnique.id },
+          data: {
+            tenantId: router.tenantId,
+            routerId: router.id,
+            type: 'mikrotik',
+            secret: sharedSecret,
+            enabled: true,
+            description: `AROFi dynamic NAS client for ${router.name}`,
+          },
+        })
+        return undefined
+      }
+
+      return `NAS client was not created because ${nasIpAddress}/${preferredShortname} already belongs to another router.`
+    }
+
+    await tx.nasClient.create({
+      data: {
+        tenantId: router.tenantId,
+        routerId: router.id,
+        nasname: nasIpAddress,
+        shortname: preferredShortname,
+        type: 'mikrotik',
+        secret: sharedSecret,
+        description: `AROFi dynamic NAS client for ${router.name}`,
+        enabled: true,
+      },
+    })
+
+    return undefined
   }
 
   private async getSetupDiagnostics(routerId: string) {
