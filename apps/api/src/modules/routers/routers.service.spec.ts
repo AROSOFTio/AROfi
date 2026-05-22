@@ -42,7 +42,7 @@ describe('RoutersService', () => {
     expect(createArgs.data.nasClient.create).toMatchObject({
       tenantId: 'tenant-1',
       nasname: '192.0.2.10',
-      secret: 'per-router-secret',
+      secret: 'change_me_radius_secret',
       type: 'mikrotik',
       enabled: true,
     })
@@ -192,11 +192,10 @@ describe('RoutersService', () => {
   })
 
   it('creates a missing NAS client during callback', async () => {
-    const { service, tx, credentials } = buildCallbackHarness(buildCallbackRouter({ nasClient: null }))
+    const { service, tx } = buildCallbackHarness(buildCallbackRouter({ nasClient: null }))
 
     await service.markRouterProvisionedByKey('registration-key', '102.209.111.77')
 
-    expect(credentials.decrypt).toHaveBeenCalledWith('encrypted-secret')
     expect(tx.nasClient.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -204,7 +203,7 @@ describe('RoutersService', () => {
           routerId: 'router-1',
           nasname: '102.209.111.77',
           shortname: 'shop-router',
-          secret: 'plain-radius-secret',
+          secret: 'change_me_radius_secret',
           enabled: true,
         }),
       }),

@@ -308,7 +308,7 @@ export class RoutersService {
     }
 
     const registrationKey = randomUUID()
-    const sharedSecret = dto.sharedSecret?.trim() || this.generateSharedSecret()
+    const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
     const password = dto.password ?? ''
@@ -594,7 +594,7 @@ export class RoutersService {
       throw new NotFoundException('Router not found')
     }
 
-    const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const sharedSecret = this.getPlatformRadiusSharedSecret()
     const adminPassword = this.routerCredentialsService.decrypt(router.passwordCiphertext)
     const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
 
@@ -653,7 +653,7 @@ export class RoutersService {
       return null
     }
 
-    const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const sharedSecret = this.getPlatformRadiusSharedSecret()
     const adminPassword = this.routerCredentialsService.decrypt(router.passwordCiphertext)
     const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
 
@@ -707,7 +707,7 @@ export class RoutersService {
       throw new NotFoundException('Router not found')
     }
 
-    const sharedSecret = this.generateSharedSecret()
+    const sharedSecret = this.getPlatformRadiusSharedSecret()
     await this.prisma.router.update({
       where: { id: router.id },
       data: {
@@ -749,6 +749,14 @@ export class RoutersService {
           this.logger.log('FreeRADIUS NAS client reload signal sent.')
         }
       },
+    )
+  }
+
+  private getPlatformRadiusSharedSecret() {
+    return (
+      this.mikrotikService.getRadiusServerConfig?.().sharedSecret ??
+      process.env.RADIUS_SHARED_SECRET ??
+      'change_me_radius_secret'
     )
   }
 
@@ -802,7 +810,7 @@ export class RoutersService {
     },
     nasIpAddress: string,
   ) {
-    const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const sharedSecret = this.getPlatformRadiusSharedSecret()
     const preferredShortname =
       router.nasClient?.shortname ||
       router.radiusClient?.shortName ||
