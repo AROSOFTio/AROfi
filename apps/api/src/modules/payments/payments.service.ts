@@ -946,6 +946,8 @@ export class PaymentsService {
           'PrivateTransactionReference',
           'merchant_reference',
           'MerchantReference',
+          'OrderMerchantReference',
+          'orderMerchantReference',
         ])?.toString() ?? externalReferenceHint,
       providerReference:
         this.readPayloadValue(payload, [
@@ -955,6 +957,7 @@ export class PaymentsService {
           'providerReference',
           'order_tracking_id',
           'OrderTrackingId',
+          'orderTrackingId',
         ])?.toString(),
     }
   }

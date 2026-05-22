@@ -65,6 +65,30 @@ export class PaymentsController {
     return this.paymentsService.handleAggregatorCollectionWebhook(payload, headers)
   }
 
+  @Get('webhooks/aggregator/collection')
+  handleAggregatorCollectionReturn(
+    @Query() query: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    return this.paymentsService.handleAggregatorCollectionWebhook(query, headers)
+  }
+
+  @Post('webhooks/pesapal')
+  handlePesapalWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    return this.paymentsService.handleAggregatorCollectionWebhook(payload, headers)
+  }
+
+  @Get('webhooks/pesapal')
+  handlePesapalReturn(
+    @Query() query: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    return this.paymentsService.handleAggregatorCollectionWebhook(query, headers)
+  }
+
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.paymentsRead)
   @Get(':paymentId')
