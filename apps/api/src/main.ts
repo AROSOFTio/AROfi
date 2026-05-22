@@ -51,21 +51,9 @@ function assertRequiredProductionConfig() {
     'RADIUS_SHARED_SECRET',
   ]
 
-  if ((process.env.MTN_COLLECTION_PROVIDER ?? 'MTN_MOMO_DIRECT') === 'MTN_MOMO_DIRECT') {
-    required.push(
-      'MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY',
-      'MTN_MOMO_COLLECTION_API_USER',
-      'MTN_MOMO_COLLECTION_API_KEY'
-    )
-  }
-
-  const mtnMode = (process.env.MTN_MOMO_ENV ?? 'sandbox').toLowerCase()
-  if (mtnMode === 'live') {
-    // In live mode, ensure TARGET_ENVIRONMENT is set correctly
-    if (!process.env.MTN_MOMO_TARGET_ENVIRONMENT) {
-      required.push('MTN_MOMO_TARGET_ENVIRONMENT')
-    }
-  }
+  // Payment provider credentials are validated by provider adapters at request time.
+  // The API must still boot so admins can configure keys and vendors can use
+  // non-payment workflows while MTN/Airtel credentials are pending.
 
   const missing = required.filter((key) => {
     const value = process.env[key]
