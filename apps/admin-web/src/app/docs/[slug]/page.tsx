@@ -11,50 +11,93 @@ type DocPage = {
 const docs: Record<string, DocPage> = {
   'getting-started': {
     title: 'Getting started',
-    intro: 'Use this checklist to move from tenant setup to a working MikroTik captive portal. Run the generated AROFi script first, then use the RouterOS 6 recovery steps below only when the router shows the known Savana/upstream-router symptoms.',
+    intro: 'Use this checklist to move from AROFi router registration to a working MikroTik captive portal. The normal flow is: register router, copy the one-run command, paste it in WinBox Terminal, then apply the final RouterOS 6 verification block when the router is behind an upstream/Savana router.',
     sections: [
       {
-        heading: '1. Start in AROFi',
+        heading: '1. Sign in and prepare AROFi',
         body: [
-          'Create or approve the vendor tenant workspace, then sign in as the vendor admin.',
-          'Add hotspot sites, publish at least one package, and configure MTN/Airtel payment settings before sending customers to the portal.',
-          'Register a MikroTik router, generate the onboarding script, paste it into WinBox Terminal, and wait for the provisioning callback message.',
+          'Sign in to the vendor workspace as the vendor admin.',
+          'Create or confirm the hotspot site, router group, and at least one customer package.',
+          'Open Routers, click Register MikroTik Router, enter the router display name, branch/site name, HotSpot server name, and select Fresh full captive Wi-Fi for a fresh RouterOS 6 access point.',
+          'If you want to know the WinBox password after the script runs, open Advanced Settings and enter Router Admin Password. The generated script applies that password on the MikroTik.',
         ],
       },
       {
-        heading: '2. Router prerequisites',
+        heading: '2. Connect to MikroTik before running the command',
         body: [
-          'The router must already have working internet, working DNS, correct date/time, and correct WAN/LAN or bridge interfaces.',
-          'If the router is behind ISP NAT, remote management requires public IP, port forwarding, VPN, or a supported tunnel.',
-          'For RouterOS 6 recovery, use WinBox Neighbors/MAC login from a LAN port where possible. IP login can drop when WAN/LAN bridge membership changes.',
+          'Plug the upstream/Savana internet router into ether1 on the MikroTik.',
+          'Connect your laptop to ether2, ether3, ether4, ether5, or connect through WinBox Neighbors/MAC. IP login may disconnect when ether1 is moved out of bridgeLocal.',
+          'Open WinBox, login with admin and the current router password. If it is freshly reset, the password may be empty until the AROFi script sets the Router Admin Password.',
+          'Open New Terminal, paste the one-run command from AROFi, and wait for the provisioning callback message.',
         ],
       },
       {
-        heading: '3. Fix ether1 WAN when it is still a bridge slave',
+        heading: '3. One-run AROFi command',
         body: [
-          'Use this section when RouterOS shows: out-interface matcher not possible when interface ether1 is slave, or when the MikroTik gets 192.168.1.x on bridgeLocal and cannot ping 8.8.8.8.',
-          'This makes ether1 the WAN port, moves DHCP client to ether1, removes the old bridgeLocal WAN address, creates NAT on ether1, and sets DNS.',
+          'After registration, copy the one-run command shown on the router page. It downloads the generated .rsc file from AROFi, imports it, and removes the temporary file.',
+          'The registration key is unique per router. Use the command from your router page, not the example below.',
         ],
         commandBlocks: [
           {
-            title: 'Ether1 WAN fix',
+            title: 'Example one-run command',
+            commands: [
+              '/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/YOUR_ROUTER_REGISTRATION_KEY" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"',
+            ],
+          },
+        ],
+      },
+      {
+        heading: '4. Final RouterOS 6 upstream-router fix',
+        body: [
+          'Use this final block after the AROFi script when the HotSpot exists but customers do not redirect, or when customer devices still receive 192.168.1.x instead of 10.50.0.x.',
+          'This separates ether1 as WAN, makes bridgeLocal the captive LAN, recreates the AROFi DHCP pool, recreates DHCP service, fixes NAT, and binds the HotSpot to bridgeLocal.',
+          'Replace Vincent Cneter and arofi-c308ea29 with the actual HotSpot name and AROFi profile shown by /ip hotspot print detail and /ip hotspot profile print detail.',
+        ],
+        commandBlocks: [
+          {
+            title: 'Final post-script fix',
             commands: [
               '/interface bridge port remove [find interface=ether1]',
               '/ip dhcp-client remove [find interface=bridgeLocal]',
+              '/ip dhcp-client remove [find interface=ether1]',
               '/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"',
               '/ip address remove [find address="192.168.1.2/24"]',
+              '/ip address remove [find address="10.50.0.1/24"]',
+              '/ip address add address=10.50.0.1/24 interface=bridgeLocal',
+              '/ip pool remove [find name=arofi-pool]',
+              '/ip pool add name=arofi-pool ranges=10.50.0.10-10.50.0.254',
+              '/ip dhcp-server remove [find name=arofi-dhcp]',
+              '/ip dhcp-server network remove [find address="10.50.0.0/24"]',
+              '/ip dhcp-server network add address=10.50.0.0/24 gateway=10.50.0.1 dns-server=10.50.0.1,1.1.1.1',
+              '/ip dhcp-server add name=arofi-dhcp interface=bridgeLocal address-pool=arofi-pool disabled=no',
+              '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
               '/ip firewall nat remove [find comment="AROFi nat"]',
               '/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"',
-              '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
+              '/ip hotspot set [find name="Vincent Cneter"] interface=bridgeLocal address-pool=arofi-pool disabled=no',
+              '/ip hotspot profile set [find name="arofi-c308ea29"] hotspot-address=10.50.0.1 html-directory=hotspot login-by=cookie,http-chap,http-pap use-radius=yes radius-accounting=yes',
             ],
           },
+        ],
+      },
+      {
+        heading: '5. Verify redirect',
+        body: [
+          'Disconnect and reconnect the customer device to the MikroTik Wi-Fi. The customer device should receive 10.50.0.x, not 192.168.1.x.',
+          'Open http://neverssl.com or http://10.50.0.1 from the customer device. It should redirect to the AROFi captive portal.',
+          'If redirect still fails, inspect HotSpot hosts, active sessions, DHCP leases, and login.html.',
+        ],
+        commandBlocks: [
           {
-            title: 'Wait 15 seconds, then verify WAN',
+            title: 'Verification commands',
             commands: [
               '/ip dhcp-client print',
               '/ip address print',
               '/ip route print',
-              '/ping 192.168.1.1 count=4',
+              '/ip hotspot print detail',
+              '/ip hotspot host print',
+              '/ip hotspot active print',
+              '/ip dhcp-server lease print',
+              '/file print where name~"hotspot"',
               '/ping 8.8.8.8 count=4',
               '/ping arofi.arosoft.io count=4',
             ],
@@ -62,28 +105,14 @@ const docs: Record<string, DocPage> = {
         ],
       },
       {
-        heading: '4. Retry AROFi callback if WAN is now working',
+        heading: '6. RouterOS 6 wireless note',
         body: [
-          'If DHCP on ether1 gets an IP like 192.168.1.x and ping works, retry the AROFi callback from the router. Replace the registration key only if you generated a new script.',
+          'RouterOS 6 uses /interface wireless, not /interface wifi. If wlan1 is managed by CAPsMAN or disabled, disable CAP mode and configure wlan1 manually.',
+          'If the AROFi script already created the SSID and clients can connect, do not rerun this section.',
         ],
         commandBlocks: [
           {
-            title: 'Retry provisioning callback',
-            commands: [
-              '/tool fetch url="http://95.111.234.34:4012/api/mikrotik/provisioned/ef2383e9-8014-46e7-b40f-0c262548102d" mode=http keep-result=no',
-            ],
-          },
-        ],
-      },
-      {
-        heading: '5. Enable RouterOS 6 wireless when wlan1 is controlled by CAPsMAN',
-        body: [
-          'Use this section when wireless is disabled or shows wlan1 managed by CAPsMAN. RouterOS 6 uses /interface wireless, not /interface wifi.',
-          'If the profile or bridge port already exists, ignore the duplicate error.',
-        ],
-        commandBlocks: [
-          {
-            title: 'Disable CAP mode and broadcast customer WiFi',
+            title: 'Manual Wi-Fi recovery',
             commands: [
               '/interface wireless cap set enabled=no',
               '/interface wireless security-profiles add name=arofi-open mode=none authentication-types=""',
@@ -94,21 +123,11 @@ const docs: Record<string, DocPage> = {
         ],
       },
       {
-        heading: '6. Useful checks',
+        heading: '7. Important limits',
         body: [
-          'Use these commands to confirm the router state after recovery. The correct firewall command starts with /ip.',
-        ],
-        commandBlocks: [
-          {
-            title: 'Final checks',
-            commands: [
-              '/ip firewall filter print',
-              '/interface wireless print',
-              '/interface bridge port print',
-              '/ip hotspot print',
-              '/ip pool print',
-            ],
-          },
+          'The script can configure supported MikroTik settings, but it cannot create upstream internet where none exists.',
+          'Remote WinBox/API from AROFi still requires public IP, port forwarding, VPN, or a supported tunnel when the router is behind ISP NAT.',
+          'The correct firewall command is /ip firewall filter print, not firewall filter print.',
         ],
       },
     ],
@@ -130,6 +149,14 @@ const docs: Record<string, DocPage> = {
         body: [
           'Internet access is activated only after provider status is confirmed successful.',
           'Pending and failed payments must not create active sessions or increase withdrawable wallet balance.',
+        ],
+      },
+      {
+        heading: 'Testing before MTN API credentials',
+        body: [
+          'Pesapal is not part of AROFi. Do not re-enable it for customer checkout or test collections.',
+          'Before live MTN credentials are issued, test router onboarding, captive redirect, package display, voucher flows, and payment pending/failed handling.',
+          'Live package activation from mobile money must wait for a confirmed successful provider status from MTN or another approved configured provider.',
         ],
       },
     ],
