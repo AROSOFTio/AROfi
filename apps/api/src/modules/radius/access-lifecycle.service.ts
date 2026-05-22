@@ -55,11 +55,33 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
 
   async runOnce() {
     await this.expireActivations()
+    await this.cleanupExpiredRadiusCredentials()
     await this.syncRadiusSqlSignals()
     await this.enforceDataQuotas()
     await this.processPendingDisconnects()
     await this.cleanStaleSessions()
     await this.markStuckPendingPayments()
+  }
+
+  private async cleanupExpiredRadiusCredentials() {
+    const expired = await this.prisma.radiusCredential.findMany({
+      where: {
+        status: RadiusCredentialStatus.ACTIVE,
+        expiresAt: { lte: new Date() },
+      },
+      take: 100,
+    })
+
+    for (const credential of expired) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.radCheck.deleteMany({ where: { username: credential.username } })
+        await tx.radReply.deleteMany({ where: { username: credential.username } })
+        await tx.radiusCredential.update({
+          where: { id: credential.id },
+          data: { status: RadiusCredentialStatus.EXPIRED },
+        })
+      })
+    }
   }
 
   private async syncRadiusSqlSignals() {
