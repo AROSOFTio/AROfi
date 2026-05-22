@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import DocsCommandBlock from '@/components/DocsCommandBlock'
 
 type DocPage = {
   title: string
   intro: string
-  sections: Array<{ heading: string; body: string[] }>
+  sections: Array<{ heading: string; body: string[]; commandBlocks?: Array<{ title: string; commands: string[] }> }>
 }
 
 const docs: Record<string, DocPage> = {
@@ -31,25 +32,50 @@ const docs: Record<string, DocPage> = {
         heading: 'Savana or upstream-router WAN fix for RouterOS 6',
         body: [
           'If the MikroTik gets 192.168.1.x on bridgeLocal and cannot ping 8.8.8.8, ether1 is still inside the LAN bridge. Remove ether1 from bridgeLocal, move DHCP client to ether1, and masquerade out ether1.',
-          'Run: /interface bridge port remove [find interface=ether1]',
-          'Run: /ip dhcp-client remove [find interface=bridgeLocal]',
-          'Run: /ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"',
-          'Run: /ip address remove [find address="192.168.1.2/24"]',
-          'Run: /ip firewall nat remove [find comment="AROFi nat"]',
-          'Run: /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"',
-          'Run: /ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
-          'Verify with: /ip dhcp-client print, /ip address print, /ip route print, /ping 192.168.1.1 count=4, /ping 8.8.8.8 count=4, /ping arofi.arosoft.io count=4.',
+          'Run these commands line by line in WinBox Terminal. If WinBox disconnects, reconnect through Neighbors/MAC or through a LAN port after the router finishes applying the change.',
+        ],
+        commandBlocks: [
+          {
+            title: 'WAN Fix Commands',
+            commands: [
+              '/interface bridge port remove [find interface=ether1]',
+              '/ip dhcp-client remove [find interface=bridgeLocal]',
+              '/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"',
+              '/ip address remove [find address="192.168.1.2/24"]',
+              '/ip firewall nat remove [find comment="AROFi nat"]',
+              '/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"',
+              '/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
+            ],
+          },
+          {
+            title: 'Verify WAN',
+            commands: [
+              '/ip dhcp-client print',
+              '/ip address print',
+              '/ip route print',
+              '/ping 192.168.1.1 count=4',
+              '/ping 8.8.8.8 count=4',
+              '/ping arofi.arosoft.io count=4',
+            ],
+          },
         ],
       },
       {
         heading: 'RouterOS 6 wireless recovery',
         body: [
           'RouterOS 6 uses /interface wireless, not /interface wifi. If wlan1 is managed by CAPsMAN or disabled, disable CAP mode and configure wlan1 manually.',
-          'Run: /interface wireless cap set enabled=no',
-          'Run: /interface wireless security-profiles add name=arofi-open mode=none authentication-types=""',
-          'Run: /interface wireless set wlan1 disabled=no mode=ap-bridge ssid="Kitintale Market" security-profile=arofi-open',
-          'Run: /interface bridge port add bridge=bridgeLocal interface=wlan1',
           'If the profile or bridge port already exists, ignore the duplicate error.',
+        ],
+        commandBlocks: [
+          {
+            title: 'Wireless Recovery Commands',
+            commands: [
+              '/interface wireless cap set enabled=no',
+              '/interface wireless security-profiles add name=arofi-open mode=none authentication-types=""',
+              '/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="Kitintale Market" security-profile=arofi-open',
+              '/interface bridge port add bridge=bridgeLocal interface=wlan1',
+            ],
+          },
         ],
       },
     ],
@@ -277,18 +303,31 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   if (!doc) notFound()
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-950">
-      <article className="mx-auto max-w-3xl">
-        <Link href="/docs" className="text-sm font-semibold text-emerald-700">Docs</Link>
-        <h1 className="mt-3 text-4xl font-bold">{doc.title}</h1>
-        <p className="mt-4 text-lg leading-8 text-slate-600">{doc.intro}</p>
-        <div className="mt-8 space-y-8 text-base leading-7 text-slate-700">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950">
+      <article className="mx-auto max-w-5xl">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <Link href="/" className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-100">
+            Back Home
+          </Link>
+          <Link href="/docs" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800">
+            All Docs
+          </Link>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">AROfi Docs</p>
+          <h1 className="mt-3 text-4xl font-black tracking-tight">{doc.title}</h1>
+          <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">{doc.intro}</p>
+        </div>
+        <div className="mt-8 space-y-6 text-base leading-7 text-slate-700">
           {doc.sections.map((section) => (
-            <section key={section.heading} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-950">{section.heading}</h2>
+            <section key={section.heading} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-2xl font-black text-slate-950">{section.heading}</h2>
               <div className="mt-4 space-y-3">
                 {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               </div>
+              {section.commandBlocks?.map((block) => (
+                <DocsCommandBlock key={block.title} title={block.title} commands={block.commands} />
+              ))}
             </section>
           ))}
         </div>
