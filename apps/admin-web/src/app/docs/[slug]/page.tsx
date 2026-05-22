@@ -32,7 +32,7 @@ const docs: Record<string, DocPage> = {
         heading: 'Savana or upstream-router WAN fix for RouterOS 6',
         body: [
           'If the MikroTik gets 192.168.1.x on bridgeLocal and cannot ping 8.8.8.8, ether1 is still inside the LAN bridge. Remove ether1 from bridgeLocal, move DHCP client to ether1, and masquerade out ether1.',
-          'Run these commands line by line in WinBox Terminal. If WinBox disconnects, reconnect through Neighbors/MAC or through a LAN port after the router finishes applying the change.',
+          'Run these commands line by line in WinBox Terminal. If WinBox disconnects, reconnect through Neighbors/MAC or a LAN port after the router applies the change.',
         ],
         commandBlocks: [
           {

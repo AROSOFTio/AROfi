@@ -301,23 +301,6 @@ export class MikrotikService {
     ]
   }
 
-  private buildHeartbeatScript(registrationKey: string, callbackUrl: string, fallbackCallbackUrl: string) {
-    const name = `arofi-heartbeat-${registrationKey.slice(0, 8)}`
-    const source = `:do { /tool fetch url=\\"${callbackUrl}\\" mode=https keep-result=no } on-error={ :do { /tool fetch url=\\"${fallbackCallbackUrl}\\" mode=http keep-result=no } on-error={} }`
-    const intervalSeconds = Math.max(
-      2,
-      Number.parseInt(process.env.ROUTER_HEARTBEAT_INTERVAL_SECONDS ?? '2', 10),
-    )
-
-    return [
-      `/system script remove [find name="${name}"]`,
-      `/system script add name="${name}" source="${source}" comment="AROFi heartbeat ${this.escape(registrationKey)}"`,
-      `/system scheduler remove [find name="${name}"]`,
-      `/system scheduler add name="${name}" interval=${intervalSeconds}s start-time=startup on-event="/system script run ${name}" comment="AROFi live status heartbeat"`,
-      `/system script run ${name}`,
-    ]
-  }
-
   private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string) {
     return [
       `:do {`,
@@ -364,11 +347,12 @@ export class MikrotikService {
     ].join('\n')
   }
 
-  private buildOpenWifiScript(ssid: string, bridgeName = 'bridge') {
+  private buildOpenWifiScript(ssid: string) {
     const escapedSsid = this.escape(ssid.slice(0, 32) || 'AROFi Free WiFi')
 
     return [
       `:local arofiSsid "${escapedSsid}"`,
+      `:local arofiWifiConfigured false`,
       `:do {`,
       `  :foreach wifiIf in=[/interface wifi find] do={`,
       `    :do { /interface wifi set $wifiIf disabled=no configuration.mode=ap configuration.ssid=$arofiSsid security.authentication-types="" } on-error={`,
@@ -376,13 +360,13 @@ export class MikrotikService {
       `    }`,
       `    :local wifiName [/interface wifi get $wifiIf name]`,
       `    :if ([:len [/interface bridge port find interface=$wifiName]] = 0) do={`,
-      `      /interface bridge port add bridge=${bridgeName} interface=$wifiName`,
+      `      /interface bridge port add bridge=bridge interface=$wifiName`,
       `    }`,
+      `    :set arofiWifiConfigured true`,
       `  }`,
       `} on-error={`,
       `  :put "AROFi: /interface wifi menu not available; trying legacy wireless."`,
       `}`,
-      `:do { /interface wireless cap set enabled=no } on-error={ :put "AROFi: CAP wireless mode not enabled or not available." }`,
       `:do {`,
       `  :if ([:len [/interface wireless security-profiles find name="arofi-open"]] = 0) do={`,
       `    /interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""`,
@@ -391,11 +375,15 @@ export class MikrotikService {
       `    /interface wireless set $wlanIf disabled=no mode=ap-bridge ssid=$arofiSsid security-profile=arofi-open`,
       `    :local wlanName [/interface wireless get $wlanIf name]`,
       `    :if ([:len [/interface bridge port find interface=$wlanName]] = 0) do={`,
-      `      /interface bridge port add bridge=${bridgeName} interface=$wlanName`,
+      `      /interface bridge port add bridge=bridge interface=$wlanName`,
       `    }`,
+      `    :set arofiWifiConfigured true`,
       `  }`,
       `} on-error={`,
       `  :put "AROFi: legacy /interface wireless menu not available."`,
+      `}`,
+      `:if ($arofiWifiConfigured = false) do={`,
+      `  :put "Warning: no supported MikroTik Wi-Fi interface was found. Ethernet captive portal still works; configure wireless manually or use a supported RouterOS Wi-Fi package."`,
       `}`,
     ]
   }
