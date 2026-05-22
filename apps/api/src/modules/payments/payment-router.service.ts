@@ -39,9 +39,48 @@ export class PaymentRouterService {
     const fallback = network === PaymentNetwork.AIRTEL ? 'AIRTEL_MONEY_DIRECT' : 'MTN_MOMO_DIRECT'
     const configured = (this.configService.get<string>(key) ?? fallback).toUpperCase()
 
+    if (direction === 'COLLECTION' && this.shouldFallbackToAggregator(configured)) {
+      return PaymentProvider.AGGREGATOR
+    }
+
     if (configured === 'MTN_MOMO_DIRECT') return PaymentProvider.MTN_MOMO_DIRECT
     if (configured === 'AIRTEL_MONEY_DIRECT') return PaymentProvider.AIRTEL_MONEY_DIRECT
     if (configured === 'AGGREGATOR') return PaymentProvider.AGGREGATOR
     throw new BadRequestException(`${key} must be MTN_MOMO_DIRECT, AIRTEL_MONEY_DIRECT, or AGGREGATOR`)
+  }
+
+  private shouldFallbackToAggregator(configured: string) {
+    if (!['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT'].includes(configured)) {
+      return false
+    }
+
+    if (!this.hasPesapalCollectionConfig()) {
+      return false
+    }
+
+    if (configured === 'MTN_MOMO_DIRECT') {
+      return !this.hasAll([
+        'MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY',
+        'MTN_MOMO_COLLECTION_API_USER',
+        'MTN_MOMO_COLLECTION_API_KEY',
+      ])
+    }
+
+    return !this.hasAll([
+      'AIRTEL_MONEY_COLLECTION_BASE_URL',
+      'AIRTEL_MONEY_CLIENT_ID',
+      'AIRTEL_MONEY_CLIENT_SECRET',
+    ])
+  }
+
+  private hasPesapalCollectionConfig() {
+    return this.hasAll(['PESAPAL_CONSUMER_KEY', 'PESAPAL_CONSUMER_SECRET', 'PESAPAL_IPN_ID'])
+  }
+
+  private hasAll(keys: string[]) {
+    return keys.every((key) => {
+      const value = this.configService.get<string>(key)?.trim()
+      return Boolean(value && !value.startsWith('CHANGE_ME') && !value.startsWith('replace_with'))
+    })
   }
 }

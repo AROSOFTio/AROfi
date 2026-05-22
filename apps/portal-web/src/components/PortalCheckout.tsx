@@ -593,6 +593,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       const checkoutUrl = extractCheckoutUrl(payment)
       if (checkoutUrl && typeof window !== 'undefined') {
+        setStatusMessage('Opening secure payment checkout...')
         window.localStorage.setItem(paymentReturnStorageKey, JSON.stringify({
           paymentId: payment.id,
           statusToken: payment.statusToken,

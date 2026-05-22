@@ -157,8 +157,17 @@ const docs: Record<string, DocPage> = {
           'Pesapal can be used temporarily as the backend AGGREGATOR collection route while direct MTN credentials are pending.',
           'Customer screens still show only MTN, Airtel, phone number, and Pay. Gateway names must not be shown on the portal.',
           'Set MTN_COLLECTION_PROVIDER=AGGREGATOR and/or AIRTEL_COLLECTION_PROVIDER=AGGREGATOR, then configure PESAPAL_BASE_URL, PESAPAL_CONSUMER_KEY, PESAPAL_CONSUMER_SECRET, and PESAPAL_IPN_ID.',
+          'If Pesapal is configured and direct MTN/Airtel collection keys are missing, AROFi falls back to the AGGREGATOR collection route instead of failing the customer with missing MTN/Airtel key errors.',
           'Do not set disbursement providers to AGGREGATOR. Vendor withdrawals remain on direct MTN/Airtel payout adapters.',
           'Internet access is still activated only after the provider status is confirmed successful.',
+        ],
+      },
+      {
+        heading: 'Auto-connect and expiry',
+        body: [
+          'After a successful provider status check, AROFi creates an activation, provisions RADIUS credentials, and the captive portal reconnects the customer device through MikroTik login automatically.',
+          'The RADIUS reply includes Session-Timeout based on the package duration. When time expires, MikroTik ends the session and AROFi disables the credential during the lifecycle worker pass.',
+          'Set ACCESS_WORKER_INTERVAL_MS=5000 for near-real-time expiry cleanup. Enable RADIUS_DISCONNECT_ENABLED=true only after Disconnect-Request secrets and router CoA/disconnect support are configured.',
         ],
       },
     ],
