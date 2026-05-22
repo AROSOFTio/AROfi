@@ -523,6 +523,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       }
     } else if (payment.status === 'FAILED') {
       setErrorMessage(payment.statusMessage ?? 'The payment did not complete successfully.')
+    } else if (pendingStatuses.includes(payment.status)) {
+      setStatusMessage('Payment is being confirmed. Keep this page open while AROFi checks Pesapal.')
     }
 
     await loadContext(payment.phoneNumber, portalToken, hotspotParams)
@@ -719,18 +721,26 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    const form = document.createElement('form')
-    form.method = 'POST'
-    form.action = reconnect.loginUrl
-    for (const [name, value] of Object.entries({ username: reconnect.username, password: reconnect.password })) {
-      const input = document.createElement('input')
-      input.type = 'hidden'
-      input.name = name
-      input.value = value ?? ''
-      form.appendChild(input)
+    try {
+      const loginTarget = new URL(reconnect.loginUrl, window.location.href)
+      loginTarget.searchParams.set('username', reconnect.username)
+      loginTarget.searchParams.set('password', reconnect.password)
+      window.location.href = loginTarget.toString()
+      return
+    } catch {
+      const form = document.createElement('form')
+      form.method = 'POST'
+      form.action = reconnect.loginUrl
+      for (const [name, value] of Object.entries({ username: reconnect.username, password: reconnect.password })) {
+        const input = document.createElement('input')
+        input.type = 'hidden'
+        input.name = name
+        input.value = value ?? ''
+        form.appendChild(input)
+      }
+      document.body.appendChild(form)
+      form.submit()
     }
-    document.body.appendChild(form)
-    form.submit()
   }
 
   function connectNow() {
