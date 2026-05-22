@@ -6,7 +6,7 @@ sql {
 	login = "$ENV{POSTGRES_USER}"
 	password = "$ENV{POSTGRES_PASSWORD}"
 	radius_db = "$ENV{POSTGRES_DB}"
-	sql_user_name = "%{%{Stripped-User-Name}:-%{User-Name}}"
+	sql_user_name = "%{%{Stripped-User-Name}:-%{%{User-Name}:-DEFAULT}}"
 	read_clients = yes
 	client_table = "nas"
 	read_groups = no
