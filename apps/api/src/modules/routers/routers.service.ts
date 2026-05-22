@@ -179,23 +179,13 @@ export class RoutersService {
     }
 
     const radAcctNasIps = new Set(recentAccountingRows.map((row) => row.nasipaddress).filter(Boolean))
-    const mappedRouterSignals = routers.map((router) => {
+    const mappedRouters = routers.map((router) => {
       const mapped = this.mapRouter(router)
       const nasCandidates = this.getRouterNasCandidates(router)
-      const matchingRadAcctRows = recentAccountingRows.filter((row) =>
-        row.nasipaddress ? nasCandidates.includes(row.nasipaddress) : false,
-      )
-      const hasRadAcct = matchingRadAcctRows.length > 0
+      const hasRadAcct = nasCandidates.some((candidate) => radAcctNasIps.has(candidate))
       const activeRadAcctSessions = nasCandidates.reduce(
         (total, candidate) => total + (activeAccountingByNas.get(candidate) ?? 0),
         0,
-      )
-      const latestRadAcctSignalAt = this.getLatestDate(
-        matchingRadAcctRows.flatMap((row) => [
-          row.acctupdatetime,
-          row.acctstarttime,
-          row.acctstoptime,
-        ]),
       )
 
       if (!hasRadAcct) {
@@ -204,17 +194,12 @@ export class RoutersService {
 
       return {
         ...mapped,
-        accountingSeen: true,
+        status: RouterStatus.HEALTHY,
         healthMessage: 'Recent FreeRADIUS accounting seen in radacct',
-        lastAccountingSignalAt: this.getLatestDate([
-          mapped.lastAccountingSignalAt,
-          latestRadAcctSignalAt,
-        ]),
-        lastSeenAt: this.getLatestDate([mapped.lastSeenAt, latestRadAcctSignalAt]),
+        lastSeenAt: mapped.lastSeenAt ?? new Date(),
         activeSessions: Math.max(mapped.activeSessions, activeRadAcctSessions),
       }
     })
-    const mappedRouters = mappedRouterSignals.map((router) => this.decorateRouterLiveState(router))
     const latencyValues = mappedRouters
       .map((router) => router.lastLatencyMs)
       .filter((value): value is number => typeof value === 'number')
@@ -232,12 +217,10 @@ export class RoutersService {
     return {
       summary: {
         totalRouters: mappedRouters.length,
-        healthyRouters: mappedRouters.filter((router) => router.liveState === 'LIVE').length,
-        liveRouters: mappedRouters.filter((router) => router.liveState === 'LIVE').length,
-        degradedRouters: mappedRouters.filter((router) => router.liveState === 'STALE').length,
-        staleRouters: mappedRouters.filter((router) => router.liveState === 'STALE').length,
-        offlineRouters: mappedRouters.filter((router) => router.liveState === 'OFFLINE' || router.liveState === 'STALE').length,
-        pendingRouters: mappedRouters.filter((router) => router.liveState === 'PENDING').length,
+        healthyRouters: mappedRouters.filter((router) => router.status === RouterStatus.HEALTHY).length,
+        degradedRouters: mappedRouters.filter((router) => router.status === RouterStatus.DEGRADED).length,
+        offlineRouters: mappedRouters.filter((router) => router.status === RouterStatus.OFFLINE).length,
+        pendingRouters: mappedRouters.filter((router) => router.status === RouterStatus.PENDING).length,
         routerGroups: groups.length,
         activeSessions: mappedRouters.reduce((total, router) => total + router.activeSessions, 0),
         averageLatencyMs:
@@ -525,9 +508,7 @@ export class RoutersService {
             host: managementHost,
             radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
             onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
-            status: RouterStatus.DEGRADED,
             lastProvisionedAt: now,
-            lastSeenAt: now,
             healthMessage,
           },
           select: { id: true, host: true, tenantId: true, name: true },
@@ -574,9 +555,7 @@ export class RoutersService {
           data: {
             radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
             onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
-            status: RouterStatus.DEGRADED,
             lastProvisionedAt: now,
-            lastSeenAt: now,
             healthMessage:
               'Provisioning callback received, but AROFi could not fully update router/NAS records. Check API logs for the database error.',
           },
@@ -1023,80 +1002,6 @@ export class RoutersService {
     )
   }
 
-  private getLatestDate(values: Array<Date | string | null | undefined>) {
-    const latestMs = values
-      .map((value) => (value ? new Date(value).getTime() : Number.NaN))
-      .filter((value) => Number.isFinite(value))
-      .sort((a, b) => b - a)[0]
-
-    return Number.isFinite(latestMs) ? new Date(latestMs) : null
-  }
-
-  private decorateRouterLiveState<T extends {
-    status?: RouterStatus | string
-    lastSeenAt?: Date | string | null
-    lastProvisionedAt?: Date | string | null
-    lastRadiusSignalAt?: Date | string | null
-    lastAccountingSignalAt?: Date | string | null
-    lastAuthSignalAt?: Date | string | null
-    latestHealthCheck?: {
-      status?: RouterStatus | string
-      checkedAt?: Date | string | null
-    } | null
-    managementApiReachable?: boolean
-  }>(router: T) {
-    const onlineWindowSeconds = Number.parseInt(
-      process.env.ROUTER_ONLINE_WINDOW_SECONDS ?? '6',
-      10,
-    )
-    const normalizedOnlineWindowSeconds = Math.max(3, onlineWindowSeconds)
-    const onlineWindowMs = normalizedOnlineWindowSeconds * 1000
-    const signals = [
-      { at: router.lastAccountingSignalAt, source: 'FreeRADIUS accounting' },
-      { at: router.lastAuthSignalAt, source: 'RADIUS authentication' },
-      { at: router.lastRadiusSignalAt, source: 'RADIUS traffic' },
-      { at: router.lastSeenAt, source: 'Router callback/API' },
-      { at: router.lastProvisionedAt, source: 'Provisioning callback' },
-      router.managementApiReachable && router.latestHealthCheck?.checkedAt
-        ? { at: router.latestHealthCheck.checkedAt, source: 'Management API health check' }
-        : null,
-    ].filter((signal): signal is { at: Date | string | null | undefined; source: string } =>
-      Boolean(signal?.at),
-    )
-
-    const latestSignal = signals
-      .map((signal) => ({ ...signal, date: new Date(signal.at as Date | string) }))
-      .filter((signal) => Number.isFinite(signal.date.getTime()))
-      .sort((a, b) => b.date.getTime() - a.date.getTime())[0]
-
-    const secondsSinceLastSignal = latestSignal
-      ? Math.max(0, Math.floor((Date.now() - latestSignal.date.getTime()) / 1000))
-      : null
-    const isLiveNow =
-      typeof secondsSinceLastSignal === 'number' && secondsSinceLastSignal * 1000 <= onlineWindowMs
-
-    let liveState: 'LIVE' | 'STALE' | 'OFFLINE' | 'PENDING'
-    if (isLiveNow) {
-      liveState = 'LIVE'
-    } else if (!latestSignal) {
-      liveState = 'PENDING'
-    } else if (router.status === RouterStatus.OFFLINE) {
-      liveState = 'OFFLINE'
-    } else {
-      liveState = router.status === RouterStatus.PENDING ? 'PENDING' : 'STALE'
-    }
-
-    return {
-      ...router,
-      liveState,
-      isLiveNow,
-      lastSignalAt: latestSignal?.date ?? null,
-      lastSignalSource: latestSignal?.source ?? null,
-      secondsSinceLastSignal,
-      routerOnlineWindowSeconds: normalizedOnlineWindowSeconds,
-    }
-  }
-
   private mapRouter(router: {
     id: string
     name: string
@@ -1167,7 +1072,7 @@ export class RoutersService {
       checkedAt: Date
     }>
   }) {
-    return this.decorateRouterLiveState({
+    return {
       id: router.id,
       name: router.name,
       identity: router.identity ?? router.name,
@@ -1238,7 +1143,7 @@ export class RoutersService {
             checkedAt: router.healthChecks[0].checkedAt,
           }
         : null,
-    })
+    }
   }
 
   private generateSharedSecret() {

@@ -119,9 +119,7 @@ export default function RoutersManager() {
   const routerSummary = overview?.summary ?? {
     totalRouters: 0,
     healthyRouters: 0,
-    liveRouters: 0,
     degradedRouters: 0,
-    staleRouters: 0,
     offlineRouters: 0,
     pendingRouters: 0,
     routerGroups: 0,
@@ -143,45 +141,14 @@ export default function RoutersManager() {
       { title: 'Hotspot site', ready: (hotspots?.items.length ?? 0) > 0 },
       { title: 'Router group', ready: (overview?.groups.length ?? 0) > 0 },
       { title: 'First router', ready: (overview?.routers.length ?? 0) > 0 },
-      { title: 'Live router signal', ready: (overview?.summary.liveRouters ?? overview?.summary.healthyRouters ?? 0) > 0 },
+      { title: 'RADIUS/API verification', ready: (overview?.summary.healthyRouters ?? 0) > 0 },
     ],
     [hotspots, overview],
   )
-  const routers = overview?.routers ?? []
-  const onlineRouters = routerSummary.liveRouters ?? routers.filter((router) => isRouterOnline(router)).length
-  const selectedRouterState = getRouterLiveState(selectedSetup?.router)
 
   useEffect(() => {
     void loadData()
   }, [])
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      void refreshLiveRouterState()
-    }, 2000)
-
-    return () => window.clearInterval(interval)
-  }, [selectedSetup?.router.id])
-
-  async function refreshLiveRouterState() {
-    try {
-      const overviewData = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
-      setOverview(overviewData)
-
-      const selectedRouterId = selectedSetup?.router.id ?? overviewData.routers[0]?.id
-      if (!selectedRouterId) {
-        setSelectedSetup(null)
-        return
-      }
-
-      const selectedRouter = overviewData.routers.find((router) => router.id === selectedRouterId)
-      if (selectedRouter) {
-        setSelectedSetup((previous) => previous ? { ...previous, router: selectedRouter } : previous)
-      }
-    } catch {
-      // Keep the last visible state; the next poll or manual refresh will recover.
-    }
-  }
 
   async function loadData(preferredRouterId?: string) {
     try {
@@ -389,11 +356,10 @@ export default function RoutersManager() {
         <div>
           <h1 className="page-title">Routers</h1>
           <p className="page-subtitle">
-            Provision MikroTik routers, verify live signals, and keep RADIUS/HotSpot operations visible.
+            Register the first MikroTik, link it to a hotspot, and push RouterOS billing setup from the tenant workspace.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <RouterLivePill state={selectedRouterState} label={selectedSetup?.router.name ?? 'No router selected'} />
           <span className="badge badge-info" style={{ padding: '8px 12px' }}>
             {overview?.radiusFoundation.serverHost ?? 'RADIUS pending'}:{overview?.radiusFoundation.authPort ?? 1812}
           </span>
@@ -408,8 +374,8 @@ export default function RoutersManager() {
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
           { label: 'Routers', value: `${routerSummary.totalRouters}`, color: 'blue' },
-          { label: 'Live', value: `${onlineRouters}`, color: 'green' },
-          { label: 'Offline', value: `${routerSummary.offlineRouters}`, color: 'amber' },
+          { label: 'Healthy', value: `${routerSummary.healthyRouters}`, color: 'green' },
+          { label: 'Pending', value: `${routerSummary.pendingRouters}`, color: 'amber' },
           { label: 'Groups', value: `${routerSummary.routerGroups}`, color: 'purple' },
           { label: 'Live Sessions', value: `${routerSummary.activeSessions}`, color: 'blue' },
           { label: 'Avg Latency', value: formatLatency(routerSummary.averageLatencyMs), color: 'green' },
@@ -421,35 +387,32 @@ export default function RoutersManager() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 0.82fr) minmax(420px, 1.18fr)', gap: 18, marginBottom: 20 }}>
-        <section className="card">
+      <div className="charts-grid">
+        <div className="card">
           <div className="card-header">
-            <span className="card-title">Router Actions</span>
+            <span className="card-title">Tenant Launch Sequence</span>
           </div>
           <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-            <button type="button" className="btn btn-primary" onClick={() => { setRouterFormError(''); setRouterProcessText(''); setRouterModalOpen(true) }}>
-              Register MikroTik Router
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setGroupFormError(''); setGroupProcessText(''); setGroupModalOpen(true) }}>
-              Create Router Group
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => selectedSetup && void handleHealthCheck(selectedSetup.router.id)} disabled={!selectedSetup || runningHealthCheckId === selectedSetup?.router.id}>
-              {runningHealthCheckId === selectedSetup?.router.id ? 'Checking selected router...' : 'Health Check Selected'}
-            </button>
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, color: 'var(--text-2)', fontSize: 12, lineHeight: 1.55 }}>
-              Live means AROFi has proof from callback, RADIUS, accounting, or management API. Remote WinBox/API still depends on public IP, port forwarding, VPN, or tunnel.
-            </div>
+            {launchChecklist.map((step, index) => (
+              <div key={step.title} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <span className={step.ready ? 'badge badge-success' : 'badge badge-warning'} style={{ minWidth: 28, justifyContent: 'center' }}>
+                  {index + 1}
+                </span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {step.title} {step.ready ? 'ready' : 'pending'}
+                </span>
+              </div>
+            ))}
           </div>
-        </section>
+        </div>
 
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Selected Router</span>
-            <RouterLivePill state={selectedRouterState} />
+            <span className="card-title">Selected Router Setup</span>
+            {loadingSetup && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Refreshing...</span>}
           </div>
           <div style={{ padding: 20, display: 'grid', gap: 10 }}>
-            {loadingSetup && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Refreshing...</span>}
-            <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: 18 }}>
+            <div style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
               {selectedSetup?.router.name ?? 'No router selected yet'}
             </div>
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -498,7 +461,21 @@ export default function RoutersManager() {
               </div>
             )}
             {selectedSetup?.router && (
-              <RouterSignalGrid router={selectedSetup.router} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
+                <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.provisioningCallbackReceived ? 'Script callback received' : 'Waiting for script callback'}
+                </span>
+                <span className={selectedSetup.router.radiusAuthSeen ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.radiusAuthSeen ? 'RADIUS auth seen' : 'RADIUS auth not seen'}
+                </span>
+                <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.accountingSeen ? 'Accounting seen' : 'Accounting not seen'}
+                </span>
+                <span className={selectedSetup.router.managementApiReachable ? 'badge badge-success' : 'badge badge-warning'}>
+                  {selectedSetup.router.managementApiReachable ? 'Management API reachable' : `API mgmt needs TCP ${selectedSetup.router.apiPort}`}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -506,20 +483,17 @@ export default function RoutersManager() {
 
       <div className="charts-grid">
         <div className="card">
-          <div className="card-header">
-            <span className="card-title">Launch Readiness</span>
-          </div>
+          <div className="card-header"><span className="card-title">Router Groups</span></div>
           <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-            {launchChecklist.map((step, index) => (
-              <div key={step.title} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <span className={step.ready ? 'badge badge-success' : 'badge badge-warning'} style={{ minWidth: 28, justifyContent: 'center' }}>
-                  {index + 1}
-                </span>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  {step.title} {step.ready ? 'ready' : 'pending'}
-                </span>
-              </div>
-            ))}
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>Group routers by branch, region, or site before registering MikroTik devices.</p>
+            <button type="button" className="btn btn-primary" onClick={() => { setGroupFormError(''); setGroupProcessText(''); setGroupModalOpen(true) }}>Create Router Group</button>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><span className="card-title">MikroTik Registration</span></div>
+          <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>Register a MikroTik, generate the RouterOS script, then verify callback, RADIUS, accounting, and optional API reachability.</p>
+            <button type="button" className="btn btn-primary" onClick={() => { setRouterFormError(''); setRouterProcessText(''); setRouterModalOpen(true) }}>Register MikroTik Router</button>
           </div>
         </div>
       </div>
@@ -641,139 +615,6 @@ export default function RoutersManager() {
         runningHealthCheckId={runningHealthCheckId}
       />
     </>
-  )
-}
-
-type RouterLiveState = 'live' | 'warning' | 'offline' | 'pending'
-
-function isRouterOnline(router: {
-  isLiveNow?: boolean
-  liveState?: string
-  status?: string
-  provisioningCallbackReceived?: boolean
-  radiusAuthSeen?: boolean
-  accountingSeen?: boolean
-  managementApiReachable?: boolean
-}) {
-  if (typeof router.isLiveNow === 'boolean') return router.isLiveNow
-  if (router.liveState) return router.liveState === 'LIVE'
-  return Boolean(router.status === 'HEALTHY' || router.radiusAuthSeen || router.accountingSeen)
-}
-
-function getRouterLiveState(router?: {
-  isLiveNow?: boolean
-  liveState?: string
-  status?: string
-  provisioningCallbackReceived?: boolean
-  radiusAuthSeen?: boolean
-  accountingSeen?: boolean
-  managementApiReachable?: boolean
-} | null): RouterLiveState {
-  if (!router) return 'pending'
-  if (router.liveState === 'LIVE' || router.isLiveNow) return 'live'
-  if (router.liveState === 'STALE') return 'offline'
-  if (router.liveState === 'OFFLINE') return 'offline'
-  if (router.liveState === 'PENDING') return 'pending'
-  if (router.status === 'OFFLINE') return 'offline'
-  if (router.status === 'HEALTHY' || router.radiusAuthSeen || router.accountingSeen) return 'live'
-  if (router.provisioningCallbackReceived || router.managementApiReachable || router.status === 'DEGRADED') return 'warning'
-  return 'pending'
-}
-
-function RouterLivePill({ state, label }: { state: RouterLiveState; label?: string }) {
-  const config = {
-    live: { text: 'Live', color: 'var(--success-fg)', bg: 'var(--success-bg)' },
-    warning: { text: 'Stale', color: 'var(--warn-fg)', bg: 'var(--warn-bg)' },
-    offline: { text: 'Offline', color: 'var(--danger-fg)', bg: 'var(--danger-bg)' },
-    pending: { text: 'Pending', color: 'var(--text-2)', bg: 'var(--bg-app)' },
-  }[state]
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        border: '1px solid var(--border)',
-        borderRadius: 999,
-        padding: '8px 12px',
-        background: config.bg,
-        color: config.color,
-        fontSize: 13,
-        fontWeight: 800,
-      }}
-    >
-      <span
-        aria-hidden="true"
-        className={state === 'live' ? 'live-dot' : undefined}
-        style={{ width: 9, height: 9, borderRadius: 99, background: config.color, boxShadow: `0 0 0 3px ${config.bg}` }}
-      />
-      {label ? `${label}: ${config.text}` : config.text}
-    </span>
-  )
-}
-
-function RouterSignalGrid({
-  router,
-}: {
-  router: {
-    onboardingStatus?: string
-    provisioningCallbackReceived?: boolean
-    radiusAuthSeen?: boolean
-    accountingSeen?: boolean
-    managementApiReachable?: boolean
-    apiPort?: number
-    liveState?: string
-    isLiveNow?: boolean
-    lastSignalAt?: string | null
-    lastSignalSource?: string | null
-    secondsSinceLastSignal?: number | null
-  }
-}) {
-  const items = [
-    { label: 'Script callback', ok: router.provisioningCallbackReceived, good: 'Received', bad: 'Waiting' },
-    { label: 'RADIUS auth', ok: router.radiusAuthSeen, good: 'Seen', bad: 'Not yet' },
-    { label: 'Accounting', ok: router.accountingSeen, good: 'Seen', bad: 'Not yet' },
-    { label: 'Management API', ok: router.managementApiReachable, good: 'Reachable', bad: `Needs TCP ${router.apiPort ?? 8728}` },
-  ]
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(120px, 1fr))', gap: 10 }}>
-      <SignalTile label="Live State" value={router.liveState ?? 'PENDING'} ok={Boolean(router.isLiveNow)} />
-      <SignalTile label="Last Signal" value={formatRouterSignal(router)} ok={Boolean(router.isLiveNow)} />
-      <SignalTile label="Onboarding" value={router.onboardingStatus ?? 'SCRIPT_GENERATED'} ok />
-      {items.map((item) => (
-        <SignalTile key={item.label} label={item.label} value={item.ok ? item.good : item.bad} ok={Boolean(item.ok)} />
-      ))}
-    </div>
-  )
-}
-
-function formatRouterSignal(router: {
-  lastSignalSource?: string | null
-  secondsSinceLastSignal?: number | null
-}) {
-  if (!router.lastSignalSource || typeof router.secondsSinceLastSignal !== 'number') {
-    return 'No signal yet'
-  }
-  if (router.secondsSinceLastSignal < 60) {
-    return `${router.lastSignalSource} now`
-  }
-  if (router.secondsSinceLastSignal < 3600) {
-    return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 60)}m ago`
-  }
-  return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 3600)}h ago`
-}
-
-function SignalTile({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--bg-app)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: ok ? 'var(--success-fg)' : 'var(--warn-fg)', fontSize: 12, fontWeight: 800 }}>
-        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 99, background: 'currentColor' }} />
-        {label}
-      </div>
-      <div style={{ marginTop: 8, color: 'var(--text-1)', fontSize: 13, fontWeight: 700 }}>{value}</div>
-    </div>
   )
 }
 
@@ -927,12 +768,6 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
                     )}
                   </td>
                   <td>
-                    <div style={{ marginBottom: 8 }}>
-                      <RouterLivePill state={getRouterLiveState(router)} />
-                    </div>
-                    <div style={{ fontSize: 12, color: router.isLiveNow ? 'var(--success-fg)' : 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
-                      {formatRouterSignal(router)}
-                    </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <span className={router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>
                         {router.provisioningCallbackReceived ? 'callback' : 'no callback'}
