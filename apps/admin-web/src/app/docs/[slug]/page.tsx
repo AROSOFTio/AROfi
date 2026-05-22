@@ -74,7 +74,7 @@ const docs: Record<string, DocPage> = {
               '/ip firewall nat remove [find comment="AROFi nat"]',
               '/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"',
               '/ip hotspot set [find name="Vincent Cneter"] interface=bridgeLocal address-pool=arofi-pool disabled=no',
-              '/ip hotspot profile set [find name="arofi-c308ea29"] hotspot-address=10.50.0.1 html-directory=hotspot login-by=cookie,http-chap,http-pap use-radius=yes radius-accounting=yes',
+              '/ip hotspot profile set [find name="arofi-c308ea29"] hotspot-address=10.50.0.1 html-directory=hotspot login-by=http-pap,cookie use-radius=yes radius-accounting=yes',
             ],
           },
         ],
