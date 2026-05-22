@@ -165,7 +165,7 @@ export class MikrotikService {
       `/ip hotspot profile set [find name="${profileName}"] radius-accounting=yes`,
       `/ip hotspot profile set [find name="${profileName}"] radius-interim-update=5m`,
       `/ip hotspot profile set [find name="${profileName}"] html-directory=hotspot`,
-      `/ip hotspot profile set [find name="${profileName}"] login-by=http-pap,cookie`,
+      `/ip hotspot profile set [find name="${profileName}"] login-by=http-pap`,
       `/ip hotspot profile set [find name="${profileName}"] radius-location-name="${this.escape(registrationKey)}"`,
       `/ip hotspot profile set [find name="${profileName}"] radius-location-id="${this.escape(registrationKey)}"`,
       `/ip hotspot profile set [find name="${profileName}"] split-user-domain=no`,

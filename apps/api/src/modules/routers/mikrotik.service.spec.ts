@@ -35,7 +35,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=5m')
-    expect(script).toContain('login-by=http-pap,cookie')
+    expect(script).toContain('login-by=http-pap')
     expect(script).toContain('mode=http keep-result=no')
     expect(script).toContain('/api/mikrotik/provisioned/')
     expect(script).toContain('/api/mikrotik/login-html/')
