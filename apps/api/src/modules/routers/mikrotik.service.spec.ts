@@ -116,12 +116,20 @@ describe('MikrotikService', () => {
       radiusAuthPort: 1812,
       radiusAccountingPort: 1813,
       sharedSecret: 'unique-router-secret',
-      portalHosts: ['portal.arofi.test', 'sandbox.momodeveloper.mtn.com', 'portal.arofi.test'],
+      portalHosts: [
+        'portal.arofi.test',
+        'sandbox.momodeveloper.mtn.com',
+        'pay.pesapal.com',
+        '*.pesapal.com',
+        'portal.arofi.test',
+      ],
       ttlAntiTetheringEnabled: true,
     })
 
     expect(script).toContain('/ip hotspot walled-garden remove [find comment="AROFi portal"]')
     expect(script.match(/dst-host="portal\.arofi\.test"/g)).toHaveLength(1)
+    expect(script).toContain('dst-host="pay.pesapal.com"')
+    expect(script).toContain('dst-host="*.pesapal.com"')
     expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
     expect(script).toContain('new-ttl=set:1')
     expect(script).toContain('AROFi anti-tether')

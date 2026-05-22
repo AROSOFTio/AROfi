@@ -158,6 +158,7 @@ const docs: Record<string, DocPage> = {
           'Customer screens still show only MTN, Airtel, phone number, and Pay. Gateway names must not be shown on the portal.',
           'Set MTN_COLLECTION_PROVIDER=AGGREGATOR and/or AIRTEL_COLLECTION_PROVIDER=AGGREGATOR, then configure PESAPAL_BASE_URL, PESAPAL_CONSUMER_KEY, PESAPAL_CONSUMER_SECRET, and PESAPAL_IPN_ID.',
           'If Pesapal is configured and direct MTN/Airtel collection keys are missing, AROFi falls back to the AGGREGATOR collection route instead of failing the customer with missing MTN/Airtel key errors.',
+          'When using Pesapal from a captive hotspot, the MikroTik walled garden must allow pay.pesapal.com and *.pesapal.com so unauthenticated customers can open the Pesapal checkout page.',
           'Do not set disbursement providers to AGGREGATOR. Vendor withdrawals remain on direct MTN/Airtel payout adapters.',
           'Internet access is still activated only after the provider status is confirmed successful.',
         ],
@@ -309,6 +310,7 @@ const docs: Record<string, DocPage> = {
         body: [
           'Customers select a package, choose MTN or Airtel, enter a phone number, tap Pay, approve on the phone, then wait for confirmed activation.',
           'The portal polls payment status and shows retry/pending/success states without exposing backend gateway names.',
+          'For Pesapal test routing, keep Pesapal checkout hosts in the HotSpot walled garden: pay.pesapal.com, www.pesapal.com, cybqa.pesapal.com, and *.pesapal.com.',
         ],
       },
     ],

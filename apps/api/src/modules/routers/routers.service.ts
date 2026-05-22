@@ -1161,6 +1161,10 @@ export class RoutersService {
       process.env.PORTAL_PUBLIC_HOST,
       process.env.API_PUBLIC_HOST,
       'arofi.arosoft.io',
+      'pay.pesapal.com',
+      'www.pesapal.com',
+      'cybqa.pesapal.com',
+      '*.pesapal.com',
       'sandbox.momodeveloper.mtn.com',
       'proxy.momoapi.mtn.com',
     ].filter((value): value is string => Boolean(value))
