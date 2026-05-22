@@ -86,12 +86,6 @@ export class RadiusCredentialService {
             op: ':=',
             value: password,
           },
-          {
-            username,
-            attribute: 'Simultaneous-Use',
-            op: ':=',
-            value: '1',
-          },
         ],
       })
 
