@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Activity, BadgeDollarSign, Router, Ticket, Users, Wifi } from 'lucide-react'
 import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
@@ -15,6 +15,18 @@ const features = [
 export default function RootPage() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('register') === '1') {
+      setRegisterOpen(true)
+      window.history.replaceState(null, '', '/')
+    }
+    if (params.get('login') === '1') {
+      setLoginOpen(true)
+      window.history.replaceState(null, '', '/')
+    }
+  }, [])
 
   return (
     <main className="home-shell">

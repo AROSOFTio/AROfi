@@ -158,7 +158,7 @@ export default function LoginPage() {
         </form>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-          Need a tenant workspace? <a href="/register" style={{ color: 'var(--green)', fontWeight: 700 }}>Create one here</a>.
+          Need a tenant workspace? <a href="/?register=1" style={{ color: 'var(--green)', fontWeight: 700 }}>Create one here</a>.
         </p>
 
         <p style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
