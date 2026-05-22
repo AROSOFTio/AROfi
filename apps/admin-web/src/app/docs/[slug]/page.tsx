@@ -11,32 +11,33 @@ type DocPage = {
 const docs: Record<string, DocPage> = {
   'getting-started': {
     title: 'Getting started',
-    intro: 'Move a vendor from registration to the first paid customer session with this production checklist.',
+    intro: 'Use this checklist to move from tenant setup to a working MikroTik captive portal. Run the generated AROFi script first, then use the RouterOS 6 recovery steps below only when the router shows the known Savana/upstream-router symptoms.',
     sections: [
       {
-        heading: 'Launch checklist',
+        heading: '1. Start in AROFi',
         body: [
           'Create or approve the vendor tenant workspace, then sign in as the vendor admin.',
           'Add hotspot sites, publish at least one package, and configure MTN/Airtel payment settings before sending customers to the portal.',
-          'Register a MikroTik router, generate the onboarding script, run it in WinBox Terminal, then run Health Check in AROFi.',
+          'Register a MikroTik router, generate the onboarding script, paste it into WinBox Terminal, and wait for the provisioning callback message.',
         ],
       },
       {
-        heading: 'Manual prerequisites',
+        heading: '2. Router prerequisites',
         body: [
           'The router must already have working internet, working DNS, correct date/time, and correct WAN/LAN or bridge interfaces.',
           'If the router is behind ISP NAT, remote management requires public IP, port forwarding, VPN, or a supported tunnel.',
+          'For RouterOS 6 recovery, use WinBox Neighbors/MAC login from a LAN port where possible. IP login can drop when WAN/LAN bridge membership changes.',
         ],
       },
       {
-        heading: 'Savana or upstream-router WAN fix for RouterOS 6',
+        heading: '3. Fix ether1 WAN when it is still a bridge slave',
         body: [
-          'If the MikroTik gets 192.168.1.x on bridgeLocal and cannot ping 8.8.8.8, ether1 is still inside the LAN bridge. Remove ether1 from bridgeLocal, move DHCP client to ether1, and masquerade out ether1.',
-          'Run these commands line by line in WinBox Terminal. If WinBox disconnects, reconnect through Neighbors/MAC or a LAN port after the router applies the change.',
+          'Use this section when RouterOS shows: out-interface matcher not possible when interface ether1 is slave, or when the MikroTik gets 192.168.1.x on bridgeLocal and cannot ping 8.8.8.8.',
+          'This makes ether1 the WAN port, moves DHCP client to ether1, removes the old bridgeLocal WAN address, creates NAT on ether1, and sets DNS.',
         ],
         commandBlocks: [
           {
-            title: 'WAN Fix Commands',
+            title: 'Ether1 WAN fix',
             commands: [
               '/interface bridge port remove [find interface=ether1]',
               '/ip dhcp-client remove [find interface=bridgeLocal]',
@@ -48,7 +49,7 @@ const docs: Record<string, DocPage> = {
             ],
           },
           {
-            title: 'Verify WAN',
+            title: 'Wait 15 seconds, then verify WAN',
             commands: [
               '/ip dhcp-client print',
               '/ip address print',
@@ -61,19 +62,51 @@ const docs: Record<string, DocPage> = {
         ],
       },
       {
-        heading: 'RouterOS 6 wireless recovery',
+        heading: '4. Retry AROFi callback if WAN is now working',
         body: [
-          'RouterOS 6 uses /interface wireless, not /interface wifi. If wlan1 is managed by CAPsMAN or disabled, disable CAP mode and configure wlan1 manually.',
+          'If DHCP on ether1 gets an IP like 192.168.1.x and ping works, retry the AROFi callback from the router. Replace the registration key only if you generated a new script.',
+        ],
+        commandBlocks: [
+          {
+            title: 'Retry provisioning callback',
+            commands: [
+              '/tool fetch url="http://95.111.234.34:4012/api/mikrotik/provisioned/ef2383e9-8014-46e7-b40f-0c262548102d" mode=http keep-result=no',
+            ],
+          },
+        ],
+      },
+      {
+        heading: '5. Enable RouterOS 6 wireless when wlan1 is controlled by CAPsMAN',
+        body: [
+          'Use this section when wireless is disabled or shows wlan1 managed by CAPsMAN. RouterOS 6 uses /interface wireless, not /interface wifi.',
           'If the profile or bridge port already exists, ignore the duplicate error.',
         ],
         commandBlocks: [
           {
-            title: 'Wireless Recovery Commands',
+            title: 'Disable CAP mode and broadcast customer WiFi',
             commands: [
               '/interface wireless cap set enabled=no',
               '/interface wireless security-profiles add name=arofi-open mode=none authentication-types=""',
               '/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="Kitintale Market" security-profile=arofi-open',
               '/interface bridge port add bridge=bridgeLocal interface=wlan1',
+            ],
+          },
+        ],
+      },
+      {
+        heading: '6. Useful checks',
+        body: [
+          'Use these commands to confirm the router state after recovery. The correct firewall command starts with /ip.',
+        ],
+        commandBlocks: [
+          {
+            title: 'Final checks',
+            commands: [
+              '/ip firewall filter print',
+              '/interface wireless print',
+              '/interface bridge port print',
+              '/ip hotspot print',
+              '/ip pool print',
             ],
           },
         ],
