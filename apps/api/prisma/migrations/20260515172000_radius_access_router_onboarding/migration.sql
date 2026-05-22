@@ -20,7 +20,7 @@ CREATE TYPE "BillingTransactionType" AS ENUM ('MOBILE_MONEY_SALE', 'VOUCHER_SALE
 CREATE TYPE "BillingTransactionStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'REVERSED');
 
 -- CreateEnum
-CREATE TYPE "PaymentProvider" AS ENUM ('YO_UGANDA', 'PESAPAL');
+CREATE TYPE "PaymentProvider" AS ENUM ('MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR');
 
 -- CreateEnum
 CREATE TYPE "PaymentMethod" AS ENUM ('MOBILE_MONEY', 'CARD');
@@ -543,7 +543,7 @@ CREATE TABLE "Payment" (
     "tenantId" TEXT NOT NULL,
     "packageId" TEXT NOT NULL,
     "billingTransactionId" TEXT,
-    "provider" "PaymentProvider" NOT NULL DEFAULT 'YO_UGANDA',
+    "provider" "PaymentProvider" NOT NULL DEFAULT 'MTN_MOMO_DIRECT',
     "method" "PaymentMethod" NOT NULL DEFAULT 'MOBILE_MONEY',
     "network" "PaymentNetwork" NOT NULL DEFAULT 'UNKNOWN',
     "status" "PaymentStatus" NOT NULL DEFAULT 'INITIATED',
@@ -574,7 +574,7 @@ CREATE TABLE "PaymentWebhook" (
     "id" TEXT NOT NULL,
     "tenantId" TEXT,
     "paymentId" TEXT,
-    "provider" "PaymentProvider" NOT NULL DEFAULT 'YO_UGANDA',
+    "provider" "PaymentProvider" NOT NULL DEFAULT 'MTN_MOMO_DIRECT',
     "eventType" "PaymentEventType" NOT NULL,
     "externalReference" TEXT,
     "providerReference" TEXT,

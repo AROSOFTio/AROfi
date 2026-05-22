@@ -6,6 +6,7 @@ import {
   HotspotOverviewResponse,
   TenantOverviewResponse,
 } from '@/lib/admin-types'
+import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
 
@@ -30,6 +31,9 @@ export default function HotspotsManager() {
   const [formState, setFormState] = useState<HotspotFormState>(initialHotspotForm)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [processText, setProcessText] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -91,14 +95,18 @@ export default function HotspotsManager() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setFormError(null)
     setSuccess(null)
 
     if (!formState.tenantId) {
-      setError('Select a tenant before creating a hotspot site')
+      const failure = 'Select a tenant before creating a hotspot site'
+      setError(failure)
+      setFormError(failure)
       return
     }
 
     setSubmitting(true)
+    setProcessText('Creating hotspot site and preparing NAS mapping.')
 
     try {
       await clientPostApi('/hotspots', {
@@ -108,16 +116,21 @@ export default function HotspotsManager() {
         secret: formState.secret.trim() || undefined,
       })
 
+      setProcessText('Refreshing hotspot inventory.')
       setSuccess('Hotspot site created successfully')
       setFormState((previous) => ({
         ...initialHotspotForm,
         tenantId: previous.tenantId,
       }))
       await loadData()
+      setCreateOpen(false)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create hotspot site')
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to create hotspot site'
+      setError(failure)
+      setFormError(failure)
     } finally {
       setSubmitting(false)
+      setProcessText('')
     }
   }
 
@@ -135,15 +148,19 @@ export default function HotspotsManager() {
             {session?.user.tenantName ?? 'Tenant workspace'}
           </span>
         )}
+        <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setCreateOpen(true) }}>
+          Create Hotspot
+        </button>
       </div>
 
       <div className="charts-grid">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Create Hotspot Site</span>
-          </div>
-          <div className="content" style={{ paddingTop: 16 }}>
-            <form onSubmit={handleSubmit}>
+        {createOpen && (
+          <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
+            <div className="modal-card" style={{ width: 'min(760px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+              <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
+              <div className="modal-kicker">Hotspot site</div>
+              <h2 className="modal-title">Create Hotspot Site</h2>
+              <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
               <div className="stats-grid" style={{ marginBottom: 12 }}>
                 {showTenantSelector && (
                   <div className="form-group">
@@ -205,7 +222,7 @@ export default function HotspotsManager() {
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Creating...' : 'Create Hotspot'}
+                  {submitting ? 'Creating hotspot...' : 'Create Hotspot'}
                 </button>
                 <button
                   type="button"
@@ -220,11 +237,14 @@ export default function HotspotsManager() {
                   Reset
                 </button>
               </div>
-              {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
-              {success && <p style={{ color: 'var(--success-fg)', marginTop: 10, fontSize: 13 }}>{success}</p>}
-            </form>
+              <div style={{ marginTop: 12 }}>
+                <FormProcessStatus busy={submitting} error={formError} success={success} text={processText || 'Creating hotspot. The inventory refreshes after AROFi saves it.'} />
+              </div>
+              {error && !formError && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
+              </form>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="card">
           <div className="card-header">

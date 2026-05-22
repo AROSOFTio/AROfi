@@ -1,6 +1,28 @@
 #!/bin/sh
 set -eu
 
+if ! find / -name libpq.so.5 -print -quit 2>/dev/null | grep -q .; then
+  if command -v apk >/dev/null 2>&1; then
+    apk add --no-cache postgresql-libs
+  fi
+fi
+
+if [ -d /arofi-freeradius ]; then
+  cp /arofi-freeradius/clients.conf /etc/raddb/clients.conf
+  mkdir -p /etc/raddb/mods-config/files /etc/raddb/mods-available /etc/raddb/sites-enabled
+  cp /arofi-freeradius/mods-config/files/authorize /etc/raddb/mods-config/files/authorize
+  cp /arofi-freeradius/mods-available/sql /etc/raddb/mods-available/sql
+  cp /arofi-freeradius/sites-enabled/default /etc/raddb/sites-enabled/default
+  cp /arofi-freeradius/sites-enabled/inner-tunnel /etc/raddb/sites-enabled/inner-tunnel
+  chmod 0640 \
+    /etc/raddb/clients.conf \
+    /etc/raddb/mods-config/files/authorize \
+    /etc/raddb/mods-available/sql \
+    /etc/raddb/sites-enabled/default \
+    /etc/raddb/sites-enabled/inner-tunnel
+fi
+
+rm -f /etc/raddb/mods-enabled/eap /opt/etc/raddb/mods-enabled/eap 2>/dev/null || true
 ln -sf /etc/raddb/mods-available/sql /etc/raddb/mods-enabled/sql
 if [ -e /etc/raddb/mods-available/acct_unique ]; then
   ln -sf /etc/raddb/mods-available/acct_unique /etc/raddb/mods-enabled/acct_unique

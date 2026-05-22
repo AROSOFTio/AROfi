@@ -14,7 +14,7 @@ export default async function PaymentsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Payment Logs</h1>
-          <p className="page-subtitle">Yo Uganda collections, webhook processing, and auto-activation events across MTN and Airtel.</p>
+          <p className="page-subtitle">Mobile Money collections, webhook processing, and auto-activation events across MTN and Airtel.</p>
         </div>
       </div>
 

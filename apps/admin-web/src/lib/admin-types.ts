@@ -494,12 +494,12 @@ export type DisbursementOverviewResponse = {
     createdAt: string
     completedAt?: string | null
     tenant: TenantSummary
-    agent: {
+    agent?: {
       id: string
       code: string
       name: string
       phoneNumber: string
-    }
+    } | null
     settlement?: {
       id: string
       reference: string

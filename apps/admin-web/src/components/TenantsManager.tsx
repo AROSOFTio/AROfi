@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
 import type { TenantOverviewResponse } from '@/lib/admin-types'
+import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate } from '@/lib/format'
 
@@ -30,9 +31,10 @@ export default function TenantsManager() {
   const [formState, setFormState] = useState<TenantFormState>(initialTenantForm)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [processText, setProcessText] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     void loadData()
@@ -52,7 +54,8 @@ export default function TenantsManager() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
-    setSuccess(null)
+    setFormError(null)
+    setProcessText('Creating tenant workspace and default wallet.')
     setSubmitting(true)
 
     try {
@@ -65,14 +68,17 @@ export default function TenantsManager() {
         supportPhone: formState.supportPhone.trim() || undefined,
         supportEmail: formState.supportEmail.trim() || undefined,
       })
-      setSuccess('Tenant created successfully')
+      setProcessText('Refreshing tenant list.')
       setFormState(initialTenantForm)
       setIsCreateModalOpen(false)
       await loadData()
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create tenant')
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to create tenant'
+      setError(failure)
+      setFormError(failure)
     } finally {
       setSubmitting(false)
+      setProcessText('')
     }
   }
 
@@ -85,13 +91,13 @@ export default function TenantsManager() {
           <h1 className="page-title">Tenants</h1>
           <p className="page-subtitle">Manage vendor tenants and their default operations wallet.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setIsCreateModalOpen(true)}>+ Add Tenant</button>
+        <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setIsCreateModalOpen(true) }}>+ Add Tenant</button>
       </div>
 
       {isCreateModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
-            <button type="button" className="modal-close" onClick={() => setIsCreateModalOpen(false)}>Close</button>
+            <button type="button" className="modal-close" onClick={() => setIsCreateModalOpen(false)} disabled={submitting}>Close</button>
             <div className="modal-kicker">Platform Tenant</div>
             <h2 className="modal-title">Add Tenant</h2>
             <form onSubmit={handleSubmit}>
@@ -131,11 +137,10 @@ export default function TenantsManager() {
                   <input className="form-input" value={formState.supportEmail} onChange={(event) => setFormState((previous) => ({ ...previous, supportEmail: event.target.value }))} placeholder="support@tenant.com" />
                 </div>
               </div>
+              <FormProcessStatus busy={submitting} error={formError} text={processText || 'Creating tenant. This modal closes after the tenant is saved.'} />
               <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Creating...' : 'Create Tenant'}
+                {submitting ? 'Creating tenant...' : 'Create Tenant'}
               </button>
-              {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
-              {success && <p style={{ color: 'var(--success-fg)', marginTop: 10, fontSize: 13 }}>{success}</p>}
             </form>
           </div>
         </div>

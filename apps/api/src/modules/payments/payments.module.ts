@@ -4,14 +4,31 @@ import { BillingModule } from '../billing/billing.module'
 import { RadiusModule } from '../radius/radius.module'
 import { PaymentsController } from './payments.controller'
 import { PackageActivationService } from './package-activation.service'
-import { PesapalGatewayService } from './pesapal.gateway.service'
 import { PaymentsService } from './payments.service'
-import { YoUgandaGatewayService } from './yo-uganda.gateway.service'
+import { AirtelMoneyCollectionService } from './airtel-money-collection.service'
+import { AirtelMoneyDisbursementService } from './airtel-money-disbursement.service'
+import { MtnMomoCollectionService } from './mtn-momo-collection.service'
+import { MtnMomoDisbursementService } from './mtn-momo-disbursement.service'
+import { PaymentRouterService } from './payment-router.service'
+import { PaymentWebhookService } from './payment-webhook.service'
+import { PhoneNumberService } from './phone-number.service'
+import { WalletLedgerService } from './wallet-ledger.service'
 
 @Module({
   imports: [AuthModule, BillingModule, RadiusModule],
   controllers: [PaymentsController],
-  providers: [YoUgandaGatewayService, PesapalGatewayService, PackageActivationService, PaymentsService],
-  exports: [PackageActivationService, PaymentsService, YoUgandaGatewayService, PesapalGatewayService],
+  providers: [
+    AirtelMoneyCollectionService,
+    AirtelMoneyDisbursementService,
+    MtnMomoCollectionService,
+    MtnMomoDisbursementService,
+    PackageActivationService,
+    PaymentRouterService,
+    PaymentWebhookService,
+    PaymentsService,
+    PhoneNumberService,
+    WalletLedgerService,
+  ],
+  exports: [PackageActivationService, PaymentRouterService, PaymentsService, PhoneNumberService],
 })
 export class PaymentsModule {}

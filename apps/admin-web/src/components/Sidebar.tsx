@@ -10,6 +10,7 @@ type NavItem = {
   icon: ReactNode;
   required?: string[];
   platformOnly?: boolean;
+  tenantOnly?: boolean;
 };
 
 type NavGroup = {
@@ -25,48 +26,62 @@ const navItems: NavGroup[] = [
     ]
   },
   {
-    section: 'Network',
+    section: 'Vendor Operations',
     items: [
-      { href: '/routers', label: 'Routers', icon: <RouterIcon />, required: ['routers.read'] },
-      { href: '/hotspots', label: 'Hotspots', icon: <HotspotIcon />, required: ['hotspots.read'] },
-      { href: '/packages', label: 'Packages', icon: <PackageIcon />, required: ['packages.read'] },
-      { href: '/sessions', label: 'Usage Analytics', icon: <ActivityIcon />, required: ['sessions.read'] },
+      { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'], tenantOnly: true },
+      { href: '/transactions', label: 'Customer Transactions', icon: <PaymentIcon />, required: ['billing.read'], tenantOnly: true },
+      { href: '/payments', label: 'Payment Logs', icon: <PaymentPulseIcon />, required: ['payments.read'], tenantOnly: true },
+      { href: '/sessions', label: 'Live Sessions', icon: <ActivityIcon />, required: ['sessions.read'], tenantOnly: true },
     ]
   },
   {
-    section: 'Sales',
+    section: 'Vendor Setup',
     items: [
-      { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'] },
-      { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon />, required: ['vouchers.read'] },
-      { href: '/agents', label: 'Agents', icon: <AgentIcon />, required: ['agents.read'] },
+      { href: '/routers', label: 'Routers', icon: <RouterIcon />, required: ['routers.read'], tenantOnly: true },
+      { href: '/hotspots', label: 'Hotspots', icon: <HotspotIcon />, required: ['hotspots.read'], tenantOnly: true },
+      { href: '/packages', label: 'Packages', icon: <PackageIcon />, required: ['packages.read'], tenantOnly: true },
+      { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon />, required: ['vouchers.read'], tenantOnly: true },
+      { href: '/agents', label: 'Agents', icon: <AgentIcon />, required: ['agents.read'], tenantOnly: true },
     ]
   },
   {
-    section: 'Finance',
+    section: 'Vendor Finance',
     items: [
-      { href: '/transactions', label: 'Transactions', icon: <PaymentIcon />, required: ['billing.read'] },
-      { href: '/payments', label: 'Payment Logs', icon: <PaymentPulseIcon />, required: ['payments.read'] },
-      { href: '/billing', label: 'Billing & Wallet', icon: <BillingIcon />, required: ['billing.read'] },
-      { href: '/float', label: 'Float', icon: <FloatIcon />, required: ['agents.read'] },
-      { href: '/disbursements', label: 'Disbursements', icon: <SettlementIcon />, required: ['disbursements.read'] },
+      { href: '/billing', label: 'Billing & Wallet', icon: <BillingIcon />, required: ['billing.read'], tenantOnly: true },
+      { href: '/float', label: 'Float', icon: <FloatIcon />, required: ['agents.read'], tenantOnly: true },
+      { href: '/disbursements', label: 'Withdrawals', icon: <SettlementIcon />, required: ['disbursements.read'], tenantOnly: true },
     ]
   },
   {
-    section: 'System',
+    section: 'Platform Operations',
     items: [
-      { href: '/users', label: 'Users & Roles', icon: <UsersIcon />, required: ['users.read'] },
-      { href: '/tenants', label: 'Tenants', icon: <TenantIcon />, required: ['tenants.read'], platformOnly: true },
-      { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'] },
-      { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'] },
-      { href: '/support', label: 'Support', icon: <SupportIcon />, required: ['support.read'] },
+      { href: '/tenants', label: 'Vendors / Tenants', icon: <TenantIcon />, required: ['tenants.read'], platformOnly: true },
+      { href: '/routers', label: 'Router Support', icon: <RouterIcon />, required: ['routers.read'], platformOnly: true },
+      { href: '/support', label: 'Support Tickets', icon: <SupportIcon />, required: ['support.read'], platformOnly: true },
+      { href: '/payments', label: 'Payment Health', icon: <PaymentPulseIcon />, required: ['payments.read'], platformOnly: true },
+      { href: '/users', label: 'Platform Users', icon: <UsersIcon />, required: ['users.read'], platformOnly: true },
+      { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'], platformOnly: true },
+      { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'], platformOnly: true },
+    ]
+  },
+  {
+    section: 'Workspace',
+    items: [
+      { href: '/users', label: 'Staff Users', icon: <UsersIcon />, required: ['users.read'], tenantOnly: true },
+      { href: '/support', label: 'Support Tickets', icon: <SupportIcon />, required: ['support.read'], tenantOnly: true },
+      { href: '/docs', label: 'Docs', icon: <ReportIcon /> },
     ]
   },
 ]
 
 type SidebarUser = AdminSessionResponse['user']
 
-function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: boolean) {
+function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: boolean, tenantOnly?: boolean) {
   if (platformOnly && user.tenantId) {
+    return false
+  }
+
+  if (tenantOnly && !user.tenantId) {
     return false
   }
 
@@ -82,11 +97,11 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   const visibleGroups = navItems
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly)),
+      items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly, item.tenantOnly)),
     }))
     .filter((group) => group.items.length > 0)
 
-  const workspaceLabel = user.tenantName ? `${user.tenantName} Workspace` : 'Platform Workspace'
+  const workspaceLabel = user.tenantName ? 'Vendor Workspace' : 'Developer Admin Workspace'
 
   return (
     <aside className="sidebar">
@@ -95,7 +110,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>
           <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{user.role}</span>
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{user.tenantId ? 'Vendor' : 'Platform'} - {user.role}</span>
             {user.tenantName && (
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
             )}

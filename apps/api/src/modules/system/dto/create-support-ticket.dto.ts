@@ -6,8 +6,9 @@ import {
 import { IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator'
 
 export class CreateSupportTicketDto {
+  @IsOptional()
   @IsString()
-  tenantId!: string
+  tenantId?: string
 
   @IsOptional()
   @IsString()

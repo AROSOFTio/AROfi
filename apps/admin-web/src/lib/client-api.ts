@@ -15,9 +15,40 @@ export async function clientFetchApi<T>(path: string): Promise<T> {
   return parseResponse<T>(response)
 }
 
-export async function clientPostApi<T>(path: string, payload: unknown): Promise<T> {
+export async function clientPostApi<T>(path: string, payload: unknown, options: { timeoutMs?: number } = {}): Promise<T> {
+  const controller = new AbortController()
+  const timeout = options.timeoutMs
+    ? window.setTimeout(() => controller.abort(), options.timeoutMs)
+    : undefined
+
+  let response: Response
+  try {
+    response = await fetch(`${browserApiBase}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      signal: controller.signal,
+      headers: buildAuthHeaders({
+        'Content-Type': 'application/json',
+      }),
+      body: JSON.stringify(payload),
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check provider connectivity and try again.')
+    }
+    throw error
+  } finally {
+    if (timeout) {
+      window.clearTimeout(timeout)
+    }
+  }
+
+  return parseResponse<T>(response)
+}
+
+export async function clientPatchApi<T>(path: string, payload: unknown): Promise<T> {
   const response = await fetch(`${browserApiBase}${path}`, {
-    method: 'POST',
+    method: 'PATCH',
     credentials: 'include',
     headers: buildAuthHeaders({
       'Content-Type': 'application/json',

@@ -231,6 +231,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [selectedPackage, setSelectedPackage] = useState<PortalPackage | null>(null)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [currentPayment, setCurrentPayment] = useState<PortalPayment | null>(null)
+  const [selectedNetwork, setSelectedNetwork] = useState<MobileMoneyNetwork>('MTN')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [customerReference, setCustomerReference] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
@@ -515,6 +516,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setCurrentPayment(payment)
 
     if (payment.activation) {
+      setStatusMessage('Payment successful. Connecting your internet...')
       await loginWithPhone(payment.phoneNumber, initialView !== 'home', hotspotParams)
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
@@ -532,7 +534,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     if (stored?.phoneNumber && !phoneNumber) {
       setPhoneNumber(stored.phoneNumber)
     }
-    setStatusMessage('Payment returned from Pesapal. Checking status and preparing HotSpot login...')
+    setStatusMessage('Payment request submitted. Check your phone to approve.')
     await handleCheckPaymentStatus(paymentId, token)
   }
 
@@ -564,9 +566,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           packageId: selectedPackage.id,
           phoneNumber: normalizedPhone,
           customerReference: customerReference || normalizedPhone,
-          provider: 'PESAPAL',
-          method: 'MOBILE_MONEY',
-          network: detectNetwork(normalizedPhone),
+          network: selectedNetwork,
           idempotencyKey: crypto.randomUUID(),
           macAddress: hotspotParams.macAddress || undefined,
           clientIp: hotspotParams.clientIp || undefined,
@@ -591,25 +591,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         return
       }
 
-      const checkoutUrl = extractCheckoutUrl(payment)
-      if (checkoutUrl) {
-        setStatusMessage('Opening Pesapal checkout. Complete the mobile money or card payment there.')
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(
-            paymentReturnStorageKey,
-            JSON.stringify({
-              paymentId: payment.id,
-              statusToken: payment.statusToken,
-              phoneNumber: normalizedPhone,
-              hotspotParams,
-            }),
-          )
-          window.location.assign(checkoutUrl)
-        }
-        return
-      }
-
-      setStatusMessage('Payment created, but Pesapal did not return a checkout page. Check the payment status or Pesapal settings.')
+      setStatusMessage('Payment request sent. Check your phone and approve the payment.')
       if (payment.activation) {
         await loginWithPhone(payment.phoneNumber, true, hotspotParams)
       } else {
@@ -802,7 +784,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
           <div className="grid gap-3 sm:grid-cols-3">
             <SummaryCard label="Live access" value={activeActivation ? 'Active' : 'Ready to buy'} helper={activeActivation ? formatDate(activeActivation.endsAt) : `${packages.length} package${packages.length === 1 ? '' : 's'} available`} />
-            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'Pesapal checkout opens after phone entry'} />
+            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'Select a network and phone number'} />
             <SummaryCard label="Usage tracked" value={portalSession ? formatMegabytes(portalSession.summary.totalDataUsedMb) : '0 MB'} helper={portalSession ? `${portalSession.summary.recentSessionCount} recent sessions` : 'Login unlocks session insights'} />
           </div>
         </div>
@@ -884,7 +866,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
               <div className={`mt-6 rounded-lg border px-4 py-4 text-center ${portalStyle.accept}`}>
                 <div className={`text-sm font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>We accept:</div>
-                <div className={`mt-2 text-sm font-extrabold ${portalStyle.packagePrice}`}>Mobile Money via Pesapal</div>
+                <div className="mt-3 flex items-center justify-center gap-3">
+                  <NetworkIcon network="MTN" />
+                  <NetworkIcon network="AIRTEL" />
+                </div>
               </div>
 
               <div className={`mt-6 border-t border-slate-300 pt-5 text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -903,10 +888,30 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <button type="button" onClick={() => setCheckoutOpen(false)} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Close</button>
                     </div>
                     <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
-                      <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number, e.g. 0772000000" className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
+                      <div>
+                        <span className="sr-only">Network</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(['MTN', 'AIRTEL'] as const).map((network) => (
+                            <button
+                              key={network}
+                              type="button"
+                              onClick={() => setSelectedNetwork(network)}
+                              aria-label={network === 'MTN' ? 'MTN' : 'Airtel'}
+                              aria-pressed={selectedNetwork === network}
+                              className={`grid h-16 place-items-center rounded-lg border transition ${selectedNetwork === network ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white'}`}
+                            >
+                              <NetworkIcon network={network} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <label className="block text-sm font-bold text-slate-700">
+                        Phone Number
+                        <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="0771234567 or +256771234567" className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
+                      </label>
                       <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
                         {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                        {isPaymentLoading ? 'Opening Pesapal...' : 'Continue to Pesapal'}
+                        {isPaymentLoading ? 'Sending payment request...' : 'Pay'}
                       </button>
                       {currentPayment && (
                         <button type="button" onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-50 py-2 text-sm font-bold text-emerald-700">
@@ -1050,5 +1055,21 @@ function SummaryCard({ label, value, helper }: { label: string; value: string; h
       <div className="mt-2 text-lg font-semibold text-slate-950">{value}</div>
       <div className="mt-1 text-sm text-slate-500">{helper}</div>
     </div>
+  )
+}
+
+function NetworkIcon({ network }: { network: MobileMoneyNetwork }) {
+  if (network === 'MTN') {
+    return (
+      <span className="grid h-10 w-16 place-items-center rounded-full bg-[#ffcc00] text-sm font-black tracking-wide text-[#0b1f3a] shadow-sm ring-1 ring-black/10">
+        MTN
+      </span>
+    )
+  }
+
+  return (
+    <span className="grid h-10 w-16 place-items-center rounded-full bg-[#e60012] text-xs font-black text-white shadow-sm ring-1 ring-black/10">
+      airtel
+    </span>
   )
 }

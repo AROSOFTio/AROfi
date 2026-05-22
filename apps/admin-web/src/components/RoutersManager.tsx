@@ -8,6 +8,7 @@ import {
   RouterSetupResponse,
   TenantOverviewResponse,
 } from '@/lib/admin-types'
+import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
 
@@ -106,6 +107,12 @@ export default function RoutersManager() {
   const [submittingRouter, setSubmittingRouter] = useState(false)
   const [runningHealthCheckId, setRunningHealthCheckId] = useState<string | null>(null)
   const [showAdvancedRouterSettings, setShowAdvancedRouterSettings] = useState(false)
+  const [groupModalOpen, setGroupModalOpen] = useState(false)
+  const [routerModalOpen, setRouterModalOpen] = useState(false)
+  const [groupProcessText, setGroupProcessText] = useState('')
+  const [routerProcessText, setRouterProcessText] = useState('')
+  const [groupFormError, setGroupFormError] = useState('')
+  const [routerFormError, setRouterFormError] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -195,6 +202,8 @@ export default function RoutersManager() {
     event.preventDefault()
     setError(null)
     setSuccess(null)
+    setGroupFormError('')
+    setGroupProcessText('Creating router group for this tenant.')
     setSubmittingGroup(true)
 
     try {
@@ -205,13 +214,18 @@ export default function RoutersManager() {
         region: groupForm.region.trim() || undefined,
         description: groupForm.description.trim() || undefined,
       })
+      setGroupProcessText('Refreshing router groups and tenant launch checklist.')
       setSuccess('Router group created successfully')
       setGroupForm((previous) => ({ ...initialGroupForm, tenantId: previous.tenantId }))
       await loadData()
+      setGroupModalOpen(false)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create router group')
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to create router group'
+      setError(failure)
+      setGroupFormError(failure)
     } finally {
       setSubmittingGroup(false)
+      setGroupProcessText('')
     }
   }
 
@@ -219,6 +233,8 @@ export default function RoutersManager() {
     event.preventDefault()
     setError(null)
     setSuccess(null)
+    setRouterFormError('')
+    setRouterProcessText('Registering MikroTik router and preparing the onboarding script.')
     setSubmittingRouter(true)
 
     try {
@@ -243,6 +259,7 @@ export default function RoutersManager() {
         scriptMode: routerForm.scriptMode,
         tags: parseTags(routerForm.tags),
       })
+      setRouterProcessText('Generating RouterOS setup details and refreshing inventory.')
       setSelectedSetup(setup)
       setSuccess('Router registered successfully. The provisioning script is ready below.')
       setRouterForm((previous) => ({
@@ -252,10 +269,14 @@ export default function RoutersManager() {
         hotspotId: previous.hotspotId,
       }))
       await loadData(setup.router.id)
+      setRouterModalOpen(false)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to register router')
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to register router'
+      setError(failure)
+      setRouterFormError(failure)
     } finally {
       setSubmittingRouter(false)
+      setRouterProcessText('')
     }
   }
 
@@ -304,11 +325,12 @@ export default function RoutersManager() {
     const router = selectedSetup.router
     const lines = [
       `Router: ${router.name}`,
-      `Host/IP: ${router.host}`,
-      `RouterOS API: ${router.host}:${router.apiPort}`,
-      `WinBox: ${router.host}:8291`,
+      `WinBox Address: ${router.host}`,
+      `WinBox Username: admin`,
+      `WinBox Password: leave empty only if this router admin password is blank`,
+      `RouterOS API for AROFi health checks: ${router.host}:${router.apiPort}`,
       `Status: ${router.managementApiReachable ? 'API reachable' : 'API management not reachable from AROFi'}`,
-      'Password: stored encrypted in AROFi and not copied here',
+      'Remote WinBox connects only if TCP 8291 is reachable through public IP, port-forwarding, VPN, or tunnel.',
     ]
 
     await navigator.clipboard.writeText(lines.join('\n'))
@@ -404,14 +426,38 @@ export default function RoutersManager() {
               NAS client {selectedSetup?.nasClient ? `${selectedSetup.nasClient.nasname} (${selectedSetup.nasClient.enabled ? 'enabled' : 'disabled'})` : 'pending'}
             </div>
             {selectedSetup?.router && (
-              <div style={{ display: 'grid', gap: 6, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-muted)' }}>
+                <div style={{ display: 'grid', gap: 6, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-muted)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <strong style={{ color: 'var(--text-primary)', fontSize: 13 }}>Remote management details</strong>
                   <button type="button" className="btn btn-ghost" onClick={() => void copyRouterAccessDetails()}>Copy details</button>
                 </div>
                 <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>Host/IP: {selectedSetup.router.host}</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>API: {selectedSetup.router.host}:{selectedSetup.router.apiPort} | WinBox: {selectedSetup.router.host}:8291</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Router passwords stay encrypted and are never copied into this panel.</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>API: {selectedSetup.router.host}:{selectedSetup.router.apiPort} | WinBox service: TCP 8291</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>This is a reachability target, not a guarantee. ISP NAT, firewall, missing port forwarding, or disabled WinBox can block remote login.</div>
+              </div>
+            )}
+            {selectedSetup?.router && (
+              <div style={{ display: 'grid', gap: 10, padding: 14, border: '1px solid var(--green-mid)', borderRadius: 12, background: 'var(--green-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <strong style={{ color: 'var(--green-dark)', fontSize: 14 }}>Remote WinBox access for vendor</strong>
+                  <button type="button" className="btn btn-primary" onClick={() => void copyRouterAccessDetails()}>Copy WinBox Address</button>
+                </div>
+                {selectedSetup.router.host.includes('.self-service') ? (
+                  <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55 }}>
+                    Run the RouterOS script first. After the router calls back, AROFi will show the remote address here.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8, color: 'var(--text-2)', fontSize: 13 }}>
+                      <span>Address</span><strong style={{ color: 'var(--text-1)', fontFamily: 'monospace' }}>{selectedSetup.router.host}</strong>
+                      <span>Username</span><strong style={{ color: 'var(--text-1)' }}>admin</strong>
+                      <span>Password</span><strong style={{ color: 'var(--text-1)' }}>Leave empty only if router admin password is blank</strong>
+                    </div>
+                    <div style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.5 }}>
+                      Open WinBox and paste the AROFi address into Connect To. Remote login works only if TCP 8291 reaches the MikroTik through public IP, port forwarding, VPN, or tunnel.
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {selectedSetup?.router && (
@@ -436,27 +482,61 @@ export default function RoutersManager() {
       </div>
 
       <div className="charts-grid">
-        <RouterGroupCard
-          formState={groupForm}
-          setFormState={setGroupForm}
-          onSubmit={handleCreateGroup}
-          submitting={submittingGroup}
-          showTenantSelector={showTenantSelector}
-          tenants={tenants}
-        />
-        <RouterCreateCard
-          formState={routerForm}
-          setFormState={setRouterForm}
-          onSubmit={handleRegisterRouter}
-          submitting={submittingRouter}
-          showTenantSelector={showTenantSelector}
-          tenants={tenants}
-          groups={groupsForTenant}
-          hotspots={hotspotsForTenant}
-          showAdvanced={showAdvancedRouterSettings}
-          setShowAdvanced={setShowAdvancedRouterSettings}
-        />
+        <div className="card">
+          <div className="card-header"><span className="card-title">Router Groups</span></div>
+          <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>Group routers by branch, region, or site before registering MikroTik devices.</p>
+            <button type="button" className="btn btn-primary" onClick={() => { setGroupFormError(''); setGroupProcessText(''); setGroupModalOpen(true) }}>Create Router Group</button>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><span className="card-title">MikroTik Registration</span></div>
+          <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>Register a MikroTik, generate the RouterOS script, then verify callback, RADIUS, accounting, and optional API reachability.</p>
+            <button type="button" className="btn btn-primary" onClick={() => { setRouterFormError(''); setRouterProcessText(''); setRouterModalOpen(true) }}>Register MikroTik Router</button>
+          </div>
+        </div>
       </div>
+
+      {groupModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingGroup && setGroupModalOpen(false)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setGroupModalOpen(false)} disabled={submittingGroup}>Close</button>
+            <RouterGroupCard
+              formState={groupForm}
+              setFormState={setGroupForm}
+              onSubmit={handleCreateGroup}
+              submitting={submittingGroup}
+              processText={groupProcessText}
+              formError={groupFormError}
+              showTenantSelector={showTenantSelector}
+              tenants={tenants}
+            />
+          </div>
+        </div>
+      )}
+
+      {routerModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingRouter && setRouterModalOpen(false)}>
+          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setRouterModalOpen(false)} disabled={submittingRouter}>Close</button>
+            <RouterCreateCard
+              formState={routerForm}
+              setFormState={setRouterForm}
+              onSubmit={handleRegisterRouter}
+              submitting={submittingRouter}
+              processText={routerProcessText}
+              formError={routerFormError}
+              showTenantSelector={showTenantSelector}
+              tenants={tenants}
+              groups={groupsForTenant}
+              hotspots={hotspotsForTenant}
+              showAdvanced={showAdvancedRouterSettings}
+              setShowAdvanced={setShowAdvancedRouterSettings}
+            />
+          </div>
+        </div>
+      )}
 
       {(error || success) && (
         <div className="card">
@@ -538,7 +618,25 @@ export default function RoutersManager() {
   )
 }
 
-function RouterGroupCard({ formState, setFormState, onSubmit, submitting, showTenantSelector, tenants }: { formState: GroupFormState; setFormState: Dispatch<SetStateAction<GroupFormState>>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; submitting: boolean; showTenantSelector: boolean; tenants: TenantOverviewResponse['items'] }) {
+function RouterGroupCard({
+  formState,
+  setFormState,
+  onSubmit,
+  submitting,
+  processText,
+  formError,
+  showTenantSelector,
+  tenants,
+}: {
+  formState: GroupFormState
+  setFormState: Dispatch<SetStateAction<GroupFormState>>
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  submitting: boolean
+  processText: string
+  formError: string
+  showTenantSelector: boolean
+  tenants: TenantOverviewResponse['items']
+}) {
   return (
     <div className="card">
       <div className="card-header"><span className="card-title">Create Router Group</span></div>
@@ -552,7 +650,10 @@ function RouterGroupCard({ formState, setFormState, onSubmit, submitting, showTe
           </div>
           <InputField label="Description" value={formState.description} onChange={(value) => setFormState((previous) => ({ ...previous, description: value }))} placeholder="Main branch routers and uplink infrastructure." />
           <div style={{ marginTop: 12 }}>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Creating...' : 'Create Group'}</button>
+            <FormProcessStatus busy={submitting} error={formError} text={processText || 'Creating router group. This modal closes after the group is saved.'} />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Creating group...' : 'Create Group'}</button>
           </div>
         </form>
       </div>
@@ -560,7 +661,33 @@ function RouterGroupCard({ formState, setFormState, onSubmit, submitting, showTe
   )
 }
 
-function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showTenantSelector, tenants, groups, hotspots, showAdvanced, setShowAdvanced }: { formState: RouterFormState; setFormState: Dispatch<SetStateAction<RouterFormState>>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; submitting: boolean; showTenantSelector: boolean; tenants: TenantOverviewResponse['items']; groups: RouterOverviewResponse['groups']; hotspots: HotspotOverviewResponse['items']; showAdvanced: boolean; setShowAdvanced: Dispatch<SetStateAction<boolean>> }) {
+function RouterCreateCard({
+  formState,
+  setFormState,
+  onSubmit,
+  submitting,
+  processText,
+  formError,
+  showTenantSelector,
+  tenants,
+  groups,
+  hotspots,
+  showAdvanced,
+  setShowAdvanced,
+}: {
+  formState: RouterFormState
+  setFormState: Dispatch<SetStateAction<RouterFormState>>
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  submitting: boolean
+  processText: string
+  formError: string
+  showTenantSelector: boolean
+  tenants: TenantOverviewResponse['items']
+  groups: RouterOverviewResponse['groups']
+  hotspots: HotspotOverviewResponse['items']
+  showAdvanced: boolean
+  setShowAdvanced: Dispatch<SetStateAction<boolean>>
+}) {
   return (
     <div className="card">
       <div className="card-header"><span className="card-title">Register MikroTik Router</span></div>
@@ -604,8 +731,11 @@ function RouterCreateCard({ formState, setFormState, onSubmit, submitting, showT
               <InputField label="Tags" value={formState.tags} onChange={(value) => setFormState((previous) => ({ ...previous, tags: value }))} placeholder="backbone, tower-a, hotspot-core" />
             </>
           )}
+          <div style={{ marginTop: 12 }}>
+            <FormProcessStatus busy={submitting} error={formError} text={processText || 'Registering router. This modal closes after AROFi saves the router and generates setup details.'} />
+          </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Registering...' : 'Register Router'}</button>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Registering router...' : 'Register Router'}</button>
             {showAdvanced && <button type="button" className="btn btn-ghost" onClick={() => setFormState((previous) => ({ ...previous, sharedSecret: generateSecret() }))}>Regenerate Secret</button>}
           </div>
         </form>

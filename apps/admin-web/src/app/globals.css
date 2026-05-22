@@ -759,6 +759,10 @@ tr:hover td { background: var(--bg-hover); }
   background: var(--green);
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .sop-list {
   margin-top: 20px;
   display: grid;

@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
+import { PaymentsModule } from '../payments/payments.module'
 import { WalletsController } from './wallets.controller'
 import { WalletsService } from './wallets.service'
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PaymentsModule],
   controllers: [WalletsController],
   providers: [WalletsService],
   exports: [WalletsService],

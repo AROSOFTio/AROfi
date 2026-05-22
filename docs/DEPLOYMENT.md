@@ -9,9 +9,9 @@
 
 The Docker stack includes PostgreSQL, Redis, API, admin web, portal web, Nginx, and FreeRADIUS with SQL-backed `radcheck`, `radreply`, `radacct`, `radpostauth`, and dynamic `nas` clients.
 
-## Pesapal
+## Mobile Money Payments
 
-Configure `PESAPAL_MODE`, credentials, IPN ID, callback URL, and webhook token. A callback or IPN never grants access by itself; the API verifies status server-to-server before creating an activation and RADIUS credential.
+Configure MTN MoMo collection/disbursement credentials and the callback URLs under `/api/payments/webhooks/mtn/*`. Airtel remains available in the portal, but requires official Airtel endpoint and credential configuration before live payments can be processed. A callback never grants access by itself; the API verifies status server-to-server before creating an activation and RADIUS credential.
 
 ## MikroTik Self-Service Onboarding
 
@@ -21,7 +21,7 @@ Configure `PESAPAL_MODE`, credentials, IPN ID, callback URL, and webhook token. 
 4. Copy or download the generated RouterOS script.
 5. Open WinBox Terminal, WebFig Terminal, or SSH.
 6. Paste the script and press Enter.
-7. Connect a test client, open the captive portal, redeem a voucher or complete a Pesapal test payment.
+7. Connect a test client, open the captive portal, redeem a voucher or complete an MTN sandbox payment.
 8. Router status becomes `VERIFIED_ONLINE` only after real RADIUS/accounting/authentication traffic is detected.
 
 The script does not reset the router or wipe WAN/LAN settings. The fresh-router mode adds HotSpot objects but still avoids a full reset.
@@ -34,7 +34,7 @@ Expired, revoked, suspended, and quota-exhausted activations disable their RADIU
 
 ## Ports And Firewall
 
-Allow UDP `1812` and `1813` from MikroTik routers to FreeRADIUS. Allow HTTPS to the portal/API hosts and the Pesapal domains in the MikroTik walled garden. If active disconnect is enabled, also allow CoA/Disconnect traffic on UDP `3799` or your configured `RADIUS_DISCONNECT_PORT`.
+Allow UDP `1812` and `1813` from MikroTik routers to FreeRADIUS. Allow HTTPS to the portal/API hosts and Mobile Money provider callback/API hosts in the MikroTik walled garden. If active disconnect is enabled, also allow CoA/Disconnect traffic on UDP `3799` or your configured `RADIUS_DISCONNECT_PORT`.
 
 ## Anti-Sharing Controls
 

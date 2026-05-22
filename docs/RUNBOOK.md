@@ -4,7 +4,7 @@
 
 1. Join the HotSpot as a new device.
 2. Confirm the portal URL includes MikroTik MAC/IP parameters.
-3. Buy a package through Pesapal sandbox.
+3. Buy a package through MTN MoMo sandbox or the configured Mobile Money provider.
 4. Confirm payment becomes `COMPLETED`.
 5. Confirm an activation and RADIUS credential are created.
 6. Confirm the portal auto-posts the MikroTik login form. Use the fallback connect button only if the browser/router blocks automatic submission.
@@ -43,7 +43,7 @@ Pending states mean:
 
 - Check `/radius print detail` for server, ports, and secret.
 - Check `/ip hotspot profile print detail` for `use-radius=yes`, `radius-accounting=yes`, and interim update.
-- Confirm walled garden contains portal/API/Pesapal hosts.
+- Confirm walled garden contains portal/API/payment hosts.
 - Confirm FreeRADIUS receives packets on UDP `1812/1813`.
 - After the first script callback changes a placeholder NAS IP to the router public/NAT IP, run `sudo docker compose restart freeradius` once so FreeRADIUS re-reads SQL clients.
 - Replace or redirect MikroTik `hotspot/login.html` to `https://arofi.arosoft.io/portal?mac=$(mac)&ip=$(ip)&link-login=$(link-login-only)&server=$(server-name)` so customers land on AROFi instead of the default MikroTik page.

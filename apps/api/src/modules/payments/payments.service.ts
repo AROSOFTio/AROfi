@@ -18,20 +18,20 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client'
-import { randomBytes, randomUUID } from 'crypto'
+import { createHash, randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
 import { PackageActivationService } from './package-activation.service'
-import { PesapalGatewayResponse, PesapalGatewayService } from './pesapal.gateway.service'
-import { YoGatewayResponse, YoUgandaGatewayService } from './yo-uganda.gateway.service'
+import { PaymentProviderResult } from './payment-provider.interface'
+import { PaymentRouterService } from './payment-router.service'
+import { PhoneNumberService } from './phone-number.service'
 
-type ProviderGatewayResponse = YoGatewayResponse &
-  PesapalGatewayResponse & {
-    checkoutUrl?: string
-    orderTrackingId?: string
-    merchantReference?: string
-  }
+type ProviderGatewayResponse = PaymentProviderResult & {
+  checkoutUrl?: string
+  orderTrackingId?: string
+  merchantReference?: string
+}
 
 @Injectable()
 export class PaymentsService {
@@ -110,8 +110,8 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly billingService: BillingService,
-    private readonly yoUgandaGatewayService: YoUgandaGatewayService,
-    private readonly pesapalGatewayService: PesapalGatewayService,
+    private readonly paymentRouterService: PaymentRouterService,
+    private readonly phoneNumberService: PhoneNumberService,
     private readonly packageActivationService: PackageActivationService,
   ) {}
 
@@ -293,18 +293,14 @@ export class PaymentsService {
       throw new BadRequestException('Package has no active price configured')
     }
 
-    const provider = this.resolvePaymentProvider(dto.provider)
-    const method = this.resolvePaymentMethod(provider, dto.method)
-    const network =
-      method === PaymentMethod.CARD
-        ? PaymentNetwork.UNKNOWN
-        : dto.network ?? PaymentNetwork.UNKNOWN
-
-    if (provider === PaymentProvider.YO_UGANDA && method !== PaymentMethod.MOBILE_MONEY) {
-      throw new BadRequestException('Yo Uganda supports only mobile money collections')
+    if (dto.network !== PaymentNetwork.MTN && dto.network !== PaymentNetwork.AIRTEL) {
+      throw new BadRequestException('Select MTN or Airtel before paying')
     }
 
-    const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber)
+    const network = dto.network
+    const provider = this.paymentRouterService.providerFor(network, 'COLLECTION')
+    const method = PaymentMethod.MOBILE_MONEY
+    const phoneNumber = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, network)
     const normalizedMac = this.normalizeMac(dto.macAddress)
 
     const idempotencyKey = dto.idempotencyKey?.trim() || randomUUID()
@@ -344,6 +340,7 @@ export class PaymentsService {
         status: PaymentStatus.INITIATED,
         amountUgx: activePrice.amountUgx,
         phoneNumber,
+        normalizedPhone: phoneNumber,
         customerReference: dto.customerReference,
         externalReference,
         idempotencyKey,
@@ -354,37 +351,19 @@ export class PaymentsService {
     })
 
     try {
-      const gatewayResponse =
-        provider === PaymentProvider.PESAPAL
-          ? await this.pesapalGatewayService.initiateCheckout({
-              amountUgx: activePrice.amountUgx,
-              phoneNumber,
-              externalReference,
-              customerReference: dto.customerReference ?? phoneNumber,
-              narrative: `${pkg.name} internet package`,
-              method,
-              network,
-              callbackUrl: this.buildPesapalBrowserCallbackUrl(payment.id, payment.statusToken, externalReference),
-            })
-          : await this.yoUgandaGatewayService.initiateCollection({
-              amountUgx: activePrice.amountUgx,
-              phoneNumber,
-              externalReference,
-              internalReference: dto.sessionReference,
-              narrative: `${pkg.name} internet package`,
-              providerReferenceText: 'AROFi Internet Access',
-              instantNotificationUrl: this.buildWebhookUrl('instant', externalReference),
-              failureNotificationUrl: this.buildWebhookUrl('failure', externalReference),
-              network: network === PaymentNetwork.UNKNOWN ? undefined : network,
-            })
+      const collectionProvider = this.paymentRouterService.resolveCollection(network)
+      const gatewayResponse = await collectionProvider.collectPayment({
+        amountUgx: activePrice.amountUgx,
+        currency: activePrice.currency || this.configService.get<string>('PAYMENT_DEFAULT_CURRENCY') || 'UGX',
+        phoneNumber,
+        externalReference,
+        narrative: `${pkg.name} internet package`,
+        network,
+      })
 
       return this.applyProviderTransition(payment.id, gatewayResponse, {
         eventType: PaymentEventType.REQUESTED,
-        notes:
-          gatewayResponse.statusMessage ??
-          (provider === PaymentProvider.PESAPAL
-            ? 'Pesapal checkout initialized'
-            : 'Yo Uganda collection request submitted'),
+        notes: gatewayResponse.statusMessage ?? 'Payment collection request submitted',
         payload: {
           request: {
             packageId: pkg.id,
@@ -417,6 +396,7 @@ export class PaymentsService {
           tenantId: payment.tenantId,
           paymentId: payment.id,
           provider: payment.provider,
+          network: payment.network,
           eventType: PaymentEventType.REQUESTED,
           externalReference: payment.externalReference,
           verificationStatus: 'accepted',
@@ -480,77 +460,56 @@ export class PaymentsService {
       return this.getPayment(payment.id)
     }
 
-    const gatewayResponse =
-      payment.provider === PaymentProvider.PESAPAL
-        ? await this.pesapalGatewayService.checkTransactionStatus({
-            orderTrackingId: payment.providerReference,
-            externalReference: payment.externalReference,
-          })
-        : await this.yoUgandaGatewayService.checkTransactionStatus({
-            transactionReference: payment.providerReference,
-            externalReference: payment.externalReference,
-          })
+    const referenceId = payment.providerReference ?? payment.externalReference
+    const gatewayResponse = await this.paymentRouterService
+      .resolveCollection(payment.network)
+      .getPaymentStatus(referenceId)
 
     return this.applyProviderTransition(payment.id, gatewayResponse, {
       eventType: PaymentEventType.STATUS_CHECK,
-      notes:
-        gatewayResponse.statusMessage ??
-        (payment.provider === PaymentProvider.PESAPAL
-          ? 'Pesapal status check completed'
-          : 'Yo Uganda status check completed'),
+      notes: gatewayResponse.statusMessage ?? 'Payment status check completed',
       payload: gatewayResponse,
     })
   }
 
-  async handleYoWebhook(
+  async handleProviderWebhook(
+    provider: PaymentProvider,
+    network: PaymentNetwork,
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
-    token?: string,
-    event?: string,
-    externalReferenceHint?: string,
+    direction: 'collection' | 'disbursement',
   ) {
-    const extracted = this.extractWebhookReferences(payload, externalReferenceHint)
+    const extracted = this.extractWebhookReferences(payload)
     const payment = await this.findPaymentByReferences(extracted.externalReference, extracted.providerReference)
-    const tokenAccepted = this.verifyWebhookToken(token)
+    const idempotencyKey = this.buildWebhookIdempotencyKey(provider, extracted.externalReference, extracted.providerReference, payload)
+    const duplicateWebhook = await this.prisma.paymentWebhook.findUnique({ where: { idempotencyKey } })
+
+    if (duplicateWebhook) {
+      return {
+        received: true,
+        matched: Boolean(payment),
+        processed: false,
+        duplicate: true,
+      }
+    }
 
     await this.prisma.paymentWebhook.create({
       data: {
         tenantId: payment?.tenantId,
         paymentId: payment?.id,
-        provider: PaymentProvider.YO_UGANDA,
+        provider,
+        network,
         eventType: PaymentEventType.WEBHOOK_RECEIVED,
+        status: String(payload.status ?? payload.transactionStatus ?? ''),
+        idempotencyKey,
         externalReference: extracted.externalReference,
         providerReference: extracted.providerReference,
-        verificationStatus: tokenAccepted ? 'accepted' : 'rejected',
+        verificationStatus: 'accepted',
         headers: this.toJsonValue(headers),
         payload: this.toJsonValue(payload),
-        notes: event ? `Yo Uganda webhook received (${event})` : 'Yo Uganda webhook received',
+        notes: `${provider} ${direction} webhook received`,
       },
     })
-
-    if (!tokenAccepted) {
-      await this.prisma.paymentWebhook.create({
-        data: {
-          tenantId: payment?.tenantId,
-          paymentId: payment?.id,
-          provider: PaymentProvider.YO_UGANDA,
-          eventType: PaymentEventType.WEBHOOK_REJECTED,
-          externalReference: extracted.externalReference,
-          providerReference: extracted.providerReference,
-          verificationStatus: 'rejected',
-          headers: this.toJsonValue(headers),
-          payload: this.toJsonValue(payload),
-          notes: 'Webhook token rejected',
-        },
-      })
-
-      return {
-        received: true,
-        matched: Boolean(payment),
-        processed: false,
-        reason: 'Webhook token rejected',
-      }
-    }
 
     if (!payment) {
       return {
@@ -560,7 +519,7 @@ export class PaymentsService {
       }
     }
 
-    if (payment.provider !== PaymentProvider.YO_UGANDA) {
+    if (payment.provider !== provider || payment.network !== network) {
       return {
         received: true,
         matched: true,
@@ -569,111 +528,10 @@ export class PaymentsService {
       }
     }
 
-    const gatewayResponse = this.mapWebhookToGatewayResponse(payload, event)
+    const gatewayResponse = this.mapWebhookToGatewayResponse(payload)
     const updatedPayment = await this.applyProviderTransition(payment.id, gatewayResponse, {
       eventType: PaymentEventType.WEBHOOK_PROCESSED,
-      notes: event ? `Webhook processed (${event})` : 'Webhook processed',
-      payload: {
-        webhook: payload,
-        gateway: gatewayResponse,
-      },
-      headers,
-    })
-
-    return {
-      received: true,
-      matched: true,
-      processed: true,
-      payment: updatedPayment,
-    }
-  }
-
-  async handlePesapalWebhook(
-    payload: Record<string, unknown>,
-    headers: Record<string, string | string[] | undefined>,
-    token?: string,
-    orderTrackingId?: string,
-    merchantReference?: string,
-    eventType?: string,
-  ) {
-    const providerReference =
-      orderTrackingId ??
-      this.readPayloadValue(payload, ['orderTrackingId', 'OrderTrackingId', 'tracking_id'])?.toString()
-    const externalReference =
-      merchantReference ??
-      this.readPayloadValue(payload, [
-        'merchantReference',
-        'OrderMerchantReference',
-        'merchant_reference',
-        'externalReference',
-      ])?.toString()
-    const payment = await this.findPaymentByReferences(externalReference, providerReference)
-    const tokenAccepted = this.verifyPesapalWebhookToken(token)
-
-    await this.prisma.paymentWebhook.create({
-      data: {
-        tenantId: payment?.tenantId,
-        paymentId: payment?.id,
-        provider: PaymentProvider.PESAPAL,
-        eventType: PaymentEventType.WEBHOOK_RECEIVED,
-        externalReference,
-        providerReference,
-        verificationStatus: tokenAccepted ? 'accepted' : 'rejected',
-        headers: this.toJsonValue(headers),
-        payload: this.toJsonValue(payload),
-        notes: eventType ? `Pesapal webhook received (${eventType})` : 'Pesapal webhook received',
-      },
-    })
-
-    if (!tokenAccepted) {
-      await this.prisma.paymentWebhook.create({
-        data: {
-          tenantId: payment?.tenantId,
-          paymentId: payment?.id,
-          provider: PaymentProvider.PESAPAL,
-          eventType: PaymentEventType.WEBHOOK_REJECTED,
-          externalReference,
-          providerReference,
-          verificationStatus: 'rejected',
-          headers: this.toJsonValue(headers),
-          payload: this.toJsonValue(payload),
-          notes: 'Pesapal webhook token rejected',
-        },
-      })
-
-      return {
-        received: true,
-        matched: Boolean(payment),
-        processed: false,
-        reason: 'Webhook token rejected',
-      }
-    }
-
-    if (!payment) {
-      return {
-        received: true,
-        matched: false,
-        processed: false,
-      }
-    }
-
-    if (payment.provider !== PaymentProvider.PESAPAL) {
-      return {
-        received: true,
-        matched: true,
-        processed: false,
-        reason: 'Payment provider mismatch',
-      }
-    }
-
-    const gatewayResponse = await this.pesapalGatewayService.checkTransactionStatus({
-      orderTrackingId: providerReference ?? payment.providerReference,
-      externalReference: externalReference ?? payment.externalReference,
-    })
-
-    const updatedPayment = await this.applyProviderTransition(payment.id, gatewayResponse, {
-      eventType: PaymentEventType.WEBHOOK_PROCESSED,
-      notes: eventType ? `Pesapal webhook processed (${eventType})` : 'Pesapal webhook processed',
+      notes: `${provider} ${direction} webhook processed`,
       payload: {
         webhook: payload,
         gateway: gatewayResponse,
@@ -710,6 +568,12 @@ export class PaymentsService {
       }
 
       const nextStatus = this.mapProviderStatus(gatewayResponse)
+      if (payment.status === PaymentStatus.COMPLETED && nextStatus === PaymentStatus.COMPLETED) {
+        return tx.payment.findUnique({
+          where: { id: payment.id },
+          include: this.paymentDetailInclude,
+        })
+      }
       const now = new Date()
       const providerReference =
         gatewayResponse.transactionReference ??
@@ -736,7 +600,6 @@ export class PaymentsService {
             errorMessage: gatewayResponse.errorMessage,
             amount: gatewayResponse.amount,
             currencyCode: gatewayResponse.currencyCode,
-            paymentMethod: gatewayResponse.paymentMethod,
             checkoutUrl: gatewayResponse.checkoutUrl,
             orderTrackingId: gatewayResponse.orderTrackingId,
             merchantReference: gatewayResponse.merchantReference,
@@ -762,7 +625,9 @@ export class PaymentsService {
           tenantId: payment.tenantId,
           paymentId: payment.id,
           provider: payment.provider,
+          network: payment.network,
           eventType: log.eventType,
+          status: nextStatus,
           externalReference: payment.externalReference,
           providerReference,
           verificationStatus: 'accepted',
@@ -798,10 +663,10 @@ export class PaymentsService {
             channel: BillingChannel.MOBILE_MONEY,
             type: BillingTransactionType.MOBILE_MONEY_SALE,
             grossAmountUgx: payment.amountUgx,
-            description: `${payment.method === PaymentMethod.CARD ? 'Card' : 'Mobile money'} payment settled via ${payment.provider === PaymentProvider.PESAPAL ? 'Pesapal' : 'Yo! Uganda'}`,
+            description: `${payment.method === PaymentMethod.CARD ? 'Card' : 'Mobile money'} payment - ${payment.network} network`,
             customerReference: payment.customerReference ?? payment.phoneNumber,
             externalReference: payment.externalReference,
-            paymentProvider: payment.provider === PaymentProvider.PESAPAL ? 'Pesapal' : 'Yo! Uganda',
+            paymentProvider: payment.provider.replace(/_/g, ' '),
             metadata: this.toJsonValue({
               paymentId: payment.id,
               providerReference,
@@ -853,6 +718,7 @@ export class PaymentsService {
             tenantId: payment.tenantId,
             paymentId: payment.id,
             provider: payment.provider,
+            network: payment.network,
             eventType: PaymentEventType.ACTIVATION_POSTED,
             externalReference: payment.externalReference,
             providerReference,
@@ -935,90 +801,29 @@ export class PaymentsService {
     return { routerId: router.id }
   }
 
-  private buildWebhookUrl(event: 'instant' | 'failure', externalReference: string) {
-    const baseUrl = this.configService.get<string>('YO_WEBHOOK_BASE_URL')
-
-    if (!baseUrl) {
-      return undefined
-    }
-
-    const url = new URL(baseUrl)
-    const token = this.configService.get<string>('YO_WEBHOOK_TOKEN')
-
-    url.searchParams.set('event', event)
-    url.searchParams.set('externalReference', externalReference)
-
-    if (token) {
-      url.searchParams.set('token', token)
-    }
-
-    return url.toString()
-  }
-
-  private buildPesapalBrowserCallbackUrl(paymentId: string, statusToken: string | null, externalReference: string) {
-    const configured =
-      this.configService.get<string>('PESAPAL_BROWSER_CALLBACK_URL') ??
-      this.buildDefaultPortalReturnUrl()
-
-    if (!configured) {
-      return undefined
-    }
-
-    try {
-      const url = new URL(configured)
-      url.searchParams.set('paymentId', paymentId)
-      url.searchParams.set('externalReference', externalReference)
-
-      if (statusToken) {
-        url.searchParams.set('token', statusToken)
-      }
-
-      return url.toString()
-    } catch {
-      return undefined
-    }
-  }
-
-  private buildDefaultPortalReturnUrl() {
-    const host =
-      this.configService.get<string>('PORTAL_PUBLIC_HOST') ??
-      this.configService.get<string>('API_PUBLIC_HOST')
-
-    if (!host) {
-      return undefined
-    }
-
-    return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}/portal/payment-return`
-  }
-
-  private verifyWebhookToken(token?: string) {
-    const configuredToken = this.configService.get<string>('YO_WEBHOOK_TOKEN')
-
-    if (!configuredToken) {
-      return true
-    }
-
-    return token === configuredToken
-  }
-
-  private verifyPesapalWebhookToken(token?: string) {
-    const configuredToken = this.configService.get<string>('PESAPAL_WEBHOOK_TOKEN')
-
-    if (!configuredToken) {
-      return true
-    }
-
-    return token === configuredToken
-  }
-
   private buildExternalReference() {
     return `AROFI-PAY-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
+  }
+
+  private buildWebhookIdempotencyKey(
+    provider: PaymentProvider,
+    externalReference?: string,
+    providerReference?: string,
+    payload?: unknown,
+  ) {
+    const raw = JSON.stringify({
+      provider,
+      externalReference,
+      providerReference,
+      payload,
+    })
+    return createHash('sha256').update(raw).digest('hex')
   }
 
   private mapProviderStatus(gatewayResponse: ProviderGatewayResponse) {
     const providerStatus = (gatewayResponse.transactionStatus ?? '').toUpperCase()
 
-    if (providerStatus === 'SUCCEEDED' || providerStatus === 'PAID' || providerStatus === 'COMPLETED') {
+    if (providerStatus === 'SUCCESSFUL' || providerStatus === 'SUCCEEDED' || providerStatus === 'PAID' || providerStatus === 'COMPLETED' || providerStatus === 'SUCCESS') {
       return PaymentStatus.COMPLETED
     }
 
@@ -1053,7 +858,7 @@ export class PaymentsService {
     return PaymentStatus.PENDING
   }
 
-  private mapWebhookToGatewayResponse(payload: Record<string, unknown>, event?: string): YoGatewayResponse {
+  private mapWebhookToGatewayResponse(payload: Record<string, unknown>): ProviderGatewayResponse {
     const transactionStatus = (
       this.readPayloadValue(payload, [
         'TransactionStatus',
@@ -1061,7 +866,6 @@ export class PaymentsService {
         'transaction_status',
         'TransactionStatusName',
       ]) ??
-      (event === 'failure' ? 'FAILED' : undefined) ??
       'PENDING'
     ).toString()
 
@@ -1198,27 +1002,6 @@ export class PaymentsService {
 
     const value = metadata[key]
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
-  }
-
-  private resolvePaymentProvider(provider?: PaymentProvider) {
-    if (provider) {
-      return provider
-    }
-
-    const configured = (this.configService.get<string>('PAYMENT_DEFAULT_PROVIDER') ?? 'PESAPAL').toUpperCase()
-    return configured === PaymentProvider.PESAPAL ? PaymentProvider.PESAPAL : PaymentProvider.YO_UGANDA
-  }
-
-  private resolvePaymentMethod(provider: PaymentProvider, method?: PaymentMethod) {
-    if (provider === PaymentProvider.YO_UGANDA) {
-      return PaymentMethod.MOBILE_MONEY
-    }
-
-    if (method === PaymentMethod.CARD) {
-      return PaymentMethod.CARD
-    }
-
-    return PaymentMethod.MOBILE_MONEY
   }
 
   private toJsonValue(value: unknown): Prisma.InputJsonValue {

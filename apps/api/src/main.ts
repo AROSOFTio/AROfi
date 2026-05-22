@@ -51,21 +51,25 @@ function assertRequiredProductionConfig() {
     'RADIUS_SHARED_SECRET',
   ]
 
-  if ((process.env.PAYMENT_DEFAULT_PROVIDER ?? 'PESAPAL') === 'PESAPAL') {
-    required.push('PESAPAL_CONSUMER_KEY', 'PESAPAL_CONSUMER_SECRET', 'PESAPAL_IPN_ID')
+  if ((process.env.MTN_COLLECTION_PROVIDER ?? 'MTN_MOMO_DIRECT') === 'MTN_MOMO_DIRECT') {
+    required.push(
+      'MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY',
+      'MTN_MOMO_COLLECTION_API_USER',
+      'MTN_MOMO_COLLECTION_API_KEY'
+    )
   }
 
-  const pesapalMode = (process.env.PESAPAL_MODE ?? 'live').toLowerCase()
-  if (pesapalMode === 'sandbox') {
-    throw new Error('PESAPAL_MODE is set to sandbox in a production environment. Set it to live.')
-  }
-  if (pesapalMode === 'mock') {
-    throw new Error('PESAPAL_MODE is set to mock in a production environment. Set it to live for real payments.')
+  const mtnMode = (process.env.MTN_MOMO_ENV ?? 'sandbox').toLowerCase()
+  if (mtnMode === 'live') {
+    // In live mode, ensure TARGET_ENVIRONMENT is set correctly
+    if (!process.env.MTN_MOMO_TARGET_ENVIRONMENT) {
+      required.push('MTN_MOMO_TARGET_ENVIRONMENT')
+    }
   }
 
   const missing = required.filter((key) => {
     const value = process.env[key]
-    return !value || value.startsWith('change_') || value.startsWith('replace_with')
+    return !value || value.startsWith('change_') || value.startsWith('replace_with') || value.startsWith('CHANGE_ME')
   })
   if (missing.length > 0) {
     throw new Error(`Missing required production configuration: ${missing.join(', ')}`)

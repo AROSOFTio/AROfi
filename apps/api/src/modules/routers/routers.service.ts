@@ -1154,10 +1154,9 @@ export class RoutersService {
     const envHosts = [
       process.env.PORTAL_PUBLIC_HOST,
       process.env.API_PUBLIC_HOST,
-      process.env.PESAPAL_HOST,
       'arofi.arosoft.io',
-      'pay.pesapal.com',
-      'cybqa.pesapal.com',
+      'sandbox.momodeveloper.mtn.com',
+      'proxy.momoapi.mtn.com',
     ].filter((value): value is string => Boolean(value))
 
     return Array.from(new Set([...configured, ...envHosts]))

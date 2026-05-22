@@ -7,6 +7,7 @@ import {
   VoucherTemplatesResponse,
   VouchersOverviewResponse,
 } from '@/lib/admin-types'
+import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import { getBrowserAdminToken } from '@/lib/admin-session'
@@ -137,6 +138,12 @@ export default function VouchersManager() {
   const [success, setSuccess] = useState<string | null>(null)
   const [submittingTemplate, setSubmittingTemplate] = useState(false)
   const [submittingBatch, setSubmittingBatch] = useState(false)
+  const [templateProcessText, setTemplateProcessText] = useState('')
+  const [batchProcessText, setBatchProcessText] = useState('')
+  const [templateFormError, setTemplateFormError] = useState<string | null>(null)
+  const [batchFormError, setBatchFormError] = useState<string | null>(null)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [printBatch, setPrintBatch] = useState<VouchersOverviewResponse['batches'][number] | null>(null)
   const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(printTemplates[0].id)
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null)
@@ -240,14 +247,18 @@ export default function VouchersManager() {
   async function handleTemplateSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setTemplateFormError(null)
     setSuccess(null)
 
     if (!templateForm.tenantId) {
-      setError('Select a tenant before creating a voucher template')
+      const failure = 'Select a tenant before creating a voucher template'
+      setError(failure)
+      setTemplateFormError(failure)
       return
     }
 
     setSubmittingTemplate(true)
+    setTemplateProcessText('Creating voucher template for this tenant.')
 
     try {
       await clientPostApi('/vouchers/templates', {
@@ -264,30 +275,39 @@ export default function VouchersManager() {
         notes: templateForm.notes.trim() || undefined,
       })
 
+      setTemplateProcessText('Refreshing voucher templates.')
       setSuccess('Voucher template created successfully')
       setTemplateForm((previous) => ({
         ...initialTemplateForm,
         tenantId: previous.tenantId,
       }))
       await loadData()
+      setTemplateModalOpen(false)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create template')
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to create template'
+      setError(failure)
+      setTemplateFormError(failure)
     } finally {
       setSubmittingTemplate(false)
+      setTemplateProcessText('')
     }
   }
 
   async function handleBatchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setBatchFormError(null)
     setSuccess(null)
 
     if (!batchForm.tenantId || !batchForm.packageId) {
-      setError('Select tenant and package before generating vouchers')
+      const failure = 'Select tenant and package before generating vouchers'
+      setError(failure)
+      setBatchFormError(failure)
       return
     }
 
     setSubmittingBatch(true)
+    setBatchProcessText('Generating voucher codes and reserving the batch.')
 
     try {
       await clientPostApi('/vouchers/batches', {
@@ -301,16 +321,21 @@ export default function VouchersManager() {
         notes: batchForm.notes.trim() || undefined,
       })
 
+      setBatchProcessText('Refreshing voucher batch list.')
       setSuccess('Voucher batch generated successfully')
       setBatchForm((previous) => ({
         ...initialBatchForm,
         tenantId: previous.tenantId,
       }))
       await loadData()
+      setBatchModalOpen(false)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to generate voucher batch')
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to generate voucher batch'
+      setError(failure)
+      setBatchFormError(failure)
     } finally {
       setSubmittingBatch(false)
+      setBatchProcessText('')
     }
   }
 
@@ -367,14 +392,23 @@ export default function VouchersManager() {
           <h1 className="page-title">Vouchers</h1>
           <p className="page-subtitle">Create voucher templates, generate voucher stock, and monitor redemption activity.</p>
         </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-ghost" onClick={() => { setTemplateFormError(null); setTemplateProcessText(''); setTemplateModalOpen(true) }}>
+            Create Template
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => { setBatchFormError(null); setBatchProcessText(''); setBatchModalOpen(true) }}>
+            Generate Vouchers
+          </button>
+        </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Create Voucher Template</span>
-        </div>
-        <div className="content" style={{ paddingTop: 16 }}>
-          <form onSubmit={handleTemplateSubmit}>
+      {templateModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingTemplate && setTemplateModalOpen(false)}>
+          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setTemplateModalOpen(false)} disabled={submittingTemplate}>Close</button>
+            <div className="modal-kicker">Voucher template</div>
+            <h2 className="modal-title">Create Voucher Template</h2>
+            <form onSubmit={handleTemplateSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 12 }}>
               <div className="form-group">
                 <label className="form-label">Tenant</label>
@@ -448,19 +482,24 @@ export default function VouchersManager() {
                 Active
               </label>
               <button type="submit" className="btn btn-primary" disabled={submittingTemplate}>
-                {submittingTemplate ? 'Saving...' : 'Create Template'}
+                {submittingTemplate ? 'Creating template...' : 'Create Template'}
               </button>
             </div>
+            <div style={{ marginTop: 12 }}>
+              <FormProcessStatus busy={submittingTemplate} error={templateFormError} success={success?.includes('template') ? success : null} text={templateProcessText || 'Creating template. Template list refreshes after AROFi saves it.'} />
+            </div>
           </form>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Generate Voucher Batch</span>
-        </div>
-        <div className="content" style={{ paddingTop: 16 }}>
-          <form onSubmit={handleBatchSubmit}>
+      {batchModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingBatch && setBatchModalOpen(false)}>
+          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setBatchModalOpen(false)} disabled={submittingBatch}>Close</button>
+            <div className="modal-kicker">Voucher batch</div>
+            <h2 className="modal-title">Generate Voucher Batch</h2>
+            <form onSubmit={handleBatchSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 12 }}>
               <div className="form-group">
                 <label className="form-label">Tenant</label>
@@ -528,14 +567,18 @@ export default function VouchersManager() {
                 <input className="form-input" value={batchForm.notes} onChange={(event) => setBatchForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder="Batch for city center outlets" />
               </div>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={submittingBatch}>
-              {submittingBatch ? 'Generating...' : 'Generate Vouchers'}
-            </button>
-          </form>
-          {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
-          {success && <p style={{ color: 'var(--success-fg)', marginTop: 10, fontSize: 13 }}>{success}</p>}
+            <div style={{ display: 'grid', gap: 12 }}>
+              <FormProcessStatus busy={submittingBatch} error={batchFormError} success={success?.includes('batch') ? success : null} text={batchProcessText || 'Generating vouchers. The batch list refreshes after AROFi saves it.'} />
+              <button type="submit" className="btn btn-primary" disabled={submittingBatch}>
+                {submittingBatch ? 'Generating vouchers...' : 'Generate Vouchers'}
+              </button>
+            </div>
+            </form>
+          {error && !templateFormError && !batchFormError && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
+          {success && !success.includes('template') && !success.includes('batch') && <p style={{ color: 'var(--success-fg)', marginTop: 10, fontSize: 13 }}>{success}</p>}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[

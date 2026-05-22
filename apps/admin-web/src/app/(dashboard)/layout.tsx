@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import AdminSessionControl from '../../components/AdminSessionControl'
 import Sidebar from '../../components/Sidebar'
 import ThemeToggle from '../../components/ThemeToggle'
+import WorkspaceRouteGuard from '../../components/WorkspaceRouteGuard'
 
 export const metadata = {
   title: 'AROFi Admin - Hotspot Billing & Network Management',
@@ -44,7 +45,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <AdminSessionControl />
           </div>
         </header>
-        <div className="content">{children}</div>
+        <WorkspaceRouteGuard user={session.user}>
+          <div className="content">{children}</div>
+        </WorkspaceRouteGuard>
       </div>
     </>
   )

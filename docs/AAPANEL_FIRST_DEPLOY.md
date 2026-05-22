@@ -53,22 +53,21 @@ sudo cp .env.aapanel.example .env
 sudo nano .env
 ```
 
-Replace all `CHANGE_ME...` values. Also add real Pesapal and Yo Uganda credentials before live payments.
+Replace all `CHANGE_ME...` values. Add real MTN MoMo credentials before live payments. Add Airtel endpoint and credential details when Airtel live access is approved.
 
-The default provider is `PESAPAL`, so these must be set before the API will start:
+MTN collection requires:
 
 ```env
-PESAPAL_CONSUMER_KEY=...
-PESAPAL_CONSUMER_SECRET=...
-PESAPAL_IPN_ID=...
+MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY=...
+MTN_MOMO_COLLECTION_API_USER=...
+MTN_MOMO_COLLECTION_API_KEY=...
 ```
 
-If you are starting with Yo Uganda instead, set:
+For live Uganda set:
 
 ```env
-PAYMENT_DEFAULT_PROVIDER=YO_UGANDA
-YO_API_USERNAME=...
-YO_API_PASSWORD=...
+MTN_MOMO_COLLECTION_BASE_URL=https://proxy.momoapi.mtn.com
+MTN_MOMO_TARGET_ENVIRONMENT=mtnuganda
 ```
 
 For random secrets you can run:

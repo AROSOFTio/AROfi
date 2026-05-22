@@ -5,6 +5,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { PaymentNetwork, PaymentProvider } from '@prisma/client'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
 import { PaymentsService } from './payments.service'
 
@@ -36,49 +37,27 @@ export class PaymentsController {
     return this.paymentsService.initiatePortalPayment(dto)
   }
 
-  @Post('webhooks/yo-uganda')
-  handleYoWebhook(
+  @Post('webhooks/mtn/collection')
+  handleMtnCollectionWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
-    @Query('token') token?: string,
-    @Query('event') event?: string,
-    @Query('externalReference') externalReference?: string,
   ) {
-    return this.paymentsService.handleYoWebhook(payload, headers, token, event, externalReference)
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, payload, headers, 'collection')
   }
 
-  @Get('webhooks/pesapal')
-  handlePesapalWebhookGet(
-    @Query() query: Record<string, string>,
-    @Headers() headers: Record<string, string | string[] | undefined>,
-  ) {
-    return this.paymentsService.handlePesapalWebhook(
-      {},
-      headers,
-      query.token,
-      query.OrderTrackingId ?? query.orderTrackingId,
-      query.OrderMerchantReference ?? query.merchantReference ?? query.externalReference,
-      query.OrderNotificationType ?? query.event,
-    )
+  @Post('webhooks/mtn/disbursement')
+  handleMtnDisbursementWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, payload, headers, 'disbursement')
   }
 
-  @Post('webhooks/pesapal')
-  handlePesapalWebhookPost(
-    @Body() payload: Record<string, unknown>,
-    @Headers() headers: Record<string, string | string[] | undefined>,
-    @Query('token') token?: string,
-    @Query('orderTrackingId') orderTrackingId?: string,
-    @Query('merchantReference') merchantReference?: string,
-    @Query('event') event?: string,
-  ) {
-    return this.paymentsService.handlePesapalWebhook(
-      payload,
-      headers,
-      token,
-      orderTrackingId,
-      merchantReference,
-      event,
-    )
+  @Post('webhooks/airtel/collection')
+  handleAirtelCollectionWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, payload, headers, 'collection')
+  }
+
+  @Post('webhooks/airtel/disbursement')
+  handleAirtelDisbursementWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, payload, headers, 'disbursement')
   }
 
   @UseGuards(JwtAuthGuard, PermissionsGuard)

@@ -109,7 +109,7 @@ describe('MikrotikService', () => {
       radiusAuthPort: 1812,
       radiusAccountingPort: 1813,
       sharedSecret: 'unique-router-secret',
-      portalHosts: ['portal.arofi.test', 'pay.pesapal.com', 'portal.arofi.test'],
+      portalHosts: ['portal.arofi.test', 'sandbox.momodeveloper.mtn.com', 'portal.arofi.test'],
       ttlAntiTetheringEnabled: true,
     })
 

@@ -5,7 +5,7 @@ AROFi is a multi-tenant hotspot billing platform with:
 - Customer captive portal (`/portal`)
 - Backend API (`/api`)
 - PostgreSQL, Redis, FreeRADIUS, and Nginx in Docker Compose
-- Live payments (Yo Uganda + Pesapal mobile money/card checkout)
+- Mobile money payments: MTN MoMo and Airtel Money in Uganda
 
 ## Production Deploy (Contabo / Ubuntu)
 
@@ -40,25 +40,25 @@ POSTGRES_PASSWORD=strong_password_here
 POSTGRES_DB=arofi_dev
 JWT_SECRET=change_this_to_long_random_secret
 
-# Default provider when client does not specify one
-PAYMENT_DEFAULT_PROVIDER=PESAPAL
+# Default provider - MTN MoMo recommended for Uganda
+PAYMENT_DEFAULT_PROVIDER=MTN_MOMO_DIRECT
 
-# Yo Uganda
-YO_API_MODE=live
-YO_API_USERNAME=your_yo_username
-YO_API_PASSWORD=your_yo_password
-YO_WEBHOOK_BASE_URL=https://arofi.arosoft.io/api/payments/webhooks/yo-uganda
-YO_WEBHOOK_TOKEN=change_this_webhook_token
+# MTN MoMo API (recommended for Uganda)
+MTN_MOMO_ENV=sandbox
+MTN_MOMO_COLLECTION_BASE_URL=https://sandbox.momodeveloper.mtn.com
+MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY=your_mtn_key
+MTN_MOMO_COLLECTION_API_USER=your_mtn_user
+MTN_MOMO_COLLECTION_API_KEY=your_mtn_api_key
+MTN_MOMO_TARGET_ENVIRONMENT=sandbox
+MTN_ALLOWED_PREFIXES=077,078,076,079,031,039
 
-# Pesapal
-PESAPAL_MODE=live
-PESAPAL_CONSUMER_KEY=your_pesapal_consumer_key
-PESAPAL_CONSUMER_SECRET=your_pesapal_consumer_secret
-PESAPAL_IPN_ID=your_pesapal_ipn_id
-PESAPAL_BROWSER_CALLBACK_URL=https://arofi.arosoft.io/portal/payment-return
-PESAPAL_IPN_URL=https://arofi.arosoft.io/api/payments/webhooks/pesapal
-PESAPAL_CALLBACK_URL=https://arofi.arosoft.io/api/payments/webhooks/pesapal
-PESAPAL_WEBHOOK_TOKEN=change_this_pesapal_webhook_token
+# Airtel Money API
+AIRTEL_MONEY_ENV=sandbox
+AIRTEL_MONEY_COLLECTION_BASE_URL=
+AIRTEL_MONEY_DISBURSEMENT_BASE_URL=
+AIRTEL_MONEY_CLIENT_ID=your_airtel_client_id
+AIRTEL_MONEY_CLIENT_SECRET=your_airtel_secret
+AIRTEL_ALLOWED_PREFIXES=070,075,074
 
 # Router / Radius
 ROUTER_CREDENTIAL_SECRET=change_this_router_secret
@@ -80,10 +80,9 @@ Routing inside container Nginx:
 
 ## Live Payment Webhooks
 
-- Yo Uganda webhook: `POST /api/payments/webhooks/yo-uganda`
-- Pesapal webhook: `GET/POST /api/payments/webhooks/pesapal`
-
-Both support token verification via `YO_WEBHOOK_TOKEN` / `PESAPAL_WEBHOOK_TOKEN`.
+- Yo! Uganda webhook: `POST /api/payments/webhooks/yo-uganda` (token-verified)
+- MTN MoMo webhooks are configured via MTN dashboard
+- Airtel Money webhooks are configured via Airtel dashboard
 
 ## Fresh MikroTik Acceptance Flow
 
@@ -94,8 +93,8 @@ Use **Fresh full captive Wi-Fi** only on a router where AROFi is allowed to conf
 3. Confirm the terminal prints `AROFi HotSpot login.html installed` and `AROFi provisioning callback sent`.
 4. On the router, confirm an open SSID appears using the registered site/router name.
 5. Connect a phone to that open SSID. MikroTik should open `hotspot/login.html`, which redirects to `/portal` with `mac`, `ip`, `link-login`, `server`, and `routerKey`.
-6. Buy a package. Pesapal returns the browser to `/portal/payment-return`, where AROFi checks payment status.
-7. When payment is completed, AROFi creates RADIUS credentials with `Session-Timeout` from the package duration and posts them to MikroTik `link-login-only`.
+6. Buy a package using MTN MoMo or Airtel Money. Approve the payment prompt on your phone.
+7. AROFi receives payment confirmation and creates RADIUS credentials with `Session-Timeout` from the package duration and posts them to MikroTik `link-login-only`.
 8. Dashboard should then show these independently: script callback received, RADIUS auth seen, accounting seen, and management API reachable/unreachable.
 
 Real-world limits:

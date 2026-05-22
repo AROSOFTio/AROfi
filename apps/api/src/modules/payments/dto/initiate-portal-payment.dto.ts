@@ -1,4 +1,4 @@
-import { PaymentMethod, PaymentNetwork, PaymentProvider } from '@prisma/client'
+import { PaymentNetwork } from '@prisma/client'
 import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator'
 
 export class InitiatePortalPaymentDto {
@@ -10,22 +10,14 @@ export class InitiatePortalPaymentDto {
   @MaxLength(32)
   phoneNumber: string
 
+  @IsEnum(PaymentNetwork)
+  @IsNotEmpty()
+  network: PaymentNetwork
+
   @IsOptional()
   @IsString()
   @MaxLength(120)
   customerReference?: string
-
-  @IsOptional()
-  @IsEnum(PaymentNetwork)
-  network?: PaymentNetwork
-
-  @IsOptional()
-  @IsEnum(PaymentProvider)
-  provider?: PaymentProvider
-
-  @IsOptional()
-  @IsEnum(PaymentMethod)
-  method?: PaymentMethod
 
   @IsOptional()
   @IsString()

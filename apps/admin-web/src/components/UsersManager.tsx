@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { UsersOverviewResponse } from '@/lib/admin-types'
+import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
 
@@ -19,6 +20,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   const [data, setData] = useState(initialData)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [processText, setProcessText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const roles = useMemo(() => {
     const availableRoles = data?.roles ?? []
@@ -44,10 +46,12 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsSubmitting(true)
+    setProcessText('Creating staff user and assigning role permissions.')
     setError(null)
 
     try {
       const createdUser = await clientPostApi<UsersOverviewResponse['users'][number]>('/users', form)
+      setProcessText('Refreshing user directory.')
       setData((previous) => {
         if (!previous) return previous
         return {
@@ -67,6 +71,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
       setError(requestError instanceof Error ? requestError.message : 'Could not create user')
     } finally {
       setIsSubmitting(false)
+      setProcessText('')
     }
   }
 
@@ -77,7 +82,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
           <h1 className="page-title">Users & Roles</h1>
           <p className="page-subtitle">Create tenant staff accounts with scoped access for WiFi admins, voucher agents, finance, and support.</p>
         </div>
-        <button className="primary-button" type="button" onClick={() => setIsModalOpen(true)}>
+        <button className="primary-button" type="button" onClick={() => { setError(null); setProcessText(''); setIsModalOpen(true) }}>
           + Add User
         </button>
       </div>
@@ -142,7 +147,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
       {isModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
-            <button className="modal-close" type="button" onClick={() => setIsModalOpen(false)}>Close</button>
+            <button className="modal-close" type="button" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Close</button>
             <div className="modal-kicker">Tenant Access</div>
             <h2 className="modal-title">Add Staff User</h2>
             <form onSubmit={handleSubmit}>
@@ -160,10 +165,10 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                   </select>
                 </div>
               </div>
-              {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
+              <FormProcessStatus busy={isSubmitting} error={error} text={processText || 'Creating user. This modal closes after the account is saved.'} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                <button className="secondary-button" type="button" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                <button className="primary-button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Create User'}</button>
+                <button className="secondary-button" type="button" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</button>
+                <button className="primary-button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating user...' : 'Create User'}</button>
               </div>
             </form>
           </div>

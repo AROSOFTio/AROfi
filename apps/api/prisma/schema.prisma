@@ -64,8 +64,9 @@ enum BillingTransactionStatus {
 }
 
 enum PaymentProvider {
-  YO_UGANDA
-  PESAPAL
+  MTN_MOMO_DIRECT
+  AIRTEL_MONEY_DIRECT
+  AGGREGATOR
 }
 
 enum PaymentMethod {
@@ -195,6 +196,18 @@ enum DisbursementStatus {
   PROCESSING
   COMPLETED
   FAILED
+  CANCELLED
+}
+
+enum PayoutNumberStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PayoutNumberChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
   CANCELLED
 }
 
@@ -339,6 +352,7 @@ model Tenant {
   voucherRedemptions  VoucherRedemption[]
   payments            Payment[]
   paymentWebhooks     PaymentWebhook[]
+  paymentProviderConfigs PaymentProviderConfig[]
   packageActivations  PackageActivation[]
   routerGroups        RouterGroup[]
   routers             Router[]
@@ -356,6 +370,9 @@ model Tenant {
   suspiciousAttempts  SuspiciousAccessAttempt[]
   voucherPrintLogs    VoucherPrintLog[]
   tenantSettings      TenantSetting?
+  payoutProfile       TenantPayoutProfile?
+  payoutNumbers       TenantPayoutNumber[]
+  payoutNumberChangeRequests TenantPayoutNumberChangeRequest[]
   disconnectionAttempts DisconnectionAttempt[]
 }
 
@@ -879,13 +896,14 @@ model Payment {
   package             Package            @relation(fields: [packageId], references: [id])
   billingTransactionId String?           @unique
   billingTransaction  BillingTransaction? @relation(fields: [billingTransactionId], references: [id])
-  provider            PaymentProvider    @default(YO_UGANDA)
+  provider            PaymentProvider    @default(MTN_MOMO_DIRECT)
   method              PaymentMethod      @default(MOBILE_MONEY)
   network             PaymentNetwork     @default(UNKNOWN)
   status              PaymentStatus      @default(INITIATED)
   amountUgx           Int
   currency            String             @default("UGX")
   phoneNumber         String
+  normalizedPhone     String?
   customerReference   String?
   externalReference   String             @unique
   providerReference   String?            @unique
@@ -906,6 +924,7 @@ model Payment {
 
   @@index([tenantId, createdAt])
   @@index([status, createdAt])
+  @@index([tenantId, network, status, createdAt])
 }
 
 model PaymentWebhook {
@@ -914,8 +933,11 @@ model PaymentWebhook {
   tenant             Tenant?        @relation(fields: [tenantId], references: [id])
   paymentId          String?
   payment            Payment?       @relation(fields: [paymentId], references: [id])
-  provider           PaymentProvider @default(YO_UGANDA)
+  provider           PaymentProvider @default(MTN_MOMO_DIRECT)
+  network            PaymentNetwork?
   eventType          PaymentEventType
+  status             String?
+  idempotencyKey     String?         @unique
   externalReference  String?
   providerReference  String?
   verificationStatus String?
@@ -928,6 +950,29 @@ model PaymentWebhook {
 
   @@index([paymentId, createdAt])
   @@index([externalReference, createdAt])
+  @@index([provider, providerReference, createdAt])
+}
+
+model PaymentProviderConfig {
+  id                   String          @id @default(uuid())
+  tenantId             String?
+  tenant               Tenant?         @relation(fields: [tenantId], references: [id])
+  network              PaymentNetwork
+  collectionProvider   PaymentProvider
+  disbursementProvider PaymentProvider
+  mode                 String          @default("sandbox")
+  currency             String          @default("UGX")
+  commissionBps        Int             @default(0)
+  minimumPayoutUgx     Int             @default(0)
+  requirePayoutApproval Boolean        @default(true)
+  allowedPrefixes      String[]
+  lastSuccessfulCollectionAt DateTime?
+  lastSuccessfulDisbursementAt DateTime?
+  webhookHealthStatus  String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@unique([tenantId, network])
 }
 
 model PackageActivation {
@@ -1238,8 +1283,8 @@ model Disbursement {
   id                  String              @id @default(uuid())
   tenantId            String
   tenant              Tenant              @relation(fields: [tenantId], references: [id])
-  agentId             String
-  agent               Agent               @relation(fields: [agentId], references: [id])
+  agentId             String?
+  agent               Agent?              @relation(fields: [agentId], references: [id])
   settlementId        String?
   settlement          Settlement?         @relation(fields: [settlementId], references: [id])
   walletId            String
@@ -1249,6 +1294,8 @@ model Disbursement {
   reference           String              @unique
   method              DisbursementMethod  @default(MOBILE_MONEY)
   status              DisbursementStatus  @default(PENDING)
+  network             PaymentNetwork?
+  provider            PaymentProvider?
   amountUgx           Int
   destinationReference String?
   providerReference   String?
@@ -1262,6 +1309,51 @@ model Disbursement {
 
   @@index([tenantId, createdAt])
   @@index([agentId, status])
+}
+
+model TenantPayoutProfile {
+  id             String   @id @default(uuid())
+  tenantId       String   @unique
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  secretHash     String
+  termsVersion   String   @default("2026-05-22")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model TenantPayoutNumber {
+  id              String             @id @default(uuid())
+  tenantId        String
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  network         PaymentNetwork
+  phone           String
+  normalizedPhone String
+  label           String?
+  status          PayoutNumberStatus @default(ACTIVE)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([tenantId, normalizedPhone])
+  @@index([tenantId, status])
+}
+
+model TenantPayoutNumberChangeRequest {
+  id                    String                   @id @default(uuid())
+  tenantId              String
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id])
+  existingPayoutNumberId String?
+  requestedNetwork      PaymentNetwork
+  requestedPhone        String
+  requestedNormalizedPhone String
+  reason                String
+  status                PayoutNumberChangeStatus @default(PENDING)
+  reviewedByUserId      String?
+  reviewedAt            DateTime?
+  reviewNotes           String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([tenantId, status, createdAt])
 }
 
 model FeatureLimit {

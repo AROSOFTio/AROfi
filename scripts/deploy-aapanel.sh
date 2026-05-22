@@ -47,8 +47,6 @@ create_env_if_missing() {
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_JWT_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_PORTAL_TOKEN_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_ROUTER_SECRET/$(random_secret)/g" "$ENV_FILE"
-  sed -i "s/CHANGE_ME_RANDOM_PESAPAL_WEBHOOK_TOKEN/$(random_secret)/g" "$ENV_FILE"
-  sed -i "s/CHANGE_ME_RANDOM_YO_WEBHOOK_TOKEN/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_RANDOM_RADIUS_SHARED_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_RANDOM_RADIUS_INTERNAL_API_KEY/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_RANDOM_RADIUS_DISCONNECT_SECRET/$(random_secret)/g" "$ENV_FILE"
@@ -71,8 +69,6 @@ require_env_value() {
 
 create_env_if_missing
 
-payment_provider="$(grep -E "^PAYMENT_DEFAULT_PROVIDER=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr '[:lower:]' '[:upper:]' || true)"
-
 require_env_value POSTGRES_PASSWORD
 require_env_value REDIS_PASSWORD
 require_env_value JWT_SECRET
@@ -81,16 +77,9 @@ require_env_value ROUTER_CREDENTIAL_SECRET
 require_env_value RADIUS_SHARED_SECRET
 require_env_value RADIUS_INTERNAL_API_KEY
 
-if [ "${payment_provider:-PESAPAL}" = "PESAPAL" ]; then
-  require_env_value PESAPAL_CONSUMER_KEY
-  require_env_value PESAPAL_CONSUMER_SECRET
-  require_env_value PESAPAL_IPN_ID
-  require_env_value PESAPAL_WEBHOOK_TOKEN
-else
-  require_env_value YO_API_USERNAME
-  require_env_value YO_API_PASSWORD
-  require_env_value YO_WEBHOOK_TOKEN
-fi
+require_env_value MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY
+require_env_value MTN_MOMO_COLLECTION_API_USER
+require_env_value MTN_MOMO_COLLECTION_API_KEY
 
 echo "Pulling public images..."
 compose pull --ignore-buildable || true

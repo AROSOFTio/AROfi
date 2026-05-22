@@ -44,12 +44,12 @@ export default function RootPage() {
         </div>
         <div className="home-panel" aria-hidden="true">
           <div className="home-panel-row"><Wifi /> AROFi live captive portal</div>
-          <div className="home-panel-metric">UGX 2.8M</div>
-          <div className="home-panel-muted">Revenue tracked across vouchers, agents, and mobile money.</div>
+          <div className="home-panel-metric">Live Data</div>
+          <div className="home-panel-muted">Operational values are shown only after sign-in from your real workspace records.</div>
           <div className="home-panel-grid">
-            <span>Routers online</span><strong>42</strong>
-            <span>Active sessions</span><strong>1,284</strong>
-            <span>Packages sold</span><strong>8,920</strong>
+            <span>Router health</span><strong>Workspace</strong>
+            <span>Customer sessions</span><strong>Live</strong>
+            <span>Wallet balance</span><strong>Verified</strong>
           </div>
         </div>
       </section>

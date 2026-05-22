@@ -1,11 +1,13 @@
 import { DisbursementOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import VendorWithdrawalsPanel from '@/components/VendorWithdrawalsPanel'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DisbursementsPage() {
   const data = await fetchApi<DisbursementOverviewResponse>('/agents/disbursements/overview')
+  const payoutProfile = await fetchApi<any>('/wallets/payouts/profile/me')
   const settlements = data?.settlements ?? []
   const disbursements = data?.disbursements ?? []
 
@@ -31,6 +33,8 @@ export default async function DisbursementsPage() {
           </div>
         ))}
       </div>
+
+      <VendorWithdrawalsPanel initialProfile={payoutProfile} />
 
       <div className="card">
         <div className="card-header">
@@ -115,7 +119,7 @@ export default async function DisbursementsPage() {
                       {disbursement.billingTransaction?.externalReference ?? disbursement.settlement?.reference ?? 'No source ref'}
                     </div>
                   </td>
-                  <td>{disbursement.agent.name}</td>
+                  <td>{disbursement.agent?.name ?? 'Vendor wallet'}</td>
                   <td>{formatTransactionType(disbursement.method)}</td>
                   <td>{disbursement.destinationReference ?? 'Manual'}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(disbursement.amountUgx)}</td>
