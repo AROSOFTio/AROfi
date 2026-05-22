@@ -59,4 +59,8 @@ if ! "$SERVER_BIN" -C; then
   exit 1
 fi
 
+if [ "${AROFI_RADIUS_DEBUG:-}" = "1" ]; then
+  exec "$SERVER_BIN" -X
+fi
+
 exec "$SERVER_BIN" -f
