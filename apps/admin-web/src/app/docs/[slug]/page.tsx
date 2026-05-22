@@ -154,9 +154,11 @@ const docs: Record<string, DocPage> = {
       {
         heading: 'Testing before MTN API credentials',
         body: [
-          'Pesapal is not part of AROFi. Do not re-enable it for customer checkout or test collections.',
-          'Before live MTN credentials are issued, test router onboarding, captive redirect, package display, voucher flows, and payment pending/failed handling.',
-          'Live package activation from mobile money must wait for a confirmed successful provider status from MTN or another approved configured provider.',
+          'Pesapal can be used temporarily as the backend AGGREGATOR collection route while direct MTN credentials are pending.',
+          'Customer screens still show only MTN, Airtel, phone number, and Pay. Gateway names must not be shown on the portal.',
+          'Set MTN_COLLECTION_PROVIDER=AGGREGATOR and/or AIRTEL_COLLECTION_PROVIDER=AGGREGATOR, then configure PESAPAL_BASE_URL, PESAPAL_CONSUMER_KEY, PESAPAL_CONSUMER_SECRET, and PESAPAL_IPN_ID.',
+          'Do not set disbursement providers to AGGREGATOR. Vendor withdrawals remain on direct MTN/Airtel payout adapters.',
+          'Internet access is still activated only after the provider status is confirmed successful.',
         ],
       },
     ],

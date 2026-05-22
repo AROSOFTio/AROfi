@@ -5,6 +5,9 @@ export type PaymentProviderResult = {
   statusCode: number
   transactionStatus?: string
   transactionReference?: string
+  checkoutUrl?: string
+  orderTrackingId?: string
+  merchantReference?: string
   mnoTransactionReferenceId?: string
   issuedReceiptNumber?: string
   statusMessage?: string
@@ -26,6 +29,7 @@ export type CollectPaymentInput = {
   customerReference?: string
   narrative: string
   network: PaymentNetwork
+  returnUrl?: string
 }
 
 export type SendMoneyInput = {

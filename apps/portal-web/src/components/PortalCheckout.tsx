@@ -591,6 +591,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         return
       }
 
+      const checkoutUrl = extractCheckoutUrl(payment)
+      if (checkoutUrl && typeof window !== 'undefined') {
+        window.localStorage.setItem(paymentReturnStorageKey, JSON.stringify({
+          paymentId: payment.id,
+          statusToken: payment.statusToken,
+          phoneNumber: payment.phoneNumber,
+          hotspotParams,
+        }))
+        window.location.href = checkoutUrl
+        return
+      }
+
       setStatusMessage('Payment request sent. Check your phone and approve the payment.')
       if (payment.activation) {
         await loginWithPhone(payment.phoneNumber, true, hotspotParams)

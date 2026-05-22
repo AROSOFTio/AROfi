@@ -60,6 +60,11 @@ export class PaymentsController {
     return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, payload, headers, 'disbursement')
   }
 
+  @Post('webhooks/aggregator/collection')
+  handleAggregatorCollectionWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
+    return this.paymentsService.handleAggregatorCollectionWebhook(payload, headers)
+  }
+
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.paymentsRead)
   @Get(':paymentId')

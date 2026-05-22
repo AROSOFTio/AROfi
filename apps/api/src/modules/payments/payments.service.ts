@@ -357,8 +357,10 @@ export class PaymentsService {
         currency: activePrice.currency || this.configService.get<string>('PAYMENT_DEFAULT_CURRENCY') || 'UGX',
         phoneNumber,
         externalReference,
+        customerReference: dto.customerReference,
         narrative: `${pkg.name} internet package`,
         network,
+        returnUrl: this.buildPortalPaymentReturnUrl(payment.id, payment.statusToken),
       })
 
       return this.applyProviderTransition(payment.id, gatewayResponse, {
@@ -805,6 +807,21 @@ export class PaymentsService {
     return `AROFI-PAY-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
   }
 
+  async handleAggregatorCollectionWebhook(
+    payload: Record<string, unknown>,
+    headers: Record<string, string | string[] | undefined>,
+  ) {
+    const extracted = this.extractWebhookReferences(payload)
+    const payment = await this.findPaymentByReferences(extracted.externalReference, extracted.providerReference)
+    return this.handleProviderWebhook(
+      PaymentProvider.AGGREGATOR,
+      payment?.network ?? PaymentNetwork.MTN,
+      payload,
+      headers,
+      'collection',
+    )
+  }
+
   private buildWebhookIdempotencyKey(
     provider: PaymentProvider,
     externalReference?: string,
@@ -865,6 +882,8 @@ export class PaymentsService {
         'transactionStatus',
         'transaction_status',
         'TransactionStatusName',
+        'payment_status_description',
+        'payment_status',
       ]) ??
       'PENDING'
     ).toString()
@@ -886,6 +905,8 @@ export class PaymentsService {
         'transactionReference',
         'network_ref',
         'providerReference',
+        'order_tracking_id',
+        'OrderTrackingId',
       ])?.toString(),
       mnoTransactionReferenceId: this.readPayloadValue(payload, [
         'MNOTransactionReferenceId',
@@ -907,6 +928,8 @@ export class PaymentsService {
       ])?.toString(),
       amount: this.readPayloadValue(payload, ['Amount', 'amount'])?.toString(),
       currencyCode: this.readPayloadValue(payload, ['CurrencyCode', 'currency'])?.toString(),
+      orderTrackingId: this.readPayloadValue(payload, ['order_tracking_id', 'OrderTrackingId'])?.toString(),
+      merchantReference: this.readPayloadValue(payload, ['merchant_reference', 'MerchantReference'])?.toString(),
       rawRequest: '',
       rawResponse: JSON.stringify(payload),
     }
@@ -921,6 +944,8 @@ export class PaymentsService {
           'external_ref',
           'privateTransactionReference',
           'PrivateTransactionReference',
+          'merchant_reference',
+          'MerchantReference',
         ])?.toString() ?? externalReferenceHint,
       providerReference:
         this.readPayloadValue(payload, [
@@ -928,7 +953,25 @@ export class PaymentsService {
           'transactionReference',
           'network_ref',
           'providerReference',
+          'order_tracking_id',
+          'OrderTrackingId',
         ])?.toString(),
+    }
+  }
+
+  private buildPortalPaymentReturnUrl(paymentId: string, statusToken?: string | null) {
+    const base = this.configService.get<string>('PORTAL_BASE_URL') ?? this.configService.get<string>('APP_BASE_URL') ?? 'https://arofi.arosoft.io/portal'
+    try {
+      const url = new URL(base)
+      url.searchParams.set('paymentId', paymentId)
+      if (statusToken) {
+        url.searchParams.set('token', statusToken)
+      }
+      return url.toString()
+    } catch {
+      const separator = base.includes('?') ? '&' : '?'
+      const token = statusToken ? `&token=${encodeURIComponent(statusToken)}` : ''
+      return `${base}${separator}paymentId=${encodeURIComponent(paymentId)}${token}`
     }
   }
 

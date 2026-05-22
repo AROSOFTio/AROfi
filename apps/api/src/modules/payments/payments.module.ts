@@ -11,6 +11,7 @@ import { MtnMomoCollectionService } from './mtn-momo-collection.service'
 import { MtnMomoDisbursementService } from './mtn-momo-disbursement.service'
 import { PaymentRouterService } from './payment-router.service'
 import { PaymentWebhookService } from './payment-webhook.service'
+import { PesapalCollectionService } from './pesapal-collection.service'
 import { PhoneNumberService } from './phone-number.service'
 import { WalletLedgerService } from './wallet-ledger.service'
 
@@ -25,6 +26,7 @@ import { WalletLedgerService } from './wallet-ledger.service'
     PackageActivationService,
     PaymentRouterService,
     PaymentWebhookService,
+    PesapalCollectionService,
     PaymentsService,
     PhoneNumberService,
     WalletLedgerService,
