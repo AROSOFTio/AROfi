@@ -173,6 +173,9 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []
   const supportTickets = system?.support.items ?? []
+  const routerItems = routers?.routers ?? []
+  const liveRouters = routerItems.filter((router) => router.liveState === 'LIVE' || router.isLiveNow)
+  const primaryRouter = routerItems[0]
 
   return (
     <>
@@ -183,7 +186,33 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <a href="/disbursements" className="btn btn-ghost">Withdraw</a>
-          <a href="/routers" className="btn btn-primary">Connect Router</a>
+          <a href="/routers" className="btn btn-primary">{routerItems.length > 0 ? 'Manage Routers' : 'Connect Router'}</a>
+        </div>
+      </div>
+
+      <div className="card" style={{ borderColor: primaryRouter?.isLiveNow ? 'var(--green-mid)' : 'var(--border)' }}>
+        <div style={{ padding: 20, display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span
+              className={primaryRouter?.isLiveNow ? 'live-dot' : undefined}
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 99,
+                background: primaryRouter?.isLiveNow ? 'var(--success-fg)' : 'var(--danger-fg)',
+                boxShadow: primaryRouter?.isLiveNow ? '0 0 0 4px var(--success-bg)' : '0 0 0 4px var(--danger-bg)',
+              }}
+            />
+            <div>
+              <div style={{ color: 'var(--text-1)', fontWeight: 800, fontSize: 16 }}>
+                {primaryRouter ? `${primaryRouter.name}: ${primaryRouter.isLiveNow ? 'Live' : primaryRouter.liveState === 'PENDING' ? 'Pending' : 'Offline'}` : 'No router connected'}
+              </div>
+              <div style={{ color: 'var(--text-2)', fontSize: 13 }}>
+                {primaryRouter ? formatRouterSignal(primaryRouter) : 'Register a MikroTik router under Routers to start live monitoring.'}
+              </div>
+            </div>
+          </div>
+          <a href="/routers" className="btn btn-ghost">{routerItems.length > 0 ? 'Open Routers' : 'Connect Router'}</a>
         </div>
       </div>
 
@@ -195,7 +224,7 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
         <Stat label="Vouchers Sold" value={`${vouchers?.summary.sold ?? 0}`} color="blue" note="Voucher access sold" />
         <Stat label="Pending Payments" value={`${payments?.summary.pendingPayments ?? 0}`} color="amber" note="Awaiting provider result" />
         <Stat label="Open Tickets" value={`${supportTickets.filter((ticket) => !['RESOLVED', 'CLOSED'].includes(ticket.status)).length}`} color="purple" note="Support conversations" />
-        <Stat label="Healthy Routers" value={`${routers?.summary.healthyRouters ?? 0}`} color="green" note="Ready for customers" />
+        <Stat label="Live Routers" value={`${routers?.summary.liveRouters ?? liveRouters.length}`} color="green" note="Fresh callback, RADIUS, accounting, or API signal" />
       </div>
 
       <div className="card">
@@ -272,7 +301,8 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
             <a href="/support" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Submit Ticket</a>
           </div>
           <div style={{ display: 'grid', gap: 12 }}>
-            <Readiness label="Router connected" ready={(routers?.summary.totalRouters ?? 0) > 0} />
+            <Readiness label="Router registered" ready={(routers?.summary.totalRouters ?? 0) > 0} />
+            <Readiness label="Router live now" ready={(routers?.summary.liveRouters ?? liveRouters.length) > 0} />
             <Readiness label="Package catalog ready" ready={(tenantRecord?.counts.packages ?? 0) > 0} />
             <Readiness label="Hotspot configured" ready={(tenantRecord?.counts.hotspots ?? 0) > 0} />
             <Readiness label="Payments visible" ready={(payments?.summary.mobileMoneyRequests ?? 0) > 0} />
@@ -313,4 +343,20 @@ function Readiness({ label, ready }: { label: string; ready: boolean }) {
       <span className={getStatusBadgeClass(ready ? 'success' : 'pending')}>{ready ? 'ready' : 'needed'}</span>
     </div>
   )
+}
+
+function formatRouterSignal(router: {
+  lastSignalSource?: string | null
+  secondsSinceLastSignal?: number | null
+}) {
+  if (!router.lastSignalSource || typeof router.secondsSinceLastSignal !== 'number') {
+    return 'Waiting for a real router signal.'
+  }
+  if (router.secondsSinceLastSignal < 60) {
+    return `${router.lastSignalSource} just now`
+  }
+  if (router.secondsSinceLastSignal < 3600) {
+    return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 60)}m ago`
+  }
+  return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 3600)}h ago`
 }

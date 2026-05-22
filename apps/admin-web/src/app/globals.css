@@ -763,6 +763,16 @@ tr:hover td { background: var(--bg-hover); }
   to { transform: rotate(360deg); }
 }
 
+.live-dot {
+  animation: livePulse 1.6s ease-out infinite;
+}
+
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.45); }
+  70% { box-shadow: 0 0 0 9px rgba(22, 163, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
 .sop-list {
   margin-top: 20px;
   display: grid;

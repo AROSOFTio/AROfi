@@ -119,7 +119,9 @@ export default function RoutersManager() {
   const routerSummary = overview?.summary ?? {
     totalRouters: 0,
     healthyRouters: 0,
+    liveRouters: 0,
     degradedRouters: 0,
+    staleRouters: 0,
     offlineRouters: 0,
     pendingRouters: 0,
     routerGroups: 0,
@@ -141,12 +143,12 @@ export default function RoutersManager() {
       { title: 'Hotspot site', ready: (hotspots?.items.length ?? 0) > 0 },
       { title: 'Router group', ready: (overview?.groups.length ?? 0) > 0 },
       { title: 'First router', ready: (overview?.routers.length ?? 0) > 0 },
-      { title: 'RADIUS/API verification', ready: (overview?.summary.healthyRouters ?? 0) > 0 },
+      { title: 'Live router signal', ready: (overview?.summary.liveRouters ?? overview?.summary.healthyRouters ?? 0) > 0 },
     ],
     [hotspots, overview],
   )
   const routers = overview?.routers ?? []
-  const onlineRouters = routers.filter((router) => isRouterOnline(router)).length
+  const onlineRouters = routerSummary.liveRouters ?? routers.filter((router) => isRouterOnline(router)).length
   const selectedRouterState = getRouterLiveState(selectedSetup?.router)
 
   useEffect(() => {
@@ -617,23 +619,22 @@ export default function RoutersManager() {
 type RouterLiveState = 'live' | 'warning' | 'offline' | 'pending'
 
 function isRouterOnline(router: {
+  isLiveNow?: boolean
+  liveState?: string
   status?: string
   provisioningCallbackReceived?: boolean
   radiusAuthSeen?: boolean
   accountingSeen?: boolean
   managementApiReachable?: boolean
 }) {
-  return Boolean(
-    router.provisioningCallbackReceived ||
-      router.radiusAuthSeen ||
-      router.accountingSeen ||
-      router.managementApiReachable ||
-      router.status === 'HEALTHY' ||
-      router.status === 'DEGRADED',
-  )
+  if (typeof router.isLiveNow === 'boolean') return router.isLiveNow
+  if (router.liveState) return router.liveState === 'LIVE'
+  return Boolean(router.status === 'HEALTHY' || router.radiusAuthSeen || router.accountingSeen)
 }
 
 function getRouterLiveState(router?: {
+  isLiveNow?: boolean
+  liveState?: string
   status?: string
   provisioningCallbackReceived?: boolean
   radiusAuthSeen?: boolean
@@ -641,6 +642,10 @@ function getRouterLiveState(router?: {
   managementApiReachable?: boolean
 } | null): RouterLiveState {
   if (!router) return 'pending'
+  if (router.liveState === 'LIVE' || router.isLiveNow) return 'live'
+  if (router.liveState === 'STALE') return 'offline'
+  if (router.liveState === 'OFFLINE') return 'offline'
+  if (router.liveState === 'PENDING') return 'pending'
   if (router.status === 'OFFLINE') return 'offline'
   if (router.status === 'HEALTHY' || router.radiusAuthSeen || router.accountingSeen) return 'live'
   if (router.provisioningCallbackReceived || router.managementApiReachable || router.status === 'DEGRADED') return 'warning'
@@ -650,7 +655,7 @@ function getRouterLiveState(router?: {
 function RouterLivePill({ state, label }: { state: RouterLiveState; label?: string }) {
   const config = {
     live: { text: 'Live', color: 'var(--success-fg)', bg: 'var(--success-bg)' },
-    warning: { text: 'Provisioned', color: 'var(--warn-fg)', bg: 'var(--warn-bg)' },
+    warning: { text: 'Stale', color: 'var(--warn-fg)', bg: 'var(--warn-bg)' },
     offline: { text: 'Offline', color: 'var(--danger-fg)', bg: 'var(--danger-bg)' },
     pending: { text: 'Pending', color: 'var(--text-2)', bg: 'var(--bg-app)' },
   }[state]
@@ -670,7 +675,11 @@ function RouterLivePill({ state, label }: { state: RouterLiveState; label?: stri
         fontWeight: 800,
       }}
     >
-      <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 99, background: config.color, boxShadow: `0 0 0 3px ${config.bg}` }} />
+      <span
+        aria-hidden="true"
+        className={state === 'live' ? 'live-dot' : undefined}
+        style={{ width: 9, height: 9, borderRadius: 99, background: config.color, boxShadow: `0 0 0 3px ${config.bg}` }}
+      />
       {label ? `${label}: ${config.text}` : config.text}
     </span>
   )
@@ -686,6 +695,11 @@ function RouterSignalGrid({
     accountingSeen?: boolean
     managementApiReachable?: boolean
     apiPort?: number
+    liveState?: string
+    isLiveNow?: boolean
+    lastSignalAt?: string | null
+    lastSignalSource?: string | null
+    secondsSinceLastSignal?: number | null
   }
 }) {
   const items = [
@@ -697,12 +711,30 @@ function RouterSignalGrid({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(120px, 1fr))', gap: 10 }}>
+      <SignalTile label="Live State" value={router.liveState ?? 'PENDING'} ok={Boolean(router.isLiveNow)} />
+      <SignalTile label="Last Signal" value={formatRouterSignal(router)} ok={Boolean(router.isLiveNow)} />
       <SignalTile label="Onboarding" value={router.onboardingStatus ?? 'SCRIPT_GENERATED'} ok />
       {items.map((item) => (
         <SignalTile key={item.label} label={item.label} value={item.ok ? item.good : item.bad} ok={Boolean(item.ok)} />
       ))}
     </div>
   )
+}
+
+function formatRouterSignal(router: {
+  lastSignalSource?: string | null
+  secondsSinceLastSignal?: number | null
+}) {
+  if (!router.lastSignalSource || typeof router.secondsSinceLastSignal !== 'number') {
+    return 'No signal yet'
+  }
+  if (router.secondsSinceLastSignal < 60) {
+    return `${router.lastSignalSource} now`
+  }
+  if (router.secondsSinceLastSignal < 3600) {
+    return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 60)}m ago`
+  }
+  return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 3600)}h ago`
 }
 
 function SignalTile({ label, value, ok }: { label: string; value: string; ok: boolean }) {
@@ -867,6 +899,12 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
                     )}
                   </td>
                   <td>
+                    <div style={{ marginBottom: 8 }}>
+                      <RouterLivePill state={getRouterLiveState(router)} />
+                    </div>
+                    <div style={{ fontSize: 12, color: router.isLiveNow ? 'var(--success-fg)' : 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
+                      {formatRouterSignal(router)}
+                    </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <span className={router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>
                         {router.provisioningCallbackReceived ? 'callback' : 'no callback'}

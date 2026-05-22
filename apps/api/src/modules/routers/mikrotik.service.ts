@@ -126,6 +126,7 @@ export class MikrotikService {
     const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
+    const heartbeatScript = this.buildHeartbeatScript(registrationKey, callbackUrl, fallbackCallbackUrl)
     const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl)
     const isFreshCaptiveWifi =
       input.mode === 'FRESH_FULL_CAPTIVE_WIFI' || input.mode === 'FRESH_FULL_HOTSPOT'
@@ -192,6 +193,9 @@ export class MikrotikService {
         ``,
         `# 6. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
         ...callbackScript,
+        ``,
+        `# 7. Keep AROFi live status accurate while the router has power and internet.`,
+        ...heartbeatScript,
         `:put "AROFi router configured."`,
       ].join('\n')
     }
@@ -259,6 +263,9 @@ export class MikrotikService {
       ``,
       `# 6. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
       ...callbackScript,
+      ``,
+      `# 7. Keep AROFi live status accurate while the router has power and internet.`,
+      ...heartbeatScript,
       `:put "AROFi fresh setup completed."`,
     ].join('\n')
   }
@@ -304,6 +311,19 @@ export class MikrotikService {
       `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
       `  }`,
       `}`,
+    ]
+  }
+
+  private buildHeartbeatScript(registrationKey: string, callbackUrl: string, fallbackCallbackUrl: string) {
+    const name = `arofi-heartbeat-${registrationKey.slice(0, 8)}`
+    const source = `:do { /tool fetch url=\\"${callbackUrl}\\" mode=https keep-result=no } on-error={ :do { /tool fetch url=\\"${fallbackCallbackUrl}\\" mode=http keep-result=no } on-error={} }`
+
+    return [
+      `/system script remove [find name="${name}"]`,
+      `/system script add name="${name}" source="${source}" comment="AROFi heartbeat ${this.escape(registrationKey)}"`,
+      `/system scheduler remove [find name="${name}"]`,
+      `/system scheduler add name="${name}" interval=2m start-time=startup on-event="/system script run ${name}" comment="AROFi live status heartbeat"`,
+      `/system script run ${name}`,
     ]
   }
 

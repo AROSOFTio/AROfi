@@ -664,6 +664,12 @@ export type RouterItem = {
   accountingSeen?: boolean
   managementApiReachable?: boolean
   managementApiMessage?: string | null
+  liveState?: 'LIVE' | 'STALE' | 'OFFLINE' | 'PENDING'
+  isLiveNow?: boolean
+  lastSignalAt?: string | null
+  lastSignalSource?: string | null
+  secondsSinceLastSignal?: number | null
+  routerOnlineWindowSeconds?: number
   hotspotServerName?: string | null
   portalWalledGardenHosts?: string[]
   ttlAntiTetheringEnabled?: boolean
@@ -714,7 +720,9 @@ export type RouterOverviewResponse = {
   summary: {
     totalRouters: number
     healthyRouters: number
+    liveRouters?: number
     degradedRouters: number
+    staleRouters?: number
     offlineRouters: number
     pendingRouters: number
     routerGroups: number
