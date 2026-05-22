@@ -92,16 +92,6 @@ export class RadiusCredentialService {
             op: ':=',
             value: '1',
           },
-          ...(credential.boundMacAddress
-            ? [
-                {
-                  username,
-                  attribute: 'Calling-Station-Id',
-                  op: '==',
-                  value: this.normalizeMac(credential.boundMacAddress),
-                },
-              ]
-            : []),
         ],
       })
 
