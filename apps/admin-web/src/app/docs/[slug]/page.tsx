@@ -27,6 +27,31 @@ const docs: Record<string, DocPage> = {
           'If the router is behind ISP NAT, remote management requires public IP, port forwarding, VPN, or a supported tunnel.',
         ],
       },
+      {
+        heading: 'Savana or upstream-router WAN fix for RouterOS 6',
+        body: [
+          'If the MikroTik gets 192.168.1.x on bridgeLocal and cannot ping 8.8.8.8, ether1 is still inside the LAN bridge. Remove ether1 from bridgeLocal, move DHCP client to ether1, and masquerade out ether1.',
+          'Run: /interface bridge port remove [find interface=ether1]',
+          'Run: /ip dhcp-client remove [find interface=bridgeLocal]',
+          'Run: /ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"',
+          'Run: /ip address remove [find address="192.168.1.2/24"]',
+          'Run: /ip firewall nat remove [find comment="AROFi nat"]',
+          'Run: /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"',
+          'Run: /ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8',
+          'Verify with: /ip dhcp-client print, /ip address print, /ip route print, /ping 192.168.1.1 count=4, /ping 8.8.8.8 count=4, /ping arofi.arosoft.io count=4.',
+        ],
+      },
+      {
+        heading: 'RouterOS 6 wireless recovery',
+        body: [
+          'RouterOS 6 uses /interface wireless, not /interface wifi. If wlan1 is managed by CAPsMAN or disabled, disable CAP mode and configure wlan1 manually.',
+          'Run: /interface wireless cap set enabled=no',
+          'Run: /interface wireless security-profiles add name=arofi-open mode=none authentication-types=""',
+          'Run: /interface wireless set wlan1 disabled=no mode=ap-bridge ssid="Kitintale Market" security-profile=arofi-open',
+          'Run: /interface bridge port add bridge=bridgeLocal interface=wlan1',
+          'If the profile or bridge port already exists, ignore the duplicate error.',
+        ],
+      },
     ],
   },
   payments: {
@@ -214,6 +239,7 @@ const docs: Record<string, DocPage> = {
         heading: 'Router not live',
         body: [
           'Check router internet, DNS, time/NTP, interface selection, RADIUS server reachability, and whether the script callback reached AROFi.',
+          'If pings to 8.8.8.8 and arofi.arosoft.io fail from the MikroTik terminal, fix WAN first. For Savana/upstream routers, ether1 must be WAN and must not remain inside bridgeLocal.',
           'If remote API/WinBox fails, check public IP, VPN, port forwarding, firewall rules, and ISP NAT.',
         ],
       },
@@ -241,8 +267,13 @@ const docs: Record<string, DocPage> = {
   },
 }
 
-export default function DocsPage({ params }: { params: { slug: string } }) {
-  const doc = docs[params.slug]
+export function generateStaticParams() {
+  return Object.keys(docs).map((slug) => ({ slug }))
+}
+
+export default async function DocsPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const doc = docs[slug]
   if (!doc) notFound()
 
   return (

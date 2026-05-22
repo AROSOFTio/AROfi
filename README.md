@@ -101,3 +101,57 @@ Real-world limits:
 - If the MikroTik is behind an upstream modem, RouterOS API health checks require TCP 8728/8729 port forwarding or VPN. HotSpot/RADIUS can still work without API reachability.
 - Some RouterOS device-mode restrictions require physical confirmation and reboot before HotSpot or Wi-Fi changes are accepted.
 - Unknown or unsupported Wi-Fi packages/interface layouts may need manual Wi-Fi setup, but Ethernet captive portal and RADIUS can still work.
+
+### RouterOS 6 Savana WAN recovery
+
+If the AROFi callback fails and the router cannot ping `8.8.8.8`, check whether the upstream/Savana cable is in `ether1` but `ether1` is still inside `bridgeLocal`.
+
+```routeros
+/ping 192.168.1.1 count=4
+/ping 8.8.8.8 count=4
+/ping arofi.arosoft.io count=4
+/ip dhcp-client print
+/ip route print
+/interface bridge port print
+```
+
+If DHCP is bound on `bridgeLocal`, move WAN to `ether1`:
+
+```routeros
+/interface bridge port remove [find interface=ether1]
+/ip dhcp-client remove [find interface=bridgeLocal]
+/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"
+/ip address remove [find address="192.168.1.2/24"]
+/ip firewall nat remove [find comment="AROFi nat"]
+/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"
+/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8
+```
+
+Verify:
+
+```routeros
+/ip dhcp-client print
+/ip address print
+/ip route print
+/ping 192.168.1.1 count=4
+/ping 8.8.8.8 count=4
+/ping arofi.arosoft.io count=4
+```
+
+RouterOS 6 wireless recovery:
+
+```routeros
+/interface wireless cap set enabled=no
+/interface wireless security-profiles add name=arofi-open mode=none authentication-types=""
+/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="Kitintale Market" security-profile=arofi-open
+/interface bridge port add bridge=bridgeLocal interface=wlan1
+/ip firewall filter print
+```
+
+After internet works, retry the callback:
+
+```routeros
+/tool fetch url="http://95.111.234.34:4012/api/mikrotik/provisioned/<registration-key>" mode=http keep-result=no
+```
+
+Remote WinBox still requires TCP `8291` reachability through public IP, port forwarding, VPN, or tunnel. The script cannot bypass ISP NAT.
