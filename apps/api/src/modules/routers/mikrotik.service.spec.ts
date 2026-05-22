@@ -60,8 +60,11 @@ describe('MikrotikService', () => {
       mode: 'FRESH_FULL_CAPTIVE_WIFI',
     })
 
-    expect(script).toContain('/interface bridge add name=bridge')
+    expect(script).toContain(':local arofiLanBridge "bridge"')
+    expect(script).toContain(':set arofiLanBridge "bridgeLocal"')
+    expect(script).toContain('/interface bridge add name=$arofiLanBridge')
     expect(script).toContain('/interface bridge port remove $wanBridgePort')
+    expect(script).toContain('/ip dhcp-client remove $staleWanClient')
     expect(script).toContain('/ip dhcp-client add interface=ether1')
     expect(script).toContain('AROFi provisioning callback sent')
     expect(script).toContain('/api/mikrotik/login-html/fresh-router-token')
@@ -69,14 +72,16 @@ describe('MikrotikService', () => {
     expect(script).toContain('/interface wifi find')
     expect(script).toContain('security.authentication-types=""')
     expect(script).toContain('/interface wireless find')
+    expect(script).toContain('/interface wireless cap set enabled=no')
     expect(script).toContain('security-profile=arofi-open')
     expect(script).toContain(':local arofiSsid "AROFi Free WiFi"')
-    expect(script).toContain('/interface bridge port add bridge=bridge')
-    expect(script).toContain('/ip address add address=10.50.0.1/24 interface=bridge')
+    expect(script).toContain('/interface bridge port add bridge=$arofiLanBridge')
+    expect(script).toContain('/ip address add address=10.50.0.1/24 interface=$arofiLanBridge')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
+    expect(script).toContain('/ip firewall nat remove [find comment="AROFi nat"]')
     expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade')
-    expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=bridge')
+    expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=$arofiLanBridge')
   })
 
   it('serves a MikroTik login page that forwards captive portal parameters to AROFi', () => {

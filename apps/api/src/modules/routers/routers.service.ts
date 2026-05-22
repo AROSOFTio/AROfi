@@ -508,7 +508,9 @@ export class RoutersService {
             host: managementHost,
             radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
             onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
+            status: RouterStatus.DEGRADED,
             lastProvisionedAt: now,
+            lastSeenAt: now,
             healthMessage,
           },
           select: { id: true, host: true, tenantId: true, name: true },
@@ -555,7 +557,9 @@ export class RoutersService {
           data: {
             radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
             onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
+            status: RouterStatus.DEGRADED,
             lastProvisionedAt: now,
+            lastSeenAt: now,
             healthMessage:
               'Provisioning callback received, but AROFi could not fully update router/NAS records. Check API logs for the database error.',
           },
