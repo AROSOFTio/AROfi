@@ -10,6 +10,7 @@ import {
 } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
+import LiveRouterStatusCard from '@/components/LiveRouterStatusCard'
 
 export default async function DashboardHome() {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
@@ -175,7 +176,6 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
   const supportTickets = system?.support.items ?? []
   const routerItems = routers?.routers ?? []
   const liveRouters = routerItems.filter((router) => router.liveState === 'LIVE' || router.isLiveNow)
-  const primaryRouter = routerItems[0]
 
   return (
     <>
@@ -190,31 +190,7 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
         </div>
       </div>
 
-      <div className="card" style={{ borderColor: primaryRouter?.isLiveNow ? 'var(--green-mid)' : 'var(--border)' }}>
-        <div style={{ padding: 20, display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span
-              className={primaryRouter?.isLiveNow ? 'live-dot' : undefined}
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 99,
-                background: primaryRouter?.isLiveNow ? 'var(--success-fg)' : 'var(--danger-fg)',
-                boxShadow: primaryRouter?.isLiveNow ? '0 0 0 4px var(--success-bg)' : '0 0 0 4px var(--danger-bg)',
-              }}
-            />
-            <div>
-              <div style={{ color: 'var(--text-1)', fontWeight: 800, fontSize: 16 }}>
-                {primaryRouter ? `${primaryRouter.name}: ${primaryRouter.isLiveNow ? 'Live' : primaryRouter.liveState === 'PENDING' ? 'Pending' : 'Offline'}` : 'No router connected'}
-              </div>
-              <div style={{ color: 'var(--text-2)', fontSize: 13 }}>
-                {primaryRouter ? formatRouterSignal(primaryRouter) : 'Register a MikroTik router under Routers to start live monitoring.'}
-              </div>
-            </div>
-          </div>
-          <a href="/routers" className="btn btn-ghost">{routerItems.length > 0 ? 'Open Routers' : 'Connect Router'}</a>
-        </div>
-      </div>
+      <LiveRouterStatusCard initialRouters={routerItems} />
 
       <div className="stats-grid">
         <Stat label="Sales Revenue" value={formatCurrency(billing?.summary.totalSalesUgx ?? 0)} color="green" note="Completed customer sales" />
@@ -343,20 +319,4 @@ function Readiness({ label, ready }: { label: string; ready: boolean }) {
       <span className={getStatusBadgeClass(ready ? 'success' : 'pending')}>{ready ? 'ready' : 'needed'}</span>
     </div>
   )
-}
-
-function formatRouterSignal(router: {
-  lastSignalSource?: string | null
-  secondsSinceLastSignal?: number | null
-}) {
-  if (!router.lastSignalSource || typeof router.secondsSinceLastSignal !== 'number') {
-    return 'Waiting for a real router signal.'
-  }
-  if (router.secondsSinceLastSignal < 60) {
-    return `${router.lastSignalSource} just now`
-  }
-  if (router.secondsSinceLastSignal < 3600) {
-    return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 60)}m ago`
-  }
-  return `${router.lastSignalSource} ${Math.floor(router.secondsSinceLastSignal / 3600)}h ago`
 }

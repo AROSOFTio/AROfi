@@ -1046,10 +1046,11 @@ export class RoutersService {
     managementApiReachable?: boolean
   }>(router: T) {
     const onlineWindowSeconds = Number.parseInt(
-      process.env.ROUTER_ONLINE_WINDOW_SECONDS ?? '600',
+      process.env.ROUTER_ONLINE_WINDOW_SECONDS ?? '6',
       10,
     )
-    const onlineWindowMs = Math.max(60, onlineWindowSeconds) * 1000
+    const normalizedOnlineWindowSeconds = Math.max(3, onlineWindowSeconds)
+    const onlineWindowMs = normalizedOnlineWindowSeconds * 1000
     const signals = [
       { at: router.lastAccountingSignalAt, source: 'FreeRADIUS accounting' },
       { at: router.lastAuthSignalAt, source: 'RADIUS authentication' },
@@ -1092,7 +1093,7 @@ export class RoutersService {
       lastSignalAt: latestSignal?.date ?? null,
       lastSignalSource: latestSignal?.source ?? null,
       secondsSinceLastSignal,
-      routerOnlineWindowSeconds: Math.max(60, onlineWindowSeconds),
+      routerOnlineWindowSeconds: normalizedOnlineWindowSeconds,
     }
   }
 

@@ -313,12 +313,16 @@ export class MikrotikService {
   private buildHeartbeatScript(registrationKey: string, callbackUrl: string, fallbackCallbackUrl: string) {
     const name = `arofi-heartbeat-${registrationKey.slice(0, 8)}`
     const source = `:do { /tool fetch url=\\"${callbackUrl}\\" mode=https keep-result=no } on-error={ :do { /tool fetch url=\\"${fallbackCallbackUrl}\\" mode=http keep-result=no } on-error={} }`
+    const intervalSeconds = Math.max(
+      2,
+      Number.parseInt(process.env.ROUTER_HEARTBEAT_INTERVAL_SECONDS ?? '2', 10),
+    )
 
     return [
       `/system script remove [find name="${name}"]`,
       `/system script add name="${name}" source="${source}" comment="AROFi heartbeat ${this.escape(registrationKey)}"`,
       `/system scheduler remove [find name="${name}"]`,
-      `/system scheduler add name="${name}" interval=2m start-time=startup on-event="/system script run ${name}" comment="AROFi live status heartbeat"`,
+      `/system scheduler add name="${name}" interval=${intervalSeconds}s start-time=startup on-event="/system script run ${name}" comment="AROFi live status heartbeat"`,
       `/system script run ${name}`,
     ]
   }

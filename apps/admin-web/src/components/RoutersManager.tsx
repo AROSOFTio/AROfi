@@ -155,6 +155,34 @@ export default function RoutersManager() {
     void loadData()
   }, [])
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshLiveRouterState()
+    }, 2000)
+
+    return () => window.clearInterval(interval)
+  }, [selectedSetup?.router.id])
+
+  async function refreshLiveRouterState() {
+    try {
+      const overviewData = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
+      setOverview(overviewData)
+
+      const selectedRouterId = selectedSetup?.router.id ?? overviewData.routers[0]?.id
+      if (!selectedRouterId) {
+        setSelectedSetup(null)
+        return
+      }
+
+      const selectedRouter = overviewData.routers.find((router) => router.id === selectedRouterId)
+      if (selectedRouter) {
+        setSelectedSetup((previous) => previous ? { ...previous, router: selectedRouter } : previous)
+      }
+    } catch {
+      // Keep the last visible state; the next poll or manual refresh will recover.
+    }
+  }
+
   async function loadData(preferredRouterId?: string) {
     try {
       setLoading(true)
