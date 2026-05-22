@@ -595,6 +595,7 @@ export class RoutersService {
     }
 
     const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const adminPassword = this.routerCredentialsService.decrypt(router.passwordCiphertext)
     const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
 
     return {
@@ -611,6 +612,8 @@ export class RoutersService {
         radiusAuthPort: radiusServer.authPort,
         radiusAccountingPort: radiusServer.accountingPort,
         sharedSecret,
+        adminUsername: router.username,
+        adminPassword,
         hotspotServerName: router.hotspotServerName,
         portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
@@ -651,6 +654,7 @@ export class RoutersService {
     }
 
     const sharedSecret = this.routerCredentialsService.decrypt(router.sharedSecretCiphertext)
+    const adminPassword = this.routerCredentialsService.decrypt(router.passwordCiphertext)
     const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
 
     return this.mikrotikService.buildProvisioningScript({
@@ -663,6 +667,8 @@ export class RoutersService {
       radiusAuthPort: radiusServer.authPort,
       radiusAccountingPort: radiusServer.accountingPort,
       sharedSecret,
+      adminUsername: router.username,
+      adminPassword,
       hotspotServerName: router.hotspotServerName,
       portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,

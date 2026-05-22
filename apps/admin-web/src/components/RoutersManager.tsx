@@ -261,7 +261,7 @@ export default function RoutersManager() {
       })
       setRouterProcessText('Generating RouterOS setup details and refreshing inventory.')
       setSelectedSetup(setup)
-      setSuccess('Router registered successfully. The provisioning script is ready below.')
+      setSuccess('Router registered successfully. Copy the one-run WinBox command below.')
       setRouterForm((previous) => ({
         ...initialRouterForm(),
         tenantId: previous.tenantId,
@@ -312,9 +312,9 @@ export default function RoutersManager() {
     if (!selectedSetup?.provisioningScript) {
       return
     }
-    const cmd = `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="a.rsc" mode=https; /import file-name="a.rsc"; /file remove "a.rsc"`
+    const cmd = `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
     await navigator.clipboard.writeText(cmd)
-    setSuccess('RouterOS script copied to clipboard.')
+    setSuccess('One-run RouterOS command copied to clipboard.')
   }
 
   async function copyRouterAccessDetails() {
@@ -572,15 +572,38 @@ export default function RoutersManager() {
 
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Provisioning Script</span>
+            <span className="card-title">One-Run RouterOS Setup</span>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-ghost" onClick={() => void copyScript()} disabled={!selectedSetup?.provisioningScript}>Copy</button>
-              <button type="button" className="btn btn-ghost" onClick={downloadScript} disabled={!selectedSetup?.provisioningScript}>Download</button>
+              <button type="button" className="btn btn-primary" onClick={() => void copyScript()} disabled={!selectedSetup?.provisioningScript}>Copy One-Run Command</button>
+              <button type="button" className="btn btn-ghost" onClick={downloadScript} disabled={!selectedSetup?.provisioningScript}>Download .rsc</button>
               <button type="button" className="btn btn-ghost" onClick={() => selectedSetup && void handleRotateSecret(selectedSetup.router.id)} disabled={!selectedSetup}>Rotate Secret</button>
             </div>
           </div>
-          <div style={{ padding: 20 }}>
-            <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+          <div style={{ padding: 20, display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 12 }}>
+              {[
+                { title: '1. Register', text: 'Router is saved in AROFi and has a unique registration key.' },
+                { title: '2. Copy', text: 'Paste one command in WinBox Terminal. It fetches and imports the real .rsc file.' },
+                { title: '3. Verify', text: 'Script configures WAN, LAN, WiFi, HotSpot, RADIUS, and callback.' },
+              ].map((step) => (
+                <div key={step.title} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: 'var(--surface-muted)' }}>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{step.title}</div>
+                  <div style={{ marginTop: 6, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.45 }}>{step.text}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ border: '1px solid var(--green-mid)', borderRadius: 12, background: 'var(--green-light)', padding: 14, color: 'var(--green-dark)', fontSize: 13, lineHeight: 1.55 }}>
+              The generated .rsc now uses <strong>bridgeLocal</strong>, configures <strong>ether1 as WAN</strong>, creates <strong>arofi-pool</strong> before HotSpot, disables CAP mode for RouterOS 6 wireless, and applies the Admin Password from the registration form when provided.
+            </div>
+
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#07111f', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 1.65, color: '#d6fbe8', minHeight: 96 }}>
+              {selectedSetup?.router.registrationKey
+                ? `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
+                : 'Register a MikroTik router first, then copy the one-run command from here.'}
+            </pre>
+
+            <div style={{ display: 'grid', gap: 8 }}>
               {(selectedSetup?.setupDiagnostics ?? []).map((check) => (
                 <div key={check.code} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{check.label}</span>
@@ -588,20 +611,6 @@ export default function RoutersManager() {
                 </div>
               ))}
             </div>
-            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)', minHeight: 280 }}>
-              {selectedSetup?.router.registrationKey 
-                ? `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="a.rsc" mode=https; /import file-name="a.rsc"; /file remove "a.rsc"`
-                : 'The RouterOS setup script will appear here after your first MikroTik is registered.'}
-            </pre>
-            {selectedSetup?.router && (
-              <div style={{ marginTop: 14, display: 'grid', gap: 8, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.55 }}>
-                <strong style={{ color: 'var(--text-primary)' }}>Manual checks after script import</strong>
-                <span>1. If the script says callback failed, fix router DNS/internet, then import again.</span>
-                <span>2. If the router was registered without a real NAS/public IP, restart FreeRADIUS once on the VPS: <code>sudo docker compose restart freeradius</code>.</span>
-                <span>3. If the router is behind a Savana/ISP router, API health check needs port forwarding TCP {selectedSetup.router.apiPort} to the MikroTik, or use a reachable VPN/private IP. HotSpot and RADIUS can still work without this.</span>
-                <span>4. The script installs MikroTik <code>hotspot/login.html</code> automatically. If the script warns that install failed, fix router internet/DNS/HTTPS, then import it again.</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -716,7 +725,7 @@ function RouterCreateCard({
                 <SelectField label="Connection Mode" value={formState.connectionMode} onChange={(value) => setFormState((previous) => ({ ...previous, connectionMode: value as RouterFormState['connectionMode'] }))} options={[{ value: 'ROUTEROS_API', label: 'RouterOS API' }, { value: 'ROUTEROS_API_SSL', label: 'RouterOS API SSL' }]} />
                 <InputField label="API Port" value={formState.apiPort} onChange={(value) => setFormState((previous) => ({ ...previous, apiPort: value }))} placeholder="8728" />
                 <InputField label="Admin Username" value={formState.username} onChange={(value) => setFormState((previous) => ({ ...previous, username: value }))} placeholder="Optional, for health checks" />
-                <InputField label="Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Optional, encrypted at rest" />
+                <InputField label="Router Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Optional, set on MikroTik by script" />
                 <InputField label="RADIUS Shared Secret" value={formState.sharedSecret} onChange={(value) => setFormState((previous) => ({ ...previous, sharedSecret: value }))} placeholder="Generated automatically" />
                 <InputField label="RouterOS Major Version" value={formState.routerOsVersion} onChange={(value) => setFormState((previous) => ({ ...previous, routerOsVersion: value }))} placeholder="Optional" />
                 <InputField label="Model" value={formState.model} onChange={(value) => setFormState((previous) => ({ ...previous, model: value }))} placeholder="RB951Ui-2HnD" />
