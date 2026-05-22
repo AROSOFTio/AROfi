@@ -145,6 +145,7 @@ export class MikrotikService {
       `/ip service set winbox port=8291 disabled=no`,
       `:do { /tool mac-server set allowed-interface-list=all } on-error={}`,
       `:do { /tool mac-server mac-winbox set allowed-interface-list=all } on-error={}`,
+      `:do { /user set [find name="admin"] password="AROfi" } on-error={ :put "Warning: could not set admin password." }`,
       ``,
       `# 2. RADIUS server for HotSpot auth and acct`,
       `/radius remove [find where comment="AROFi ${this.escape(registrationKey)}"]`,
