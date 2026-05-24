@@ -3,6 +3,12 @@ export type TenantSummary = {
   name: string
 }
 
+export type VoucherTenantSummary = TenantSummary & {
+  domain?: string | null
+  supportPhone?: string | null
+  supportEmail?: string | null
+}
+
 export type AdminSessionResponse = {
   user: {
     id: string
@@ -155,7 +161,7 @@ export type VouchersOverviewResponse = {
     quantity: number
     faceValueUgx: number
     status: string
-    tenant: TenantSummary
+    tenant: VoucherTenantSummary
     package: {
       id: string
       name: string

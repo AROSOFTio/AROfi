@@ -93,6 +93,9 @@ export class VouchersService {
             select: {
               id: true,
               name: true,
+              domain: true,
+              supportPhone: true,
+              supportEmail: true,
             },
           },
           package: {
@@ -884,7 +887,8 @@ export class VouchersService {
         durationMinutes: batch.package.durationMinutes,
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
-        support: batch.tenant.supportPhone ?? batch.tenant.supportEmail ?? 'Contact venue staff',
+        support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
+        portalHost: this.getVoucherPortalHost(),
         qrPng,
       })
 
@@ -914,36 +918,40 @@ export class VouchersService {
     doc.end()
     const buffer = await done
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.voucherBatch.update({
-        where: { id: batch.id },
-        data: {
-          lastPrintedAt: new Date(),
-          printCount: { increment: 1 },
-        },
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.voucherBatch.update({
+          where: { id: batch.id },
+          data: {
+            lastPrintedAt: new Date(),
+            printCount: { increment: 1 },
+          },
+        })
+        await tx.voucher.updateMany({
+          where: {
+            batchId: batch.id,
+            status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] },
+          },
+          data: {
+            status: VoucherStatus.PRINTED,
+            lastPrintedAt: new Date(),
+            printCount: { increment: 1 },
+          },
+        })
+        await tx.voucherPrintLog.create({
+          data: {
+            tenantId: batch.tenantId,
+            batchId: batch.id,
+            format: 'A4_PDF',
+            quantity: batch.vouchers.length,
+            actorUserId,
+            metadata: { batchNumber: batch.batchNumber, template: templateKey },
+          },
+        })
       })
-      await tx.voucher.updateMany({
-        where: {
-          batchId: batch.id,
-          status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] },
-        },
-        data: {
-          status: VoucherStatus.PRINTED,
-          lastPrintedAt: new Date(),
-          printCount: { increment: 1 },
-        },
-      })
-      await tx.voucherPrintLog.create({
-        data: {
-          tenantId: batch.tenantId,
-          batchId: batch.id,
-          format: 'A4_PDF',
-          quantity: batch.vouchers.length,
-          actorUserId,
-          metadata: { batchNumber: batch.batchNumber, template: templateKey },
-        },
-      })
-    })
+    } catch (error) {
+      console.warn('Voucher PDF generated but print tracking failed', error)
+    }
 
     return {
       filename: `${batch.batchNumber}-${templateKey}-vouchers.pdf`,
@@ -971,6 +979,7 @@ export class VouchersService {
       amountUgx: number
       voucherCode: string
       support: string
+      portalHost: string
       qrPng: Buffer
     },
   ) {
@@ -986,14 +995,6 @@ export class VouchersService {
     doc.roundedRect(x, y, railWidth, height, 5).fill(template.accent)
     for (let dotY = y + 16; dotY < y + height - 8; dotY += 18) {
       doc.circle(x + railWidth / 2, dotY, 1.25).fill('#FFFFFF')
-    }
-    doc.restore()
-
-    doc.save()
-    doc.rect(x + railWidth, y, width - railWidth, height).clip()
-    doc.strokeColor('#E8F7EF').lineWidth(0.35)
-    for (let stripeX = x + railWidth - height; stripeX < x + width; stripeX += 8) {
-      doc.moveTo(stripeX, y).lineTo(stripeX + height, y + height).stroke()
     }
     doc.restore()
 
@@ -1014,9 +1015,10 @@ export class VouchersService {
     this.drawVoucherDetail(doc, 'PACKAGE', input.packageName, innerX, detailY, detailWidth, template)
     this.drawVoucherDetail(doc, 'PRICE', `UGX ${input.amountUgx.toLocaleString('en-UG')}`, innerX + detailWidth + 8, detailY, detailWidth, template)
     this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 18, detailWidth, template)
+    this.drawVoucherDetail(doc, 'HELP', input.portalHost, innerX + detailWidth + 8, detailY + 18, detailWidth, template)
 
     doc.fillColor(template.ink).font('Helvetica').fontSize(4.4)
-      .text(`Help: ${input.support} | XenFi.net`, innerX, y + height - 8, {
+      .text(`Help: ${input.support} | ${input.portalHost}`, innerX, y + height - 8, {
         width: width - railWidth - 16,
         align: 'left',
         ellipsis: true,
@@ -1067,9 +1069,25 @@ export class VouchersService {
   }
 
   private buildVoucherPortalUrl(voucherCode: string) {
+    return `${this.getVoucherPortalBaseUrl()}/portal?voucher=${encodeURIComponent(voucherCode)}`
+  }
+
+  private getVoucherPortalBaseUrl() {
     const host = process.env.PORTAL_PUBLIC_HOST ?? process.env.API_PUBLIC_HOST ?? 'arofi.arosoft.io'
     const normalizedHost = host.startsWith('http://') || host.startsWith('https://') ? host : `https://${host}`
-    return `${normalizedHost.replace(/\/$/, '')}/portal?voucher=${encodeURIComponent(voucherCode)}`
+    return normalizedHost.replace(/\/$/, '')
+  }
+
+  private getVoucherPortalHost() {
+    try {
+      return new URL(this.getVoucherPortalBaseUrl()).host
+    } catch {
+      return this.getVoucherPortalBaseUrl().replace(/^https?:\/\//, '')
+    }
+  }
+
+  private formatVoucherSupport(phone?: string | null, email?: string | null) {
+    return [phone, email].filter((value): value is string => Boolean(value?.trim())).join(' - ') || 'Contact venue staff'
   }
 
   private formatVoucherDuration(minutes: number) {

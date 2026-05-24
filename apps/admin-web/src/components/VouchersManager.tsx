@@ -126,6 +126,23 @@ function parseOptionalInt(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function getVoucherPortalOrigin() {
+  const origin = typeof window === 'undefined' ? 'https://arofi.arosoft.io' : window.location.origin
+  return origin.replace(/\/$/, '')
+}
+
+function getVoucherPortalHost() {
+  try {
+    return new URL(getVoucherPortalOrigin()).host
+  } catch {
+    return getVoucherPortalOrigin().replace(/^https?:\/\//, '')
+  }
+}
+
+function formatVoucherSupport(phone?: string | null, email?: string | null) {
+  return [phone, email].filter((value): value is string => Boolean(value?.trim())).join(' - ') || 'Contact venue staff'
+}
+
 export default function VouchersManager() {
   const [overview, setOverview] = useState<VouchersOverviewResponse | null>(null)
   const [templates, setTemplates] = useState<VoucherTemplatesResponse | null>(null)
@@ -759,6 +776,8 @@ export default function VouchersManager() {
                   packageName={printBatch.package.name}
                   duration={formatDuration(printBatch.package.durationMinutes)}
                   amount={formatCurrency(printBatch.faceValueUgx)}
+                  support={formatVoucherSupport(printBatch.tenant.supportPhone, printBatch.tenant.supportEmail)}
+                  portalHost={getVoucherPortalHost()}
                 />
                 <div style={{ maxWidth: 520, color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
                   Generated preview shows one voucher for checking the design. Download PDF prints the whole batch as a dense A4 sheet.
@@ -849,19 +868,22 @@ function VoucherSampleCard({
   packageName,
   duration,
   amount,
+  support,
+  portalHost,
 }: {
   tenantName: string
   code: string
   packageName: string
   duration: string
   amount: string
+  support: string
+  portalHost: string
 }) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
   useEffect(() => {
     let active = true
-    const origin = typeof window === 'undefined' ? 'https://arofi.arosoft.io' : window.location.origin
-    const portalUrl = `${origin.replace(/\/$/, '')}/portal?voucher=${encodeURIComponent(code)}`
+    const portalUrl = `${getVoucherPortalOrigin()}/portal?voucher=${encodeURIComponent(code)}`
 
     void QRCode.toDataURL(portalUrl, {
       errorCorrectionLevel: 'M',
@@ -898,9 +920,9 @@ function VoucherSampleCard({
           <div><span>PACKAGE</span>{packageName}</div>
           <div><span>PRICE</span>{amount}</div>
           <div><span>DURATION</span>{duration}</div>
-          <div><span>HELP</span>XenFi.net</div>
+          <div><span>HELP</span>{portalHost}</div>
         </div>
-        <div className="voucher-sample-help">Help: 0787726388 - 0774846195 | XenFi.net</div>
+        <div className="voucher-sample-help">Help: {support} | {portalHost}</div>
       </div>
       <div className="voucher-sample-qr">
         {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for voucher ${code}`} /> : null}
