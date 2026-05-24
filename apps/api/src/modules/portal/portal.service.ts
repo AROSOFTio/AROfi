@@ -227,12 +227,14 @@ export class PortalService {
       hotspotServerName: resolvedHotspot.hotspotServerName,
       userAgent,
     })
+    const reconnect = result.activation ? this.issueReconnectLoginPayload(result.activation, dto.loginUrl) : null
 
     if (!phoneNumber) {
       return {
         ...result,
         accessToken: null,
         session: null,
+        reconnect,
       }
     }
 
@@ -247,6 +249,7 @@ export class PortalService {
       ...result,
       accessToken,
       session: await this.getSessionFromAccessToken(accessToken),
+      reconnect,
     }
   }
 

@@ -139,6 +139,17 @@ function getVoucherPortalHost() {
   }
 }
 
+function getVoucherQrPortalUrl(code: string) {
+  const configuredBase = process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ?? 'http://wifi.login/portal'
+  const withProtocol = configuredBase.startsWith('http://') || configuredBase.startsWith('https://')
+    ? configuredBase
+    : `http://${configuredBase}`
+  const normalized = withProtocol.replace(/\/$/, '')
+  const baseUrl = normalized.endsWith('/portal') ? normalized : `${normalized}/portal`
+  const separator = baseUrl.includes('?') ? '&' : '?'
+  return `${baseUrl}${separator}voucher=${encodeURIComponent(code)}`
+}
+
 function formatVoucherSupport(phone?: string | null, email?: string | null) {
   return [phone, email].filter((value): value is string => Boolean(value?.trim())).join(' - ') || 'Contact venue staff'
 }
@@ -163,30 +174,10 @@ export default function VouchersManager() {
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [printBatch, setPrintBatch] = useState<VouchersOverviewResponse['batches'][number] | null>(null)
   const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(printTemplates[0].id)
-  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null)
-  const [previewPdfLoading, setPreviewPdfLoading] = useState(false)
-  const [previewPdfError, setPreviewPdfError] = useState<string | null>(null)
 
   useEffect(() => {
     void loadData()
   }, [])
-
-  useEffect(() => {
-    if (!printBatch) {
-      setPreviewPdfUrl(null)
-      setPreviewPdfLoading(false)
-      setPreviewPdfError(null)
-      return
-    }
-
-    setPreviewPdfLoading(true)
-    setPreviewPdfError(null)
-    setError(null)
-    setPreviewPdfUrl(buildBatchFileUrl(printBatch.id, 'print.pdf', selectedPrintTemplateId, true))
-    const timer = window.setTimeout(() => setPreviewPdfLoading(false), 500)
-
-    return () => window.clearTimeout(timer)
-  }, [printBatch, selectedPrintTemplateId])
 
   const tenantPackages = useMemo(
     () => packages.filter((pkg) => pkg.tenant.id === batchForm.tenantId),
@@ -769,19 +760,8 @@ export default function VouchersManager() {
               </button>
             </div>
             <div style={{ display: 'grid', gap: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-                <VoucherSampleCard
-                  tenantName={printBatch.tenant.name}
-                  code={printBatch.previewVouchers[0]?.code ?? printBatch.batchNumber}
-                  packageName={printBatch.package.name}
-                  duration={formatDuration(printBatch.package.durationMinutes)}
-                  amount={formatCurrency(printBatch.faceValueUgx)}
-                  support={formatVoucherSupport(printBatch.tenant.supportPhone, printBatch.tenant.supportEmail)}
-                  portalHost={getVoucherPortalHost()}
-                />
-                <div style={{ maxWidth: 520, color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
-                  Generated preview shows one voucher for checking the design. Download PDF prints the whole batch as a dense A4 sheet.
-                </div>
+              <div style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
+                Showing all {printBatch.previewVouchers.length} generated vouchers in this batch. Download PDF prints this same voucher sheet.
               </div>
               <div
                 style={{
@@ -821,38 +801,20 @@ export default function VouchersManager() {
                   )
                 })}
               </div>
-              <div
-                style={{
-                  minHeight: '68vh',
-                  border: '1px solid #d7dee8',
-                  borderRadius: 12,
-                  background: '#fffffb',
-                  overflow: 'hidden',
-                }}
-              >
-                {previewPdfLoading && (
-                  <div className="empty-state" style={{ height: '68vh' }}>
-                    <p>Loading real PDF preview...</p>
-                  </div>
-                )}
-                {!previewPdfLoading && previewPdfUrl && (
-                  <iframe
-                    src={previewPdfUrl}
-                    title={`PDF preview for ${printBatch.batchNumber}`}
-                    onLoad={() => setPreviewPdfLoading(false)}
-                    onError={() => {
-                      const failure = 'PDF preview could not be loaded. Try Download PDF or check the API logs.'
-                      setPreviewPdfLoading(false)
-                      setPreviewPdfError(failure)
-                    }}
-                    style={{ display: 'block', width: '100%', height: '68vh', border: 0, background: '#fffffb' }}
+              <div className="voucher-preview-sheet">
+                {printBatch.previewVouchers.map((voucher) => (
+                  <VoucherSampleCard
+                    key={voucher.id}
+                    compact
+                    tenantName={printBatch.tenant.name}
+                    code={voucher.code}
+                    packageName={printBatch.package.name}
+                    duration={formatDuration(printBatch.package.durationMinutes)}
+                    amount={formatCurrency(printBatch.faceValueUgx)}
+                    support={formatVoucherSupport(printBatch.tenant.supportPhone, printBatch.tenant.supportEmail)}
+                    portalHost={getVoucherPortalHost()}
                   />
-                )}
-                {!previewPdfLoading && !previewPdfUrl && (
-                  <div className="empty-state" style={{ height: '68vh' }}>
-                    <p>{previewPdfError ?? 'PDF preview could not be loaded. Use Download PDF after checking the API is healthy.'}</p>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           </div>
@@ -870,6 +832,7 @@ function VoucherSampleCard({
   amount,
   support,
   portalHost,
+  compact = false,
 }: {
   tenantName: string
   code: string
@@ -878,12 +841,13 @@ function VoucherSampleCard({
   amount: string
   support: string
   portalHost: string
+  compact?: boolean
 }) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
   useEffect(() => {
     let active = true
-    const portalUrl = `${getVoucherPortalOrigin()}/portal?voucher=${encodeURIComponent(code)}`
+    const portalUrl = getVoucherQrPortalUrl(code)
 
     void QRCode.toDataURL(portalUrl, {
       errorCorrectionLevel: 'M',
@@ -905,7 +869,7 @@ function VoucherSampleCard({
   }, [code])
 
   return (
-    <div className="voucher-sample">
+    <div className={`voucher-sample${compact ? ' voucher-sample--sheet' : ''}`}>
       <div className="voucher-sample-rail">
         {Array.from({ length: 5 }).map((_, index) => <span key={index} />)}
       </div>

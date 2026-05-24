@@ -17,7 +17,7 @@ import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VoucherCodeService } from './voucher-code.service'
-import PDFDocument from 'pdfkit'
+import PDFDocument = require('pdfkit')
 import * as QRCode from 'qrcode'
 
 type VoucherPdfTemplate = 'emerald' | 'midnight' | 'royal' | 'sunrise' | 'mono'
@@ -220,7 +220,7 @@ export class VouchersService {
           soldCount,
           redeemedCount,
           remainingCount: generatedCount,
-          previewVouchers: batch.vouchers.slice(0, 24).map((voucher) => ({
+          previewVouchers: batch.vouchers.map((voucher) => ({
             id: voucher.id,
             code: voucher.code,
             status: voucher.status,
@@ -1069,7 +1069,9 @@ export class VouchersService {
   }
 
   private buildVoucherPortalUrl(voucherCode: string) {
-    return `${this.getVoucherPortalBaseUrl()}/portal?voucher=${encodeURIComponent(voucherCode)}`
+    const baseUrl = this.getVoucherQrBaseUrl()
+    const separator = baseUrl.includes('?') ? '&' : '?'
+    return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
   }
 
   private getVoucherPortalBaseUrl() {
@@ -1084,6 +1086,15 @@ export class VouchersService {
     } catch {
       return this.getVoucherPortalBaseUrl().replace(/^https?:\/\//, '')
     }
+  }
+
+  private getVoucherQrBaseUrl() {
+    const configuredBase = process.env.VOUCHER_QR_BASE_URL ?? process.env.HOTSPOT_LOGIN_BASE_URL ?? 'http://wifi.login/portal'
+    const withProtocol = configuredBase.startsWith('http://') || configuredBase.startsWith('https://')
+      ? configuredBase
+      : `http://${configuredBase}`
+    const normalized = withProtocol.replace(/\/$/, '')
+    return normalized.endsWith('/portal') ? normalized : `${normalized}/portal`
   }
 
   private formatVoucherSupport(phone?: string | null, email?: string | null) {

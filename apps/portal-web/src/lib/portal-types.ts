@@ -212,4 +212,10 @@ export type PortalRedeemVoucherResponse = {
   activation?: PortalActivation | null
   accessToken?: string | null
   session?: PortalCustomerSession | null
+  reconnect?: {
+    loginUrl?: string | null
+    username?: string | null
+    password?: string | null
+    method: string
+  } | null
 }

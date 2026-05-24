@@ -658,6 +658,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode('')
       setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
 
+      if (redemption.reconnect?.loginUrl && redemption.reconnect.username && redemption.reconnect.password) {
+        setConnectionStatus('reconnecting')
+        setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
+        window.setTimeout(() => autoSubmitHotspotLogin(redemption.reconnect), 250)
+        return
+      }
+
       if (redemption.accessToken && redemption.session) {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(portalStorageKey, redemption.accessToken)
