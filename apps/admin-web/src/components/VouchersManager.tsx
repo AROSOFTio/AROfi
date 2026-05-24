@@ -790,6 +790,17 @@ export default function VouchersManager() {
               </button>
             </div>
             <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+                <VoucherSampleCard
+                  tenantName={printBatch.tenant.name}
+                  code={printBatch.previewVouchers[0]?.code ?? printBatch.batchNumber}
+                  packageName={printBatch.package.name}
+                  amount={formatCurrency(printBatch.faceValueUgx)}
+                />
+                <div style={{ maxWidth: 520, color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
+                  Generated preview shows one voucher for checking the design. Download PDF prints the whole batch as a dense A4 sheet.
+                </div>
+              </div>
               <div
                 style={{
                   display: 'flex',
@@ -860,5 +871,36 @@ export default function VouchersManager() {
         </div>
       )}
     </>
+  )
+}
+
+function VoucherSampleCard({
+  tenantName,
+  code,
+  packageName,
+  amount,
+}: {
+  tenantName: string
+  code: string
+  packageName: string
+  amount: string
+}) {
+  return (
+    <div className="voucher-sample">
+      <div className="voucher-sample-rail">
+        {Array.from({ length: 5 }).map((_, index) => <span key={index} />)}
+      </div>
+      <div className="voucher-sample-body">
+        <div className="voucher-sample-tenant">{tenantName}</div>
+        <div className="voucher-sample-code">{code}</div>
+        <div className="voucher-sample-grid">
+          <div><span>PACKAGE</span>{packageName}</div>
+          <div><span>PRICE</span>{amount}</div>
+          <div><span>DURATION</span>6 Hours</div>
+          <div><span>HELP</span>Contact support</div>
+        </div>
+      </div>
+      <div className="voucher-sample-qr" />
+    </div>
   )
 }

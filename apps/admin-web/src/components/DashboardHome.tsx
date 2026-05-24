@@ -10,7 +10,7 @@ import {
 } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
-import LiveRouterStatusCard from '@/components/LiveRouterStatusCard'
+import type { CSSProperties } from 'react'
 
 export default async function DashboardHome() {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
@@ -160,134 +160,144 @@ async function PlatformDashboard() {
 }
 
 async function VendorDashboard({ session }: { session: AdminSessionResponse | null }) {
-  const [billing, tenants, routers, sessions, vouchers, payments, system] = await Promise.all([
+  const [billing, routers, sessions, vouchers] = await Promise.all([
     fetchApi<BillingOverviewResponse>('/billing/overview'),
-    fetchApi<TenantOverviewResponse>('/tenants'),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<SessionOverviewResponse>('/sessions/overview'),
     fetchApi<VouchersOverviewResponse>('/vouchers/overview'),
-    fetchApi<PaymentOverviewResponse>('/payments/overview'),
-    fetchApi<SystemOverviewResponse>('/system/overview'),
   ])
 
-  const tenantRecord = tenants?.items?.[0]
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []
-  const supportTickets = system?.support.items ?? []
   const routerItems = routers?.routers ?? []
-  const liveRouters = routerItems.filter((router) => router.liveState === 'LIVE' || router.isLiveNow)
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const dateRange = `${formatShortDate(monthStart)} - ${formatShortDate(now)}`
+  const offlineRouters = routers?.summary.offlineRouters ?? routerItems.filter((router) => router.liveState === 'OFFLINE').length
+  const totalDataUsedMb = activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
+  const overviewTicks = Array.from({ length: 12 }).map((_, index) => {
+    const day = Math.max(1, Math.round(1 + (index * Math.max(1, now.getDate() - 1)) / 11))
+    return `${now.toLocaleString('en-US', { month: 'short' })} ${day}`
+  })
 
   return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{session?.user.tenantName ?? 'Vendor'} Dashboard</h1>
-          <p className="page-subtitle">Run sales, vouchers, packages, customer sessions, wallet withdrawals, and support from this vendor workspace.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <a href="/disbursements" className="btn btn-ghost">Withdraw</a>
-          <a href="/routers" className="btn btn-primary">{routerItems.length > 0 ? 'Manage Routers' : 'Connect Router'}</a>
-        </div>
+    <div className="tenant-dashboard">
+      <div className="dashboard-toolbar">
+        <h1 className="page-title">Dashboard</h1>
+        <div className="date-pill">{dateRange} <span>v</span></div>
       </div>
 
-      <LiveRouterStatusCard initialRouters={routerItems} />
-
-      <div className="stats-grid">
-        <Stat label="Sales Revenue" value={formatCurrency(billing?.summary.totalSalesUgx ?? 0)} color="green" note="Completed customer sales" />
-        <Stat label="Wallet Balance" value={formatCurrency(billing?.summary.walletBalanceUgx ?? 0)} color="blue" note="Available vendor wallet" />
-        <Stat label="Active Sessions" value={`${sessions?.summary.activeSessions ?? 0}`} color="purple" note="Customers online now" />
-        <Stat label="Packages" value={`${tenantRecord?.counts.packages ?? 0}`} color="amber" note="Sellable offers" />
-        <Stat label="Vouchers Sold" value={`${vouchers?.summary.sold ?? 0}`} color="blue" note="Voucher access sold" />
-        <Stat label="Pending Payments" value={`${payments?.summary.pendingPayments ?? 0}`} color="amber" note="Awaiting provider result" />
-        <Stat label="Open Tickets" value={`${supportTickets.filter((ticket) => !['RESOLVED', 'CLOSED'].includes(ticket.status)).length}`} color="purple" note="Support conversations" />
-        <Stat label="Live Routers" value={`${routers?.summary.liveRouters ?? liveRouters.length}`} color="green" note="Fresh callback, RADIUS, accounting, or API signal" />
-      </div>
-
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Live Customer Transactions</span>
-          <a href="/transactions" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>View All</a>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Customer / Phone</th>
-                <th>Package / Voucher</th>
-                <th>Amount</th>
-                <th>Method</th>
-                <th>Status</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTransactions.length === 0 && <EmptyRow colSpan={6} text="Customer payments and voucher sales will appear here." />}
-              {recentTransactions.slice(0, 10).map((transaction) => (
-                <tr key={transaction.id}>
-                  <td>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{transaction.customerReference ?? 'Customer'}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{transaction.externalReference ?? transaction.id.slice(0, 8)}</div>
-                  </td>
-                  <td>{transaction.package?.name ?? transaction.voucher?.code ?? transaction.type.replace(/_/g, ' ')}</td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{formatCurrency(transaction.grossAmountUgx)}</td>
-                  <td>{transaction.paymentProvider ?? transaction.channel.replace(/_/g, ' ')}</td>
-                  <td><span className={getStatusBadgeClass(transaction.status)}>{transaction.status.toLowerCase()}</span></td>
-                  <td style={{ fontSize: 12 }}>{formatDate(transaction.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="charts-grid">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Customers Online</span>
-            <span className="badge badge-success">Live</span>
+      <div className="tenant-stats">
+        <DashboardStat title="Net Sales" value={formatCurrency(billing?.summary.vendorNetUgx ?? billing?.summary.totalSalesUgx ?? 0)} note={`MM: ${formatCurrency(billing?.summary.mobileMoneyGrossUgx ?? 0)}`} icon="^" />
+        <DashboardStat title="Vouchers Sales" value={formatCurrency(vouchers?.summary.totalVoucherSalesUgx ?? 0)} note="Total sales from physical vouchers" icon="[]" />
+        <DashboardStat title="Balance" value={formatCurrency(billing?.summary.walletBalanceUgx ?? 0)} note="Net balance on account." icon="$" />
+        <div className="tenant-stat">
+          <div className="tenant-stat-title">System Insights</div>
+          <div className="tenant-stat-icon" style={{ color: offlineRouters > 0 ? '#ef4444' : 'var(--green)' }}>
+            {offlineRouters > 0 ? 'Offline' : 'Online'}
           </div>
-          {activeSessions.length === 0 ? (
-            <div className="empty-state">
-              <p>Live customer sessions will appear after router accounting starts.</p>
+          <div className="system-insights-grid">
+            <div className="system-mini"><strong>{sessions?.summary.activeSessions ?? 0}</strong><span>Active</span></div>
+            <div className="system-mini"><strong>{(routers?.summary.liveRouters ?? 0) > 0 ? '1%' : '0%'}</strong><span>CPU</span></div>
+            <div className="system-mini"><strong>{formatMegabytes(totalDataUsedMb)}</strong><span>Data Usage</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-main-grid">
+        <section className="dashboard-panel">
+          <div className="dashboard-panel-header">
+            <div>
+              <div className="dashboard-panel-title">Overview</div>
+              <div className="dashboard-panel-subtitle">{dateRange}</div>
             </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 12 }}>
-              {activeSessions.slice(0, 6).map((item) => (
-                <div key={item.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: 'var(--bg-app)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.customerReference ?? item.phoneNumber ?? item.username}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.packageName} via {item.router?.name ?? 'Router pending'}</div>
-                    </div>
-                    <span className={getStatusBadgeClass(item.status)}>{item.status.toLowerCase()}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-                    <span>{formatMegabytes(item.dataUsedMb)} used</span>
-                    <span>{formatDate(item.startedAt)}</span>
-                  </div>
+            <select className="form-input" style={{ width: 212, minHeight: 46 }}>
+              <option>All ...</option>
+            </select>
+          </div>
+          <div className="chart-shell">
+            <div className="chart-grid" />
+            <div className="chart-axis">
+              {overviewTicks.map((tick, index) => <span key={`${tick}-${index}`}>{tick}</span>)}
+            </div>
+            <div className="chart-legend">
+              <span style={{ '--legend-color': 'var(--green)' } as CSSProperties}>Proceeds</span>
+              <span style={{ '--legend-color': '#111827' } as CSSProperties}>Commission</span>
+              <span style={{ '--legend-color': '#818cf8' } as CSSProperties}>Gross Revenue</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="dashboard-panel">
+          <div className="dashboard-panel-header">
+            <div>
+              <div className="dashboard-panel-title">Recent Sales</div>
+              <div className="dashboard-panel-subtitle">You made {recentTransactions.length} sales today.</div>
+            </div>
+            <a href="/sales" style={{ color: '#9aa3b2', textDecoration: 'none' }}>Scroll for more v</a>
+          </div>
+          <div className="recent-sales-list">
+            {recentTransactions.length === 0 && <div className="empty-state"><p>No recent sales yet.</p></div>}
+            {recentTransactions.slice(0, 6).map((transaction) => (
+              <div className="recent-sale" key={transaction.id}>
+                <div className="sale-avatar">{transaction.voucher ? '[]' : initialsFor(transaction.customerReference ?? 'Customer')}</div>
+                <div>
+                  <div className="sale-title">{transaction.customerReference ?? transaction.voucher?.code ?? 'Customer'}</div>
+                  <div className="sale-meta">{transaction.voucher ? 'Printed Voucher - ' : ''}{relativeDays(transaction.createdAt)}</div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Vendor Readiness</span>
-            <a href="/support" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Submit Ticket</a>
+                <div className="sale-amount">+{formatCurrency(transaction.grossAmountUgx)}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ display: 'grid', gap: 12 }}>
-            <Readiness label="Router registered" ready={(routers?.summary.totalRouters ?? 0) > 0} />
-            <Readiness label="Router live now" ready={(routers?.summary.liveRouters ?? liveRouters.length) > 0} />
-            <Readiness label="Package catalog ready" ready={(tenantRecord?.counts.packages ?? 0) > 0} />
-            <Readiness label="Hotspot configured" ready={(tenantRecord?.counts.hotspots ?? 0) > 0} />
-            <Readiness label="Payments visible" ready={(payments?.summary.mobileMoneyRequests ?? 0) > 0} />
-            <Readiness label="Support channel open" ready />
-          </div>
-        </div>
+          <div className="recent-sales-footer">Showing {Math.min(recentTransactions.length, 20)} recent sales</div>
+        </section>
       </div>
-    </>
+    </div>
   )
+}
+
+function DashboardStat({ title, value, note, icon }: { title: string; value: string; note: string; icon: string }) {
+  return (
+    <div className="tenant-stat">
+      <div className="tenant-stat-icon">{icon}</div>
+      <div className="tenant-stat-title">{title}</div>
+      <div className="tenant-stat-value">{value}</div>
+      <div className="tenant-stat-note">{note}</div>
+    </div>
+  )
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
+function initialsFor(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'C'
+}
+
+function relativeDays(value: string) {
+  const then = new Date(value).getTime()
+  const now = Date.now()
+  if (!Number.isFinite(then)) {
+    return 'recently'
+  }
+  const days = Math.max(0, Math.round((now - then) / 86400000))
+  if (days === 0) {
+    return 'today'
+  }
+  if (days === 1) {
+    return '1 day ago'
+  }
+  return `${days} days ago`
 }
 
 function Stat({ label, value, color, note }: { label: string; value: string; color: string; note: string }) {

@@ -1,10 +1,10 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { PackageCatalogResponse, TenantOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import { formatCurrency, formatDate, formatDuration, getStatusBadgeClass } from '@/lib/format'
+import { formatCurrency, formatDuration } from '@/lib/format'
 
 type PackageFormState = {
   tenantId: string
@@ -56,17 +56,6 @@ export default function PackagesManager() {
   const [success, setSuccess] = useState<string | null>(null)
 
   const items = catalog?.items ?? []
-
-  const summary = useMemo(
-    () =>
-      catalog?.summary ?? {
-        totalPackages: 0,
-        activePackages: 0,
-        featuredPackages: 0,
-        averagePriceUgx: 0,
-      },
-    [catalog],
-  )
 
   useEffect(() => {
     void loadData()
@@ -146,12 +135,9 @@ export default function PackagesManager() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Packages</h1>
-          <p className="page-subtitle">Create and maintain tenant package catalog, pricing, and voucher-ready plans.</p>
+          <h1 className="page-title">Manage Packages</h1>
+          <p className="page-subtitle">Create and manage your Hotspot packages and PPPoE subscription plans.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setCreateOpen(true) }}>
-          Create Package
-        </button>
       </div>
 
       {createOpen && (
@@ -236,42 +222,36 @@ export default function PackagesManager() {
         </div>
       )}
 
-      <div className="stats-grid" style={{ marginBottom: 20 }}>
-        {[
-          { label: 'Total Packages', value: `${summary.totalPackages}`, color: 'blue' },
-          { label: 'Active Packages', value: `${summary.activePackages}`, color: 'green' },
-          { label: 'Featured Offers', value: `${summary.featuredPackages}`, color: 'amber' },
-          { label: 'Avg Price', value: formatCurrency(summary.averagePriceUgx), color: 'purple' },
-        ].map((stat) => (
-          <div key={stat.label} className={`stat-card ${stat.color}`}>
-            <div className="stat-label">{stat.label}</div>
-            <div className={`stat-value ${stat.color}`}>{stat.value}</div>
-          </div>
-        ))}
+      <div className="table-toolbar">
+        <input className="form-input" placeholder="Filter packages..." style={{ width: 244 }} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setCreateOpen(true) }}>
+            + Create Package
+          </button>
+          <button type="button" className="btn btn-ghost">Columns v</button>
+        </div>
       </div>
 
       <div className="card">
-        <div className="card-header">
-          <span className="card-title">Package Catalog</span>
-        </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Package</th>
-                <th>Tenant</th>
-                <th>Duration</th>
+                <th style={{ width: 58 }}><input type="checkbox" aria-label="Select all packages" /></th>
+                <th>Package Name</th>
                 <th>Price</th>
-                <th>Speed</th>
-                <th>Voucher Batches</th>
+                <th>Duration</th>
+                <th>Agent Commission</th>
+                <th>Speed Limit</th>
+                <th>Data Limit</th>
                 <th>Status</th>
-                <th>Updated</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="empty-state">
                       <p>Loading package catalog...</p>
                     </div>
@@ -280,7 +260,7 @@ export default function PackagesManager() {
               )}
               {!loading && items.length === 0 && (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="empty-state">
                       <p>No packages found yet.</p>
                     </div>
@@ -289,23 +269,23 @@ export default function PackagesManager() {
               )}
               {items.map((item) => (
                 <tr key={item.id}>
+                  <td><input type="checkbox" aria-label={`Select ${item.name}`} /></td>
                   <td>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{item.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.code}</div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{item.name}</div>
                   </td>
-                  <td>{item.tenant.name}</td>
-                  <td>{formatDuration(item.durationMinutes)}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(item.activePriceUgx)}</td>
+                  <td>{formatDuration(item.durationMinutes).replace('hr', 'H').replace('day', 'D')}</td>
+                  <td>UGX 0</td>
                   <td>
                     {item.downloadSpeedKbps && item.uploadSpeedKbps
                       ? `${item.downloadSpeedKbps / 1024}M / ${item.uploadSpeedKbps / 1024}M`
-                      : 'Unspecified'}
+                      : 'Unlimited'}
                   </td>
-                  <td>{item.voucherBatchCount}</td>
+                  <td>{item.dataLimitMb ? `${item.dataLimitMb} MB` : 'Unlimited'}</td>
                   <td>
-                    <span className={getStatusBadgeClass(item.status)}>{item.status.toLowerCase()}</span>
+                    <span className={`switch-pill ${item.status === 'ACTIVE' ? 'on' : ''}`} aria-label={item.status} />
                   </td>
-                  <td style={{ fontSize: 12 }}>{formatDate(item.updatedAt)}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 800 }}>...</td>
                 </tr>
               ))}
             </tbody>

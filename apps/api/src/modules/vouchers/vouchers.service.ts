@@ -974,24 +974,68 @@ export class VouchersService {
     },
   ) {
     const { x, y, width, height, template } = input
+    const railWidth = 12
+    const innerX = x + railWidth + 6
+    const qrSize = 46
+    const qrX = x + width - qrSize - 8
     doc.save()
-    doc.roundedRect(x, y, width, height, 6).fillAndStroke(template.background, '#D7DEE8')
-    doc.rect(x, y, width, 16).fill(template.accentDark)
-    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('AROFi', x + 7, y + 5, { width: 42 })
-    doc.fillColor('#FFFFFF').fontSize(5).font('Helvetica-Bold').text('SCAN TO CONNECT', x + 48, y + 6, { width: width - 55, align: 'right' })
+    doc.roundedRect(x, y, width, height, 5).fillAndStroke(template.background, '#D7DEE8')
 
-    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(8).text(input.tenantName, x + 7, y + 21, { width: width - 14, ellipsis: true })
-    doc.fillColor(template.accentDark).fontSize(13).text(input.voucherCode, x + 7, y + 33, { width: width - 14, align: 'center' })
-    doc.moveTo(x + 8, y + 49).lineTo(x + width - 8, y + 49).strokeColor('#D7DEE8').lineWidth(0.5).stroke()
-
-    const qrSize = 30
-    doc.image(input.qrPng, x + 8, y + 53, { width: qrSize, height: qrSize })
-    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(7).text(input.packageName, x + 44, y + 55, { width: width - 52, ellipsis: true })
-    doc.fillColor(template.accentDark).fontSize(7).text(`UGX ${input.amountUgx.toLocaleString('en-UG')}`, x + 44, y + 66, { width: width - 52 })
-    doc.fillColor(template.muted).font('Helvetica').fontSize(6).text(this.formatVoucherDuration(input.durationMinutes), x + 44, y + 77, { width: width - 52 })
-    doc.fillColor(template.muted).fontSize(4.8).text('Scan QR or enter code in the portal', x + 8, y + height - 12, { width: width - 16, align: 'center' })
-    doc.fillColor(template.muted).fontSize(4.5).text('Powered by AROSOFT . arosoft.io', x + 8, y + height - 6, { width: width - 16, align: 'center', link: 'https://arosoft.io' })
+    doc.save()
+    doc.roundedRect(x, y, railWidth, height, 5).fill(template.accent)
+    for (let dotY = y + 16; dotY < y + height - 8; dotY += 18) {
+      doc.circle(x + railWidth / 2, dotY, 1.25).fill('#FFFFFF')
+    }
     doc.restore()
+
+    doc.save()
+    doc.rect(x + railWidth, y, width - railWidth, height).clip()
+    doc.strokeColor('#E8F7EF').lineWidth(0.35)
+    for (let stripeX = x + railWidth - height; stripeX < x + width; stripeX += 8) {
+      doc.moveTo(stripeX, y).lineTo(stripeX + height, y + height).stroke()
+    }
+    doc.restore()
+
+    doc.roundedRect(innerX, y + 5, width - railWidth - 12, 15, 4).fillAndStroke('#FFFFFF', '#EDF0F4')
+    doc.fillColor(template.accentDark).font('Helvetica-Bold').fontSize(5.2)
+      .text(input.tenantName.toUpperCase(), innerX, y + 10, { width: width - railWidth - 12, align: 'center', ellipsis: true })
+
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(11.5)
+      .text(input.voucherCode, innerX + 12, y + 26, { width: qrX - innerX - 16, ellipsis: true })
+
+    doc.image(input.qrPng, qrX, y + 30, { width: qrSize, height: qrSize })
+
+    const detailY = y + 46
+    const detailWidth = (qrX - innerX - 10) / 2
+    this.drawVoucherDetail(doc, 'PACKAGE', input.packageName, innerX, detailY, detailWidth, template)
+    this.drawVoucherDetail(doc, 'PRICE', `UGX ${input.amountUgx.toLocaleString('en-UG')}`, innerX + detailWidth + 8, detailY, detailWidth, template)
+    this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 20, detailWidth, template)
+    this.drawVoucherDetail(doc, 'HELP', input.support, innerX + detailWidth + 8, detailY + 20, detailWidth, template)
+
+    doc.fillColor(template.muted).font('Helvetica').fontSize(4.4)
+      .text(`Help ${input.support} | arosoft.io | Scan or enter code`, innerX, y + height - 8, {
+        width: width - railWidth - 16,
+        align: 'left',
+        ellipsis: true,
+      })
+    doc.restore()
+  }
+
+  private drawVoucherDetail(
+    doc: PDFKit.PDFDocument,
+    label: string,
+    value: string,
+    x: number,
+    y: number,
+    width: number,
+    template: (typeof voucherPdfTemplates)[VoucherPdfTemplate],
+  ) {
+    doc.fillColor(template.muted).font('Helvetica-Bold').fontSize(4).text(label, x, y, { width })
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(5.4).text(value, x, y + 5, {
+      width,
+      height: 12,
+      ellipsis: true,
+    })
   }
 
   private async generateVoucherQrPng(voucherCode: string) {
