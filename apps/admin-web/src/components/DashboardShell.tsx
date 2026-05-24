@@ -33,13 +33,6 @@ export default function DashboardShell({ children, initials, session, workspaceT
       <div className="app-titlebar" aria-hidden="true">
         <img src="/logo.png" alt="" />
         <span>AROFi</span>
-        <span className="app-titlebar-spacer" />
-        <span className="app-window-dot">o</span>
-        <span className="app-window-dot">#</span>
-        <span className="app-window-dot">:</span>
-        <span className="app-window-dot">-</span>
-        <span className="app-window-dot">[]</span>
-        <span className="app-window-dot">x</span>
       </div>
       <button
         type="button"

@@ -177,6 +177,8 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
   const staleRouters = routers?.summary.staleRouters ?? routerItems.filter((router) => router.liveState === 'STALE').length
   const offlineRouters = routers?.summary.offlineRouters ?? routerItems.filter((router) => router.liveState === 'OFFLINE').length
   const onlineRouters = liveRouters + staleRouters
+  const routerStatusLabel = onlineRouters > 0 ? 'Online' : offlineRouters > 0 ? 'Offline' : 'Pending'
+  const routerStatusColor = onlineRouters > 0 ? 'var(--green)' : offlineRouters > 0 ? '#ef4444' : '#f59e0b'
   const totalDataUsedMb = activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
   const overviewTicks = Array.from({ length: 12 }).map((_, index) => {
     const day = Math.max(1, Math.round(1 + (index * Math.max(1, now.getDate() - 1)) / 11))
@@ -196,8 +198,8 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
         <DashboardStat title="Balance" value={formatCurrency(billing?.summary.walletBalanceUgx ?? 0)} note="Net balance on account." icon="$" />
         <div className="tenant-stat">
           <div className="tenant-stat-title">System Insights</div>
-          <div className="tenant-stat-icon" style={{ color: offlineRouters > 0 ? '#ef4444' : 'var(--green)' }}>
-            {offlineRouters > 0 ? 'Offline' : 'Online'}
+          <div className="tenant-stat-icon" style={{ color: routerStatusColor }}>
+            {routerStatusLabel}
           </div>
           <div className="system-insights-grid">
             <div className="system-mini"><strong>{sessions?.summary.activeSessions ?? 0}</strong><span>Active</span></div>

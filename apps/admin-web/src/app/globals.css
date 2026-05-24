@@ -871,7 +871,6 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 .app-titlebar-spacer { flex: 1; }
-.app-window-dot { width: 36px; text-align: center; font-size: 18px; line-height: 1; }
 
 .sidebar {
   top: var(--titlebar-height);
@@ -993,19 +992,14 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 .topbar .btn {
-  width: 36px;
+  width: auto;
   height: 36px;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  color: transparent;
-}
-
-.topbar .btn::before {
-  content: ":";
+  padding: 0 14px;
+  overflow: visible;
+  border: 1px solid var(--border);
   color: var(--text-1);
-  font-size: 24px;
-  line-height: 1;
+  background: var(--bg-card);
+  font-weight: 700;
 }
 
 .content { padding: 34px 18px 34px; }
