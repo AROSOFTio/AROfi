@@ -140,7 +140,7 @@ function getVoucherPortalHost() {
 }
 
 function getVoucherQrPortalUrl(code: string) {
-  const configuredBase = process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ?? 'http://wifi.login/portal'
+  const configuredBase = process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ?? `${getVoucherPortalOrigin()}/portal`
   const withProtocol = configuredBase.startsWith('http://') || configuredBase.startsWith('https://')
     ? configuredBase
     : `http://${configuredBase}`

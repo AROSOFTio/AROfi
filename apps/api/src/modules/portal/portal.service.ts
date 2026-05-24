@@ -541,7 +541,7 @@ export class PortalService {
     loginUrl?: string | null,
   ) {
     return {
-      loginUrl: loginUrl || null,
+      loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://wifi.login/login',
       username: activation.radiusCredential?.username ?? activation.radiusUsername,
       password: activation.radiusCredential?.password ?? activation.radiusPassword,
       method: 'mikrotik-hotspot-post',

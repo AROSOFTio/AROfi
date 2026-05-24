@@ -23,6 +23,8 @@ import { RouterCredentialsService } from './router-credentials.service'
 @Injectable()
 export class RoutersService {
   private readonly logger = new Logger(RoutersService.name)
+  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '900', 10)
+  private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '86400', 10)
 
   private readonly authRadiusEventTypes = new Set<RadiusEventType>([
     RadiusEventType.ACCESS_ACCEPT,
@@ -219,8 +221,10 @@ export class RoutersService {
         totalRouters: mappedRouters.length,
         healthyRouters: mappedRouters.filter((router) => router.status === RouterStatus.HEALTHY).length,
         degradedRouters: mappedRouters.filter((router) => router.status === RouterStatus.DEGRADED).length,
-        offlineRouters: mappedRouters.filter((router) => router.status === RouterStatus.OFFLINE).length,
-        pendingRouters: mappedRouters.filter((router) => router.status === RouterStatus.PENDING).length,
+        liveRouters: mappedRouters.filter((router) => router.liveState === 'LIVE').length,
+        staleRouters: mappedRouters.filter((router) => router.liveState === 'STALE').length,
+        offlineRouters: mappedRouters.filter((router) => router.liveState === 'OFFLINE').length,
+        pendingRouters: mappedRouters.filter((router) => router.liveState === 'PENDING').length,
         routerGroups: groups.length,
         activeSessions: mappedRouters.reduce((total, router) => total + router.activeSessions, 0),
         averageLatencyMs:
@@ -1086,6 +1090,15 @@ export class RoutersService {
       checkedAt: Date
     }>
   }) {
+    const activeSessions = router.sessions.length || router.activeSessionCount
+    const live = this.resolveRouterLiveState(router, activeSessions)
+    const effectiveStatus =
+      live.liveState === 'LIVE'
+        ? RouterStatus.HEALTHY
+        : live.liveState === 'STALE' && router.status === RouterStatus.OFFLINE
+          ? RouterStatus.DEGRADED
+          : router.status
+
     return {
       id: router.id,
       name: router.name,
@@ -1118,12 +1131,18 @@ export class RoutersService {
       managementApiMessage:
         router.healthChecks[0]?.message ??
         'Management API has not been checked. HotSpot/RADIUS can still work without public API reachability.',
-      status: router.status,
-      healthMessage: router.healthMessage,
+      status: effectiveStatus,
+      liveState: live.liveState,
+      isLiveNow: live.liveState === 'LIVE',
+      lastSignalAt: live.lastSignalAt,
+      lastSignalSource: live.lastSignalSource,
+      secondsSinceLastSignal: live.secondsSinceLastSignal,
+      routerOnlineWindowSeconds: this.routerLiveWindowSeconds,
+      healthMessage: live.message ?? router.healthMessage,
       lastSeenAt: router.lastSeenAt,
       lastHealthCheckAt: router.lastHealthCheckAt,
       lastLatencyMs: router.lastLatencyMs,
-      activeSessions: router.sessions.length || router.activeSessionCount,
+      activeSessions,
       tags: router.tags,
       tenant: router.tenant,
       group: router.group,
@@ -1157,6 +1176,89 @@ export class RoutersService {
             checkedAt: router.healthChecks[0].checkedAt,
           }
         : null,
+    }
+  }
+
+  private resolveRouterLiveState(
+    router: {
+      status: RouterStatus
+      lastSeenAt: Date | null
+      lastProvisionedAt?: Date | null
+      lastRadiusSignalAt?: Date | null
+      lastAccountingSignalAt?: Date | null
+      lastAuthSignalAt?: Date | null
+      healthChecks: Array<{
+        status: RouterStatus
+        checkedAt: Date
+      }>
+    },
+    activeSessions: number,
+  ) {
+    const signals = [
+      { source: 'accounting', at: router.lastAccountingSignalAt ?? null },
+      { source: 'auth', at: router.lastAuthSignalAt ?? null },
+      { source: 'radius', at: router.lastRadiusSignalAt ?? null },
+      { source: 'provisioning', at: router.lastProvisionedAt ?? null },
+      { source: 'management', at: router.lastSeenAt ?? null },
+      {
+        source: 'health-check',
+        at:
+          router.healthChecks[0]?.status === RouterStatus.HEALTHY ||
+          router.healthChecks[0]?.status === RouterStatus.DEGRADED
+            ? router.healthChecks[0].checkedAt
+            : null,
+      },
+    ].filter((signal): signal is { source: string; at: Date } => Boolean(signal.at))
+
+    const latest = signals.sort((left, right) => right.at.getTime() - left.at.getTime())[0]
+
+    if (activeSessions > 0) {
+      return {
+        liveState: 'LIVE' as const,
+        lastSignalAt: latest?.at ?? new Date(),
+        lastSignalSource: latest?.source ?? 'active-session',
+        secondsSinceLastSignal: latest ? Math.max(0, Math.round((Date.now() - latest.at.getTime()) / 1000)) : 0,
+        message: 'Active sessions are present on this router',
+      }
+    }
+
+    if (!latest) {
+      return {
+        liveState: router.status === RouterStatus.PENDING ? ('PENDING' as const) : ('OFFLINE' as const),
+        lastSignalAt: null,
+        lastSignalSource: null,
+        secondsSinceLastSignal: null,
+        message: null,
+      }
+    }
+
+    const secondsSinceLastSignal = Math.max(0, Math.round((Date.now() - latest.at.getTime()) / 1000))
+    if (secondsSinceLastSignal <= this.routerLiveWindowSeconds) {
+      return {
+        liveState: 'LIVE' as const,
+        lastSignalAt: latest.at,
+        lastSignalSource: latest.source,
+        secondsSinceLastSignal,
+        message: `Recent ${latest.source} signal received`,
+      }
+    }
+
+    if (secondsSinceLastSignal <= this.routerStaleWindowSeconds) {
+      return {
+        liveState: 'STALE' as const,
+        lastSignalAt: latest.at,
+        lastSignalSource: latest.source,
+        secondsSinceLastSignal,
+        message: `Last router signal was ${latest.source}; management API may be blocked`,
+      }
+    }
+
+    return {
+      liveState: 'OFFLINE' as const,
+      lastSignalAt: latest.at,
+      lastSignalSource: latest.source,
+      secondsSinceLastSignal,
+      message: null,
     }
   }
 

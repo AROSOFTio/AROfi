@@ -173,7 +173,10 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const dateRange = `${formatShortDate(monthStart)} - ${formatShortDate(now)}`
+  const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((router) => router.liveState === 'LIVE').length
+  const staleRouters = routers?.summary.staleRouters ?? routerItems.filter((router) => router.liveState === 'STALE').length
   const offlineRouters = routers?.summary.offlineRouters ?? routerItems.filter((router) => router.liveState === 'OFFLINE').length
+  const onlineRouters = liveRouters + staleRouters
   const totalDataUsedMb = activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
   const overviewTicks = Array.from({ length: 12 }).map((_, index) => {
     const day = Math.max(1, Math.round(1 + (index * Math.max(1, now.getDate() - 1)) / 11))
@@ -198,7 +201,7 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
           </div>
           <div className="system-insights-grid">
             <div className="system-mini"><strong>{sessions?.summary.activeSessions ?? 0}</strong><span>Active</span></div>
-            <div className="system-mini"><strong>{(routers?.summary.liveRouters ?? 0) > 0 ? '1%' : '0%'}</strong><span>CPU</span></div>
+            <div className="system-mini"><strong>{onlineRouters > 0 ? '1%' : '0%'}</strong><span>CPU</span></div>
             <div className="system-mini"><strong>{formatMegabytes(totalDataUsedMb)}</strong><span>Data Usage</span></div>
           </div>
         </div>

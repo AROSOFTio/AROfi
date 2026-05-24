@@ -1003,8 +1003,14 @@ export class VouchersService {
 
     const codeY = y + 28
     this.drawVoucherUserIcon(doc, innerX + 1, codeY - 3)
-    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(12)
-      .text(input.voucherCode, innerX + 20, codeY, { width: qrX - innerX - 24, ellipsis: true })
+    const codeFontSize = input.voucherCode.length > 18 ? 7.2 : input.voucherCode.length > 14 ? 8.4 : 9.8
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(codeFontSize)
+      .text(input.voucherCode, innerX + 17, codeY + 1, {
+        width: qrX - innerX - 20,
+        height: 10,
+        ellipsis: true,
+        lineBreak: false,
+      })
 
     doc.moveTo(innerX, y + 44).lineTo(x + width - 5, y + 44).strokeColor(template.accent).lineWidth(1.4).stroke()
 
@@ -1089,7 +1095,7 @@ export class VouchersService {
   }
 
   private getVoucherQrBaseUrl() {
-    const configuredBase = process.env.VOUCHER_QR_BASE_URL ?? process.env.HOTSPOT_LOGIN_BASE_URL ?? 'http://wifi.login/portal'
+    const configuredBase = process.env.VOUCHER_QR_BASE_URL ?? this.getVoucherPortalBaseUrl()
     const withProtocol = configuredBase.startsWith('http://') || configuredBase.startsWith('https://')
       ? configuredBase
       : `http://${configuredBase}`
