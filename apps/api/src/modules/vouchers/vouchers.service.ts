@@ -578,8 +578,15 @@ export class VouchersService {
   }
 
   async redeemVoucher(dto: RedeemVoucherDto, tenantId?: string) {
-    const voucher = await this.prisma.voucher.findUnique({
-      where: { code: dto.code },
+    const codeVariants = this.getVoucherCodeLookupVariants(dto.code)
+    if (!codeVariants.length) {
+      throw new NotFoundException('Voucher not found')
+    }
+
+    const voucher = await this.prisma.voucher.findFirst({
+      where: {
+        OR: codeVariants.map((code) => ({ code })),
+      },
       include: {
         redemption: {
           include: {
@@ -1030,6 +1037,41 @@ export class VouchersService {
         ellipsis: true,
       })
     doc.restore()
+  }
+
+  private getVoucherCodeLookupVariants(input: string) {
+    const normalized = this.normalizeVoucherCodeInput(input)
+    const variants = new Set<string>()
+
+    if (normalized) {
+      variants.add(normalized)
+    }
+
+    const parts = normalized.split('-').filter(Boolean)
+    if (parts.length >= 4 && /^\d{8}$/.test(parts[1])) {
+      variants.add(`${parts[0]}-${parts[parts.length - 2]}-${parts[parts.length - 1]}`)
+    }
+
+    const compact = normalized.replace(/[^A-Z0-9]/g, '')
+    const compactWithDate = compact.match(/^([A-Z0-9]{2,8})(\d{8})([A-Z0-9]{4})(\d{4})$/)
+    if (compactWithDate) {
+      variants.add(`${compactWithDate[1]}-${compactWithDate[3]}-${compactWithDate[4]}`)
+    }
+
+    const compactStandard = compact.match(/^([A-Z0-9]{2,8})([A-Z0-9]{4})(\d{4})$/)
+    if (compactStandard) {
+      variants.add(`${compactStandard[1]}-${compactStandard[2]}-${compactStandard[3]}`)
+    }
+
+    return Array.from(variants)
+  }
+
+  private normalizeVoucherCodeInput(input?: string | null) {
+    return (input ?? '')
+      .trim()
+      .replace(/[\u2010-\u2015]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase()
   }
 
   private drawVoucherDetail(

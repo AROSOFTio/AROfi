@@ -1,5 +1,8 @@
 import {
+  HttpException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -27,6 +30,8 @@ type PortalTokenPayload = {
 
 @Injectable()
 export class PortalService {
+  private readonly logger = new Logger(PortalService.name)
+
   private readonly portalTokenLifetimeMs = 12 * 60 * 60 * 1000
 
   private readonly activationInclude = {
@@ -215,18 +220,31 @@ export class PortalService {
       this.tryNormalizePhoneNumber(dto.customerReference)
     const customerReference = dto.customerReference?.trim() || phoneNumber || 'portal-customer'
 
-    const result = await this.vouchersService.redeemVoucher({
-      code: dto.code.trim(),
-      hotspotId: dto.hotspotId,
-      sessionReference: dto.sessionReference,
-      customerReference,
-      accessPhoneNumber: phoneNumber,
-      macAddress: dto.macAddress,
-      clientIp: dto.clientIp,
-      routerId: resolvedHotspot.routerId,
-      hotspotServerName: resolvedHotspot.hotspotServerName,
-      userAgent,
-    })
+    let result: Awaited<ReturnType<VouchersService['redeemVoucher']>>
+    try {
+      result = await this.vouchersService.redeemVoucher({
+        code: this.normalizeVoucherCode(dto.code),
+        hotspotId: dto.hotspotId,
+        sessionReference: dto.sessionReference,
+        customerReference,
+        accessPhoneNumber: phoneNumber,
+        macAddress: dto.macAddress,
+        clientIp: dto.clientIp,
+        routerId: resolvedHotspot.routerId,
+        hotspotServerName: resolvedHotspot.hotspotServerName,
+        userAgent,
+      })
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error
+      }
+
+      this.logger.error(
+        `Voucher redemption failed for code ${this.maskVoucherCode(dto.code)} router=${resolvedHotspot.routerId ?? 'unknown'} mac=${this.normalizeMac(dto.macAddress) ?? 'unknown'}`,
+        error instanceof Error ? error.stack : String(error),
+      )
+      throw new InternalServerErrorException('Voucher activation failed. Please retry or contact support.')
+    }
     const reconnect = result.activation ? this.issueReconnectLoginPayload(result.activation, dto.loginUrl) : null
 
     if (!phoneNumber) {
@@ -546,6 +564,22 @@ export class PortalService {
       password: activation.radiusCredential?.password ?? activation.radiusPassword,
       method: 'mikrotik-hotspot-post',
     }
+  }
+
+  private normalizeVoucherCode(value?: string | null) {
+    return (value ?? '')
+      .trim()
+      .replace(/[\u2010-\u2015]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase()
+  }
+
+  private maskVoucherCode(value?: string | null) {
+    const code = this.normalizeVoucherCode(value)
+    if (code.length <= 4) {
+      return '****'
+    }
+    return `${code.slice(0, 4)}...${code.slice(-4)}`
   }
 
   private async markReconnectionAttempt(input: {

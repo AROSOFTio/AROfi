@@ -182,6 +182,14 @@ function normalizePhone(value: string) {
   return digits
 }
 
+function normalizeVoucherCode(value?: string | null) {
+  return (value ?? '')
+    .trim()
+    .replace(/[\u2010-\u2015]/g, '-')
+    .replace(/\s+/g, '')
+    .toUpperCase()
+}
+
 function resolvePortalTemplate(template?: string | null): PortalTemplateId {
   return template && template in portalTemplateStyles ? (template as PortalTemplateId) : 'classic'
 }
@@ -259,7 +267,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
     const voucherFromQr = searchParams?.get('voucher') ?? searchParams?.get('code')
     if (voucherFromQr) {
-      const code = voucherFromQr.trim()
+      const code = normalizeVoucherCode(voucherFromQr)
       setVoucherCode(code)
       setQrVoucherCode(code)
       setQrVoucherRedeemAttempted(false)
@@ -621,7 +629,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setErrorMessage('')
     setStatusMessage('')
 
-    const codeToRedeem = (overrideCode ?? voucherCode).trim()
+    const codeToRedeem = normalizeVoucherCode(overrideCode ?? voucherCode)
     if (!codeToRedeem) {
       setErrorMessage('Enter your voucher code before redeeming.')
       return
@@ -680,6 +688,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       } else {
         await loadContext(undefined, undefined, hotspotParams)
       }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Voucher redemption failed. Please retry.')
     } finally {
       setIsVoucherLoading(false)
     }
