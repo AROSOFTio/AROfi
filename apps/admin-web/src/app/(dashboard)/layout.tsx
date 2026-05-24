@@ -1,10 +1,7 @@
 import { AdminSessionResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { redirect } from 'next/navigation'
-import AdminSessionControl from '../../components/AdminSessionControl'
-import Sidebar from '../../components/Sidebar'
-import ThemeToggle from '../../components/ThemeToggle'
-import WorkspaceRouteGuard from '../../components/WorkspaceRouteGuard'
+import DashboardShell from '../../components/DashboardShell'
 
 export const metadata = {
   title: 'AROFi Admin - Hotspot Billing & Network Management',
@@ -30,36 +27,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const workspaceTitle = session.user.tenantName ? `${session.user.tenantName} Console` : 'AROFi Platform'
 
   return (
-    <>
-      <div className="app-titlebar" aria-hidden="true">
-        <img src="/logo.png" alt="" />
-        <span>AROFi</span>
-        <span className="app-titlebar-spacer" />
-        <span className="app-window-dot">o</span>
-        <span className="app-window-dot">#</span>
-        <span className="app-window-dot">:</span>
-        <span className="app-window-dot">-</span>
-        <span className="app-window-dot">[]</span>
-        <span className="app-window-dot">x</span>
-      </div>
-      <Sidebar user={session.user} />
-      <div className="main-content">
-        <header className="topbar">
-          <span className="topbar-title">{workspaceTitle}</span>
-          <div className="topbar-actions">
-            <ThemeToggle />
-            <div style={{ display: 'grid', gap: 2, textAlign: 'right' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{session.user.displayName}</span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{session.user.email}</span>
-            </div>
-            <div className="avatar">{initials}</div>
-            <AdminSessionControl />
-          </div>
-        </header>
-        <WorkspaceRouteGuard user={session.user}>
-          <div className="content">{children}</div>
-        </WorkspaceRouteGuard>
-      </div>
-    </>
+    <DashboardShell initials={initials} session={session} workspaceTitle={workspaceTitle}>
+      {children}
+    </DashboardShell>
   )
 }

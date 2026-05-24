@@ -1,13 +1,24 @@
 import './globals.css'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
+import PwaInstallPrompt from '../components/PwaInstallPrompt'
 
 export const metadata: Metadata = {
   title: 'AROFi Portal - High-speed Internet Access',
   description: 'Buy hotspot packages securely with mobile money and get connected instantly.',
+  manifest: '/portal/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'AROFi Portal',
+    statusBarStyle: 'default',
+  },
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#16a34a',
 }
 
 export default function RootLayout({
@@ -37,6 +48,7 @@ export default function RootLayout({
               </a>
             </p>
           </div>
+          <PwaInstallPrompt appName="AROFi Portal" />
         </main>
       </body>
     </html>

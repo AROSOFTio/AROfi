@@ -1,0 +1,25 @@
+{
+  "name": "AROFi Portal",
+  "short_name": "AROFi",
+  "description": "Buy hotspot packages, redeem vouchers, and reconnect quickly.",
+  "start_url": "/portal",
+  "scope": "/portal/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/portal/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/portal/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

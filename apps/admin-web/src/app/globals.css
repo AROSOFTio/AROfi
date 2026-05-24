@@ -235,6 +235,40 @@ body {
   gap: 10px;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mobile-menu-button,
+.mobile-nav-backdrop,
+.mobile-nav-close {
+  display: none;
+}
+
+.mobile-menu-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-1);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.mobile-menu-button span {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 /* ═══════════════════════════════════════════════
    THEME TOGGLE
 ═══════════════════════════════════════════════ */
@@ -1607,6 +1641,67 @@ td {
   object-fit: contain;
 }
 
+.install-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100vw - 24px));
+  padding: 14px;
+  border: 1px solid rgba(45, 184, 121, 0.28);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
+}
+
+[data-theme="dark"] .install-prompt {
+  background: rgba(13, 17, 23, 0.96);
+}
+
+.install-prompt-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--green);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.install-prompt-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.install-prompt-body strong {
+  color: var(--text-1);
+  font-size: 14px;
+}
+
+.install-prompt-body span {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.install-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+body.mobile-nav-locked {
+  overflow: hidden;
+}
+
 @media (max-width: 1200px) {
   .tenant-stats,
   .dashboard-main-grid {
@@ -1621,6 +1716,82 @@ td {
   .app-titlebar { display: none; }
   .main-content { padding-top: 0; }
   .topbar { top: 0; padding: 0 16px; }
+  .topbar-left { flex: 1; }
+  .topbar-title {
+    display: block;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-menu-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 240;
+    border: 0;
+    background: rgba(15, 23, 42, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .mobile-nav-open .mobile-nav-backdrop {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar {
+    top: 0;
+    width: min(88vw, 340px);
+    height: 100dvh;
+    z-index: 260;
+    border-right: 0;
+    box-shadow: 24px 0 70px rgba(15, 23, 42, 0.28);
+    transform: translateX(-104%);
+    transition: transform 0.22s ease;
+  }
+  .mobile-nav-open .sidebar {
+    transform: translateX(0);
+  }
+  .mobile-nav-close {
+    position: fixed;
+    top: 12px;
+    left: min(calc(88vw - 54px), 286px);
+    z-index: 270;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-card);
+    color: var(--text-1);
+    font-size: 18px;
+    font-weight: 800;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .mobile-nav-open .mobile-nav-close {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar-logo {
+    padding-right: 58px;
+  }
+  .install-prompt {
+    align-items: stretch;
+    flex-direction: column;
+    bottom: 12px;
+  }
+  .install-prompt-actions {
+    margin-left: 0;
+  }
+  .install-prompt-actions .btn {
+    flex: 1;
+  }
   .tenant-stats,
   .dashboard-main-grid {
     grid-template-columns: 1fr;
