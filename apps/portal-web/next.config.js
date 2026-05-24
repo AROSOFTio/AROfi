@@ -2,6 +2,16 @@
 const nextConfig = {
     reactStrictMode: true,
     basePath: '/portal',
+    async redirects() {
+        return [
+            {
+                source: '/',
+                destination: '/portal',
+                permanent: false,
+                basePath: false,
+            },
+        ]
+    },
     async headers() {
         return [
             {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'arofi-portal-v1'
+const CACHE_NAME = 'arofi-portal-v2'
 const APP_SHELL = ['/portal', '/portal/login', '/portal/logo.png', '/portal/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -27,8 +27,10 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        const copy = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined)
+        if (response.ok) {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined)
+        }
         return response
       })
       .catch(() => caches.match(request).then((cached) => cached || caches.match('/portal'))),
