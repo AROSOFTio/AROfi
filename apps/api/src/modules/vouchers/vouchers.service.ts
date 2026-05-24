@@ -100,6 +100,7 @@ export class VouchersService {
               id: true,
               name: true,
               code: true,
+              durationMinutes: true,
             },
           },
           vouchers: {
@@ -996,24 +997,26 @@ export class VouchersService {
     }
     doc.restore()
 
-    doc.roundedRect(innerX, y + 5, width - railWidth - 12, 15, 4).fillAndStroke('#FFFFFF', '#EDF0F4')
     doc.fillColor(template.accentDark).font('Helvetica-Bold').fontSize(5.2)
-      .text(input.tenantName.toUpperCase(), innerX, y + 10, { width: width - railWidth - 12, align: 'center', ellipsis: true })
+      .text(input.tenantName.toUpperCase(), innerX, y + 7, { width: width - railWidth - 12, align: 'center', ellipsis: true })
 
-    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(11.5)
-      .text(input.voucherCode, innerX + 12, y + 26, { width: qrX - innerX - 16, ellipsis: true })
+    const codeY = y + 28
+    this.drawVoucherUserIcon(doc, innerX + 1, codeY - 3)
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(12)
+      .text(input.voucherCode, innerX + 20, codeY, { width: qrX - innerX - 24, ellipsis: true })
 
-    doc.image(input.qrPng, qrX, y + 30, { width: qrSize, height: qrSize })
+    doc.moveTo(innerX, y + 44).lineTo(x + width - 5, y + 44).strokeColor(template.accent).lineWidth(1.4).stroke()
 
-    const detailY = y + 46
+    doc.image(input.qrPng, qrX, y + 43, { width: qrSize, height: qrSize })
+
+    const detailY = y + 49
     const detailWidth = (qrX - innerX - 10) / 2
     this.drawVoucherDetail(doc, 'PACKAGE', input.packageName, innerX, detailY, detailWidth, template)
     this.drawVoucherDetail(doc, 'PRICE', `UGX ${input.amountUgx.toLocaleString('en-UG')}`, innerX + detailWidth + 8, detailY, detailWidth, template)
-    this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 20, detailWidth, template)
-    this.drawVoucherDetail(doc, 'HELP', input.support, innerX + detailWidth + 8, detailY + 20, detailWidth, template)
+    this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 18, detailWidth, template)
 
-    doc.fillColor(template.muted).font('Helvetica').fontSize(4.4)
-      .text(`Help ${input.support} | arosoft.io | Scan or enter code`, innerX, y + height - 8, {
+    doc.fillColor(template.ink).font('Helvetica').fontSize(4.4)
+      .text(`Help: ${input.support} | XenFi.net`, innerX, y + height - 8, {
         width: width - railWidth - 16,
         align: 'left',
         ellipsis: true,
@@ -1036,6 +1039,18 @@ export class VouchersService {
       height: 12,
       ellipsis: true,
     })
+  }
+
+  private drawVoucherUserIcon(doc: PDFKit.PDFDocument, x: number, y: number) {
+    doc.save()
+    doc.fillColor('#000000')
+    doc.circle(x + 7, y + 5, 4.2).fill()
+    doc.roundedRect(x + 1, y + 10, 12, 8, 4).fill()
+    doc.circle(x + 14, y + 15, 4).fill()
+    doc.strokeColor('#FFFFFF').lineWidth(0.8)
+    doc.moveTo(x + 11.5, y + 15).lineTo(x + 16.5, y + 15).stroke()
+    doc.moveTo(x + 14, y + 12.5).lineTo(x + 14, y + 17.5).stroke()
+    doc.restore()
   }
 
   private async generateVoucherQrPng(voucherCode: string) {

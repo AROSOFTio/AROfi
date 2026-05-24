@@ -14,7 +14,7 @@ const nextConfig = {
               "img-src 'self' data: blob:",
               "font-src 'self'",
               "connect-src 'self'",
-              "frame-src 'none'",
+              "frame-src 'self' blob:",
               "object-src 'none'",
               "base-uri 'self'",
             ].join('; '),

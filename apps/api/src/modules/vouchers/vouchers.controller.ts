@@ -72,12 +72,13 @@ export class VouchersController {
     @CurrentUser() user: AuthenticatedAdminUser,
     @Param('batchId') batchId: string,
     @Query('template') template: string | undefined,
+    @Query('disposition') disposition: string | undefined,
     @Res() response: Response,
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     const file = await this.vouchersService.renderBatchPdf(batchId, tenantId, user.id, template)
     response.setHeader('Content-Type', file.contentType)
-    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.setHeader('Content-Disposition', `${disposition === 'inline' ? 'inline' : 'attachment'}; filename="${file.filename}"`)
     response.send(file.buffer)
   }
 

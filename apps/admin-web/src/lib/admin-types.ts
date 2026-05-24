@@ -160,6 +160,7 @@ export type VouchersOverviewResponse = {
       id: string
       name: string
       code: string
+      durationMinutes: number
     }
     generatedCount: number
     soldCount: number

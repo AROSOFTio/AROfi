@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import QRCode from 'qrcode'
 import {
   PackageCatalogResponse,
   TenantOverviewResponse,
@@ -9,8 +10,7 @@ import {
 } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
-import { getBrowserAdminToken } from '@/lib/admin-session'
+import { formatCurrency, formatDate, formatDuration, getStatusBadgeClass } from '@/lib/format'
 
 type TemplateFormState = {
   tenantId: string
@@ -148,56 +148,27 @@ export default function VouchersManager() {
   const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(printTemplates[0].id)
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null)
   const [previewPdfLoading, setPreviewPdfLoading] = useState(false)
+  const [previewPdfError, setPreviewPdfError] = useState<string | null>(null)
 
   useEffect(() => {
     void loadData()
   }, [])
 
   useEffect(() => {
-    let active = true
-
     if (!printBatch) {
-      setPreviewPdfUrl((previous) => {
-        if (previous) {
-          URL.revokeObjectURL(previous)
-        }
-        return null
-      })
-      return () => {
-        active = false
-      }
+      setPreviewPdfUrl(null)
+      setPreviewPdfLoading(false)
+      setPreviewPdfError(null)
+      return
     }
 
     setPreviewPdfLoading(true)
+    setPreviewPdfError(null)
     setError(null)
+    setPreviewPdfUrl(buildBatchFileUrl(printBatch.id, 'print.pdf', selectedPrintTemplateId, true))
+    const timer = window.setTimeout(() => setPreviewPdfLoading(false), 500)
 
-    void fetchBatchFileBlob(printBatch.id, 'print.pdf', selectedPrintTemplateId)
-      .then(({ blob }) => {
-        if (!active) {
-          return
-        }
-        const nextUrl = URL.createObjectURL(blob)
-        setPreviewPdfUrl((previous) => {
-          if (previous) {
-            URL.revokeObjectURL(previous)
-          }
-          return nextUrl
-        })
-      })
-      .catch((requestError) => {
-        if (active) {
-          setError(requestError instanceof Error ? requestError.message : 'Unable to load voucher PDF preview')
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setPreviewPdfLoading(false)
-        }
-      })
-
-    return () => {
-      active = false
-    }
+    return () => window.clearTimeout(timer)
   }, [printBatch, selectedPrintTemplateId])
 
   const tenantPackages = useMemo(
@@ -342,36 +313,27 @@ export default function VouchersManager() {
   async function downloadBatchFile(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string) {
     setError(null)
     setSuccess(null)
-    const { blob, filename } = await fetchBatchFileBlob(batchId, type, templateId)
-    const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = filename
+    anchor.href = buildBatchFileUrl(batchId, type, templateId)
     anchor.rel = 'noopener'
+    anchor.download = type.endsWith('pdf') ? 'vouchers.pdf' : 'vouchers.csv'
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    setSuccess(`${filename} download started.`)
-    await loadData()
+    setSuccess(`${type.endsWith('pdf') ? 'PDF' : 'CSV'} download started.`)
+    window.setTimeout(() => void loadData(), 1200)
   }
 
-  async function fetchBatchFileBlob(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string) {
-    const token = getBrowserAdminToken()
-    const templateQuery = type === 'print.pdf' && templateId ? `?template=${encodeURIComponent(templateId)}` : ''
-    const response = await fetch(`/api/vouchers/batches/${batchId}/${type}${templateQuery}`, {
-      credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type') ?? ''
-      const body = contentType.includes('application/json') ? await response.json().catch(() => null) : null
-      throw new Error(body?.message ?? 'Unable to load voucher batch file')
+  function buildBatchFileUrl(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string, inline = false) {
+    const params = new URLSearchParams()
+    if (type === 'print.pdf' && templateId) {
+      params.set('template', templateId)
     }
-    const blob = await response.blob()
-    const disposition = response.headers.get('content-disposition') ?? ''
-    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `vouchers.${type.endsWith('pdf') ? 'pdf' : 'csv'}`
-    return { blob, filename }
+    if (type === 'print.pdf' && inline) {
+      params.set('disposition', 'inline')
+    }
+    const query = params.toString()
+    return `/api/vouchers/batches/${batchId}/${type}${query ? `?${query}` : ''}`
   }
 
   const summary = overview?.summary ?? {
@@ -795,6 +757,7 @@ export default function VouchersManager() {
                   tenantName={printBatch.tenant.name}
                   code={printBatch.previewVouchers[0]?.code ?? printBatch.batchNumber}
                   packageName={printBatch.package.name}
+                  duration={formatDuration(printBatch.package.durationMinutes)}
                   amount={formatCurrency(printBatch.faceValueUgx)}
                 />
                 <div style={{ maxWidth: 520, color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
@@ -857,12 +820,18 @@ export default function VouchersManager() {
                   <iframe
                     src={previewPdfUrl}
                     title={`PDF preview for ${printBatch.batchNumber}`}
+                    onLoad={() => setPreviewPdfLoading(false)}
+                    onError={() => {
+                      const failure = 'PDF preview could not be loaded. Try Download PDF or check the API logs.'
+                      setPreviewPdfLoading(false)
+                      setPreviewPdfError(failure)
+                    }}
                     style={{ display: 'block', width: '100%', height: '68vh', border: 0, background: '#fffffb' }}
                   />
                 )}
                 {!previewPdfLoading && !previewPdfUrl && (
                   <div className="empty-state" style={{ height: '68vh' }}>
-                    <p>PDF preview could not be loaded. Use Download PDF after checking the API is healthy.</p>
+                    <p>{previewPdfError ?? 'PDF preview could not be loaded. Use Download PDF after checking the API is healthy.'}</p>
                   </div>
                 )}
               </div>
@@ -878,13 +847,41 @@ function VoucherSampleCard({
   tenantName,
   code,
   packageName,
+  duration,
   amount,
 }: {
   tenantName: string
   code: string
   packageName: string
+  duration: string
   amount: string
 }) {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('')
+
+  useEffect(() => {
+    let active = true
+    const origin = typeof window === 'undefined' ? 'https://arofi.arosoft.io' : window.location.origin
+    const portalUrl = `${origin.replace(/\/$/, '')}/portal?voucher=${encodeURIComponent(code)}`
+
+    void QRCode.toDataURL(portalUrl, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 160,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+    }).then((nextUrl) => {
+      if (active) {
+        setQrDataUrl(nextUrl)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [code])
+
   return (
     <div className="voucher-sample">
       <div className="voucher-sample-rail">
@@ -892,15 +889,22 @@ function VoucherSampleCard({
       </div>
       <div className="voucher-sample-body">
         <div className="voucher-sample-tenant">{tenantName}</div>
-        <div className="voucher-sample-code">{code}</div>
+        <div className="voucher-sample-code-row">
+          <span className="voucher-sample-user" aria-hidden="true"><span /></span>
+          <strong>{code}</strong>
+        </div>
+        <div className="voucher-sample-rule" />
         <div className="voucher-sample-grid">
           <div><span>PACKAGE</span>{packageName}</div>
           <div><span>PRICE</span>{amount}</div>
-          <div><span>DURATION</span>6 Hours</div>
-          <div><span>HELP</span>Contact support</div>
+          <div><span>DURATION</span>{duration}</div>
+          <div><span>HELP</span>XenFi.net</div>
         </div>
+        <div className="voucher-sample-help">Help: 0787726388 - 0774846195 | XenFi.net</div>
       </div>
-      <div className="voucher-sample-qr" />
+      <div className="voucher-sample-qr">
+        {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for voucher ${code}`} /> : null}
+      </div>
     </div>
   )
 }

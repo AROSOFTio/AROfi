@@ -52,6 +52,24 @@ export type AuthenticatedAdminUser = {
   displayName: string
 }
 
+function extractJwtFromAdminCookie(request: Request) {
+  const rawCookie = request.headers.cookie
+  if (!rawCookie) {
+    return null
+  }
+
+  const cookie = rawCookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith('arofi_admin_token='))
+
+  if (!cookie) {
+    return null
+  }
+
+  return decodeURIComponent(cookie.split('=').slice(1).join('='))
+}
+
 type AuthenticatedRequest = Request & {
   user: AuthenticatedAdminUser
 }
@@ -167,7 +185,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly authService: AuthService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        extractJwtFromAdminCookie,
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET') ?? '',
     })
