@@ -96,6 +96,9 @@ compose run --rm api npx prisma migrate deploy
 echo "Starting AROFi stack..."
 compose up -d --remove-orphans
 
+echo "Reloading edge proxy..."
+compose up -d --force-recreate nginx
+
 if [ "$SEED_DATABASE" = "true" ]; then
   echo "Seeding database..."
   compose exec -T api npx prisma db seed
