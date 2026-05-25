@@ -11,6 +11,9 @@ export class UpdateTenantSettingsDto {
   routerOnboardingPreferences?: Record<string, unknown>
   voucherPrintDefaultTemplate?: string
   termsAccepted?: boolean
+  kycCompleted?: boolean
+  accountActive?: boolean
+  fraudHold?: boolean
   redeemableWhenGenerated?: boolean
   allowDeviceReset?: boolean
   maxResetsPerActivation?: number

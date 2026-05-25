@@ -1,4 +1,5 @@
 import {
+  AuditSeverity,
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
@@ -8,6 +9,7 @@ import {
   LedgerTransactionType,
   PaymentNetwork,
   Prisma,
+  PayoutNumberChangeStatus,
   PayoutNumberStatus,
   WalletOwnerType,
 } from '@prisma/client'
@@ -126,7 +128,7 @@ export class WalletsService {
       }),
       this.prisma.tenantPayoutNumber.findMany({
         where: { tenantId },
-        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ isPrimary: 'desc' }, { status: 'asc' }, { createdAt: 'asc' }],
       }),
       this.prisma.tenantPayoutNumberChangeRequest.findMany({
         where: { tenantId },
@@ -155,10 +157,15 @@ export class WalletsService {
       rules: {
         maxActiveNumbers: platformSettings.maxPayoutNumbers,
         registeredNumbersOnly: true,
-        numberChangesRequireApproval: true,
+        numberChangesRequireApproval: platformSettings.payoutNumberChangeRequiresApproval,
         secretKeyRequired: true,
         finalAfterProviderAccepts: true,
         requireWithdrawalApproval: platformSettings.requireWithdrawalApproval,
+        instantWithdrawalsEnabled: platformSettings.instantWithdrawalsEnabled,
+        requireApprovalForFirstWithdrawal: platformSettings.requireApprovalForFirstWithdrawal,
+        requireApprovalAboveAmountUgx: platformSettings.requireApprovalAboveAmountUgx,
+        failedSecretAttemptsBeforeLock: platformSettings.failedSecretAttemptsBeforeLock,
+        withdrawalLockMinutes: platformSettings.withdrawalLockMinutes,
         minimumPayoutUgx: platformSettings.minimumWithdrawalUgx,
         withdrawalFeeBasisPoints: platformSettings.withdrawalFeeBps,
         withdrawalFlatFeeUgx: platformSettings.withdrawalFlatFeeUgx,
@@ -166,12 +173,30 @@ export class WalletsService {
     }
   }
 
-  async setPayoutSecret(tenantId: string, dto: SetPayoutSecretDto) {
+  async setPayoutSecret(tenantId: string, dto: SetPayoutSecretDto, userId: string) {
+    const existing = await this.prisma.tenantPayoutProfile.findUnique({ where: { tenantId } })
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { password: true, email: true } })
+    const passwordOk = dto.currentPassword && user ? await bcrypt.compare(dto.currentPassword, user.password) : false
+    const currentSecretOk = existing && dto.currentSecretKey ? await bcrypt.compare(dto.currentSecretKey, existing.secretHash) : false
+
+    if (!passwordOk && !currentSecretOk) {
+      throw new BadRequestException(existing ? 'Enter your current password or current withdrawal secret to change the secret code' : 'Enter your current password to set the withdrawal secret code')
+    }
+
     const secretHash = await bcrypt.hash(dto.secretKey, 12)
     await this.prisma.tenantPayoutProfile.upsert({
       where: { tenantId },
-      update: { secretHash },
+      update: { secretHash, failedSecretAttempts: 0, withdrawalLockedUntil: null, lastFailedSecretAt: null },
       create: { tenantId, secretHash },
+    })
+
+    await this.writeAudit({
+      tenantId,
+      userId,
+      action: 'withdrawal.secret.updated',
+      entity: 'TenantPayoutProfile',
+      entityId: tenantId,
+      details: { resetFailedAttempts: true },
     })
 
     return { secretConfigured: true }
@@ -183,7 +208,7 @@ export class WalletsService {
 
     return this.prisma.$transaction(async (tx) => {
       const activeCount = await tx.tenantPayoutNumber.count({
-        where: { tenantId, status: PayoutNumberStatus.ACTIVE },
+        where: { tenantId, status: PayoutNumberStatus.VERIFIED },
       })
 
       const platformSettings = await this.getPlatformSettings()
@@ -191,15 +216,34 @@ export class WalletsService {
         throw new BadRequestException(`You can register only ${platformSettings.maxPayoutNumbers} payout number(s). Request a number change instead.`)
       }
 
-      return tx.tenantPayoutNumber.create({
+      const hasVerified = await tx.tenantPayoutNumber.count({
+        where: { tenantId, status: PayoutNumberStatus.VERIFIED },
+      })
+      const status = platformSettings.payoutNumberChangeRequiresApproval ? PayoutNumberStatus.PENDING_ADMIN_APPROVAL : PayoutNumberStatus.VERIFIED
+      const created = await tx.tenantPayoutNumber.create({
         data: {
           tenantId,
           network: dto.network,
           phone: dto.phoneNumber.trim(),
           normalizedPhone,
           label: dto.label?.trim(),
+          ownerName: dto.ownerName?.trim(),
+          status,
+          isPrimary: status === PayoutNumberStatus.VERIFIED && hasVerified === 0,
+          verifiedAt: status === PayoutNumberStatus.VERIFIED ? new Date() : null,
         },
       })
+
+      await this.writeAudit({
+        tenantId,
+        action: status === PayoutNumberStatus.VERIFIED ? 'payout.number.registered' : 'payout.number.pending_approval',
+        entity: 'TenantPayoutNumber',
+        entityId: created.id,
+        details: { network: dto.network, normalizedPhone, status },
+        client: tx,
+      })
+
+      return created
     })
   }
 
@@ -209,22 +253,38 @@ export class WalletsService {
 
     if (dto.existingPayoutNumberId) {
       const existing = await this.prisma.tenantPayoutNumber.findFirst({
-        where: { id: dto.existingPayoutNumberId, tenantId, status: PayoutNumberStatus.ACTIVE },
+        where: { id: dto.existingPayoutNumberId, tenantId, status: PayoutNumberStatus.VERIFIED },
       })
       if (!existing) {
         throw new NotFoundException('Registered payout number not found')
       }
     }
 
-    return this.prisma.tenantPayoutNumberChangeRequest.create({
-      data: {
+    const platformSettings = await this.getPlatformSettings()
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.tenantPayoutNumberChangeRequest.create({
+        data: {
+          tenantId,
+          existingPayoutNumberId: dto.existingPayoutNumberId,
+          requestedNetwork: dto.network,
+          requestedPhone: dto.phoneNumber.trim(),
+          requestedNormalizedPhone: normalizedPhone,
+          reason: dto.reason.trim(),
+          status: platformSettings.payoutNumberChangeRequiresApproval
+            ? PayoutNumberChangeStatus.PENDING_ADMIN_APPROVAL
+            : PayoutNumberChangeStatus.PENDING_VERIFICATION,
+        },
+      })
+      await this.writeAudit({
         tenantId,
-        existingPayoutNumberId: dto.existingPayoutNumberId,
-        requestedNetwork: dto.network,
-        requestedPhone: dto.phoneNumber.trim(),
-        requestedNormalizedPhone: normalizedPhone,
-        reason: dto.reason.trim(),
-      },
+        userId,
+        action: 'payout.number_change.requested',
+        entity: 'TenantPayoutNumberChangeRequest',
+        entityId: request.id,
+        details: { requestedNetwork: dto.network, requestedNormalizedPhone: normalizedPhone },
+        client: tx,
+      })
+      return request
     })
   }
 
@@ -237,31 +297,65 @@ export class WalletsService {
       throw new BadRequestException('Accept the final disbursement terms before requesting withdrawal')
     }
 
-    const profile = await this.prisma.tenantPayoutProfile.findUnique({ where: { tenantId } })
+    const [profile, tenantSettings, platformSettings, pendingNumberChange] = await Promise.all([
+      this.prisma.tenantPayoutProfile.findUnique({ where: { tenantId } }),
+      this.prisma.tenantSetting.upsert({
+        where: { tenantId },
+        update: {},
+        create: { tenantId },
+      }),
+      this.getPlatformSettings(),
+      this.prisma.tenantPayoutNumberChangeRequest.findFirst({
+        where: {
+          tenantId,
+          status: { in: [PayoutNumberChangeStatus.PENDING, PayoutNumberChangeStatus.PENDING_VERIFICATION, PayoutNumberChangeStatus.PENDING_ADMIN_APPROVAL] },
+        },
+      }),
+    ])
     if (!profile) {
       throw new BadRequestException('Set your disbursement secret key before requesting withdrawal')
     }
 
+    if (!tenantSettings.kycCompleted) throw new BadRequestException('Complete vendor verification before withdrawing')
+    if (!tenantSettings.accountActive) throw new BadRequestException('Vendor account is not active for withdrawals')
+    if (tenantSettings.fraudHold) throw new BadRequestException('Withdrawals are temporarily blocked while the account is under review')
+    if (pendingNumberChange) throw new BadRequestException('A payout number change is pending. Withdrawals remain blocked until the request is approved or cancelled.')
+    if (profile.withdrawalLockedUntil && profile.withdrawalLockedUntil > new Date()) {
+      throw new BadRequestException(`Withdrawals are locked until ${profile.withdrawalLockedUntil.toISOString()} after failed secret attempts`)
+    }
+
     const secretOk = await bcrypt.compare(dto.secretKey, profile.secretHash)
     if (!secretOk) {
+      await this.recordFailedSecretAttempt(tenantId, profile.id, platformSettings, userId)
       throw new BadRequestException('Invalid disbursement secret key')
+    }
+
+    if (profile.failedSecretAttempts > 0 || profile.withdrawalLockedUntil) {
+      await this.prisma.tenantPayoutProfile.update({
+        where: { id: profile.id },
+        data: { failedSecretAttempts: 0, withdrawalLockedUntil: null, lastFailedSecretAt: null },
+      })
     }
 
     const payoutNumber = await this.prisma.tenantPayoutNumber.findFirst({
       where: {
-        id: dto.payoutNumberId,
         tenantId,
-        status: PayoutNumberStatus.ACTIVE,
+        isPrimary: true,
+        status: PayoutNumberStatus.VERIFIED,
+        verifiedAt: { not: null },
       },
     })
 
     if (!payoutNumber) {
-      throw new NotFoundException('Active registered payout number not found')
+      throw new NotFoundException('Primary verified payout number not found')
+    }
+
+    if (dto.payoutNumberId && dto.payoutNumberId !== payoutNumber.id) {
+      throw new BadRequestException('Withdrawals can only go to the primary verified payout number')
     }
 
     const provider = this.paymentRouterService.resolveDisbursement(payoutNumber.network)
     const reference = `VENDOR-WD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
-    const platformSettings = await this.getPlatformSettings()
     const fee = this.calculateWithdrawalFee(dto.amountUgx, platformSettings)
     const totalDebitUgx = dto.amountUgx + fee.feeAmountUgx
     const minimumPayoutUgx = platformSettings.minimumWithdrawalUgx
@@ -269,6 +363,9 @@ export class WalletsService {
     if (dto.amountUgx < minimumPayoutUgx) {
       throw new BadRequestException(`Minimum withdrawal is UGX ${minimumPayoutUgx.toLocaleString('en-US')}`)
     }
+
+    const reviewReason = await this.resolveWithdrawalReviewReason(tenantId, dto.amountUgx, platformSettings)
+    const initialStatus = reviewReason ? DisbursementStatus.FLAGGED_FOR_REVIEW : DisbursementStatus.PROCESSING
 
     const reserved = await this.prisma.$transaction(async (tx) => {
       const wallet = await tx.wallet.findFirst({
@@ -312,6 +409,7 @@ export class WalletsService {
             totalDebitUgx,
             withdrawalFee: fee,
             finalAfterProviderAccepts: true,
+            reviewReason,
           }),
           entries: {
             create: [
@@ -370,6 +468,7 @@ export class WalletsService {
             withdrawalFee: fee,
             confirmPhoneInPossession: dto.confirmPhoneInPossession,
             acceptFinalTerms: dto.acceptFinalTerms,
+            reviewReason,
           }),
         },
       })
@@ -381,14 +480,14 @@ export class WalletsService {
           billingTransactionId: billingTransaction.id,
           reference,
           method: DisbursementMethod.MOBILE_MONEY,
-          status: platformSettings.requireWithdrawalApproval ? DisbursementStatus.PENDING_APPROVAL : DisbursementStatus.PENDING,
+          status: initialStatus,
           network: payoutNumber.network,
           provider: provider.provider,
           amountUgx: dto.amountUgx,
           destinationReference: payoutNumber.normalizedPhone,
-          notes: platformSettings.requireWithdrawalApproval
-            ? 'Vendor wallet withdrawal reserved. Awaiting Dev Admin approval.'
-            : 'Vendor wallet withdrawal reserved. Final after provider accepts.',
+          notes: reviewReason
+            ? `Vendor wallet withdrawal reserved. Review required: ${reviewReason}.`
+            : 'Vendor wallet withdrawal reserved. Provider payout is being sent instantly.',
           metadata: this.toJsonValue({
             payoutNumberId: payoutNumber.id,
             requestedByUserId: userId,
@@ -396,14 +495,25 @@ export class WalletsService {
             payoutAmountUgx: dto.amountUgx,
             totalDebitUgx,
             withdrawalFee: fee,
+            reviewReason,
           }),
         },
+      })
+
+      await this.writeAudit({
+        tenantId,
+        userId,
+        action: 'withdrawal.requested',
+        entity: 'Disbursement',
+        entityId: disbursement.id,
+        details: { amountUgx: dto.amountUgx, totalDebitUgx, payoutNumberId: payoutNumber.id, reviewReason },
+        client: tx,
       })
 
       return { walletId: wallet.id, currency: wallet.currency, billingTransactionId: billingTransaction.id, disbursementId: disbursement.id }
     })
 
-    if (platformSettings.requireWithdrawalApproval) {
+    if (reviewReason) {
       const [disbursement, billingTransaction, wallet] = await Promise.all([
         this.prisma.disbursement.findUniqueOrThrow({ where: { id: reserved.disbursementId } }),
         this.prisma.billingTransaction.findUniqueOrThrow({ where: { id: reserved.billingTransactionId } }),
@@ -414,7 +524,7 @@ export class WalletsService {
         disbursement,
         billingTransaction,
         wallet,
-        providerStatus: 'PENDING_APPROVAL',
+        providerStatus: 'FLAGGED_FOR_REVIEW',
       }
     }
 
@@ -446,36 +556,15 @@ export class WalletsService {
       throw new ServiceUnavailableException(error instanceof Error ? error.message : 'Unable to submit withdrawal to provider')
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const billingTransaction = await tx.billingTransaction.update({
-        where: { id: reserved.billingTransactionId },
-        data: { status: BillingTransactionStatus.COMPLETED },
-      })
-      const disbursement = await tx.disbursement.update({
-        where: { id: reserved.disbursementId },
-        data: {
-          status: DisbursementStatus.PROCESSING,
-          providerReference: providerResponse.transactionReference,
-          notes: 'Vendor wallet withdrawal submitted. Final after provider accepts.',
-          metadata: this.toJsonValue({
-            payoutNumberId: payoutNumber.id,
-            providerResponse,
-            requestedByUserId: userId,
-            termsVersion: profile.termsVersion,
-            payoutAmountUgx: dto.amountUgx,
-            totalDebitUgx,
-            withdrawalFee: fee,
-          }),
-        },
-      })
-      const updatedWallet = await tx.wallet.findUniqueOrThrow({ where: { id: reserved.walletId } })
-
-      return {
-        disbursement,
-        billingTransaction,
-        wallet: updatedWallet,
-        providerStatus: providerResponse.transactionStatus,
-      }
+    return this.completeProviderSubmission({
+      reserved,
+      providerResponse,
+      payoutNumberId: payoutNumber.id,
+      requestedByUserId: userId,
+      termsVersion: profile.termsVersion,
+      payoutAmountUgx: dto.amountUgx,
+      totalDebitUgx,
+      withdrawalFee: fee,
     })
   }
 
@@ -498,14 +587,14 @@ export class WalletsService {
 
   async approveWithdrawal(disbursementId: string, actorUserId: string, scopedTenantId?: string) {
     const disbursement = await this.getWithdrawalForAction(disbursementId, scopedTenantId)
-    if (disbursement.status !== DisbursementStatus.PENDING_APPROVAL) {
-      throw new BadRequestException('Only withdrawals pending approval can be approved')
+    if (disbursement.status !== DisbursementStatus.PENDING_APPROVAL && disbursement.status !== DisbursementStatus.FLAGGED_FOR_REVIEW) {
+      throw new BadRequestException('Only flagged withdrawals can be approved')
     }
 
     await this.prisma.disbursement.update({
       where: { id: disbursement.id },
       data: {
-        status: DisbursementStatus.PENDING,
+        status: DisbursementStatus.PROCESSING,
         notes: 'Withdrawal approved. Submitting to provider.',
         metadata: this.toJsonValue({ ...(this.objectMetadata(disbursement.metadata)), approvedByUserId: actorUserId }),
       },
@@ -516,8 +605,8 @@ export class WalletsService {
 
   async rejectWithdrawal(disbursementId: string, actorUserId: string, reason: string, scopedTenantId?: string) {
     const disbursement = await this.getWithdrawalForAction(disbursementId, scopedTenantId)
-    if (disbursement.status !== DisbursementStatus.PENDING_APPROVAL) {
-      throw new BadRequestException('Only withdrawals pending approval can be rejected')
+    if (disbursement.status !== DisbursementStatus.PENDING_APPROVAL && disbursement.status !== DisbursementStatus.FLAGGED_FOR_REVIEW) {
+      throw new BadRequestException('Only flagged withdrawals can be rejected')
     }
     if (!disbursement.billingTransactionId || !disbursement.walletId) {
       throw new BadRequestException('Withdrawal reserve is incomplete')
@@ -532,7 +621,7 @@ export class WalletsService {
       totalDebitUgx: disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx,
       reference: disbursement.reference,
       errorMessage: reason,
-      disbursementStatus: DisbursementStatus.CANCELLED,
+      disbursementStatus: DisbursementStatus.REVERSED,
       billingStatus: BillingTransactionStatus.REVERSED,
       notes: 'Withdrawal rejected by Dev Admin. Wallet reserve released.',
       extraMetadata: { rejectedByUserId: actorUserId, reason },
@@ -547,6 +636,121 @@ export class WalletsService {
       throw new BadRequestException('Only failed withdrawals can be retried')
     }
     throw new BadRequestException('Failed withdrawals release the reserved balance. Ask the vendor to submit a new withdrawal request.')
+  }
+
+  async approvePayoutNumberChange(requestId: string, actorUserId: string, scopedTenantId?: string) {
+    const request = await this.prisma.tenantPayoutNumberChangeRequest.findUnique({ where: { id: requestId } })
+    if (!request || (scopedTenantId && request.tenantId !== scopedTenantId)) {
+      throw new NotFoundException('Payout number change request not found')
+    }
+    if (
+      request.status !== PayoutNumberChangeStatus.PENDING &&
+      request.status !== PayoutNumberChangeStatus.PENDING_VERIFICATION &&
+      request.status !== PayoutNumberChangeStatus.PENDING_ADMIN_APPROVAL
+    ) {
+      throw new BadRequestException('Only pending payout number changes can be approved')
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (request.existingPayoutNumberId) {
+        await tx.tenantPayoutNumber.updateMany({
+          where: { id: request.existingPayoutNumberId, tenantId: request.tenantId },
+          data: { status: PayoutNumberStatus.DISABLED, isPrimary: false, changedAt: new Date() },
+        })
+      } else {
+        await tx.tenantPayoutNumber.updateMany({
+          where: { tenantId: request.tenantId, isPrimary: true },
+          data: { isPrimary: false },
+        })
+      }
+
+      const payoutNumber = await tx.tenantPayoutNumber.upsert({
+        where: {
+          tenantId_normalizedPhone: {
+            tenantId: request.tenantId,
+            normalizedPhone: request.requestedNormalizedPhone,
+          },
+        },
+        update: {
+          network: request.requestedNetwork,
+          phone: request.requestedPhone,
+          status: PayoutNumberStatus.VERIFIED,
+          isPrimary: true,
+          verifiedAt: new Date(),
+          changedAt: new Date(),
+          approvedByUserId: actorUserId,
+        },
+        create: {
+          tenantId: request.tenantId,
+          network: request.requestedNetwork,
+          phone: request.requestedPhone,
+          normalizedPhone: request.requestedNormalizedPhone,
+          status: PayoutNumberStatus.VERIFIED,
+          isPrimary: true,
+          verifiedAt: new Date(),
+          changedAt: new Date(),
+          approvedByUserId: actorUserId,
+        },
+      })
+
+      const updatedRequest = await tx.tenantPayoutNumberChangeRequest.update({
+        where: { id: request.id },
+        data: {
+          status: PayoutNumberChangeStatus.APPROVED,
+          reviewedByUserId: actorUserId,
+          reviewedAt: new Date(),
+          reviewNotes: 'Approved by Dev Admin',
+        },
+      })
+
+      await this.writeAudit({
+        tenantId: request.tenantId,
+        userId: actorUserId,
+        action: 'payout.number_change.approved',
+        entity: 'TenantPayoutNumberChangeRequest',
+        entityId: request.id,
+        details: { payoutNumberId: payoutNumber.id, normalizedPhone: payoutNumber.normalizedPhone },
+        client: tx,
+      })
+
+      return { request: updatedRequest, payoutNumber }
+    })
+  }
+
+  async rejectPayoutNumberChange(requestId: string, actorUserId: string, reason: string, scopedTenantId?: string) {
+    const request = await this.prisma.tenantPayoutNumberChangeRequest.findUnique({ where: { id: requestId } })
+    if (!request || (scopedTenantId && request.tenantId !== scopedTenantId)) {
+      throw new NotFoundException('Payout number change request not found')
+    }
+    if (
+      request.status !== PayoutNumberChangeStatus.PENDING &&
+      request.status !== PayoutNumberChangeStatus.PENDING_VERIFICATION &&
+      request.status !== PayoutNumberChangeStatus.PENDING_ADMIN_APPROVAL
+    ) {
+      throw new BadRequestException('Only pending payout number changes can be rejected')
+    }
+
+    const updated = await this.prisma.tenantPayoutNumberChangeRequest.update({
+      where: { id: request.id },
+      data: {
+        status: PayoutNumberChangeStatus.REJECTED,
+        reviewedByUserId: actorUserId,
+        reviewedAt: new Date(),
+        reviewNotes: reason,
+      },
+    })
+
+    await this.writeAudit({
+      tenantId: request.tenantId,
+      userId: actorUserId,
+      action: 'payout.number_change.rejected',
+      entity: 'TenantPayoutNumberChangeRequest',
+      entityId: request.id,
+      severity: AuditSeverity.WARNING,
+      details: { reason },
+    })
+
+    return updated
   }
 
   private async findTenantWallet(tenantId: string) {
@@ -583,30 +787,15 @@ export class WalletsService {
         network: disbursement.network,
       })
 
-      return this.prisma.$transaction(async (tx) => {
-        const billingTransaction = await tx.billingTransaction.update({
-          where: { id: disbursement.billingTransactionId! },
-          data: { status: BillingTransactionStatus.COMPLETED },
-        })
-        const updatedDisbursement = await tx.disbursement.update({
-          where: { id: disbursement.id },
-          data: {
-            status: DisbursementStatus.PROCESSING,
-            providerReference: providerResponse.transactionReference,
-            notes: 'Vendor wallet withdrawal submitted. Final after provider accepts.',
-            metadata: this.toJsonValue({
-              ...this.objectMetadata(disbursement.metadata),
-              providerResponse,
-            }),
-          },
-        })
-        const wallet = await tx.wallet.findUniqueOrThrow({ where: { id: disbursement.walletId } })
-        return {
-          disbursement: updatedDisbursement,
-          billingTransaction,
-          wallet,
-          providerStatus: providerResponse.transactionStatus,
-        }
+      return this.completeProviderSubmission({
+        reserved: {
+          walletId: disbursement.walletId,
+          currency: disbursement.wallet.currency,
+          billingTransactionId: disbursement.billingTransactionId,
+          disbursementId: disbursement.id,
+        },
+        providerResponse,
+        ...this.objectMetadata(disbursement.metadata),
       })
     } catch (error) {
       await this.releaseFailedWithdrawalReserve({
@@ -620,6 +809,146 @@ export class WalletsService {
         errorMessage: error instanceof Error ? error.message : 'Unable to submit withdrawal to provider',
       })
       throw new ServiceUnavailableException(error instanceof Error ? error.message : 'Unable to submit withdrawal to provider')
+    }
+  }
+
+  private async completeProviderSubmission(input: {
+    reserved: {
+      walletId: string
+      currency?: string
+      billingTransactionId: string
+      disbursementId: string
+    }
+    providerResponse: {
+      status?: string
+      statusCode?: number
+      transactionStatus?: string
+      transactionReference?: string
+      [key: string]: unknown
+    }
+    payoutNumberId?: unknown
+    requestedByUserId?: unknown
+    termsVersion?: unknown
+    payoutAmountUgx?: unknown
+    totalDebitUgx?: unknown
+    withdrawalFee?: unknown
+  }) {
+    const finalStatus = this.providerResponseCompleted(input.providerResponse)
+      ? DisbursementStatus.COMPLETED
+      : DisbursementStatus.PROCESSING
+
+    return this.prisma.$transaction(async (tx) => {
+      const billingTransaction = await tx.billingTransaction.update({
+        where: { id: input.reserved.billingTransactionId },
+        data: { status: BillingTransactionStatus.COMPLETED },
+      })
+      const disbursement = await tx.disbursement.update({
+        where: { id: input.reserved.disbursementId },
+        data: {
+          status: finalStatus,
+          providerReference: input.providerResponse.transactionReference,
+          completedAt: finalStatus === DisbursementStatus.COMPLETED ? new Date() : undefined,
+          notes:
+            finalStatus === DisbursementStatus.COMPLETED
+              ? 'Withdrawal sent successfully.'
+              : 'Withdrawal sent to provider and is processing.',
+          metadata: this.toJsonValue({
+            payoutNumberId: input.payoutNumberId,
+            providerResponse: input.providerResponse,
+            requestedByUserId: input.requestedByUserId,
+            termsVersion: input.termsVersion,
+            payoutAmountUgx: input.payoutAmountUgx,
+            totalDebitUgx: input.totalDebitUgx,
+            withdrawalFee: input.withdrawalFee,
+          }),
+        },
+      })
+      await this.writeAudit({
+        tenantId: disbursement.tenantId,
+        userId: typeof input.requestedByUserId === 'string' ? input.requestedByUserId : undefined,
+        action: 'withdrawal.payout_sent',
+        entity: 'Disbursement',
+        entityId: disbursement.id,
+        details: { status: finalStatus, providerReference: input.providerResponse.transactionReference },
+        client: tx,
+      })
+      const wallet = await tx.wallet.findUniqueOrThrow({ where: { id: input.reserved.walletId } })
+      return {
+        disbursement,
+        billingTransaction,
+        wallet,
+        providerStatus: input.providerResponse.transactionStatus,
+      }
+    })
+  }
+
+  private providerResponseCompleted(providerResponse: { statusCode?: number; transactionStatus?: string; status?: string }) {
+    const status = (providerResponse.transactionStatus ?? providerResponse.status ?? '').toUpperCase()
+    return providerResponse.statusCode === 0 || ['SUCCESS', 'SUCCESSFUL', 'COMPLETED', 'SUCCEEDED'].includes(status)
+  }
+
+  private async resolveWithdrawalReviewReason(
+    tenantId: string,
+    amountUgx: number,
+    settings: {
+      requireWithdrawalApproval: boolean
+      instantWithdrawalsEnabled: boolean
+      requireApprovalForFirstWithdrawal: boolean
+      requireApprovalAboveAmountUgx: number | null
+    },
+  ) {
+    if (settings.requireWithdrawalApproval) return 'Platform approval mode is enabled'
+    if (!settings.instantWithdrawalsEnabled) return 'Instant withdrawals are disabled'
+    if (settings.requireApprovalAboveAmountUgx !== null && settings.requireApprovalAboveAmountUgx !== undefined && amountUgx > settings.requireApprovalAboveAmountUgx) {
+      return `Amount is above the review threshold of UGX ${settings.requireApprovalAboveAmountUgx.toLocaleString('en-US')}`
+    }
+    if (settings.requireApprovalForFirstWithdrawal) {
+      const completed = await this.prisma.disbursement.count({
+        where: { tenantId, agentId: null, status: { in: [DisbursementStatus.COMPLETED, DisbursementStatus.PROCESSING] } },
+      })
+      if (completed === 0) return 'First withdrawal requires review'
+    }
+    return null
+  }
+
+  private async recordFailedSecretAttempt(
+    tenantId: string,
+    profileId: string,
+    settings: { failedSecretAttemptsBeforeLock: number; withdrawalLockMinutes: number },
+    userId?: string,
+  ) {
+    const updated = await this.prisma.tenantPayoutProfile.update({
+      where: { id: profileId },
+      data: {
+        failedSecretAttempts: { increment: 1 },
+        lastFailedSecretAt: new Date(),
+      },
+    })
+    await this.writeAudit({
+      tenantId,
+      userId,
+      action: 'withdrawal.secret_failed',
+      entity: 'TenantPayoutProfile',
+      entityId: profileId,
+      severity: AuditSeverity.WARNING,
+      details: { failedSecretAttempts: updated.failedSecretAttempts },
+    })
+
+    if (updated.failedSecretAttempts >= settings.failedSecretAttemptsBeforeLock) {
+      const lockedUntil = new Date(Date.now() + settings.withdrawalLockMinutes * 60_000)
+      await this.prisma.tenantPayoutProfile.update({
+        where: { id: profileId },
+        data: { withdrawalLockedUntil: lockedUntil },
+      })
+      await this.writeAudit({
+        tenantId,
+        userId,
+        action: 'withdrawal.locked',
+        entity: 'TenantPayoutProfile',
+        entityId: profileId,
+        severity: AuditSeverity.WARNING,
+        details: { lockedUntil, failedSecretAttempts: updated.failedSecretAttempts },
+      })
     }
   }
 
@@ -663,7 +992,12 @@ export class WalletsService {
   }) {
     await this.prisma.$transaction(async (tx) => {
       const disbursement = await tx.disbursement.findUnique({ where: { id: input.disbursementId } })
-      if (!disbursement || disbursement.status === DisbursementStatus.FAILED || disbursement.status === DisbursementStatus.CANCELLED) {
+      if (
+        !disbursement ||
+        disbursement.status === DisbursementStatus.FAILED ||
+        disbursement.status === DisbursementStatus.REVERSED ||
+        disbursement.status === DisbursementStatus.CANCELLED
+      ) {
         return
       }
 
@@ -733,6 +1067,16 @@ export class WalletsService {
           metadata: this.toJsonValue({ errorMessage: input.errorMessage, ...input.extraMetadata }),
         },
       })
+
+      await this.writeAudit({
+        tenantId: input.tenantId,
+        action: input.disbursementStatus === DisbursementStatus.REVERSED ? 'withdrawal.balance_reversed' : 'withdrawal.payout_failed',
+        entity: 'Disbursement',
+        entityId: input.disbursementId,
+        severity: AuditSeverity.WARNING,
+        details: { errorMessage: input.errorMessage, totalDebitUgx: input.totalDebitUgx },
+        client: tx,
+      })
     })
   }
 
@@ -769,6 +1113,30 @@ export class WalletsService {
       where: { id: PLATFORM_SETTINGS_ID },
       update: {},
       create: { id: PLATFORM_SETTINGS_ID },
+    })
+  }
+
+  private async writeAudit(input: {
+    tenantId?: string | null
+    userId?: string
+    action: string
+    entity: string
+    entityId?: string
+    severity?: AuditSeverity
+    details?: Record<string, unknown>
+    client?: Prisma.TransactionClient
+  }) {
+    const client = input.client ?? this.prisma
+    await client.auditLog.create({
+      data: {
+        tenantId: input.tenantId ?? null,
+        userId: input.userId,
+        action: input.action,
+        entity: input.entity,
+        entityId: input.entityId,
+        severity: input.severity ?? AuditSeverity.INFO,
+        details: this.toJsonValue(input.details ?? {}),
+      },
     })
   }
 }

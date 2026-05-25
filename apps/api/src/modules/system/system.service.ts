@@ -55,6 +55,17 @@ export class SystemService {
     if (dto.withdrawalFeePercent !== undefined) data.withdrawalFeeBps = this.percentToBps(dto.withdrawalFeePercent, 'withdrawalFeePercent')
     if (dto.withdrawalFlatFeeUgx !== undefined) data.withdrawalFlatFeeUgx = this.nonNegativeInt(dto.withdrawalFlatFeeUgx, 'withdrawalFlatFeeUgx')
     if (dto.requireWithdrawalApproval !== undefined) data.requireWithdrawalApproval = dto.requireWithdrawalApproval
+    if (dto.instantWithdrawalsEnabled !== undefined) data.instantWithdrawalsEnabled = dto.instantWithdrawalsEnabled
+    if (dto.requireApprovalForFirstWithdrawal !== undefined) data.requireApprovalForFirstWithdrawal = dto.requireApprovalForFirstWithdrawal
+    if (dto.requireApprovalAboveAmountUgx !== undefined) {
+      data.requireApprovalAboveAmountUgx =
+        dto.requireApprovalAboveAmountUgx === null ? null : this.nonNegativeInt(dto.requireApprovalAboveAmountUgx, 'requireApprovalAboveAmountUgx')
+    }
+    if (dto.failedSecretAttemptsBeforeLock !== undefined) {
+      data.failedSecretAttemptsBeforeLock = this.positiveInt(dto.failedSecretAttemptsBeforeLock, 'failedSecretAttemptsBeforeLock')
+    }
+    if (dto.withdrawalLockMinutes !== undefined) data.withdrawalLockMinutes = this.positiveInt(dto.withdrawalLockMinutes, 'withdrawalLockMinutes')
+    if (dto.payoutNumberChangeRequiresApproval !== undefined) data.payoutNumberChangeRequiresApproval = dto.payoutNumberChangeRequiresApproval
     if (dto.maxPayoutNumbers !== undefined) data.maxPayoutNumbers = this.positiveInt(dto.maxPayoutNumbers, 'maxPayoutNumbers')
     if (dto.allowedPaymentNetworks !== undefined) data.allowedPaymentNetworks = this.sanitizeNetworks(dto.allowedPaymentNetworks)
     if (dto.mtnCollectionProvider !== undefined) data.mtnCollectionProvider = this.sanitizeProvider(dto.mtnCollectionProvider)
@@ -181,6 +192,9 @@ export class SystemService {
       settingsData.termsAcceptedAt = new Date()
       settingsData.termsAcceptedByUserId = actor.id
     }
+    if (canManageFees && dto.kycCompleted !== undefined) settingsData.kycCompleted = dto.kycCompleted
+    if (canManageFees && dto.accountActive !== undefined) settingsData.accountActive = dto.accountActive
+    if (canManageFees && dto.fraudHold !== undefined) settingsData.fraudHold = dto.fraudHold
     if (dto.redeemableWhenGenerated !== undefined) settingsData.redeemableWhenGenerated = dto.redeemableWhenGenerated
     if (dto.allowDeviceReset !== undefined) settingsData.allowDeviceReset = dto.allowDeviceReset
     if (dto.maxResetsPerActivation !== undefined) settingsData.maxResetsPerActivation = this.nonNegativeInt(dto.maxResetsPerActivation, 'maxResetsPerActivation')
@@ -701,6 +715,12 @@ export class SystemService {
     withdrawalFeeBps: number
     withdrawalFlatFeeUgx: number
     requireWithdrawalApproval: boolean
+    instantWithdrawalsEnabled: boolean
+    requireApprovalForFirstWithdrawal: boolean
+    requireApprovalAboveAmountUgx: number | null
+    failedSecretAttemptsBeforeLock: number
+    withdrawalLockMinutes: number
+    payoutNumberChangeRequiresApproval: boolean
     maxPayoutNumbers: number
     allowedPaymentNetworks: PaymentNetwork[]
     mtnCollectionProvider: PaymentProvider

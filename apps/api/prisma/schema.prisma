@@ -198,20 +198,27 @@ enum DisbursementMethod {
 
 enum DisbursementStatus {
   PENDING_APPROVAL
+  PENDING_NUMBER_APPROVAL
+  FLAGGED_FOR_REVIEW
   PENDING
   PROCESSING
   COMPLETED
   FAILED
+  REVERSED
   CANCELLED
 }
 
 enum PayoutNumberStatus {
-  ACTIVE
+  PENDING_VERIFICATION
+  PENDING_ADMIN_APPROVAL
+  VERIFIED
   DISABLED
 }
 
 enum PayoutNumberChangeStatus {
   PENDING
+  PENDING_VERIFICATION
+  PENDING_ADMIN_APPROVAL
   APPROVED
   REJECTED
   CANCELLED
@@ -390,6 +397,12 @@ model PlatformSetting {
   withdrawalFeeBps           Int      @default(0)
   withdrawalFlatFeeUgx       Int      @default(0)
   requireWithdrawalApproval  Boolean  @default(false)
+  instantWithdrawalsEnabled  Boolean  @default(true)
+  requireApprovalForFirstWithdrawal Boolean @default(false)
+  requireApprovalAboveAmountUgx Int?
+  failedSecretAttemptsBeforeLock Int @default(5)
+  withdrawalLockMinutes      Int      @default(30)
+  payoutNumberChangeRequiresApproval Boolean @default(true)
   maxPayoutNumbers           Int      @default(2)
   allowedPaymentNetworks     PaymentNetwork[] @default([MTN])
   mtnCollectionProvider      PaymentProvider @default(MTN_MOMO_DIRECT)
@@ -1192,6 +1205,9 @@ model TenantSetting {
   voucherPrintDefaultTemplate String?
   termsAcceptedAt         DateTime?
   termsAcceptedByUserId   String?
+  kycCompleted             Boolean  @default(true)
+  accountActive            Boolean  @default(true)
+  fraudHold                Boolean  @default(false)
   redeemableWhenGenerated Boolean  @default(true)
   allowDeviceReset        Boolean  @default(false)
   maxResetsPerActivation  Int      @default(0)
@@ -1366,6 +1382,9 @@ model TenantPayoutProfile {
   tenant         Tenant   @relation(fields: [tenantId], references: [id])
   secretHash     String
   termsVersion   String   @default("2026-05-22")
+  failedSecretAttempts Int  @default(0)
+  lastFailedSecretAt DateTime?
+  withdrawalLockedUntil DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -1378,11 +1397,17 @@ model TenantPayoutNumber {
   phone           String
   normalizedPhone String
   label           String?
-  status          PayoutNumberStatus @default(ACTIVE)
+  ownerName       String?
+  isPrimary       Boolean            @default(false)
+  status          PayoutNumberStatus @default(PENDING_ADMIN_APPROVAL)
+  verifiedAt      DateTime?
+  changedAt       DateTime?
+  approvedByUserId String?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   @@unique([tenantId, normalizedPhone])
+  @@index([tenantId, isPrimary])
   @@index([tenantId, status])
 }
 

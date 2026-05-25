@@ -13,4 +13,9 @@ export class RegisterPayoutNumberDto {
   @IsString()
   @MaxLength(80)
   label?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  ownerName?: string
 }

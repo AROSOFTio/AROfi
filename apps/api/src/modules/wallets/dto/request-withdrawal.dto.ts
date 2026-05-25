@@ -1,8 +1,9 @@
-import { IsBoolean, IsInt, IsString, IsUUID, Max, Min } from 'class-validator'
+import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 
 export class RequestWithdrawalDto {
+  @IsOptional()
   @IsUUID()
-  payoutNumberId: string
+  payoutNumberId?: string
 
   @IsInt()
   @Min(1)

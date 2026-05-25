@@ -14,17 +14,17 @@ export default async function FloatPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Float</h1>
-          <p className="page-subtitle">Tenant working capital, agent wallet balances, reserved commissions, and recent float movements.</p>
+          <h1 className="page-title">Earnings</h1>
+          <p className="page-subtitle">Tenant settlement balance, agent wallet balances, reserved commissions, and recent wallet movements.</p>
         </div>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
-          { label: 'Tenant Float', value: formatCurrency(data?.summary.tenantWalletBalanceUgx ?? 0), color: 'blue' },
+          { label: 'Settlement Balance', value: formatCurrency(data?.summary.tenantWalletBalanceUgx ?? 0), color: 'blue' },
           { label: 'Agent Wallets', value: formatCurrency(data?.summary.totalAgentWalletBalanceUgx ?? 0), color: 'green' },
           { label: 'Reserved Commission', value: formatCurrency(data?.summary.reservedCommissionUgx ?? 0), color: 'amber' },
-          { label: 'Working Float', value: formatCurrency(data?.summary.workingFloatUgx ?? 0), color: 'purple' },
+          { label: 'Working Balance', value: formatCurrency(data?.summary.workingFloatUgx ?? 0), color: 'purple' },
         ].map((stat) => (
           <div key={stat.label} className={`stat-card ${stat.color}`}>
             <div className="stat-label">{stat.label}</div>
@@ -80,7 +80,7 @@ export default async function FloatPage() {
                 <th>Type</th>
                 <th>Rate</th>
                 <th>Wallet Balance</th>
-                <th>Available Float</th>
+                <th>Available Balance</th>
                 <th>Reserved Commission</th>
               </tr>
             </thead>
@@ -114,7 +114,7 @@ export default async function FloatPage() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Recent Float Movements</span>
+          <span className="card-title">Recent Wallet Movements</span>
         </div>
         <div className="table-wrap">
           <table>
@@ -134,7 +134,7 @@ export default async function FloatPage() {
                 <tr>
                   <td colSpan={7}>
                     <div className="empty-state">
-                      <p>No float transfers or payout wallet entries have been posted yet.</p>
+                      <p>No wallet transfers or payout entries have been posted yet.</p>
                     </div>
                   </td>
                 </tr>

@@ -1,0 +1,52 @@
+ALTER TYPE "DisbursementStatus" ADD VALUE IF NOT EXISTS 'PENDING_NUMBER_APPROVAL';
+ALTER TYPE "DisbursementStatus" ADD VALUE IF NOT EXISTS 'FLAGGED_FOR_REVIEW';
+ALTER TYPE "DisbursementStatus" ADD VALUE IF NOT EXISTS 'REVERSED';
+
+ALTER TYPE "PayoutNumberStatus" ADD VALUE IF NOT EXISTS 'PENDING_VERIFICATION';
+ALTER TYPE "PayoutNumberStatus" ADD VALUE IF NOT EXISTS 'PENDING_ADMIN_APPROVAL';
+ALTER TYPE "PayoutNumberStatus" ADD VALUE IF NOT EXISTS 'VERIFIED';
+
+ALTER TYPE "PayoutNumberChangeStatus" ADD VALUE IF NOT EXISTS 'PENDING_VERIFICATION';
+ALTER TYPE "PayoutNumberChangeStatus" ADD VALUE IF NOT EXISTS 'PENDING_ADMIN_APPROVAL';
+
+ALTER TABLE "PlatformSetting"
+  ADD COLUMN IF NOT EXISTS "instantWithdrawalsEnabled" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS "requireApprovalForFirstWithdrawal" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "requireApprovalAboveAmountUgx" INTEGER,
+  ADD COLUMN IF NOT EXISTS "failedSecretAttemptsBeforeLock" INTEGER NOT NULL DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS "withdrawalLockMinutes" INTEGER NOT NULL DEFAULT 30,
+  ADD COLUMN IF NOT EXISTS "payoutNumberChangeRequiresApproval" BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE "TenantSetting"
+  ADD COLUMN IF NOT EXISTS "kycCompleted" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS "accountActive" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS "fraudHold" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "TenantPayoutProfile"
+  ADD COLUMN IF NOT EXISTS "failedSecretAttempts" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "lastFailedSecretAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "withdrawalLockedUntil" TIMESTAMP(3);
+
+ALTER TABLE "TenantPayoutNumber"
+  ADD COLUMN IF NOT EXISTS "ownerName" TEXT,
+  ADD COLUMN IF NOT EXISTS "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "changedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT;
+
+UPDATE "TenantPayoutNumber"
+SET "status" = 'VERIFIED',
+    "verifiedAt" = COALESCE("verifiedAt", "createdAt")
+WHERE "status" = 'ACTIVE';
+
+WITH ranked AS (
+  SELECT id, ROW_NUMBER() OVER (PARTITION BY "tenantId" ORDER BY "createdAt" ASC) AS rn
+  FROM "TenantPayoutNumber"
+  WHERE "status" = 'VERIFIED'
+)
+UPDATE "TenantPayoutNumber" number
+SET "isPrimary" = true
+FROM ranked
+WHERE number.id = ranked.id AND ranked.rn = 1 AND number."isPrimary" = false;
+
+CREATE INDEX IF NOT EXISTS "TenantPayoutNumber_tenantId_isPrimary_idx" ON "TenantPayoutNumber"("tenantId", "isPrimary");

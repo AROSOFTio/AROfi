@@ -11,7 +11,10 @@ type PayoutNumber = {
   network: 'MTN' | 'AIRTEL'
   normalizedPhone: string
   label?: string | null
+  ownerName?: string | null
   status: string
+  isPrimary?: boolean
+  verifiedAt?: string | null
 }
 
 type PayoutProfile = {
@@ -33,12 +36,17 @@ type PayoutProfile = {
     destinationReference?: string | null
     amountUgx: number
     status: string
+    providerReference?: string | null
     createdAt: string
   }>
   rules?: {
     minimumPayoutUgx?: number
     withdrawalFeeBasisPoints?: number
     withdrawalFlatFeeUgx?: number
+    instantWithdrawalsEnabled?: boolean
+    requireApprovalAboveAmountUgx?: number | null
+    failedSecretAttemptsBeforeLock?: number
+    withdrawalLockMinutes?: number
   }
 }
 
@@ -53,8 +61,12 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   const [progress, setProgress] = useState('')
   const [busy, setBusy] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [historyRange, setHistoryRange] = useState<'today' | 'yesterday' | 'last7' | 'month' | 'custom'>('last7')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
-  const activeNumbers = profile?.numbers.filter((item) => item.status === 'ACTIVE') ?? []
+  const verifiedNumbers = profile?.numbers.filter((item) => item.status === 'VERIFIED') ?? []
+  const primaryNumber = verifiedNumbers.find((item) => item.isPrimary) ?? verifiedNumbers[0] ?? null
   const availableUgx = profile?.wallet?.balanceUgx ?? 0
   const feeBps = profile?.rules?.withdrawalFeeBasisPoints ?? 0
   const flatFeeUgx = profile?.rules?.withdrawalFlatFeeUgx ?? 0
@@ -75,6 +87,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
       belowMinimum: amountUgx > 0 && amountUgx < minimumPayoutUgx,
     }
   }, [availableUgx, feeBps, flatFeeUgx, minimumPayoutUgx, withdrawAmount])
+  const filteredWithdrawals = useMemo(() => filterWithdrawals(profile?.recentWithdrawals ?? [], historyRange, customFrom, customTo), [profile?.recentWithdrawals, historyRange, customFrom, customTo])
 
   async function run(successMessage: string, callback: () => Promise<unknown>) {
     const activeAction = action ?? 'saving'
@@ -104,18 +117,23 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   async function setSecret(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    await run('Disbursement secret updated.', () => clientPostApi('/wallets/payouts/secret', { secretKey: form.get('secretKey') }))
+    await run('Withdrawal secret updated.', () => clientPostApi('/wallets/payouts/secret', {
+      currentPassword: form.get('currentPassword') || undefined,
+      currentSecretKey: form.get('currentSecretKey') || undefined,
+      secretKey: form.get('secretKey'),
+    }))
     event.currentTarget.reset()
   }
 
   async function addNumber(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    await run('Payout number registered.', () =>
+    await run('Payout number submitted. It must be verified before it can receive withdrawals.', () =>
       clientPostApi('/wallets/payouts/numbers', {
         network: form.get('network'),
         phoneNumber: form.get('phoneNumber'),
         label: form.get('label'),
+        ownerName: form.get('ownerName'),
       }),
     )
     event.currentTarget.reset()
@@ -124,7 +142,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   async function requestChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    await run('Payout number change request submitted.', () =>
+    await run('Payout number change request submitted. Withdrawals are disabled until it is verified or approved.', () =>
       clientPostApi('/wallets/payouts/number-change-requests', {
         existingPayoutNumberId: form.get('existingPayoutNumberId') || undefined,
         network: form.get('network'),
@@ -151,9 +169,11 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
     }
 
     const form = new FormData(event.currentTarget)
-    await run('Withdrawal submitted. The wallet balance has been deducted and provider payout is processing.', () =>
+    const confirmed = window.confirm(`You are withdrawing ${formatCurrency(withdrawalMath.amountUgx)} to ${primaryNumber?.network} ${maskPhone(primaryNumber?.normalizedPhone ?? '')}. Platform/withdrawal fee ${formatCurrency(withdrawalMath.feeAmountUgx)}. You will receive ${formatCurrency(withdrawalMath.amountUgx)}.`)
+    if (!confirmed) return
+
+    await run('Withdrawal sent successfully. If the provider later fails, your balance will be restored automatically.', () =>
       clientPostApi('/wallets/withdrawals', {
-        payoutNumberId: form.get('payoutNumberId'),
         amountUgx: withdrawalMath.amountUgx,
         secretKey: form.get('secretKey'),
         confirmPhoneInPossession: form.get('confirmPhoneInPossession') === 'on',
@@ -167,7 +187,8 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
     return null
   }
 
-  const canWithdraw = profile.profile.secretConfigured && activeNumbers.length > 0 && availableUgx > 0
+  const pendingChange = profile.changeRequests.find((item) => ['PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_APPROVAL'].includes(item.status))
+  const canWithdraw = profile.profile.secretConfigured && Boolean(primaryNumber) && !pendingChange && availableUgx > 0
   const latestWithdrawal = profile.recentWithdrawals[0]
   const latestChange = profile.changeRequests[0]
 
@@ -177,7 +198,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         <div>
           <span className="card-title">Vendor Wallet</span>
           <p style={{ marginTop: 6, color: 'var(--text-2)', fontSize: 13 }}>
-            Withdrawals are paid only to registered numbers and require the vendor secret key.
+            Withdrawals are instant only to your primary verified payout number and require the vendor secret key.
           </p>
         </div>
         <span className="badge badge-info">Registered numbers only</span>
@@ -201,8 +222,16 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                 {formatCurrency(availableUgx)}
               </div>
               <div style={{ marginTop: 10, color: 'var(--text-2)', fontSize: 13 }}>
-                Wallet is debited automatically after the provider accepts the payout request.
+                Wallet is debited immediately, then AROFi sends the payout through the configured provider.
               </div>
+              {primaryNumber && (
+                <div style={{ marginTop: 12, color: 'var(--text-1)', fontSize: 14, fontWeight: 800 }}>
+                  Withdraw to: {primaryNumber.network} {maskPhone(primaryNumber.normalizedPhone)}
+                </div>
+              )}
+              {pendingChange && (
+                <Notice tone="danger" text="Payout number change pending. Withdrawals are disabled until verified or approved." />
+              )}
             </div>
             <button type="button" className="btn btn-primary" onClick={() => setAction('withdraw')} disabled={!canWithdraw}>
               Withdraw
@@ -210,7 +239,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 22 }}>
-            <Metric label="Payout numbers" value={`${activeNumbers.length}/2`} />
+            <Metric label="Verified numbers" value={`${verifiedNumbers.length}/2`} />
             <Metric label="Secret key" value={profile.profile.secretConfigured ? 'Set' : 'Missing'} />
             <Metric label="Minimum payout" value={minimumPayoutUgx > 0 ? formatCurrency(minimumPayoutUgx) : 'None'} />
           </div>
@@ -222,11 +251,11 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
           </div>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             <ActionButton icon={<KeyRound size={17} />} label={profile.profile.secretConfigured ? 'Change secret key' : 'Set secret key'} onClick={() => setAction('secret')} />
-            <ActionButton icon={<Plus size={17} />} label="Register payout number" onClick={() => setAction('number')} disabled={activeNumbers.length >= 2} />
-            <ActionButton icon={<RefreshCw size={17} />} label="Request number change" onClick={() => setAction('change')} />
+            <ActionButton icon={<Plus size={17} />} label="Register payout number" onClick={() => setAction('number')} disabled={verifiedNumbers.length >= 2} />
+            <ActionButton icon={<RefreshCw size={17} />} label="Change payout number" onClick={() => setAction('change')} />
           </div>
           <div style={{ marginTop: 14, color: 'var(--text-2)', fontSize: 12, lineHeight: 1.6 }}>
-            A number change is an application request. It does not replace an active payout number until approved.
+            Withdrawals to a new number are disabled until verified or approved.
           </div>
         </section>
       </div>
@@ -243,7 +272,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
               </tr>
             </thead>
             <tbody>
-              {activeNumbers.length === 0 && (
+              {profile.numbers.length === 0 && (
                 <tr>
                   <td colSpan={4}>
                     <div className="empty-state" style={{ padding: 24 }}>
@@ -252,12 +281,12 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                   </td>
                 </tr>
               )}
-              {activeNumbers.map((number) => (
+              {profile.numbers.map((number) => (
                 <tr key={number.id}>
                   <td style={{ fontFamily: 'monospace', color: 'var(--text-1)', fontWeight: 700 }}>{number.normalizedPhone}</td>
                   <td>{number.network === 'AIRTEL' ? 'Airtel' : 'MTN'}</td>
-                  <td><span className={getStatusBadgeClass(number.status)}>{number.status.toLowerCase()}</span></td>
-                  <td>{number.label || 'Owner line'}</td>
+                  <td><span className={getStatusBadgeClass(number.status)}>{number.isPrimary ? 'primary ' : ''}{number.status.toLowerCase().replace(/_/g, ' ')}</span></td>
+                  <td>{number.ownerName || number.label || 'Owner line'}</td>
                 </tr>
               ))}
             </tbody>
@@ -266,10 +295,60 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
 
         <section style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 18, background: 'var(--bg-card)' }}>
           <div style={{ color: 'var(--text-2)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.08 }}>Recent activity</div>
-          <Activity label="Last withdrawal" value={latestWithdrawal ? `${formatCurrency(latestWithdrawal.amountUgx)} - ${latestWithdrawal.status}` : 'None yet'} />
+          <Activity label="Last withdrawal" value={latestWithdrawal ? `${formatCurrency(latestWithdrawal.amountUgx)} - ${latestWithdrawal.status}${latestWithdrawal.providerReference ? ` - ${latestWithdrawal.providerReference}` : ''}` : 'None yet'} />
           <Activity label="Number change" value={latestChange ? `${latestChange.status} - ${formatDate(latestChange.createdAt)}` : 'No pending change'} />
         </section>
       </div>
+
+      <section style={{ padding: '0 22px 22px' }}>
+        <div className="card-header" style={{ paddingLeft: 0, paddingRight: 0 }}>
+          <span className="card-title">Withdrawal History</span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              ['today', 'Today'],
+              ['yesterday', 'Yesterday'],
+              ['last7', 'Last 7 days'],
+              ['month', 'This month'],
+              ['custom', 'Custom range'],
+            ].map(([value, label]) => (
+              <button key={value} type="button" className={`btn btn-sm ${historyRange === value ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setHistoryRange(value as typeof historyRange)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {historyRange === 'custom' && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <input className="form-input" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} style={{ maxWidth: 180 }} />
+            <input className="form-input" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} style={{ maxWidth: 180 }} />
+          </div>
+        )}
+        <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 12 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Destination</th>
+                <th>Status</th>
+                <th>Provider Ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredWithdrawals.length === 0 && (
+                <tr><td colSpan={5}><div className="empty-state" style={{ padding: 24 }}><p>No withdrawals in this date range.</p></div></td></tr>
+              )}
+              {filteredWithdrawals.map((withdrawal) => (
+                <tr key={withdrawal.id}>
+                  <td>{formatDate(withdrawal.createdAt)}</td>
+                  <td>{formatCurrency(withdrawal.amountUgx)}</td>
+                  <td>{withdrawal.network ?? 'Mobile Money'} {withdrawal.destinationReference ? maskPhone(withdrawal.destinationReference) : ''}</td>
+                  <td><span className={getStatusBadgeClass(withdrawal.status)}>{withdrawal.status.toLowerCase().replace(/_/g, ' ')}</span></td>
+                  <td>{withdrawal.providerReference ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {action && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !busy && setAction(null)}>
@@ -280,14 +359,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                 <div className="modal-kicker">Wallet withdrawal</div>
                 <h2 className="modal-title">Withdraw to registered number</h2>
                 <FormGrid>
-                  <Field label="Payout number">
-                    <select name="payoutNumberId" className="form-input" required disabled={busy === 'withdraw'}>
-                      <option value="">Choose registered number</option>
-                      {activeNumbers.map((number) => (
-                        <option key={number.id} value={number.id}>{number.network} - {number.normalizedPhone}</option>
-                      ))}
-                    </select>
-                  </Field>
+                  <ReadOnlyLine label="Withdraw to" value={primaryNumber ? `${primaryNumber.network} ${maskPhone(primaryNumber.normalizedPhone)}` : 'No verified primary payout number'} />
                   <Field label="Amount to send">
                     <input
                       name="amountUgx"
@@ -318,14 +390,14 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                   </label>
                   <label style={checkRowStyle}>
                     <input name="acceptFinalTerms" type="checkbox" required disabled={busy === 'withdraw'} />
-                    <span>I accept that after provider disbursement, this payout is final and cannot be reversed by AROfi.</span>
+                    <span>I accept that after provider disbursement, this payout is final and cannot be reversed by AROFi.</span>
                   </label>
                   <FormProcessStatus
                     busy={busy === 'withdraw'}
                     error={modalError}
-                    text={progress || 'Submitting withdrawal request to the provider. This window closes only after AROFi receives the API response.'}
+                    text={progress || 'Sending withdrawal to the provider. This window closes after AROFi receives the API response.'}
                   />
-                  <button className="btn btn-primary btn-block" disabled={busy === 'withdraw' || withdrawalMath.exceedsBalance || withdrawalMath.belowMinimum}>
+                  <button className="btn btn-primary btn-block" disabled={busy === 'withdraw' || !primaryNumber || withdrawalMath.exceedsBalance || withdrawalMath.belowMinimum}>
                     {busy === 'withdraw' ? 'Processing withdrawal...' : 'Withdraw'}
                   </button>
                 </FormGrid>
@@ -338,6 +410,8 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                 <h2 className="modal-title">{profile.profile.secretConfigured ? 'Change secret key' : 'Set secret key'}</h2>
                 <FormGrid>
                   <Field label="Secret key">
+                    {profile.profile.secretConfigured && <input name="currentSecretKey" type="password" placeholder="Current withdrawal secret or use password below" className="form-input" disabled={busy === 'secret'} />}
+                    <input name="currentPassword" type="password" placeholder="Current account password" className="form-input" disabled={busy === 'secret'} />
                     <input name="secretKey" type="password" minLength={8} required placeholder="At least 8 characters" className="form-input" disabled={busy === 'secret'} />
                   </Field>
                   <FormProcessStatus busy={busy === 'secret'} error={modalError} text={progress || 'Saving secret key and refreshing profile.'} />
@@ -363,9 +437,12 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                   <Field label="Label">
                     <input name="label" placeholder="Owner or business line" className="form-input" disabled={busy === 'number'} />
                   </Field>
+                  <Field label="Owner name">
+                    <input name="ownerName" placeholder="Registered owner name" className="form-input" disabled={busy === 'number'} />
+                  </Field>
                   <FormProcessStatus busy={busy === 'number'} error={modalError} text={progress || 'Registering payout number and refreshing profile.'} />
-                  <button className="btn btn-primary btn-block" disabled={busy === 'number' || activeNumbers.length >= 2}>
-                    {busy === 'number' ? 'Registering number...' : 'Register number'}
+                  <button className="btn btn-primary btn-block" disabled={busy === 'number' || verifiedNumbers.length >= 2}>
+                    {busy === 'number' ? 'Submitting number...' : 'Submit number for verification'}
                   </button>
                 </FormGrid>
               </form>
@@ -379,7 +456,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                   <Field label="Existing number">
                     <select name="existingPayoutNumberId" className="form-input" disabled={busy === 'change'}>
                       <option value="">Add or replace payout number</option>
-                      {activeNumbers.map((number) => (
+                      {verifiedNumbers.map((number) => (
                         <option key={number.id} value={number.id}>{number.network} - {number.normalizedPhone}</option>
                       ))}
                     </select>
@@ -396,6 +473,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                   <Field label="Reason">
                     <textarea name="reason" required minLength={10} placeholder="Explain why this payout number should change" className="form-input" rows={4} disabled={busy === 'change'} />
                   </Field>
+                  <Notice tone="danger" text="Withdrawals to this new number will be disabled until verified or approved." />
                   <FormProcessStatus busy={busy === 'change'} error={modalError} text={progress || 'Submitting number change request for approval.'} />
                   <button className="btn btn-primary btn-block" disabled={busy === 'change'}>
                     {busy === 'change' ? 'Submitting request...' : 'Submit request'}
@@ -461,6 +539,44 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   )
+}
+
+function ReadOnlyLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--bg-app)' }}>
+      <div style={{ color: 'var(--text-2)', fontSize: 12, fontWeight: 800 }}>{label}</div>
+      <div style={{ marginTop: 6, color: 'var(--text-1)', fontSize: 15, fontWeight: 900 }}>{value}</div>
+    </div>
+  )
+}
+
+function maskPhone(phone: string) {
+  if (phone.length <= 6) return phone
+  return `${phone.slice(0, 3)}xxxx${phone.slice(-3)}`
+}
+
+function filterWithdrawals(items: PayoutProfile['recentWithdrawals'], range: 'today' | 'yesterday' | 'last7' | 'month' | 'custom', customFrom: string, customTo: string) {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  let from = new Date(startOfToday)
+  let to = new Date(now)
+  if (range === 'yesterday') {
+    from = new Date(startOfToday)
+    from.setDate(from.getDate() - 1)
+    to = new Date(startOfToday)
+  } else if (range === 'last7') {
+    from = new Date(startOfToday)
+    from.setDate(from.getDate() - 6)
+  } else if (range === 'month') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1)
+  } else if (range === 'custom') {
+    from = customFrom ? new Date(`${customFrom}T00:00:00`) : new Date(0)
+    to = customTo ? new Date(`${customTo}T23:59:59`) : new Date(8640000000000000)
+  }
+  return items.filter((item) => {
+    const created = new Date(item.createdAt)
+    return created >= from && created <= to
+  })
 }
 
 function MathBreakdown({

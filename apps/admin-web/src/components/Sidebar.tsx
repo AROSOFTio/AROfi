@@ -27,7 +27,7 @@ const navItems: NavGroup[] = [
       { href: '/sessions', label: 'Usage Analytics', icon: <UsageIcon />, required: ['sessions.read'], tenantOnly: true },
       { href: '/support', label: 'Support Hub', icon: <SupportIcon />, required: ['support.read'], tenantOnly: true },
       { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'], tenantOnly: true },
-      { href: '/float', label: 'Float', icon: <FloatIcon />, required: ['agents.read'], tenantOnly: true },
+      { href: '/float', label: 'Earnings', icon: <FloatIcon />, required: ['agents.read'], tenantOnly: true },
       { href: '/users', label: 'Users', icon: <UsersIcon />, required: ['users.read'], tenantOnly: true },
       { href: '/packages', label: 'Packages', icon: <PackageIcon />, required: ['packages.read'], tenantOnly: true },
       { href: '/transactions', label: 'Transactions', icon: <BillingIcon />, required: ['billing.read'], tenantOnly: true },

@@ -7,6 +7,12 @@ export class UpdatePlatformSettingsDto {
   withdrawalFeePercent?: number
   withdrawalFlatFeeUgx?: number
   requireWithdrawalApproval?: boolean
+  instantWithdrawalsEnabled?: boolean
+  requireApprovalForFirstWithdrawal?: boolean
+  requireApprovalAboveAmountUgx?: number | null
+  failedSecretAttemptsBeforeLock?: number
+  withdrawalLockMinutes?: number
+  payoutNumberChangeRequiresApproval?: boolean
   maxPayoutNumbers?: number
   allowedPaymentNetworks?: PaymentNetwork[]
   mtnCollectionProvider?: PaymentProvider

@@ -15,6 +15,12 @@ type PlatformSettings = {
   withdrawalFeePercent: number
   withdrawalFlatFeeUgx: number
   requireWithdrawalApproval: boolean
+  instantWithdrawalsEnabled: boolean
+  requireApprovalForFirstWithdrawal: boolean
+  requireApprovalAboveAmountUgx?: number | null
+  failedSecretAttemptsBeforeLock: number
+  withdrawalLockMinutes: number
+  payoutNumberChangeRequiresApproval: boolean
   maxPayoutNumbers: number
   allowedPaymentNetworks: string[]
   mtnCollectionProvider: string
@@ -54,6 +60,9 @@ type TenantSettings = {
     allowDeviceReset: boolean
     maxResetsPerActivation: number
     supportText?: string | null
+    kycCompleted?: boolean
+    accountActive?: boolean
+    fraudHold?: boolean
     termsAcceptedAt?: string | null
   }
 }
@@ -98,6 +107,12 @@ export default function SettingsManager({
         withdrawalFeePercent: numberValue(form, 'withdrawalFeePercent'),
         withdrawalFlatFeeUgx: numberValue(form, 'withdrawalFlatFeeUgx'),
         requireWithdrawalApproval: form.get('requireWithdrawalApproval') === 'on',
+        instantWithdrawalsEnabled: form.get('instantWithdrawalsEnabled') === 'on',
+        requireApprovalForFirstWithdrawal: form.get('requireApprovalForFirstWithdrawal') === 'on',
+        requireApprovalAboveAmountUgx: nullableNumberValue(form, 'requireApprovalAboveAmountUgx'),
+        failedSecretAttemptsBeforeLock: numberValue(form, 'failedSecretAttemptsBeforeLock'),
+        withdrawalLockMinutes: numberValue(form, 'withdrawalLockMinutes'),
+        payoutNumberChangeRequiresApproval: form.get('payoutNumberChangeRequiresApproval') === 'on',
         maxPayoutNumbers: numberValue(form, 'maxPayoutNumbers'),
         allowedPaymentNetworks: ['MTN', 'AIRTEL'].filter((network) => form.get(`network-${network}`) === 'on'),
         mtnCollectionProvider: stringValue(form, 'mtnCollectionProvider'),
@@ -148,6 +163,9 @@ export default function SettingsManager({
           ? {
               tenantMobileMoneyFeePercent: nullableNumberValue(form, 'tenantMobileMoneyFeePercent'),
               tenantVoucherFeePercent: nullableNumberValue(form, 'tenantVoucherFeePercent'),
+              kycCompleted: form.get('kycCompleted') === 'on',
+              accountActive: form.get('accountActive') === 'on',
+              fraudHold: form.get('fraudHold') === 'on',
             }
           : {}),
       }
@@ -208,9 +226,15 @@ export default function SettingsManager({
                   <Input name="withdrawalFeePercent" label="Withdrawal Fee %" defaultValue={platformForm.withdrawalFeePercent} />
                   <Input name="withdrawalFlatFeeUgx" label="Withdrawal Flat Fee UGX" defaultValue={platformForm.withdrawalFlatFeeUgx} />
                   <Input name="maxPayoutNumbers" label="Max Payout Numbers" defaultValue={platformForm.maxPayoutNumbers} />
+                  <Input name="requireApprovalAboveAmountUgx" label="Review Withdrawals Above UGX" defaultValue={platformForm.requireApprovalAboveAmountUgx ?? ''} />
+                  <Input name="failedSecretAttemptsBeforeLock" label="Failed Secret Attempts Before Lock" defaultValue={platformForm.failedSecretAttemptsBeforeLock} />
+                  <Input name="withdrawalLockMinutes" label="Withdrawal Lock Minutes" defaultValue={platformForm.withdrawalLockMinutes} />
                   <Select name="mtnDisbursementProvider" label="MTN Disbursement Route" defaultValue={platformForm.mtnDisbursementProvider} options={providerOptions} />
                   <Select name="airtelDisbursementProvider" label="Airtel Disbursement Route" defaultValue={platformForm.airtelDisbursementProvider} options={providerOptions} />
-                  <Check name="requireWithdrawalApproval" label="Require Dev Admin approval before provider payout" defaultChecked={platformForm.requireWithdrawalApproval} />
+                  <Check name="instantWithdrawalsEnabled" label="Instant withdrawals enabled by default" defaultChecked={platformForm.instantWithdrawalsEnabled} />
+                  <Check name="requireApprovalForFirstWithdrawal" label="Review first withdrawal" defaultChecked={platformForm.requireApprovalForFirstWithdrawal} />
+                  <Check name="payoutNumberChangeRequiresApproval" label="Payout number changes require approval" defaultChecked={platformForm.payoutNumberChangeRequiresApproval} />
+                  <Check name="requireWithdrawalApproval" label="Force review for every withdrawal" defaultChecked={platformForm.requireWithdrawalApproval} />
                 </>
               )}
               {activeTab === 'Router & Portal' && (
@@ -278,6 +302,9 @@ export default function SettingsManager({
                 <>
                   <Check name="allowDeviceReset" label="Allow device binding resets" defaultChecked={tenantForm.allowDeviceReset} />
                   <Input name="maxResetsPerActivation" label="Max resets per activation" defaultValue={tenantForm.maxResetsPerActivation ?? 0} />
+                  {isDevAdmin && <Check name="kycCompleted" label="Vendor KYC complete" defaultChecked={tenantForm.kycCompleted ?? true} />}
+                  {isDevAdmin && <Check name="accountActive" label="Vendor account active" defaultChecked={tenantForm.accountActive ?? true} />}
+                  {isDevAdmin && <Check name="fraudHold" label="Put vendor withdrawals on fraud hold" defaultChecked={tenantForm.fraudHold ?? false} />}
                   <Check name="termsAccepted" label="Accept current vendor operating terms" defaultChecked={Boolean(tenantForm.termsAcceptedAt)} />
                 </>
               )}

@@ -38,7 +38,7 @@ export class WalletsController {
   @Post('payouts/secret')
   setPayoutSecret(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: SetPayoutSecretDto) {
     const tenantId = this.accessScope.requireTenantScope(user)
-    return this.walletsService.setPayoutSecret(tenantId, dto)
+    return this.walletsService.setPayoutSecret(tenantId, dto, user.id)
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
@@ -110,6 +110,30 @@ export class WalletsController {
     }
     const scopedTenantId = this.accessScope.resolveTenantScope(user)
     return this.walletsService.retryFailedWithdrawal(disbursementId, scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @Post('payouts/number-change-requests/:requestId/approve')
+  approvePayoutNumberChange(@CurrentUser() user: AuthenticatedAdminUser, @Param('requestId') requestId: string) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can approve payout number changes')
+    }
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.walletsService.approvePayoutNumberChange(requestId, user.id, scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @Post('payouts/number-change-requests/:requestId/reject')
+  rejectPayoutNumberChange(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('requestId') requestId: string,
+    @Body() body: { reason?: string },
+  ) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can reject payout number changes')
+    }
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.walletsService.rejectPayoutNumberChange(requestId, user.id, body.reason?.trim() || 'Rejected by Dev Admin', scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
