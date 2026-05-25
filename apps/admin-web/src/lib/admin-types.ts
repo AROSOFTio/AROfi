@@ -108,12 +108,102 @@ export type TenantItem = {
     balanceUgx: number
     currency: string
   } | null
+  status?: {
+    accountActive: boolean
+    fraudHold: boolean
+    kycCompleted: boolean
+  }
+  earnings?: {
+    grossSalesUgx: number
+    platformFeesUgx: number
+    netEarningsUgx: number
+    pendingWithdrawalUgx: number
+    completedWithdrawalUgx: number
+    failedWithdrawalCount: number
+    pendingWithdrawalCount: number
+  }
+  payoutNumbers?: Array<{
+    id: string
+    network: string
+    phone: string
+    normalizedPhone: string
+    label?: string | null
+    ownerName?: string | null
+    isPrimary: boolean
+    status: string
+    verifiedAt?: string | null
+    createdAt: string
+  }>
+  payoutNumberChangeRequests?: Array<{
+    id: string
+    requestedNetwork: string
+    requestedPhone: string
+    requestedNormalizedPhone: string
+    reason: string
+    status: string
+    createdAt: string
+  }>
   counts: {
     users: number
     hotspots: number
     routers: number
     packages: number
   }
+}
+
+export type PlatformWithdrawalsResponse = {
+  summary: {
+    totalWithdrawals: number
+    pendingReview: number
+    failed: number
+    completedAmountUgx: number
+    pendingPayoutNumbers: number
+    pendingNumberChanges: number
+  }
+  items: Array<{
+    id: string
+    reference: string
+    status: string
+    network?: string | null
+    provider?: string | null
+    amountUgx: number
+    destinationReference?: string | null
+    providerReference?: string | null
+    notes?: string | null
+    createdAt: string
+    completedAt?: string | null
+    tenant: TenantSummary & { domain?: string | null }
+    billingTransaction?: {
+      id: string
+      grossAmountUgx: number
+      feeAmountUgx: number
+      netAmountUgx: number
+      status: string
+    } | null
+  }>
+  pendingPayoutNumbers: Array<{
+    id: string
+    network: string
+    phone: string
+    normalizedPhone: string
+    label?: string | null
+    ownerName?: string | null
+    isPrimary: boolean
+    status: string
+    createdAt: string
+    tenant: TenantSummary & { domain?: string | null }
+  }>
+  pendingNumberChanges: Array<{
+    id: string
+    existingPayoutNumberId?: string | null
+    requestedNetwork: string
+    requestedPhone: string
+    requestedNormalizedPhone: string
+    reason: string
+    status: string
+    createdAt: string
+    tenant: TenantSummary & { domain?: string | null }
+  }>
 }
 
 export type PackageCatalogResponse = {

@@ -38,6 +38,7 @@ type PlatformSettings = {
 
 type TenantSettings = {
   tenant: {
+    id: string
     name: string
     logoUrl?: string | null
     brandColor?: string | null
@@ -169,7 +170,8 @@ export default function SettingsManager({
             }
           : {}),
       }
-      const saved = await clientPatchApi<TenantSettings>('/system/tenant-settings', payload)
+      const tenantQuery = isDevAdmin ? `?tenantId=${tenant.tenant.id}` : ''
+      const saved = await clientPatchApi<TenantSettings>(`/system/tenant-settings${tenantQuery}`, payload)
       setTenant(saved)
       setMessage('Vendor settings saved and audit logged.')
     } catch (caught) {

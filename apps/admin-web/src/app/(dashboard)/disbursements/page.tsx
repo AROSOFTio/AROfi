@@ -1,11 +1,21 @@
-import { DisbursementOverviewResponse } from '@/lib/admin-types'
+import { AdminSessionResponse, DisbursementOverviewResponse, PlatformWithdrawalsResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 import VendorWithdrawalsPanel from '@/components/VendorWithdrawalsPanel'
+import PlatformWithdrawalsPanel from '@/components/PlatformWithdrawalsPanel'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DisbursementsPage() {
+  const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  const isVendor = isVendorWorkspace(session?.user)
+
+  if (!isVendor) {
+    const platformWithdrawals = await fetchApi<PlatformWithdrawalsResponse>('/wallets/withdrawals/all')
+    return <PlatformWithdrawalsPanel initialData={platformWithdrawals} />
+  }
+
   const data = await fetchApi<DisbursementOverviewResponse>('/agents/disbursements/overview')
   const payoutProfile = await fetchApi<any>('/wallets/payouts/profile/me')
   const settlements = data?.settlements ?? []

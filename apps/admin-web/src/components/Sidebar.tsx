@@ -46,6 +46,8 @@ const navItems: NavGroup[] = [
       { href: '/routers', label: 'Router Support', icon: <RouterIcon />, required: ['routers.read'], platformOnly: true },
       { href: '/support', label: 'Support Tickets', icon: <SupportIcon />, required: ['support.read'], platformOnly: true },
       { href: '/payments', label: 'Payment Health', icon: <PaymentPulseIcon />, required: ['payments.read'], platformOnly: true },
+      { href: '/disbursements', label: 'Withdrawal Control', icon: <SettlementIcon />, required: ['disbursements.read'], platformOnly: true },
+      { href: '/settings', label: 'Platform Settings', icon: <SettingsIcon />, required: ['settings.manage'], platformOnly: true },
       { href: '/users', label: 'Platform Users', icon: <UsersIcon />, required: ['users.read'], platformOnly: true },
       { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'], platformOnly: true },
       { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'], platformOnly: true },

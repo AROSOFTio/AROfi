@@ -569,20 +569,120 @@ export class WalletsService {
   }
 
   async listVendorWithdrawals(filters: { tenantId?: string; status?: DisbursementStatus; from?: string; to?: string }) {
-    return this.prisma.disbursement.findMany({
-      where: {
-        ...(filters.tenantId ? { tenantId: filters.tenantId } : {}),
-        agentId: null,
-        ...(filters.status ? { status: filters.status } : {}),
-        ...(this.buildDateFilter(filters).createdAt ? { createdAt: this.buildDateFilter(filters).createdAt } : {}),
+    const dateFilter = this.buildDateFilter(filters)
+    const where = {
+      ...(filters.tenantId ? { tenantId: filters.tenantId } : {}),
+      agentId: null,
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(dateFilter.createdAt ? { createdAt: dateFilter.createdAt } : {}),
+    }
+    const [items, pendingPayoutNumbers, pendingNumberChanges] = await Promise.all([
+      this.prisma.disbursement.findMany({
+        where,
+        include: {
+          tenant: { select: { id: true, name: true, domain: true } },
+          billingTransaction: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 250,
+      }),
+      this.prisma.tenantPayoutNumber.findMany({
+        where: {
+          ...(filters.tenantId ? { tenantId: filters.tenantId } : {}),
+          status: { in: [PayoutNumberStatus.PENDING_ADMIN_APPROVAL, PayoutNumberStatus.PENDING_VERIFICATION] },
+        },
+        include: { tenant: { select: { id: true, name: true, domain: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.tenantPayoutNumberChangeRequest.findMany({
+        where: {
+          ...(filters.tenantId ? { tenantId: filters.tenantId } : {}),
+          status: { in: [PayoutNumberChangeStatus.PENDING, PayoutNumberChangeStatus.PENDING_ADMIN_APPROVAL, PayoutNumberChangeStatus.PENDING_VERIFICATION] },
+        },
+        include: { tenant: { select: { id: true, name: true, domain: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+    ])
+
+    return {
+      summary: {
+        totalWithdrawals: items.length,
+        pendingReview: items.filter((item) => item.status === DisbursementStatus.PENDING_APPROVAL || item.status === DisbursementStatus.FLAGGED_FOR_REVIEW).length,
+        failed: items.filter((item) => item.status === DisbursementStatus.FAILED).length,
+        completedAmountUgx: items.filter((item) => item.status === DisbursementStatus.COMPLETED).reduce((total, item) => total + item.amountUgx, 0),
+        pendingPayoutNumbers: pendingPayoutNumbers.length,
+        pendingNumberChanges: pendingNumberChanges.length,
       },
-      include: {
-        tenant: { select: { id: true, name: true } },
-        billingTransaction: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 250,
+      items,
+      pendingPayoutNumbers,
+      pendingNumberChanges,
+    }
+  }
+
+  async approvePayoutNumber(numberId: string, actorUserId: string, scopedTenantId?: string) {
+    const number = await this.prisma.tenantPayoutNumber.findUnique({ where: { id: numberId } })
+    if (!number || (scopedTenantId && number.tenantId !== scopedTenantId)) {
+      throw new NotFoundException('Payout number not found')
+    }
+    if (number.status !== PayoutNumberStatus.PENDING_ADMIN_APPROVAL && number.status !== PayoutNumberStatus.PENDING_VERIFICATION) {
+      throw new BadRequestException('Only pending payout numbers can be approved')
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const hasPrimary = await tx.tenantPayoutNumber.count({
+        where: { tenantId: number.tenantId, isPrimary: true, status: PayoutNumberStatus.VERIFIED },
+      })
+      if (!hasPrimary) {
+        await tx.tenantPayoutNumber.updateMany({ where: { tenantId: number.tenantId, isPrimary: true }, data: { isPrimary: false } })
+      }
+      const updated = await tx.tenantPayoutNumber.update({
+        where: { id: number.id },
+        data: {
+          status: PayoutNumberStatus.VERIFIED,
+          verifiedAt: new Date(),
+          approvedByUserId: actorUserId,
+          isPrimary: hasPrimary === 0,
+        },
+        include: { tenant: { select: { id: true, name: true, domain: true } } },
+      })
+      await this.writeAudit({
+        tenantId: number.tenantId,
+        userId: actorUserId,
+        action: 'payout.number.approved',
+        entity: 'TenantPayoutNumber',
+        entityId: number.id,
+        details: { normalizedPhone: number.normalizedPhone, network: number.network, isPrimary: updated.isPrimary },
+        client: tx,
+      })
+      return updated
     })
+  }
+
+  async rejectPayoutNumber(numberId: string, actorUserId: string, reason: string, scopedTenantId?: string) {
+    const number = await this.prisma.tenantPayoutNumber.findUnique({ where: { id: numberId } })
+    if (!number || (scopedTenantId && number.tenantId !== scopedTenantId)) {
+      throw new NotFoundException('Payout number not found')
+    }
+    if (number.status !== PayoutNumberStatus.PENDING_ADMIN_APPROVAL && number.status !== PayoutNumberStatus.PENDING_VERIFICATION) {
+      throw new BadRequestException('Only pending payout numbers can be rejected')
+    }
+    const updated = await this.prisma.tenantPayoutNumber.update({
+      where: { id: number.id },
+      data: { status: PayoutNumberStatus.DISABLED, changedAt: new Date(), approvedByUserId: actorUserId },
+      include: { tenant: { select: { id: true, name: true, domain: true } } },
+    })
+    await this.writeAudit({
+      tenantId: number.tenantId,
+      userId: actorUserId,
+      action: 'payout.number.rejected',
+      entity: 'TenantPayoutNumber',
+      entityId: number.id,
+      severity: AuditSeverity.WARNING,
+      details: { reason, normalizedPhone: number.normalizedPhone, network: number.network },
+    })
+    return updated
   }
 
   async approveWithdrawal(disbursementId: string, actorUserId: string, scopedTenantId?: string) {

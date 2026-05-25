@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { WalletOwnerType } from '@prisma/client'
+import { BillingChannel, BillingTransactionStatus, DisbursementStatus, WalletOwnerType } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { CreateTenantDto } from './dto/create-tenant.dto'
 
@@ -9,7 +9,7 @@ export class TenantsService {
 
   async findAll(tenantId?: string) {
     const tenants = await this.prisma.tenant.findMany({
-      where: tenantId ? { id: tenantId } : undefined,
+      where: tenantId ? { id: tenantId } : { users: { none: { role: { name: 'SuperAdmin' } } } },
       include: {
         wallets: {
           where: {
@@ -22,6 +22,15 @@ export class TenantsService {
           },
           take: 1,
         },
+        tenantSettings: true,
+        payoutNumbers: {
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+          take: 5,
+        },
+        payoutNumberChangeRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+        },
         _count: {
           select: {
             users: true,
@@ -32,6 +41,40 @@ export class TenantsService {
         },
       },
       orderBy: { createdAt: 'desc' },
+    })
+
+    const tenantIds = tenants.map((tenant) => tenant.id)
+    const [billingByTenant, withdrawalByTenant] = await Promise.all([
+      tenantIds.length
+        ? this.prisma.billingTransaction.groupBy({
+            by: ['tenantId'],
+            where: { tenantId: { in: tenantIds }, status: BillingTransactionStatus.COMPLETED, channel: { in: [BillingChannel.MOBILE_MONEY, BillingChannel.VOUCHER] } },
+            _sum: { grossAmountUgx: true, feeAmountUgx: true, netAmountUgx: true },
+          })
+        : [],
+      tenantIds.length
+        ? this.prisma.disbursement.groupBy({
+            by: ['tenantId', 'status'],
+            where: { tenantId: { in: tenantIds }, agentId: null },
+            _sum: { amountUgx: true },
+            _count: { _all: true },
+          })
+        : [],
+    ])
+    const billingMap = new Map<string, (typeof billingByTenant)[number]>()
+    billingByTenant.forEach((item) => {
+      billingMap.set(item.tenantId, item)
+    })
+    const withdrawalMap = new Map<string, { pendingUgx: number; completedUgx: number; failedCount: number; pendingCount: number }>()
+    withdrawalByTenant.forEach((item) => {
+      const current = withdrawalMap.get(item.tenantId) ?? { pendingUgx: 0, completedUgx: 0, failedCount: 0, pendingCount: 0 }
+      if ([DisbursementStatus.PENDING, DisbursementStatus.PENDING_APPROVAL, DisbursementStatus.PENDING_NUMBER_APPROVAL, DisbursementStatus.FLAGGED_FOR_REVIEW, DisbursementStatus.PROCESSING].includes(item.status)) {
+        current.pendingUgx += item._sum.amountUgx ?? 0
+        current.pendingCount += item._count._all
+      }
+      if (item.status === DisbursementStatus.COMPLETED) current.completedUgx += item._sum.amountUgx ?? 0
+      if (item.status === DisbursementStatus.FAILED || item.status === DisbursementStatus.REVERSED) current.failedCount += item._count._all
+      withdrawalMap.set(item.tenantId, current)
     })
 
     return {
@@ -53,6 +96,22 @@ export class TenantsService {
         createdAt: tenant.createdAt,
         updatedAt: tenant.updatedAt,
         wallet: tenant.wallets[0] ?? null,
+        status: {
+          accountActive: tenant.tenantSettings?.accountActive ?? true,
+          fraudHold: tenant.tenantSettings?.fraudHold ?? false,
+          kycCompleted: tenant.tenantSettings?.kycCompleted ?? true,
+        },
+        earnings: {
+          grossSalesUgx: billingMap.get(tenant.id)?._sum.grossAmountUgx ?? 0,
+          platformFeesUgx: billingMap.get(tenant.id)?._sum.feeAmountUgx ?? 0,
+          netEarningsUgx: billingMap.get(tenant.id)?._sum.netAmountUgx ?? 0,
+          pendingWithdrawalUgx: withdrawalMap.get(tenant.id)?.pendingUgx ?? 0,
+          completedWithdrawalUgx: withdrawalMap.get(tenant.id)?.completedUgx ?? 0,
+          failedWithdrawalCount: withdrawalMap.get(tenant.id)?.failedCount ?? 0,
+          pendingWithdrawalCount: withdrawalMap.get(tenant.id)?.pendingCount ?? 0,
+        },
+        payoutNumbers: tenant.payoutNumbers,
+        payoutNumberChangeRequests: tenant.payoutNumberChangeRequests,
         counts: tenant._count,
       })),
     }

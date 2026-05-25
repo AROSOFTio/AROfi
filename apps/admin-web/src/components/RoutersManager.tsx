@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   AdminSessionResponse,
   HotspotOverviewResponse,
@@ -95,6 +96,7 @@ function parseHosts(value: string) {
 }
 
 export default function RoutersManager() {
+  const searchParams = useSearchParams()
   const [overview, setOverview] = useState<RouterOverviewResponse | null>(null)
   const [hotspots, setHotspots] = useState<HotspotOverviewResponse | null>(null)
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
@@ -166,7 +168,12 @@ export default function RoutersManager() {
       setTenants(tenantData.items)
       setSession(sessionData)
 
-      const defaultTenantId = isVendorWorkspace(sessionData.user) ? sessionData.user.tenantId ?? '' : tenantData.items[0]?.id ?? ''
+      const requestedTenantId = searchParams.get('tenantId')
+      const defaultTenantId = isVendorWorkspace(sessionData.user)
+        ? sessionData.user.tenantId ?? ''
+        : tenantData.items.some((tenant) => tenant.id === requestedTenantId)
+          ? requestedTenantId ?? ''
+          : tenantData.items[0]?.id ?? ''
       setGroupForm((previous) => (previous.tenantId ? previous : { ...previous, tenantId: defaultTenantId }))
       setRouterForm((previous) => (previous.tenantId ? previous : { ...previous, tenantId: defaultTenantId }))
 
