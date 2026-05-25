@@ -63,6 +63,11 @@ enum BillingTransactionStatus {
   REVERSED
 }
 
+enum FeeSettingSource {
+  GLOBAL_DEFAULT
+  TENANT_OVERRIDE
+}
+
 enum PaymentProvider {
   MTN_MOMO_DIRECT
   AIRTEL_MONEY_DIRECT
@@ -192,6 +197,7 @@ enum DisbursementMethod {
 }
 
 enum DisbursementStatus {
+  PENDING_APPROVAL
   PENDING
   PROCESSING
   COMPLETED
@@ -374,6 +380,31 @@ model Tenant {
   payoutNumbers       TenantPayoutNumber[]
   payoutNumberChangeRequests TenantPayoutNumberChangeRequest[]
   disconnectionAttempts DisconnectionAttempt[]
+}
+
+model PlatformSetting {
+  id                         String   @id @default("global")
+  mobileMoneyFeeBps          Int      @default(700)
+  voucherFeeBps              Int      @default(200)
+  minimumWithdrawalUgx       Int      @default(0)
+  withdrawalFeeBps           Int      @default(0)
+  withdrawalFlatFeeUgx       Int      @default(0)
+  requireWithdrawalApproval  Boolean  @default(false)
+  maxPayoutNumbers           Int      @default(2)
+  allowedPaymentNetworks     PaymentNetwork[] @default([MTN])
+  mtnCollectionProvider      PaymentProvider @default(MTN_MOMO_DIRECT)
+  airtelCollectionProvider   PaymentProvider @default(AGGREGATOR)
+  mtnDisbursementProvider    PaymentProvider @default(MTN_MOMO_DIRECT)
+  airtelDisbursementProvider PaymentProvider @default(AGGREGATOR)
+  routerAutoConnectEnabled   Boolean  @default(true)
+  captivePortalFallbackMessage String @default("Payment confirmed, but automatic connection failed. Tap Connect Now or open your session.")
+  supportPhone               String?
+  supportEmail               String?
+  supportUrl                 String?
+  voucherTemplateDefaultStyle String  @default("signal")
+  auditLoggingEnabled        Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 }
 
 model Role {
@@ -804,6 +835,8 @@ model BillingTransaction {
   grossAmountUgx      Int
   feeAmountUgx        Int                      @default(0)
   netAmountUgx        Int                      @default(0)
+  feeBasisPoints      Int                      @default(0)
+  feeSource           FeeSettingSource?
   customerReference   String?
   externalReference   String?                  @unique
   paymentProvider     String?
@@ -833,6 +866,8 @@ model LedgerTransaction {
   grossAmountUgx      Int                  @default(0)
   feeAmountUgx        Int                  @default(0)
   netAmountUgx        Int                  @default(0)
+  feeBasisPoints      Int                  @default(0)
+  feeSource           FeeSettingSource?
   sourceType          String?
   sourceId            String?
   metadata            Json?
@@ -1143,6 +1178,20 @@ model TenantSetting {
   id                      String   @id @default(uuid())
   tenantId                String   @unique
   tenant                  Tenant   @relation(fields: [tenantId], references: [id])
+  tenantMobileMoneyFeeBps Int?
+  tenantVoucherFeeBps     Int?
+  businessName            String?
+  supportPhone            String?
+  supportEmail            String?
+  logoUrl                 String?
+  brandColor              String?
+  portalTemplate          String?
+  withdrawalSecretRequired Boolean @default(true)
+  routerAutoConnectEnabled Boolean?
+  routerOnboardingPreferences Json?
+  voucherPrintDefaultTemplate String?
+  termsAcceptedAt         DateTime?
+  termsAcceptedByUserId   String?
   redeemableWhenGenerated Boolean  @default(true)
   allowDeviceReset        Boolean  @default(false)
   maxResetsPerActivation  Int      @default(0)

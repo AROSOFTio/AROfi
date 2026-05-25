@@ -20,7 +20,7 @@ import { VoucherCodeService } from './voucher-code.service'
 import PDFDocument = require('pdfkit')
 import * as QRCode from 'qrcode'
 
-type VoucherPdfTemplate = 'emerald' | 'midnight' | 'royal' | 'sunrise' | 'mono'
+type VoucherPdfTemplate = 'signal' | 'wave' | 'receipt' | 'agent' | 'thermal'
 
 const voucherPdfTemplates: Record<
   VoucherPdfTemplate,
@@ -33,40 +33,40 @@ const voucherPdfTemplates: Record<
     ink: string
   }
 > = {
-  emerald: {
-    label: 'Emerald Premium',
+  signal: {
+    label: 'Signal Card',
     accent: '#10B981',
     accentDark: '#047857',
     background: '#FFFFFB',
     muted: '#64748B',
     ink: '#0F172A',
   },
-  midnight: {
-    label: 'Midnight Luxe',
+  wave: {
+    label: 'Wave Ticket',
     accent: '#38BDF8',
     accentDark: '#075985',
     background: '#FFFFFB',
     muted: '#475569',
     ink: '#020617',
   },
-  royal: {
-    label: 'Royal Blue',
+  receipt: {
+    label: 'Clean Receipt',
     accent: '#2563EB',
     accentDark: '#1E3A8A',
     background: '#FFFFFB',
     muted: '#64748B',
     ink: '#0F172A',
   },
-  sunrise: {
-    label: 'Sunrise Gold',
+  agent: {
+    label: 'Agent Strip',
     accent: '#F59E0B',
     accentDark: '#92400E',
     background: '#FFFFFB',
     muted: '#78716C',
     ink: '#1C1917',
   },
-  mono: {
-    label: 'Clean Mono',
+  thermal: {
+    label: 'Mini Thermal',
     accent: '#111827',
     accentDark: '#030712',
     background: '#FFFFFB',
@@ -969,7 +969,19 @@ export class VouchersService {
 
   private resolveVoucherPdfTemplate(templateId?: string): VoucherPdfTemplate {
     const normalized = (templateId ?? '').toLowerCase()
-    return normalized in voucherPdfTemplates ? (normalized as VoucherPdfTemplate) : 'emerald'
+    const aliases: Record<string, VoucherPdfTemplate> = {
+      emerald: 'signal',
+      midnight: 'wave',
+      royal: 'receipt',
+      sunrise: 'agent',
+      mono: 'thermal',
+      'signal-card': 'signal',
+      'wave-ticket': 'wave',
+      'clean-receipt': 'receipt',
+      'agent-strip': 'agent',
+      'mini-thermal': 'thermal',
+    }
+    return normalized in voucherPdfTemplates ? (normalized as VoucherPdfTemplate) : aliases[normalized] ?? 'signal'
   }
 
   private drawVoucherCard(

@@ -6,6 +6,7 @@ import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { BillingService } from './billing.service'
+import type { BillingReportFilters } from './billing.service'
 import { AdjustWalletDto } from './dto/adjust-wallet.dto'
 import { RecordMobileMoneySaleDto } from './dto/record-mobile-money-sale.dto'
 
@@ -19,23 +20,23 @@ export class BillingController {
 
   @RequirePermissions(PERMISSIONS.billingRead)
   @Get('overview')
-  getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+  getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.billingService.getOverview(scopedTenantId)
+    return this.billingService.getOverview(scopedTenantId, query)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
   @Get('sales')
-  getSales(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+  getSales(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.billingService.getSales(scopedTenantId)
+    return this.billingService.getSales(scopedTenantId, query)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
   @Get('transactions')
-  getTransactions(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+  getTransactions(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.billingService.getTransactions(scopedTenantId)
+    return this.billingService.getTransactions(scopedTenantId, query)
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)

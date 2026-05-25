@@ -4,13 +4,24 @@ import { FeeEngineService } from './fee-engine.service'
 
 describe('BillingPostingService', () => {
   let service: BillingPostingService
+  let feeEngine: FeeEngineService
 
   beforeEach(() => {
-    service = new BillingPostingService(new FeeEngineService())
+    feeEngine = {
+      calculateBreakdown: jest.fn().mockResolvedValue({
+        grossAmountUgx: 1000,
+        feeAmountUgx: 20,
+        netAmountUgx: 980,
+        feeBasisPoints: 200,
+        feeSource: 'GLOBAL_DEFAULT',
+        basisPoints: 200,
+      }),
+    } as unknown as FeeEngineService
+    service = new BillingPostingService(feeEngine)
   })
 
-  it('creates balanced ledger entries for voucher sales', () => {
-    const posting = service.buildSalePosting({
+  it('creates balanced ledger entries for voucher sales', async () => {
+    const posting = await service.buildSalePosting({
       tenantId: 'tenant-1',
       walletId: 'wallet-1',
       channel: BillingChannel.VOUCHER,
@@ -28,6 +39,8 @@ describe('BillingPostingService', () => {
     expect(posting.feeAmountUgx).toBe(20)
     expect(posting.netAmountUgx).toBe(980)
     expect(posting.walletDeltaUgx).toBe(980)
+    expect(posting.feeBasisPoints).toBe(200)
+    expect(posting.feeSource).toBe('GLOBAL_DEFAULT')
     expect(totalDebits).toBe(totalCredits)
   })
 

@@ -1,17 +1,21 @@
-export default function SettingsPage() {
+import SettingsManager from '@/components/SettingsManager'
+import type { AdminSessionResponse } from '@/lib/admin-types'
+import { fetchApi } from '@/lib/api'
+
+export default async function SettingsPage() {
+  const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  const isDevAdmin = Boolean(session?.user.permissions.includes('ALL'))
+
+  const [platformSettings, tenantSettings] = await Promise.all([
+    isDevAdmin ? fetchApi('/system/settings') : Promise.resolve(null),
+    session?.user.tenantId ? fetchApi('/system/tenant-settings') : Promise.resolve(null),
+  ])
+
   return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Production configuration is controlled through audited environment variables and tenant settings.</p>
-        </div>
-      </div>
-      <div className="card">
-        <div style={{ padding: 20, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          Editable platform settings are hidden until backed by validated API endpoints and audit logging. Configure payment, RADIUS, router, and security values through deployment environment variables.
-        </div>
-      </div>
-    </>
+    <SettingsManager
+      user={session?.user ?? { permissions: [] }}
+      initialPlatformSettings={platformSettings as never}
+      initialTenantSettings={tenantSettings as never}
+    />
   )
 }

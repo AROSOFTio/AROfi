@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { BillingChannel, LedgerDirection, LedgerTransactionType } from '@prisma/client'
+import { BillingChannel, LedgerDirection, LedgerTransactionType, Prisma } from '@prisma/client'
 import { LEDGER_ACCOUNTS } from './billing.constants'
 import { FeeEngineService } from './fee-engine.service'
 
@@ -9,6 +9,7 @@ type SalePostingInput = {
   channel: BillingChannel
   grossAmountUgx: number
   description: string
+  tx?: Prisma.TransactionClient
 }
 
 type WalletAdjustmentPostingInput = {
@@ -46,14 +47,21 @@ type DisbursementPostingInput = {
 export class BillingPostingService {
   constructor(private readonly feeEngineService: FeeEngineService) {}
 
-  buildSalePosting(input: SalePostingInput) {
-    const breakdown = this.feeEngineService.calculateBreakdown(input.channel, input.grossAmountUgx)
+  async buildSalePosting(input: SalePostingInput) {
+    const breakdown = await this.feeEngineService.calculateBreakdown(
+      input.channel,
+      input.grossAmountUgx,
+      input.tenantId,
+      input.tx,
+    )
 
     return {
       ledgerType: LedgerTransactionType.SALE,
       description: input.description,
       channel: input.channel,
       walletDeltaUgx: breakdown.netAmountUgx,
+      feeBasisPoints: breakdown.feeBasisPoints,
+      feeSource: breakdown.feeSource,
       ...breakdown,
       entries: [
         {

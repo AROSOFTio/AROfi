@@ -283,11 +283,24 @@ export type BillingOverviewResponse = {
     completedTransactions: number
     pendingTransactions: number
     totalSalesUgx: number
+    grossSalesUgx?: number
     mobileMoneyGrossUgx: number
+    mobileMoneyFeesUgx?: number
+    mobileMoneyNetUgx?: number
     voucherGrossUgx: number
+    voucherFeesUgx?: number
+    voucherNetUgx?: number
     platformFeesUgx: number
+    netEarningsUgx?: number
     vendorNetUgx: number
     walletBalanceUgx: number
+    withdrawableBalanceUgx?: number
+    pendingWithdrawalUgx?: number
+    completedWithdrawalUgx?: number
+    failedWithdrawalUgx?: number
+    activeUsers?: number
+    onlineRouters?: number
+    dataUsedMb?: number
   }
   wallets: Array<{
     id: string
@@ -296,6 +309,14 @@ export type BillingOverviewResponse = {
     tenant: TenantSummary
   }>
   recentTransactions: BillingTransactionItem[]
+  chart?: Array<{
+    date: string
+    grossSalesUgx: number
+    platformFeesUgx: number
+    netEarningsUgx: number
+    mobileMoneyGrossUgx: number
+    voucherGrossUgx: number
+  }>
   recentLedgerEntries: Array<{
     id: string
     accountCode: string

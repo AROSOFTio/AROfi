@@ -1,18 +1,26 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import {
   AgentStatus,
+  AuditSeverity,
   FeatureLimit,
+  PaymentNetwork,
+  PaymentProvider,
   PackageStatus,
+  Prisma,
   SessionStatus,
   SupportTicketPriority,
   SupportTicketStatus,
 } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
+import type { AuthenticatedAdminUser } from '../auth/auth.module'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto'
 import { UpdateFeatureLimitDto } from './dto/update-feature-limit.dto'
+import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto'
 import { UpdateSupportTicketDto } from './dto/update-support-ticket.dto'
+import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto'
 
 type FeatureUsageSnapshot = {
   packages: number
@@ -27,6 +35,187 @@ type FeatureUsageSnapshot = {
 @Injectable()
 export class SystemService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getPlatformSettings() {
+    const settings = await this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+    })
+
+    return this.presentPlatformSettings(settings)
+  }
+
+  async updatePlatformSettings(dto: UpdatePlatformSettingsDto, actor: AuthenticatedAdminUser) {
+    const data: Prisma.PlatformSettingUpdateInput = {}
+
+    if (dto.mobileMoneyFeePercent !== undefined) data.mobileMoneyFeeBps = this.percentToBps(dto.mobileMoneyFeePercent, 'mobileMoneyFeePercent')
+    if (dto.voucherFeePercent !== undefined) data.voucherFeeBps = this.percentToBps(dto.voucherFeePercent, 'voucherFeePercent')
+    if (dto.minimumWithdrawalUgx !== undefined) data.minimumWithdrawalUgx = this.nonNegativeInt(dto.minimumWithdrawalUgx, 'minimumWithdrawalUgx')
+    if (dto.withdrawalFeePercent !== undefined) data.withdrawalFeeBps = this.percentToBps(dto.withdrawalFeePercent, 'withdrawalFeePercent')
+    if (dto.withdrawalFlatFeeUgx !== undefined) data.withdrawalFlatFeeUgx = this.nonNegativeInt(dto.withdrawalFlatFeeUgx, 'withdrawalFlatFeeUgx')
+    if (dto.requireWithdrawalApproval !== undefined) data.requireWithdrawalApproval = dto.requireWithdrawalApproval
+    if (dto.maxPayoutNumbers !== undefined) data.maxPayoutNumbers = this.positiveInt(dto.maxPayoutNumbers, 'maxPayoutNumbers')
+    if (dto.allowedPaymentNetworks !== undefined) data.allowedPaymentNetworks = this.sanitizeNetworks(dto.allowedPaymentNetworks)
+    if (dto.mtnCollectionProvider !== undefined) data.mtnCollectionProvider = this.sanitizeProvider(dto.mtnCollectionProvider)
+    if (dto.airtelCollectionProvider !== undefined) data.airtelCollectionProvider = this.sanitizeProvider(dto.airtelCollectionProvider)
+    if (dto.mtnDisbursementProvider !== undefined) data.mtnDisbursementProvider = this.sanitizeProvider(dto.mtnDisbursementProvider)
+    if (dto.airtelDisbursementProvider !== undefined) data.airtelDisbursementProvider = this.sanitizeProvider(dto.airtelDisbursementProvider)
+    if (dto.routerAutoConnectEnabled !== undefined) data.routerAutoConnectEnabled = dto.routerAutoConnectEnabled
+    if (dto.captivePortalFallbackMessage !== undefined) data.captivePortalFallbackMessage = dto.captivePortalFallbackMessage.trim()
+    if (dto.supportPhone !== undefined) data.supportPhone = this.nullableTrim(dto.supportPhone)
+    if (dto.supportEmail !== undefined) data.supportEmail = this.nullableTrim(dto.supportEmail)
+    if (dto.supportUrl !== undefined) data.supportUrl = this.nullableTrim(dto.supportUrl)
+    if (dto.voucherTemplateDefaultStyle !== undefined) data.voucherTemplateDefaultStyle = dto.voucherTemplateDefaultStyle.trim()
+    if (dto.auditLoggingEnabled !== undefined) data.auditLoggingEnabled = dto.auditLoggingEnabled
+
+    await this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+    })
+
+    const settings = await this.prisma.platformSetting.update({
+      where: { id: PLATFORM_SETTINGS_ID },
+      data,
+    })
+
+    await this.writeAudit({
+      actor,
+      action: 'platform.settings.updated',
+      entity: 'PlatformSetting',
+      entityId: settings.id,
+      details: data,
+    })
+
+    return this.presentPlatformSettings(settings)
+  }
+
+  async getTenantSettings(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { tenantSettings: true, payoutNumbers: true, payoutProfile: true },
+    })
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found')
+    }
+
+    const settings =
+      tenant.tenantSettings ??
+      (await this.prisma.tenantSetting.create({
+        data: { tenantId },
+      }))
+
+    return {
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        domain: tenant.domain,
+        logoUrl: tenant.logoUrl,
+        brandColor: tenant.brandColor,
+        portalTemplate: tenant.portalTemplate,
+        supportPhone: tenant.supportPhone,
+        supportEmail: tenant.supportEmail,
+      },
+      settings: {
+        ...settings,
+        tenantMobileMoneyFeePercent: this.bpsToPercent(settings.tenantMobileMoneyFeeBps),
+        tenantVoucherFeePercent: this.bpsToPercent(settings.tenantVoucherFeeBps),
+        withdrawalSecretConfigured: Boolean(tenant.payoutProfile),
+        payoutNumbers: tenant.payoutNumbers,
+      },
+    }
+  }
+
+  async updateTenantSettings(tenantId: string, dto: UpdateTenantSettingsDto, actor: AuthenticatedAdminUser, canManageFees: boolean) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found')
+    }
+
+    const tenantData: Prisma.TenantUpdateInput = {}
+    const settingsData: Prisma.TenantSettingUpdateInput = {}
+
+    if (dto.businessName !== undefined) {
+      const businessName = dto.businessName.trim()
+      tenantData.name = businessName
+      settingsData.businessName = businessName
+    }
+    if (dto.logoUrl !== undefined) {
+      tenantData.logoUrl = this.nullableTrim(dto.logoUrl)
+      settingsData.logoUrl = this.nullableTrim(dto.logoUrl)
+    }
+    if (dto.brandColor !== undefined) {
+      tenantData.brandColor = this.nullableTrim(dto.brandColor)
+      settingsData.brandColor = this.nullableTrim(dto.brandColor)
+    }
+    if (dto.portalTemplate !== undefined) {
+      tenantData.portalTemplate = dto.portalTemplate.trim()
+      settingsData.portalTemplate = dto.portalTemplate.trim()
+    }
+    if (dto.supportPhone !== undefined) {
+      tenantData.supportPhone = this.nullableTrim(dto.supportPhone)
+      settingsData.supportPhone = this.nullableTrim(dto.supportPhone)
+    }
+    if (dto.supportEmail !== undefined) {
+      tenantData.supportEmail = this.nullableTrim(dto.supportEmail)
+      settingsData.supportEmail = this.nullableTrim(dto.supportEmail)
+    }
+
+    if (canManageFees) {
+      if (dto.tenantMobileMoneyFeePercent !== undefined) {
+        settingsData.tenantMobileMoneyFeeBps =
+          dto.tenantMobileMoneyFeePercent === null ? null : this.percentToBps(dto.tenantMobileMoneyFeePercent, 'tenantMobileMoneyFeePercent')
+      }
+      if (dto.tenantVoucherFeePercent !== undefined) {
+        settingsData.tenantVoucherFeeBps =
+          dto.tenantVoucherFeePercent === null ? null : this.percentToBps(dto.tenantVoucherFeePercent, 'tenantVoucherFeePercent')
+      }
+    }
+
+    if (dto.routerAutoConnectEnabled !== undefined) settingsData.routerAutoConnectEnabled = dto.routerAutoConnectEnabled
+    if (dto.routerOnboardingPreferences !== undefined) settingsData.routerOnboardingPreferences = dto.routerOnboardingPreferences as Prisma.InputJsonValue
+    if (dto.voucherPrintDefaultTemplate !== undefined) settingsData.voucherPrintDefaultTemplate = this.nullableTrim(dto.voucherPrintDefaultTemplate)
+    if (dto.termsAccepted) {
+      settingsData.termsAcceptedAt = new Date()
+      settingsData.termsAcceptedByUserId = actor.id
+    }
+    if (dto.redeemableWhenGenerated !== undefined) settingsData.redeemableWhenGenerated = dto.redeemableWhenGenerated
+    if (dto.allowDeviceReset !== undefined) settingsData.allowDeviceReset = dto.allowDeviceReset
+    if (dto.maxResetsPerActivation !== undefined) settingsData.maxResetsPerActivation = this.nonNegativeInt(dto.maxResetsPerActivation, 'maxResetsPerActivation')
+    if (dto.allowUnboundCaptiveAccess !== undefined) settingsData.allowUnboundCaptiveAccess = dto.allowUnboundCaptiveAccess
+    if (dto.antiTetheringRuleEnabled !== undefined) settingsData.antiTetheringRuleEnabled = dto.antiTetheringRuleEnabled
+    if (dto.supportText !== undefined) settingsData.supportText = this.nullableTrim(dto.supportText)
+
+    await this.prisma.$transaction(async (tx) => {
+      if (Object.keys(tenantData).length > 0) {
+        await tx.tenant.update({ where: { id: tenantId }, data: tenantData })
+      }
+      await tx.tenantSetting.upsert({
+        where: { tenantId },
+        update: {},
+        create: { tenantId },
+      })
+      await tx.tenantSetting.update({
+        where: { tenantId },
+        data: settingsData,
+      })
+      await this.writeAudit(
+        {
+          actor,
+          tenantId,
+          action: 'tenant.settings.updated',
+          entity: 'TenantSetting',
+          entityId: tenantId,
+          details: { tenantData, settingsData },
+        },
+        tx,
+      )
+    })
+
+    return this.getTenantSettings(tenantId)
+  }
 
   async getOverview(tenantId?: string) {
     const [audit, featureLimits, support] = await Promise.all([
@@ -502,5 +691,122 @@ export class SystemService {
     }
 
     return `SUP-${Date.now()}-${randomUUID().slice(0, 4).toUpperCase()}`
+  }
+
+  private presentPlatformSettings(settings: {
+    id: string
+    mobileMoneyFeeBps: number
+    voucherFeeBps: number
+    minimumWithdrawalUgx: number
+    withdrawalFeeBps: number
+    withdrawalFlatFeeUgx: number
+    requireWithdrawalApproval: boolean
+    maxPayoutNumbers: number
+    allowedPaymentNetworks: PaymentNetwork[]
+    mtnCollectionProvider: PaymentProvider
+    airtelCollectionProvider: PaymentProvider
+    mtnDisbursementProvider: PaymentProvider
+    airtelDisbursementProvider: PaymentProvider
+    routerAutoConnectEnabled: boolean
+    captivePortalFallbackMessage: string
+    supportPhone: string | null
+    supportEmail: string | null
+    supportUrl: string | null
+    voucherTemplateDefaultStyle: string
+    auditLoggingEnabled: boolean
+    updatedAt: Date
+  }) {
+    return {
+      ...settings,
+      mobileMoneyFeePercent: this.bpsToPercent(settings.mobileMoneyFeeBps),
+      voucherFeePercent: this.bpsToPercent(settings.voucherFeeBps),
+      withdrawalFeePercent: this.bpsToPercent(settings.withdrawalFeeBps),
+    }
+  }
+
+  private percentToBps(value: number, field: string) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) {
+      throw new BadRequestException(`${field} must be between 0 and 100`)
+    }
+    return Math.round(numeric * 100)
+  }
+
+  private bpsToPercent(value?: number | null) {
+    return value === null || value === undefined ? null : value / 100
+  }
+
+  private nonNegativeInt(value: number, field: string) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      throw new BadRequestException(`${field} must be zero or greater`)
+    }
+    return Math.round(numeric)
+  }
+
+  private positiveInt(value: number, field: string) {
+    const numeric = this.nonNegativeInt(value, field)
+    if (numeric < 1) {
+      throw new BadRequestException(`${field} must be at least 1`)
+    }
+    return numeric
+  }
+
+  private sanitizeNetworks(networks: PaymentNetwork[]) {
+    const allowed = networks.filter((network) => network === PaymentNetwork.MTN || network === PaymentNetwork.AIRTEL)
+    return Array.from(new Set(allowed))
+  }
+
+  private sanitizeProvider(provider: PaymentProvider) {
+    if (!Object.values(PaymentProvider).includes(provider)) {
+      throw new BadRequestException('Unsupported provider mode')
+    }
+    return provider
+  }
+
+  private nullableTrim(value?: string | null) {
+    const trimmed = value?.trim()
+    return trimmed ? trimmed : null
+  }
+
+  private async writeAudit(
+    input: {
+      actor: AuthenticatedAdminUser
+      tenantId?: string | null
+      action: string
+      entity: string
+      entityId?: string
+      details?: unknown
+      severity?: AuditSeverity
+    },
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma
+    const platformSettings = await client.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+    })
+    if (!platformSettings.auditLoggingEnabled) {
+      return
+    }
+
+    await client.auditLog.create({
+      data: {
+        tenantId: input.tenantId ?? null,
+        userId: input.actor.id,
+        actorName: input.actor.displayName,
+        actorEmail: input.actor.email,
+        action: input.action,
+        entity: input.entity,
+        entityId: input.entityId,
+        severity: input.severity ?? AuditSeverity.INFO,
+        details: this.toJsonValue(input.details ?? {}),
+      },
+    })
+  }
+
+  private toJsonValue(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue
   }
 }

@@ -19,8 +19,7 @@ export class AirtelMoneyCollectionService implements PaymentCollectionProvider {
       throw new ServiceUnavailableException('Airtel payments are temporarily unavailable. Please try MTN or contact support.')
     }
 
-    // TODO: Wire the official Airtel Uganda token endpoint once live/sandbox endpoint details are supplied.
-    throw new ServiceUnavailableException('Airtel Money collection endpoint details are not configured')
+    throw new ServiceUnavailableException('Airtel Direct is not configured. Route Airtel through the active aggregator provider.')
   }
 
   async collectPayment(_input: CollectPaymentInput): Promise<PaymentProviderResult> {
@@ -28,24 +27,15 @@ export class AirtelMoneyCollectionService implements PaymentCollectionProvider {
       throw new ServiceUnavailableException('Airtel payments are temporarily unavailable. Please try MTN or contact support.')
     }
 
-    // TODO: Implement Airtel Money collection API call using AIRTEL_MONEY_COLLECTION_BASE_URL.
-    throw new ServiceUnavailableException('Airtel Money collection endpoint details are not configured')
+    throw new ServiceUnavailableException('Airtel Direct is not configured. Route Airtel through the active aggregator provider.')
   }
 
-  async getPaymentStatus(referenceId: string): Promise<PaymentProviderResult> {
+  async getPaymentStatus(_referenceId: string): Promise<PaymentProviderResult> {
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException('Airtel payments are temporarily unavailable. Please try MTN or contact support.')
     }
 
-    // TODO: Implement Airtel Money transaction status lookup once endpoints are confirmed.
-    return {
-      status: 'OK',
-      statusCode: 1,
-      transactionStatus: 'PENDING',
-      transactionReference: referenceId,
-      rawRequest: referenceId,
-      rawResponse: '{}',
-    }
+    throw new ServiceUnavailableException('Airtel Direct is not configured. Route Airtel through the active aggregator provider.')
   }
 
   async handleWebhook(payload: Record<string, unknown>): Promise<ProviderWebhookResult> {

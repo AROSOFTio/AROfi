@@ -42,7 +42,7 @@ describe('RoutersService', () => {
     expect(createArgs.data.nasClient.create).toMatchObject({
       tenantId: 'tenant-1',
       nasname: '192.0.2.10',
-      secret: 'change_me_radius_secret',
+      secret: 'bootstrap-only-use-router-specific-secrets',
       type: 'mikrotik',
       enabled: true,
     })
@@ -203,7 +203,7 @@ describe('RoutersService', () => {
           routerId: 'router-1',
           nasname: '102.209.111.77',
           shortname: 'shop-router',
-          secret: 'change_me_radius_secret',
+          secret: 'bootstrap-only-use-router-specific-secrets',
           enabled: true,
         }),
       }),

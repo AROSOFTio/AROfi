@@ -1,7 +1,7 @@
 import { BillingChannel } from '@prisma/client'
 
 export const BILLING_FEE_BASIS_POINTS: Record<BillingChannel, number> = {
-  [BillingChannel.MOBILE_MONEY]: 800,
+  [BillingChannel.MOBILE_MONEY]: 700,
   [BillingChannel.VOUCHER]: 200,
   [BillingChannel.WALLET_ADJUSTMENT]: 0,
   [BillingChannel.FLOAT_TRANSFER]: 0,
@@ -9,6 +9,8 @@ export const BILLING_FEE_BASIS_POINTS: Record<BillingChannel, number> = {
   [BillingChannel.DISBURSEMENT]: 0,
   [BillingChannel.SYSTEM]: 0,
 }
+
+export const PLATFORM_SETTINGS_ID = 'global'
 
 export const LEDGER_ACCOUNTS = {
   salesClearing: 'sales_clearing',

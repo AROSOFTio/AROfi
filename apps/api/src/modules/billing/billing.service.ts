@@ -8,6 +8,7 @@ import {
   LedgerTransactionType,
   Prisma,
   WalletOwnerType,
+  PaymentNetwork,
 } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
@@ -29,6 +30,16 @@ type RecordSaleInput = {
   externalReference?: string
   paymentProvider?: string
   metadata?: Prisma.InputJsonValue
+}
+
+export type BillingReportFilters = {
+  from?: string
+  to?: string
+  channel?: BillingChannel
+  status?: BillingTransactionStatus
+  packageId?: string
+  routerId?: string
+  paymentNetwork?: PaymentNetwork
 }
 
 @Injectable()
@@ -97,7 +108,7 @@ export class BillingService {
       description: 'Mobile money package sale',
       customerReference: dto.customerReference,
       externalReference: dto.externalReference,
-      paymentProvider: dto.paymentProvider ?? 'Yo! Uganda',
+      paymentProvider: dto.paymentProvider ?? 'Mobile Money',
       metadata: {
         network: dto.network ?? 'unknown',
       } as Prisma.InputJsonValue,
@@ -155,12 +166,13 @@ export class BillingService {
 
   async recordSaleInTransaction(tx: Prisma.TransactionClient, input: RecordSaleInput) {
     const wallet = await this.findOrCreateTenantWallet(tx, input.tenantId)
-    const posting = this.billingPostingService.buildSalePosting({
+    const posting = await this.billingPostingService.buildSalePosting({
       tenantId: input.tenantId,
       walletId: wallet.id,
       channel: input.channel,
       grossAmountUgx: input.grossAmountUgx,
       description: input.description,
+      tx,
     })
 
     const ledgerTransaction = await tx.ledgerTransaction.create({
@@ -174,6 +186,8 @@ export class BillingService {
         grossAmountUgx: posting.grossAmountUgx,
         feeAmountUgx: posting.feeAmountUgx,
         netAmountUgx: posting.netAmountUgx,
+        feeBasisPoints: posting.feeBasisPoints,
+        feeSource: posting.feeSource,
         sourceType: 'BillingTransaction',
         sourceId: input.externalReference,
         metadata: input.metadata,
@@ -206,6 +220,8 @@ export class BillingService {
         grossAmountUgx: posting.grossAmountUgx,
         feeAmountUgx: posting.feeAmountUgx,
         netAmountUgx: posting.netAmountUgx,
+        feeBasisPoints: posting.feeBasisPoints,
+        feeSource: posting.feeSource,
         customerReference: input.customerReference,
         externalReference: input.externalReference,
         paymentProvider: input.paymentProvider,
@@ -281,10 +297,12 @@ export class BillingService {
     })
   }
 
-  async getOverview(tenantId?: string) {
-    const [transactions, wallets, ledgerEntries] = await Promise.all([
+  async getOverview(tenantId?: string, filters: BillingReportFilters = {}) {
+    const transactionWhere = this.buildTransactionWhere(tenantId, filters)
+    const dateWhere = this.buildDateWhere(filters)
+    const [transactions, wallets, ledgerEntries, disbursements, activeUsers, onlineRouters, dataUsage] = await Promise.all([
       this.prisma.billingTransaction.findMany({
-        where: this.buildTenantWhere(tenantId),
+        where: transactionWhere,
         include: this.transactionInclude,
         orderBy: { createdAt: 'desc' },
         take: 200,
@@ -306,7 +324,10 @@ export class BillingService {
         take: 200,
       }),
       this.prisma.ledgerEntry.findMany({
-        where: this.buildTenantWhere(tenantId),
+        where: {
+          ...(this.buildTenantWhere(tenantId) ?? {}),
+          ...(dateWhere.createdAt ? { createdAt: dateWhere.createdAt } : {}),
+        },
         include: {
           tenant: {
             select: {
@@ -332,6 +353,36 @@ export class BillingService {
         orderBy: { createdAt: 'desc' },
         take: 25,
       }),
+      this.prisma.disbursement.findMany({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          ...(dateWhere.createdAt ? { createdAt: dateWhere.createdAt } : {}),
+        },
+      }),
+      this.prisma.networkSession.count({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          status: 'ACTIVE',
+        },
+      }),
+      this.prisma.router.count({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          status: {
+            in: ['HEALTHY', 'DEGRADED'],
+          },
+        },
+      }),
+      this.prisma.networkSession.aggregate({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          ...(dateWhere.createdAt ? { createdAt: dateWhere.createdAt } : {}),
+        },
+        _sum: {
+          inputOctets: true,
+          outputOctets: true,
+        },
+      }),
     ])
 
     const completedSales = transactions.filter(
@@ -350,6 +401,29 @@ export class BillingService {
     const platformFeesUgx = completedSales.reduce((total, transaction) => total + transaction.feeAmountUgx, 0)
     const vendorNetUgx = completedSales.reduce((total, transaction) => total + transaction.netAmountUgx, 0)
     const walletBalanceUgx = wallets.reduce((total, wallet) => total + wallet.balanceUgx, 0)
+    const mobileMoneyFeesUgx = completedSales
+      .filter((transaction) => transaction.channel === BillingChannel.MOBILE_MONEY)
+      .reduce((total, transaction) => total + transaction.feeAmountUgx, 0)
+    const voucherFeesUgx = completedSales
+      .filter((transaction) => transaction.channel === BillingChannel.VOUCHER)
+      .reduce((total, transaction) => total + transaction.feeAmountUgx, 0)
+    const mobileMoneyNetUgx = completedSales
+      .filter((transaction) => transaction.channel === BillingChannel.MOBILE_MONEY)
+      .reduce((total, transaction) => total + transaction.netAmountUgx, 0)
+    const voucherNetUgx = completedSales
+      .filter((transaction) => transaction.channel === BillingChannel.VOUCHER)
+      .reduce((total, transaction) => total + transaction.netAmountUgx, 0)
+    const pendingWithdrawalUgx = disbursements
+      .filter((item) => item.status === 'PENDING' || item.status === 'PROCESSING')
+      .reduce((total, item) => total + item.amountUgx, 0)
+    const completedWithdrawalUgx = disbursements
+      .filter((item) => item.status === 'COMPLETED')
+      .reduce((total, item) => total + item.amountUgx, 0)
+    const failedWithdrawalUgx = disbursements
+      .filter((item) => item.status === 'FAILED')
+      .reduce((total, item) => total + item.amountUgx, 0)
+    const inputBytes = Number(dataUsage._sum.inputOctets ?? 0n)
+    const outputBytes = Number(dataUsage._sum.outputOctets ?? 0n)
 
     return {
       summary: {
@@ -357,22 +431,37 @@ export class BillingService {
         completedTransactions: transactions.filter((transaction) => transaction.status === BillingTransactionStatus.COMPLETED).length,
         pendingTransactions: transactions.filter((transaction) => transaction.status === BillingTransactionStatus.PENDING).length,
         totalSalesUgx: completedSales.reduce((total, transaction) => total + transaction.grossAmountUgx, 0),
+        grossSalesUgx: completedSales.reduce((total, transaction) => total + transaction.grossAmountUgx, 0),
         mobileMoneyGrossUgx,
+        mobileMoneyFeesUgx,
+        mobileMoneyNetUgx,
         voucherGrossUgx,
+        voucherFeesUgx,
+        voucherNetUgx,
         platformFeesUgx,
+        netEarningsUgx: vendorNetUgx,
         vendorNetUgx,
         walletBalanceUgx,
+        withdrawableBalanceUgx: walletBalanceUgx,
+        pendingWithdrawalUgx,
+        completedWithdrawalUgx,
+        failedWithdrawalUgx,
+        activeUsers,
+        onlineRouters,
+        dataUsedMb: Math.round(((inputBytes + outputBytes) / (1024 * 1024)) * 100) / 100,
       },
       wallets,
       recentTransactions: transactions.slice(0, 10),
       recentLedgerEntries: ledgerEntries,
+      chart: this.groupSalesByDay(completedSales),
+      filters: this.presentFilters(filters),
     }
   }
 
-  async getSales(tenantId?: string) {
+  async getSales(tenantId?: string, filters: BillingReportFilters = {}) {
     const items = await this.prisma.billingTransaction.findMany({
       where: {
-        ...(this.buildTenantWhere(tenantId) ?? {}),
+        ...this.buildTransactionWhere(tenantId, filters),
         type: {
           in: [BillingTransactionType.MOBILE_MONEY_SALE, BillingTransactionType.VOUCHER_SALE],
         },
@@ -387,6 +476,7 @@ export class BillingService {
         totalGrossUgx: items.reduce((total, item) => total + item.grossAmountUgx, 0),
         totalFeesUgx: items.reduce((total, item) => total + item.feeAmountUgx, 0),
         totalNetUgx: items.reduce((total, item) => total + item.netAmountUgx, 0),
+        netEarningsUgx: items.reduce((total, item) => total + item.netAmountUgx, 0),
         mobileMoneyGrossUgx: items
           .filter((item) => item.channel === BillingChannel.MOBILE_MONEY)
           .reduce((total, item) => total + item.grossAmountUgx, 0),
@@ -395,12 +485,14 @@ export class BillingService {
           .reduce((total, item) => total + item.grossAmountUgx, 0),
       },
       items,
+      chart: this.groupSalesByDay(items),
+      filters: this.presentFilters(filters),
     }
   }
 
-  async getTransactions(tenantId?: string) {
+  async getTransactions(tenantId?: string, filters: BillingReportFilters = {}) {
     const items = await this.prisma.billingTransaction.findMany({
-      where: this.buildTenantWhere(tenantId),
+      where: this.buildTransactionWhere(tenantId, filters),
       include: this.transactionInclude,
       orderBy: { createdAt: 'desc' },
     })
@@ -424,11 +516,102 @@ export class BillingService {
         walletBalanceUgx: walletBalanceAggregate._sum.balanceUgx ?? 0,
       },
       items,
+      chart: this.groupSalesByDay(items),
+      filters: this.presentFilters(filters),
     }
   }
 
   private buildTenantWhere(tenantId?: string) {
     return tenantId ? { tenantId } : undefined
+  }
+
+  private buildTransactionWhere(tenantId?: string, filters: BillingReportFilters = {}): Prisma.BillingTransactionWhereInput {
+    const dateWhere = this.buildDateWhere(filters)
+    const paymentWhere: Prisma.PaymentNullableRelationFilter | undefined =
+      filters.paymentNetwork || filters.routerId
+        ? {
+            is: {
+              ...(filters.paymentNetwork ? { network: filters.paymentNetwork } : {}),
+              ...(filters.routerId
+                ? {
+                    metadata: {
+                      path: ['routerId'],
+                      equals: filters.routerId,
+                    },
+                  }
+                : {}),
+            },
+          }
+        : undefined
+
+    return {
+      ...(tenantId ? { tenantId } : {}),
+      ...(dateWhere.createdAt ? { createdAt: dateWhere.createdAt } : {}),
+      ...(filters.channel ? { channel: filters.channel } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.packageId ? { packageId: filters.packageId } : {}),
+      ...(paymentWhere ? { payment: paymentWhere } : {}),
+    }
+  }
+
+  private buildDateWhere(filters: BillingReportFilters): { createdAt?: Prisma.DateTimeFilter } {
+    const createdAt: Prisma.DateTimeFilter = {}
+    const from = filters.from ? new Date(filters.from) : null
+    const to = filters.to ? new Date(filters.to) : null
+    if (from && Number.isFinite(from.getTime())) {
+      createdAt.gte = from
+    }
+    if (to && Number.isFinite(to.getTime())) {
+      createdAt.lte = to
+    }
+    return Object.keys(createdAt).length > 0 ? { createdAt } : {}
+  }
+
+  private groupSalesByDay(items: Array<{ createdAt: Date; grossAmountUgx: number; feeAmountUgx: number; netAmountUgx: number; channel: BillingChannel }>) {
+    const buckets = new Map<string, {
+      date: string
+      grossSalesUgx: number
+      platformFeesUgx: number
+      netEarningsUgx: number
+      mobileMoneyGrossUgx: number
+      voucherGrossUgx: number
+    }>()
+
+    for (const item of items) {
+      const date = item.createdAt.toISOString().slice(0, 10)
+      const bucket = buckets.get(date) ?? {
+        date,
+        grossSalesUgx: 0,
+        platformFeesUgx: 0,
+        netEarningsUgx: 0,
+        mobileMoneyGrossUgx: 0,
+        voucherGrossUgx: 0,
+      }
+      bucket.grossSalesUgx += item.grossAmountUgx
+      bucket.platformFeesUgx += item.feeAmountUgx
+      bucket.netEarningsUgx += item.netAmountUgx
+      if (item.channel === BillingChannel.MOBILE_MONEY) {
+        bucket.mobileMoneyGrossUgx += item.grossAmountUgx
+      }
+      if (item.channel === BillingChannel.VOUCHER) {
+        bucket.voucherGrossUgx += item.grossAmountUgx
+      }
+      buckets.set(date, bucket)
+    }
+
+    return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  private presentFilters(filters: BillingReportFilters) {
+    return {
+      from: filters.from,
+      to: filters.to,
+      channel: filters.channel,
+      status: filters.status,
+      packageId: filters.packageId,
+      routerId: filters.routerId,
+      paymentNetwork: filters.paymentNetwork,
+    }
   }
 
   private async findOrCreateTenantWallet(tx: Prisma.TransactionClient, tenantId: string) {

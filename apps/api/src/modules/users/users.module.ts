@@ -120,6 +120,159 @@ export class UsersService {
     return this.toPublicUser(user)
   }
 
+  async listCustomers(scopedTenantId: string | undefined, filters: { search?: string; from?: string; to?: string }) {
+    const where = {
+      ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+      ...(this.buildDateFilter(filters).createdAt ? { createdAt: this.buildDateFilter(filters).createdAt } : {}),
+      ...(filters.search
+        ? {
+            OR: [
+              { phoneNumber: { contains: filters.search, mode: 'insensitive' as const } },
+              { customerReference: { contains: filters.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    }
+
+    const [payments, sessions, activations] = await Promise.all([
+      this.prisma.payment.findMany({
+        where,
+        include: {
+          package: { select: { id: true, name: true, code: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      this.prisma.networkSession.findMany({
+        where: {
+          ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+          ...(filters.search
+            ? {
+                OR: [
+                  { phoneNumber: { contains: filters.search, mode: 'insensitive' as const } },
+                  { customerReference: { contains: filters.search, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 500,
+      }),
+      this.prisma.packageActivation.findMany({
+        where: {
+          ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+          status: 'ACTIVE',
+          endsAt: { gt: new Date() },
+          ...(filters.search
+            ? {
+                OR: [
+                  { accessPhoneNumber: { contains: filters.search, mode: 'insensitive' as const } },
+                  { customerReference: { contains: filters.search, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        },
+        include: { package: { select: { id: true, name: true, code: true } } },
+        orderBy: { endsAt: 'desc' },
+        take: 500,
+      }),
+    ])
+
+    const customers = new Map<string, {
+      id: string
+      phoneNumber: string
+      customerReference?: string | null
+      activePackage?: { id: string; name: string; code: string } | null
+      lastPayment?: { id: string; amountUgx: number; status: string; network: string; createdAt: Date } | null
+      totalSpentUgx: number
+      dataUsedMb: number
+      status: 'active' | 'expired'
+      lastSeen?: Date | null
+    }>()
+
+    for (const payment of payments) {
+      const key = payment.normalizedPhone ?? payment.phoneNumber ?? payment.customerReference ?? payment.id
+      const existing = customers.get(key) ?? {
+        id: key,
+        phoneNumber: payment.normalizedPhone ?? payment.phoneNumber,
+        customerReference: payment.customerReference,
+        activePackage: null,
+        lastPayment: null,
+        totalSpentUgx: 0,
+        dataUsedMb: 0,
+        status: 'expired' as const,
+        lastSeen: null,
+      }
+      if (payment.status === 'COMPLETED') {
+        existing.totalSpentUgx += payment.amountUgx
+      }
+      if (!existing.lastPayment || payment.createdAt > existing.lastPayment.createdAt) {
+        existing.lastPayment = {
+          id: payment.id,
+          amountUgx: payment.amountUgx,
+          status: payment.status,
+          network: payment.network,
+          createdAt: payment.createdAt,
+        }
+      }
+      customers.set(key, existing)
+    }
+
+    for (const activation of activations) {
+      const key = activation.accessPhoneNumber ?? activation.customerReference ?? activation.id
+      const existing = customers.get(key) ?? {
+        id: key,
+        phoneNumber: activation.accessPhoneNumber ?? activation.customerReference ?? '',
+        customerReference: activation.customerReference,
+        activePackage: null,
+        lastPayment: null,
+        totalSpentUgx: 0,
+        dataUsedMb: 0,
+        status: 'expired' as const,
+        lastSeen: null,
+      }
+      existing.activePackage = activation.package
+      existing.status = 'active'
+      customers.set(key, existing)
+    }
+
+    for (const session of sessions) {
+      const key = session.phoneNumber ?? session.customerReference ?? session.username
+      const existing = customers.get(key) ?? {
+        id: key,
+        phoneNumber: session.phoneNumber ?? '',
+        customerReference: session.customerReference,
+        activePackage: null,
+        lastPayment: null,
+        totalSpentUgx: 0,
+        dataUsedMb: 0,
+        status: session.status === 'ACTIVE' ? 'active' as const : 'expired' as const,
+        lastSeen: null,
+      }
+      existing.dataUsedMb += Number(((session.inputOctets + session.outputOctets) / 1024n / 1024n))
+      existing.lastSeen = session.lastAccountingAt ?? session.endedAt ?? session.startedAt
+      if (session.status === 'ACTIVE') {
+        existing.status = 'active'
+      }
+      customers.set(key, existing)
+    }
+
+    const items = Array.from(customers.values()).sort((a, b) => {
+      const aTime = a.lastSeen?.getTime() ?? a.lastPayment?.createdAt.getTime() ?? 0
+      const bTime = b.lastSeen?.getTime() ?? b.lastPayment?.createdAt.getTime() ?? 0
+      return bTime - aTime
+    })
+
+    return {
+      summary: {
+        totalCustomers: items.length,
+        activeCustomers: items.filter((item) => item.status === 'active').length,
+        totalSpentUgx: items.reduce((total, item) => total + item.totalSpentUgx, 0),
+      },
+      items,
+    }
+  }
+
   private toPublicUser(user: {
     id: string
     email: string
@@ -152,6 +305,15 @@ export class UsersService {
       },
     }
   }
+
+  private buildDateFilter(filters: { from?: string; to?: string }) {
+    const createdAt: { gte?: Date; lte?: Date } = {}
+    const from = filters.from ? new Date(filters.from) : null
+    const to = filters.to ? new Date(filters.to) : null
+    if (from && Number.isFinite(from.getTime())) createdAt.gte = from
+    if (to && Number.isFinite(to.getTime())) createdAt.lte = to
+    return Object.keys(createdAt).length > 0 ? { createdAt } : {}
+  }
 }
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -167,6 +329,19 @@ export class UsersController {
   list(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.usersService.list(scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.usersRead)
+  @Get('customers')
+  listCustomers(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Query('tenantId') tenantId?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.usersService.listCustomers(scopedTenantId, { search, from, to })
   }
 
   @RequirePermissions(PERMISSIONS.usersManage)

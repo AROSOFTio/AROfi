@@ -22,7 +22,9 @@ export class PaymentRouterService {
   resolveCollection(network: PaymentNetwork): PaymentCollectionProvider {
     const configured = this.providerFor(network, 'COLLECTION')
     if (configured === PaymentProvider.MTN_MOMO_DIRECT) return this.mtnCollection
-    if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) return this.airtelCollection
+    if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) {
+      throw new BadRequestException('Airtel direct collection is not configured. Enable Airtel via aggregator in platform settings.')
+    }
     if (configured === PaymentProvider.AGGREGATOR) return this.pesapalCollection
     throw new BadRequestException(`Collection provider is not configured for ${network}`)
   }
@@ -30,7 +32,9 @@ export class PaymentRouterService {
   resolveDisbursement(network: PaymentNetwork): PaymentDisbursementProvider {
     const configured = this.providerFor(network, 'DISBURSEMENT')
     if (configured === PaymentProvider.MTN_MOMO_DIRECT) return this.mtnDisbursement
-    if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) return this.airtelDisbursement
+    if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) {
+      throw new BadRequestException('Airtel direct payouts are not configured. Use MTN payouts or enable an approved payout provider.')
+    }
     throw new BadRequestException(`Disbursement provider is not configured for ${network}`)
   }
 
@@ -47,6 +51,33 @@ export class PaymentRouterService {
     if (configured === 'AIRTEL_MONEY_DIRECT') return PaymentProvider.AIRTEL_MONEY_DIRECT
     if (configured === 'AGGREGATOR') return PaymentProvider.AGGREGATOR
     throw new BadRequestException(`${key} must be MTN_MOMO_DIRECT, AIRTEL_MONEY_DIRECT, or AGGREGATOR`)
+  }
+
+  getProviderReadiness() {
+    const aggregatorReady = this.hasPesapalCollectionConfig()
+    const mtnDirectCollectionReady = this.hasAll([
+      'MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY',
+      'MTN_MOMO_COLLECTION_API_USER',
+      'MTN_MOMO_COLLECTION_API_KEY',
+    ])
+    const airtelDirectCollectionReady = false
+
+    return {
+      collection: {
+        MTN: {
+          directConfigured: mtnDirectCollectionReady,
+          aggregatorConfigured: aggregatorReady,
+          ready: mtnDirectCollectionReady || aggregatorReady,
+        },
+        AIRTEL: {
+          directConfigured: airtelDirectCollectionReady,
+          aggregatorConfigured: aggregatorReady,
+          directStatus: 'Not configured',
+          aggregatorStatus: aggregatorReady ? 'Active' : 'Inactive',
+          ready: aggregatorReady,
+        },
+      },
+    }
   }
 
   private shouldFallbackToAggregator(configured: string) {
@@ -66,11 +97,7 @@ export class PaymentRouterService {
       ])
     }
 
-    return !this.hasAll([
-      'AIRTEL_MONEY_COLLECTION_BASE_URL',
-      'AIRTEL_MONEY_CLIENT_ID',
-      'AIRTEL_MONEY_CLIENT_SECRET',
-    ])
+    return true
   }
 
   private hasPesapalCollectionConfig() {

@@ -81,6 +81,7 @@ export class PaymentsService {
     },
     activation: {
       include: {
+        radiusCredential: true,
         package: {
           select: {
             id: true,
@@ -235,6 +236,17 @@ export class PaymentsService {
           })
         : null,
     ])
+    const platformSettings = await this.prisma.platformSetting.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global' },
+    })
+    const readiness = this.paymentRouterService.getProviderReadiness()
+    const availablePaymentNetworks = platformSettings.allowedPaymentNetworks.filter((network) => {
+      if (network === PaymentNetwork.MTN) return readiness.collection.MTN.ready
+      if (network === PaymentNetwork.AIRTEL) return readiness.collection.AIRTEL.ready
+      return false
+    })
 
     return {
       tenant: {
@@ -263,6 +275,7 @@ export class PaymentsService {
           amountUgx: activePrice?.amountUgx ?? 0,
         }
       }),
+      paymentNetworks: availablePaymentNetworks,
       activeActivation,
       latestPayment,
     }
@@ -571,10 +584,11 @@ export class PaymentsService {
 
       const nextStatus = this.mapProviderStatus(gatewayResponse)
       if (payment.status === PaymentStatus.COMPLETED && nextStatus === PaymentStatus.COMPLETED) {
-        return tx.payment.findUnique({
+        const completedPayment = await tx.payment.findUnique({
           where: { id: payment.id },
           include: this.paymentDetailInclude,
         })
+        return this.attachReconnectPayload(completedPayment)
       }
       const now = new Date()
       const providerReference =
@@ -675,6 +689,10 @@ export class PaymentsService {
               network: payment.network,
               provider: payment.provider,
               method: payment.method,
+              routerId: this.readMetadataString(payment.metadata, 'routerId'),
+              routerKey: this.readMetadataString(payment.metadata, 'routerKey'),
+              hotspotServerName: this.readMetadataString(payment.metadata, 'hotspotServerName'),
+              loginUrl: this.readMetadataString(payment.metadata, 'loginUrl'),
             }),
           }))
 
@@ -737,11 +755,47 @@ export class PaymentsService {
         })
       }
 
-      return tx.payment.findUnique({
+      const refreshedPayment = await tx.payment.findUnique({
         where: { id: payment.id },
         include: this.paymentDetailInclude,
       })
+      return this.attachReconnectPayload(refreshedPayment)
     })
+  }
+
+  private attachReconnectPayload<T extends { status: PaymentStatus; activation?: {
+    radiusUsername?: string | null
+    radiusPassword?: string | null
+    radiusCredential?: { username: string; password: string } | null
+    routerId?: string | null
+    hotspotServerName?: string | null
+    endsAt?: Date
+  } | null; metadata?: Prisma.JsonValue | null } | null>(payment: T) {
+    if (!payment || payment.status !== PaymentStatus.COMPLETED || !payment.activation) {
+      return payment
+    }
+
+    const loginUrl = this.readMetadataString(payment.metadata, 'loginUrl')
+    const username = payment.activation.radiusCredential?.username ?? payment.activation.radiusUsername
+    const password = payment.activation.radiusCredential?.password ?? payment.activation.radiusPassword
+
+    return {
+      ...payment,
+      reconnect: {
+        method: 'mikrotik-hotspot-post',
+        loginUrl: loginUrl ?? null,
+        username: username ?? null,
+        password: password ?? null,
+        routerId: payment.activation.routerId ?? this.readMetadataString(payment.metadata, 'routerId') ?? null,
+        hotspotServerName:
+          payment.activation.hotspotServerName ?? this.readMetadataString(payment.metadata, 'hotspotServerName') ?? null,
+        expiresAt: payment.activation.endsAt ?? null,
+        fallbackMessage:
+          loginUrl && username && password
+            ? null
+            : 'Payment confirmed, but automatic connection needs the hotspot login URL from the router. Tap Connect Now if you are still on the Wi-Fi login page.',
+      },
+    }
   }
 
   private async resolvePortalTenant(tenantDomain?: string) {

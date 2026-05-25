@@ -19,8 +19,7 @@ export class AirtelMoneyDisbursementService implements PaymentDisbursementProvid
       throw new ServiceUnavailableException('Airtel payouts are temporarily unavailable until Airtel credentials are configured')
     }
 
-    // TODO: Wire the official Airtel Uganda disbursement token endpoint once endpoint details are supplied.
-    throw new ServiceUnavailableException('Airtel Money disbursement endpoint details are not configured')
+    throw new ServiceUnavailableException('Airtel Direct payouts are not configured. Use an approved payout route.')
   }
 
   async sendMoney(_input: SendMoneyInput): Promise<PaymentProviderResult> {
@@ -28,17 +27,15 @@ export class AirtelMoneyDisbursementService implements PaymentDisbursementProvid
       throw new ServiceUnavailableException('Airtel payouts are temporarily unavailable until Airtel credentials are configured')
     }
 
-    // TODO: Implement Airtel Money disbursement API call using AIRTEL_MONEY_DISBURSEMENT_BASE_URL.
-    throw new ServiceUnavailableException('Airtel Money disbursement endpoint details are not configured')
+    throw new ServiceUnavailableException('Airtel Direct payouts are not configured. Use an approved payout route.')
   }
 
-  async getDisbursementStatus(referenceId: string): Promise<PaymentProviderResult> {
+  async getDisbursementStatus(_referenceId: string): Promise<PaymentProviderResult> {
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException('Airtel payouts are temporarily unavailable until Airtel credentials are configured')
     }
 
-    // TODO: Implement Airtel Money payout status lookup once endpoints are confirmed.
-    return { status: 'OK', statusCode: 1, transactionStatus: 'PENDING', transactionReference: referenceId, rawRequest: referenceId, rawResponse: '{}' }
+    throw new ServiceUnavailableException('Airtel Direct payouts are not configured. Use an approved payout route.')
   }
 
   async handleWebhook(payload: Record<string, unknown>): Promise<ProviderWebhookResult> {

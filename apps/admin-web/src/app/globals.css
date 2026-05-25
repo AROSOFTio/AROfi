@@ -473,6 +473,55 @@ tr:hover td { background: var(--bg-hover); }
 .badge-danger  { background: var(--danger-bg);  color: var(--danger-fg); }
 .badge-info    { background: var(--info-bg);    color: var(--info-fg); }
 
+.tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab-button {
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.metric-card {
+  border: 1px solid var(--border);
+  background: var(--bg-app);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.metric-label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  margin-top: 8px;
+  color: var(--text-1);
+  font-size: 20px;
+  font-weight: 900;
+}
+
 /* ═══════════════════════════════════════════════
    BUTTONS
 ═══════════════════════════════════════════════ */

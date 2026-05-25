@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -8,7 +8,9 @@ import { PERMISSIONS } from '../auth/permissions.constants'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto'
 import { UpdateFeatureLimitDto } from './dto/update-feature-limit.dto'
+import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto'
 import { UpdateSupportTicketDto } from './dto/update-support-ticket.dto'
+import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto'
 import { SystemService } from './system.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -31,6 +33,42 @@ export class SystemController {
   getAuditLogs(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.systemService.getAuditLogs(scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.settingsManage)
+  @Get('settings')
+  getPlatformSettings(@CurrentUser() user: AuthenticatedAdminUser) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can view global platform settings')
+    }
+    return this.systemService.getPlatformSettings()
+  }
+
+  @RequirePermissions(PERMISSIONS.settingsManage)
+  @Patch('settings')
+  updatePlatformSettings(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: UpdatePlatformSettingsDto) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can update global platform settings')
+    }
+    return this.systemService.updatePlatformSettings(dto, user)
+  }
+
+  @RequirePermissions(PERMISSIONS.settingsManage)
+  @Get('tenant-settings')
+  getMyTenantSettings(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    const scopedTenantId = this.accessScope.requireTenantScope(user, tenantId)
+    return this.systemService.getTenantSettings(scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.settingsManage)
+  @Patch('tenant-settings')
+  updateMyTenantSettings(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Body() dto: UpdateTenantSettingsDto,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const scopedTenantId = this.accessScope.requireTenantScope(user, tenantId)
+    return this.systemService.updateTenantSettings(scopedTenantId, dto, user, this.accessScope.isSuperAdmin(user))
   }
 
   @RequirePermissions(PERMISSIONS.featureLimitsRead)

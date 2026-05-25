@@ -17,6 +17,12 @@ type PortalView = 'home' | 'login' | 'session'
 type MobileMoneyNetwork = 'MTN' | 'AIRTEL'
 type ConnectionStatus = 'idle' | 'connecting' | 'reconnecting' | 'failed'
 type PortalTemplateId = 'classic' | 'fresh' | 'midnight' | 'sunrise' | 'minimal'
+type ReconnectPayload = {
+  method?: string
+  loginUrl?: string | null
+  username?: string | null
+  password?: string | null
+}
 type HotspotParams = {
   macAddress: string
   clientIp: string
@@ -524,15 +530,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setCurrentPayment(payment)
 
     if (payment.activation) {
-      setStatusMessage('Payment successful. Connecting your internet...')
-      await loginWithPhone(payment.phoneNumber, initialView !== 'home', hotspotParams)
+      await handleCompletedPayment(payment)
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
       }
     } else if (payment.status === 'FAILED') {
       setErrorMessage(payment.statusMessage ?? 'The payment did not complete successfully.')
     } else if (pendingStatuses.includes(payment.status)) {
-      setStatusMessage('Payment is being confirmed. Keep this page open while AROFi checks Pesapal.')
+      setStatusMessage('Payment is being confirmed. Keep this page open.')
     }
 
     await loadContext(payment.phoneNumber, portalToken, hotspotParams)
@@ -560,6 +565,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     if (!phoneNumber.trim()) {
       setErrorMessage('Enter the customer phone number for payment verification and session matching.')
+      return
+    }
+
+    if (!availableNetworks.includes(selectedNetwork)) {
+      setErrorMessage(`${selectedNetwork === 'AIRTEL' ? 'Airtel' : 'MTN'} is not available for this portal right now.`)
       return
     }
 
@@ -616,7 +626,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       setStatusMessage('Payment request sent. Check your phone and approve the payment.')
       if (payment.activation) {
-        await loginWithPhone(payment.phoneNumber, true, hotspotParams)
+        await handleCompletedPayment(payment)
       } else {
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       }
@@ -695,6 +705,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
+  async function handleCompletedPayment(payment: PortalPayment) {
+    setStatusMessage('Payment confirmed. Connecting this device now...')
+
+    if (payment.reconnect?.loginUrl && payment.reconnect.username && payment.reconnect.password) {
+      setConnectionStatus('reconnecting')
+      window.setTimeout(() => autoSubmitHotspotLogin(payment.reconnect), 250)
+      return
+    }
+
+    if (payment.reconnect?.fallbackMessage) {
+      setErrorMessage(payment.reconnect.fallbackMessage)
+      setConnectionStatus('failed')
+    }
+
+    await loginWithPhone(payment.phoneNumber, initialView !== 'home', hotspotParams)
+  }
+
   async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setErrorMessage('')
@@ -731,7 +758,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  function autoSubmitHotspotLogin(reconnect = context?.returningDevice?.reconnect) {
+  function autoSubmitHotspotLogin(reconnect: ReconnectPayload | null | undefined = context?.returningDevice?.reconnect) {
     if (!reconnect?.loginUrl || !reconnect.username || !reconnect.password) {
       setErrorMessage('Reconnect is available, but this browser did not receive a MikroTik login URL. Reopen the captive portal from the WiFi network.')
       setConnectionStatus('failed')
@@ -785,6 +812,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   const activeActivation = portalSession?.activeActivation ?? context?.activeActivation ?? null
   const packages = context?.packages ?? []
+  const availableNetworks = (context?.paymentNetworks?.length ? context.paymentNetworks : ['MTN']) as MobileMoneyNetwork[]
   const portalStyle = portalTemplateStyles[resolvePortalTemplate(context?.tenant.portalTemplate)]
 
   return (
@@ -948,7 +976,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <div>
                         <span className="sr-only">Network</span>
                         <div className="grid grid-cols-2 gap-3">
-                          {(['MTN', 'AIRTEL'] as const).map((network) => (
+                          {availableNetworks.map((network) => (
                             <button
                               key={network}
                               type="button"
@@ -961,6 +989,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                             </button>
                           ))}
                         </div>
+                        {!availableNetworks.includes('AIRTEL') && (
+                          <div className="mt-2 text-xs text-slate-500">Airtel is disabled until a working collection route is configured.</div>
+                        )}
                       </div>
                       <label className="block text-sm font-bold text-slate-700">
                         Phone Number

@@ -15,6 +15,7 @@ import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableE
 import * as bcrypt from 'bcrypt'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { PaymentRouterService } from '../payments/payment-router.service'
 import { PhoneNumberService } from '../payments/phone-number.service'
 import { RegisterPayoutNumberDto } from './dto/register-payout-number.dto'
@@ -117,6 +118,7 @@ export class WalletsService {
   }
 
   async getPayoutProfile(tenantId: string) {
+    const platformSettings = await this.getPlatformSettings()
     const [profile, numbers, changeRequests, wallet, recentWithdrawals] = await Promise.all([
       this.prisma.tenantPayoutProfile.findUnique({
         where: { tenantId },
@@ -151,14 +153,15 @@ export class WalletsService {
       changeRequests,
       recentWithdrawals,
       rules: {
-        maxActiveNumbers: 2,
+        maxActiveNumbers: platformSettings.maxPayoutNumbers,
         registeredNumbersOnly: true,
         numberChangesRequireApproval: true,
         secretKeyRequired: true,
         finalAfterProviderAccepts: true,
-        minimumPayoutUgx: this.getMinimumPayoutUgx(),
-        withdrawalFeeBasisPoints: this.getWithdrawalFeeBasisPoints(),
-        withdrawalFlatFeeUgx: this.getWithdrawalFlatFeeUgx(),
+        requireWithdrawalApproval: platformSettings.requireWithdrawalApproval,
+        minimumPayoutUgx: platformSettings.minimumWithdrawalUgx,
+        withdrawalFeeBasisPoints: platformSettings.withdrawalFeeBps,
+        withdrawalFlatFeeUgx: platformSettings.withdrawalFlatFeeUgx,
       },
     }
   }
@@ -183,8 +186,9 @@ export class WalletsService {
         where: { tenantId, status: PayoutNumberStatus.ACTIVE },
       })
 
-      if (activeCount >= 2) {
-        throw new BadRequestException('You can register only two payout numbers. Request a number change instead.')
+      const platformSettings = await this.getPlatformSettings()
+      if (activeCount >= platformSettings.maxPayoutNumbers) {
+        throw new BadRequestException(`You can register only ${platformSettings.maxPayoutNumbers} payout number(s). Request a number change instead.`)
       }
 
       return tx.tenantPayoutNumber.create({
@@ -257,9 +261,10 @@ export class WalletsService {
 
     const provider = this.paymentRouterService.resolveDisbursement(payoutNumber.network)
     const reference = `VENDOR-WD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
-    const fee = this.calculateWithdrawalFee(dto.amountUgx)
+    const platformSettings = await this.getPlatformSettings()
+    const fee = this.calculateWithdrawalFee(dto.amountUgx, platformSettings)
     const totalDebitUgx = dto.amountUgx + fee.feeAmountUgx
-    const minimumPayoutUgx = this.getMinimumPayoutUgx()
+    const minimumPayoutUgx = platformSettings.minimumWithdrawalUgx
 
     if (dto.amountUgx < minimumPayoutUgx) {
       throw new BadRequestException(`Minimum withdrawal is UGX ${minimumPayoutUgx.toLocaleString('en-US')}`)
@@ -376,12 +381,14 @@ export class WalletsService {
           billingTransactionId: billingTransaction.id,
           reference,
           method: DisbursementMethod.MOBILE_MONEY,
-          status: DisbursementStatus.PENDING,
+          status: platformSettings.requireWithdrawalApproval ? DisbursementStatus.PENDING_APPROVAL : DisbursementStatus.PENDING,
           network: payoutNumber.network,
           provider: provider.provider,
           amountUgx: dto.amountUgx,
           destinationReference: payoutNumber.normalizedPhone,
-          notes: 'Vendor wallet withdrawal reserved. Final after provider accepts.',
+          notes: platformSettings.requireWithdrawalApproval
+            ? 'Vendor wallet withdrawal reserved. Awaiting Dev Admin approval.'
+            : 'Vendor wallet withdrawal reserved. Final after provider accepts.',
           metadata: this.toJsonValue({
             payoutNumberId: payoutNumber.id,
             requestedByUserId: userId,
@@ -395,6 +402,21 @@ export class WalletsService {
 
       return { walletId: wallet.id, currency: wallet.currency, billingTransactionId: billingTransaction.id, disbursementId: disbursement.id }
     })
+
+    if (platformSettings.requireWithdrawalApproval) {
+      const [disbursement, billingTransaction, wallet] = await Promise.all([
+        this.prisma.disbursement.findUniqueOrThrow({ where: { id: reserved.disbursementId } }),
+        this.prisma.billingTransaction.findUniqueOrThrow({ where: { id: reserved.billingTransactionId } }),
+        this.prisma.wallet.findUniqueOrThrow({ where: { id: reserved.walletId } }),
+      ])
+
+      return {
+        disbursement,
+        billingTransaction,
+        wallet,
+        providerStatus: 'PENDING_APPROVAL',
+      }
+    }
 
     let providerResponse
     try {
@@ -457,6 +479,76 @@ export class WalletsService {
     })
   }
 
+  async listVendorWithdrawals(filters: { tenantId?: string; status?: DisbursementStatus; from?: string; to?: string }) {
+    return this.prisma.disbursement.findMany({
+      where: {
+        ...(filters.tenantId ? { tenantId: filters.tenantId } : {}),
+        agentId: null,
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(this.buildDateFilter(filters).createdAt ? { createdAt: this.buildDateFilter(filters).createdAt } : {}),
+      },
+      include: {
+        tenant: { select: { id: true, name: true } },
+        billingTransaction: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 250,
+    })
+  }
+
+  async approveWithdrawal(disbursementId: string, actorUserId: string, scopedTenantId?: string) {
+    const disbursement = await this.getWithdrawalForAction(disbursementId, scopedTenantId)
+    if (disbursement.status !== DisbursementStatus.PENDING_APPROVAL) {
+      throw new BadRequestException('Only withdrawals pending approval can be approved')
+    }
+
+    await this.prisma.disbursement.update({
+      where: { id: disbursement.id },
+      data: {
+        status: DisbursementStatus.PENDING,
+        notes: 'Withdrawal approved. Submitting to provider.',
+        metadata: this.toJsonValue({ ...(this.objectMetadata(disbursement.metadata)), approvedByUserId: actorUserId }),
+      },
+    })
+
+    return this.submitReservedWithdrawal(disbursement.id)
+  }
+
+  async rejectWithdrawal(disbursementId: string, actorUserId: string, reason: string, scopedTenantId?: string) {
+    const disbursement = await this.getWithdrawalForAction(disbursementId, scopedTenantId)
+    if (disbursement.status !== DisbursementStatus.PENDING_APPROVAL) {
+      throw new BadRequestException('Only withdrawals pending approval can be rejected')
+    }
+    if (!disbursement.billingTransactionId || !disbursement.walletId) {
+      throw new BadRequestException('Withdrawal reserve is incomplete')
+    }
+
+    await this.releaseFailedWithdrawalReserve({
+      tenantId: disbursement.tenantId,
+      walletId: disbursement.walletId,
+      billingTransactionId: disbursement.billingTransactionId,
+      disbursementId: disbursement.id,
+      amountUgx: disbursement.amountUgx,
+      totalDebitUgx: disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx,
+      reference: disbursement.reference,
+      errorMessage: reason,
+      disbursementStatus: DisbursementStatus.CANCELLED,
+      billingStatus: BillingTransactionStatus.REVERSED,
+      notes: 'Withdrawal rejected by Dev Admin. Wallet reserve released.',
+      extraMetadata: { rejectedByUserId: actorUserId, reason },
+    })
+
+    return this.prisma.disbursement.findUnique({ where: { id: disbursement.id } })
+  }
+
+  async retryFailedWithdrawal(disbursementId: string, scopedTenantId?: string) {
+    const disbursement = await this.getWithdrawalForAction(disbursementId, scopedTenantId)
+    if (disbursement.status !== DisbursementStatus.FAILED) {
+      throw new BadRequestException('Only failed withdrawals can be retried')
+    }
+    throw new BadRequestException('Failed withdrawals release the reserved balance. Ask the vendor to submit a new withdrawal request.')
+  }
+
   private async findTenantWallet(tenantId: string) {
     return this.prisma.wallet.findFirst({
       where: {
@@ -465,6 +557,84 @@ export class WalletsService {
         ownerReference: tenantId,
       },
     })
+  }
+
+  private async submitReservedWithdrawal(disbursementId: string) {
+    const disbursement = await this.prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+      include: { billingTransaction: true, wallet: true },
+    })
+    if (!disbursement || !disbursement.billingTransactionId) {
+      throw new NotFoundException('Withdrawal not found')
+    }
+    if (!disbursement.destinationReference || !disbursement.network) {
+      throw new BadRequestException('Withdrawal payout destination is incomplete')
+    }
+
+    const provider = this.paymentRouterService.resolveDisbursement(disbursement.network)
+
+    try {
+      const providerResponse = await provider.sendMoney({
+        amountUgx: disbursement.amountUgx,
+        currency: disbursement.wallet.currency,
+        phoneNumber: disbursement.destinationReference,
+        externalReference: disbursement.reference,
+        narrative: 'AROfi vendor wallet withdrawal',
+        network: disbursement.network,
+      })
+
+      return this.prisma.$transaction(async (tx) => {
+        const billingTransaction = await tx.billingTransaction.update({
+          where: { id: disbursement.billingTransactionId! },
+          data: { status: BillingTransactionStatus.COMPLETED },
+        })
+        const updatedDisbursement = await tx.disbursement.update({
+          where: { id: disbursement.id },
+          data: {
+            status: DisbursementStatus.PROCESSING,
+            providerReference: providerResponse.transactionReference,
+            notes: 'Vendor wallet withdrawal submitted. Final after provider accepts.',
+            metadata: this.toJsonValue({
+              ...this.objectMetadata(disbursement.metadata),
+              providerResponse,
+            }),
+          },
+        })
+        const wallet = await tx.wallet.findUniqueOrThrow({ where: { id: disbursement.walletId } })
+        return {
+          disbursement: updatedDisbursement,
+          billingTransaction,
+          wallet,
+          providerStatus: providerResponse.transactionStatus,
+        }
+      })
+    } catch (error) {
+      await this.releaseFailedWithdrawalReserve({
+        tenantId: disbursement.tenantId,
+        walletId: disbursement.walletId,
+        billingTransactionId: disbursement.billingTransactionId,
+        disbursementId: disbursement.id,
+        amountUgx: disbursement.amountUgx,
+        totalDebitUgx: disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx,
+        reference: disbursement.reference,
+        errorMessage: error instanceof Error ? error.message : 'Unable to submit withdrawal to provider',
+      })
+      throw new ServiceUnavailableException(error instanceof Error ? error.message : 'Unable to submit withdrawal to provider')
+    }
+  }
+
+  private async getWithdrawalForAction(disbursementId: string, scopedTenantId?: string) {
+    const disbursement = await this.prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+      include: { billingTransaction: true },
+    })
+    if (!disbursement || disbursement.agentId) {
+      throw new NotFoundException('Withdrawal not found')
+    }
+    if (scopedTenantId && disbursement.tenantId !== scopedTenantId) {
+      throw new NotFoundException('Withdrawal not found')
+    }
+    return disbursement
   }
 
   private assertSupportedNetwork(network: PaymentNetwork) {
@@ -486,10 +656,14 @@ export class WalletsService {
     totalDebitUgx: number
     reference: string
     errorMessage: string
+    disbursementStatus?: DisbursementStatus
+    billingStatus?: BillingTransactionStatus
+    notes?: string
+    extraMetadata?: Record<string, unknown>
   }) {
     await this.prisma.$transaction(async (tx) => {
       const disbursement = await tx.disbursement.findUnique({ where: { id: input.disbursementId } })
-      if (!disbursement || disbursement.status === DisbursementStatus.FAILED) {
+      if (!disbursement || disbursement.status === DisbursementStatus.FAILED || disbursement.status === DisbursementStatus.CANCELLED) {
         return
       }
 
@@ -547,24 +721,40 @@ export class WalletsService {
 
       await tx.billingTransaction.update({
         where: { id: input.billingTransactionId },
-        data: { status: BillingTransactionStatus.FAILED },
+        data: { status: input.billingStatus ?? BillingTransactionStatus.FAILED },
       })
 
       await tx.disbursement.update({
         where: { id: input.disbursementId },
         data: {
-          status: DisbursementStatus.FAILED,
+          status: input.disbursementStatus ?? DisbursementStatus.FAILED,
           failedAt: new Date(),
-          notes: 'Provider did not accept withdrawal request. Wallet reserve released.',
-          metadata: this.toJsonValue({ errorMessage: input.errorMessage }),
+          notes: input.notes ?? 'Provider did not accept withdrawal request. Wallet reserve released.',
+          metadata: this.toJsonValue({ errorMessage: input.errorMessage, ...input.extraMetadata }),
         },
       })
     })
   }
 
-  private calculateWithdrawalFee(amountUgx: number) {
-    const basisPoints = this.getWithdrawalFeeBasisPoints()
-    const flatFeeUgx = this.getWithdrawalFlatFeeUgx()
+  private buildDateFilter(filters: { from?: string; to?: string }) {
+    const createdAt: Prisma.DateTimeFilter = {}
+    const from = filters.from ? new Date(filters.from) : null
+    const to = filters.to ? new Date(filters.to) : null
+    if (from && Number.isFinite(from.getTime())) createdAt.gte = from
+    if (to && Number.isFinite(to.getTime())) createdAt.lte = to
+    return Object.keys(createdAt).length ? { createdAt } : {}
+  }
+
+  private objectMetadata(value: Prisma.JsonValue | null): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  }
+
+  private calculateWithdrawalFee(
+    amountUgx: number,
+    settings: { withdrawalFeeBps: number; withdrawalFlatFeeUgx: number },
+  ) {
+    const basisPoints = settings.withdrawalFeeBps
+    const flatFeeUgx = settings.withdrawalFlatFeeUgx
     const percentageFeeUgx = Math.round((amountUgx * basisPoints) / 10000)
     return {
       basisPoints,
@@ -574,20 +764,11 @@ export class WalletsService {
     }
   }
 
-  private getWithdrawalFeeBasisPoints() {
-    return this.readNonNegativeIntegerEnv('VENDOR_WITHDRAWAL_FEE_BPS', 0)
-  }
-
-  private getWithdrawalFlatFeeUgx() {
-    return this.readNonNegativeIntegerEnv('VENDOR_WITHDRAWAL_FLAT_FEE_UGX', 0)
-  }
-
-  private getMinimumPayoutUgx() {
-    return this.readNonNegativeIntegerEnv('MINIMUM_PAYOUT_UGX', 0)
-  }
-
-  private readNonNegativeIntegerEnv(key: string, fallback: number) {
-    const value = Number(process.env[key] ?? fallback)
-    return Number.isFinite(value) && value >= 0 ? Math.round(value) : fallback
+  private getPlatformSettings() {
+    return this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+    })
   }
 }

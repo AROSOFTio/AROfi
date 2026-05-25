@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { DisbursementStatus } from '@prisma/client'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -62,6 +63,53 @@ export class WalletsController {
   requestWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RequestWithdrawalDto) {
     const tenantId = this.accessScope.requireTenantScope(user)
     return this.walletsService.requestWithdrawal(tenantId, dto, user.id)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsRead)
+  @Get('withdrawals/all')
+  listVendorWithdrawals(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Query('tenantId') tenantId?: string,
+    @Query('status') status?: DisbursementStatus,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.walletsService.listVendorWithdrawals({ tenantId: scopedTenantId, status, from, to })
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @Post('withdrawals/:disbursementId/approve')
+  approveWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('disbursementId') disbursementId: string) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can approve vendor withdrawals')
+    }
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.walletsService.approveWithdrawal(disbursementId, user.id, scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @Post('withdrawals/:disbursementId/reject')
+  rejectWithdrawal(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('disbursementId') disbursementId: string,
+    @Body() body: { reason?: string },
+  ) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can reject vendor withdrawals')
+    }
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.walletsService.rejectWithdrawal(disbursementId, user.id, body.reason?.trim() || 'Rejected by Dev Admin', scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @Post('withdrawals/:disbursementId/retry')
+  retryWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('disbursementId') disbursementId: string) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can retry vendor withdrawals')
+    }
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.walletsService.retryFailedWithdrawal(disbursementId, scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)

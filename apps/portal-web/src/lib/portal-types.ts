@@ -10,6 +10,7 @@ export type PortalContextResponse = {
     supportEmail?: string | null
   }
   packages: PortalPackage[]
+  paymentNetworks?: Array<'MTN' | 'AIRTEL'>
   activeActivation?: PortalActivation | null
   latestPayment?: PortalPayment | null
   session?: PortalCustomerSession | null
@@ -85,6 +86,22 @@ export type PortalPayment = {
     durationMinutes: number
   }
   activation?: PortalActivation | null
+  billingTransaction?: {
+    id: string
+    grossAmountUgx: number
+    feeAmountUgx: number
+    netAmountUgx: number
+  } | null
+  reconnect?: {
+    method?: string
+    loginUrl?: string | null
+    username?: string | null
+    password?: string | null
+    routerId?: string | null
+    hotspotServerName?: string | null
+    expiresAt?: string | null
+    fallbackMessage?: string | null
+  } | null
 }
 
 export type PortalUsageSession = {

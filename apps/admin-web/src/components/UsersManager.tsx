@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react'
 import type { UsersOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
-import { clientPostApi } from '@/lib/client-api'
-import { formatDate, getStatusBadgeClass } from '@/lib/format'
+import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 
 type UserFormState = {
   firstName: string
@@ -16,8 +16,30 @@ type UserFormState = {
 
 const preferredTenantRoles = ['WifiAdmin', 'VoucherAgent', 'FinanceManager', 'ReadOnlySupport', 'Support', 'NetworkOperator', 'Finance', 'VendorAdmin']
 
+type CustomerDirectory = {
+  summary: {
+    totalCustomers: number
+    activeCustomers: number
+    totalSpentUgx: number
+  }
+  items: Array<{
+    id: string
+    phoneNumber: string
+    customerReference?: string | null
+    activePackage?: { id: string; name: string; code: string } | null
+    lastPayment?: { id: string; amountUgx: number; status: string; network: string; createdAt: string } | null
+    totalSpentUgx: number
+    dataUsedMb: number
+    status: 'active' | 'expired'
+    lastSeen?: string | null
+  }>
+}
+
 export default function UsersManager({ initialData }: { initialData: UsersOverviewResponse | null }) {
   const [data, setData] = useState(initialData)
+  const [activeTab, setActiveTab] = useState<'staff' | 'customers'>('staff')
+  const [customers, setCustomers] = useState<CustomerDirectory | null>(null)
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [processText, setProcessText] = useState('')
@@ -42,6 +64,20 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   })
 
   const users = data?.users ?? []
+
+  async function openCustomers() {
+    setActiveTab('customers')
+    if (customers || isLoadingCustomers) return
+    setIsLoadingCustomers(true)
+    setError(null)
+    try {
+      setCustomers(await clientFetchApi<CustomerDirectory>('/users/customers'))
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Could not load customers')
+    } finally {
+      setIsLoadingCustomers(false)
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -87,12 +123,23 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
         </button>
       </div>
 
+      <div className="tabs-bar" style={{ marginBottom: 18 }}>
+        <button type="button" className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`} onClick={() => setActiveTab('staff')}>Staff</button>
+        <button type="button" className={`tab-button ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => void openCustomers()}>Customers</button>
+      </div>
+
       <div className="stats-grid" style={{ marginBottom: 20 }}>
-        {[
-          { label: 'Staff Users', value: `${users.length}`, color: 'blue' },
-          { label: 'Roles Available', value: `${roles.length}`, color: 'green' },
-          { label: 'Active Users', value: `${users.filter((user) => user.isActive).length}`, color: 'amber' },
-        ].map((stat) => (
+        {(activeTab === 'staff'
+          ? [
+              { label: 'Staff Users', value: `${users.length}`, color: 'blue' },
+              { label: 'Roles Available', value: `${roles.length}`, color: 'green' },
+              { label: 'Active Users', value: `${users.filter((user) => user.isActive).length}`, color: 'amber' },
+            ]
+          : [
+              { label: 'Customers', value: `${customers?.summary.totalCustomers ?? 0}`, color: 'blue' },
+              { label: 'Active Customers', value: `${customers?.summary.activeCustomers ?? 0}`, color: 'green' },
+              { label: 'Total Spent', value: formatCurrency(customers?.summary.totalSpentUgx ?? 0), color: 'amber' },
+            ]).map((stat) => (
           <div key={stat.label} className={`stat-card ${stat.color}`}>
             <div className="stat-label">{stat.label}</div>
             <div className={`stat-value ${stat.color}`}>{stat.value}</div>
@@ -100,7 +147,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
         ))}
       </div>
 
-      <div className="card">
+      {activeTab === 'staff' && <div className="card">
         <div className="card-header">
           <span className="card-title">Tenant User Directory</span>
         </div>
@@ -142,7 +189,58 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
+
+      {activeTab === 'customers' && <div className="card">
+        <div className="card-header">
+          <span className="card-title">Customer Directory</span>
+          {isLoadingCustomers && <span className="badge badge-info">Loading</span>}
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Active Package</th>
+                <th>Last Payment</th>
+                <th>Total Spent</th>
+                <th>Data Used</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(customers?.items.length ?? 0) === 0 && (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="empty-state">
+                      <p>No customers yet. Customer records appear after payment, voucher redemption, or network sessions.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {customers?.items.map((customer) => (
+                <tr key={customer.id}>
+                  <td>
+                    <div style={{ fontWeight: 800 }}>{customer.phoneNumber || customer.customerReference || 'Customer'}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{customer.customerReference ?? 'No reference'}</div>
+                  </td>
+                  <td>{customer.activePackage?.name ?? 'None active'}</td>
+                  <td>
+                    {customer.lastPayment
+                      ? `${customer.lastPayment.network} ${formatCurrency(customer.lastPayment.amountUgx)}`
+                      : 'No payment'}
+                  </td>
+                  <td>{formatCurrency(customer.totalSpentUgx)}</td>
+                  <td>{formatMegabytes(customer.dataUsedMb)}</td>
+                  <td><span className={getStatusBadgeClass(customer.status)}>{customer.status}</span></td>
+                  <td style={{ fontSize: 12 }}>{customer.lastSeen ? formatDate(customer.lastSeen) : 'Never'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>}
 
       {isModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true">

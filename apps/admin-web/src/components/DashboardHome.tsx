@@ -12,12 +12,14 @@ import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import type { CSSProperties } from 'react'
 
-export default async function DashboardHome() {
+type DashboardSearchParams = { range?: string; from?: string; to?: string }
+
+export default async function DashboardHome({ searchParams }: { searchParams?: DashboardSearchParams }) {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
   const isVendor = Boolean(session?.user.tenantId)
 
   if (isVendor) {
-    return <VendorDashboard session={session} />
+    return <VendorDashboard session={session} searchParams={searchParams} />
   }
 
   return <PlatformDashboard />
@@ -159,9 +161,11 @@ async function PlatformDashboard() {
   )
 }
 
-async function VendorDashboard({ session }: { session: AdminSessionResponse | null }) {
+async function VendorDashboard({ session, searchParams }: { session: AdminSessionResponse | null; searchParams?: DashboardSearchParams }) {
+  const range = resolveDashboardRange(searchParams)
+  const query = new URLSearchParams({ from: range.from.toISOString(), to: range.to.toISOString() }).toString()
   const [billing, routers, sessions, vouchers] = await Promise.all([
-    fetchApi<BillingOverviewResponse>('/billing/overview'),
+    fetchApi<BillingOverviewResponse>(`/billing/overview?${query}`),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<SessionOverviewResponse>('/sessions/overview'),
     fetchApi<VouchersOverviewResponse>('/vouchers/overview'),
@@ -170,9 +174,8 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []
   const routerItems = routers?.routers ?? []
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const dateRange = `${formatShortDate(monthStart)} - ${formatShortDate(now)}`
+  const now = range.to
+  const dateRange = `${formatShortDate(range.from)} - ${formatShortDate(range.to)}`
   const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((router) => router.liveState === 'LIVE').length
   const staleRouters = routers?.summary.staleRouters ?? routerItems.filter((router) => router.liveState === 'STALE').length
   const offlineRouters = routers?.summary.offlineRouters ?? routerItems.filter((router) => router.liveState === 'OFFLINE').length
@@ -189,24 +192,18 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
     <div className="tenant-dashboard">
       <div className="dashboard-toolbar">
         <h1 className="page-title">Dashboard</h1>
-        <div className="date-pill">{dateRange} <span>v</span></div>
+        <DateRangeLinks active={range.key} />
       </div>
 
       <div className="tenant-stats">
-        <DashboardStat title="Net Sales" value={formatCurrency(billing?.summary.vendorNetUgx ?? billing?.summary.totalSalesUgx ?? 0)} note={`MM: ${formatCurrency(billing?.summary.mobileMoneyGrossUgx ?? 0)}`} icon="^" />
-        <DashboardStat title="Vouchers Sales" value={formatCurrency(vouchers?.summary.totalVoucherSalesUgx ?? 0)} note="Total sales from physical vouchers" icon="[]" />
-        <DashboardStat title="Balance" value={formatCurrency(billing?.summary.walletBalanceUgx ?? 0)} note="Net balance on account." icon="$" />
-        <div className="tenant-stat">
-          <div className="tenant-stat-title">System Insights</div>
-          <div className="tenant-stat-icon" style={{ color: routerStatusColor }}>
-            {routerStatusLabel}
-          </div>
-          <div className="system-insights-grid">
-            <div className="system-mini"><strong>{sessions?.summary.activeSessions ?? 0}</strong><span>Active</span></div>
-            <div className="system-mini"><strong>{onlineRouters > 0 ? '1%' : '0%'}</strong><span>CPU</span></div>
-            <div className="system-mini"><strong>{formatMegabytes(totalDataUsedMb)}</strong><span>Data Usage</span></div>
-          </div>
-        </div>
+        <DashboardStat title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} note={dateRange} icon="+" />
+        <DashboardStat title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} note="Received less platform fee" icon="%" />
+        <DashboardStat title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} note="Vendor earning after fees" icon="=" />
+        <DashboardStat title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} note="Available settlement balance" icon="$" />
+        <DashboardStat title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} note="Reserved or processing" icon="~" />
+        <DashboardStat title="Active Users" value={`${billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}`} note="Live customer sessions" icon="[]" />
+        <DashboardStat title="Online Routers" value={`${billing?.summary.onlineRouters ?? onlineRouters}`} note={routerStatusLabel} icon="^" />
+        <DashboardStat title="Data Used" value={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)} note="Selected date range" icon="MB" />
       </div>
 
       <div className="dashboard-main-grid">
@@ -239,7 +236,7 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
               <div className="dashboard-panel-title">Recent Sales</div>
               <div className="dashboard-panel-subtitle">You made {recentTransactions.length} sales today.</div>
             </div>
-            <a href="/sales" style={{ color: '#9aa3b2', textDecoration: 'none' }}>Scroll for more v</a>
+            <a href={`/sales?${query}`} style={{ color: '#9aa3b2', textDecoration: 'none' }}>Open sales</a>
           </div>
           <div className="recent-sales-list">
             {recentTransactions.length === 0 && <div className="empty-state"><p>No recent sales yet.</p></div>}
@@ -248,15 +245,68 @@ async function VendorDashboard({ session }: { session: AdminSessionResponse | nu
                 <div className="sale-avatar">{transaction.voucher ? '[]' : initialsFor(transaction.customerReference ?? 'Customer')}</div>
                 <div>
                   <div className="sale-title">{transaction.customerReference ?? transaction.voucher?.code ?? 'Customer'}</div>
-                  <div className="sale-meta">{transaction.voucher ? 'Printed Voucher - ' : ''}{relativeDays(transaction.createdAt)}</div>
+                  <div className="sale-meta">{transaction.package?.name ?? 'Package'} - {transaction.channel?.replace('_', ' ') ?? 'Sale'} - fee {formatCurrency(transaction.feeAmountUgx)}</div>
                 </div>
-                <div className="sale-amount">+{formatCurrency(transaction.grossAmountUgx)}</div>
+                <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
               </div>
             ))}
           </div>
           <div className="recent-sales-footer">Showing {Math.min(recentTransactions.length, 20)} recent sales</div>
         </section>
       </div>
+    </div>
+  )
+}
+
+function resolveDashboardRange(searchParams?: DashboardSearchParams) {
+  const now = new Date()
+  const key = searchParams?.range ?? 'this-month'
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (key === 'today') return { key, from: startOfToday, to: now }
+  if (key === 'yesterday') {
+    const from = new Date(startOfToday)
+    from.setDate(from.getDate() - 1)
+    const to = new Date(startOfToday)
+    to.setMilliseconds(-1)
+    return { key, from, to }
+  }
+  if (key === 'last-7') {
+    const from = new Date(startOfToday)
+    from.setDate(from.getDate() - 6)
+    return { key, from, to: now }
+  }
+  if (key === 'last-month') {
+    return {
+      key,
+      from: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+      to: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999),
+    }
+  }
+  if (key === 'custom' && searchParams?.from && searchParams?.to) {
+    const from = new Date(searchParams.from)
+    const to = new Date(searchParams.to)
+    if (Number.isFinite(from.getTime()) && Number.isFinite(to.getTime())) {
+      return { key, from, to }
+    }
+  }
+  return { key: 'this-month', from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }
+}
+
+function DateRangeLinks({ active }: { active: string }) {
+  const options = [
+    ['today', 'Today'],
+    ['yesterday', 'Yesterday'],
+    ['last-7', 'Last 7 days'],
+    ['this-month', 'This month'],
+    ['last-month', 'Last month'],
+  ]
+  return (
+    <div className="tabs-bar">
+      {options.map(([key, label]) => (
+        <a key={key} className={`tab-button ${active === key ? 'active' : ''}`} href={`/dashboard?range=${key}`}>
+          {label}
+        </a>
+      ))}
     </div>
   )
 }
