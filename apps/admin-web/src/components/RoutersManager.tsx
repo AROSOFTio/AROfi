@@ -11,6 +11,7 @@ import {
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 type GroupFormState = {
   tenantId: string
@@ -127,7 +128,7 @@ export default function RoutersManager() {
     averageLatencyMs: 0,
   }
 
-  const showTenantSelector = !session?.user.tenantId && tenants.length > 1
+  const showTenantSelector = !isVendorWorkspace(session?.user) && tenants.length > 1
   const groupsForTenant = useMemo(
     () => (overview?.groups ?? []).filter((group) => group.tenant.id === routerForm.tenantId),
     [overview, routerForm.tenantId],
@@ -165,7 +166,7 @@ export default function RoutersManager() {
       setTenants(tenantData.items)
       setSession(sessionData)
 
-      const defaultTenantId = sessionData.user.tenantId ?? tenantData.items[0]?.id ?? ''
+      const defaultTenantId = isVendorWorkspace(sessionData.user) ? sessionData.user.tenantId ?? '' : tenantData.items[0]?.id ?? ''
       setGroupForm((previous) => (previous.tenantId ? previous : { ...previous, tenantId: defaultTenantId }))
       setRouterForm((previous) => (previous.tenantId ? previous : { ...previous, tenantId: defaultTenantId }))
 
@@ -363,7 +364,7 @@ export default function RoutersManager() {
           <span className="badge badge-info" style={{ padding: '8px 12px' }}>
             {overview?.radiusFoundation.serverHost ?? 'RADIUS pending'}:{overview?.radiusFoundation.authPort ?? 1812}
           </span>
-          {session?.user.tenantName && (
+          {isVendorWorkspace(session?.user) && session?.user.tenantName && (
             <span className="badge badge-success" style={{ padding: '8px 12px' }}>
               {session.user.tenantName}
             </span>

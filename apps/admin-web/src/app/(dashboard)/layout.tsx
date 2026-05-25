@@ -1,5 +1,6 @@
 import { AdminSessionResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
+import { isVendorWorkspace } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import DashboardShell from '../../components/DashboardShell'
 
@@ -24,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .join('')
     .slice(0, 2) || 'AD'
 
-  const workspaceTitle = session.user.tenantName ? `${session.user.tenantName} Console` : 'AROFi Platform'
+  const workspaceTitle = isVendorWorkspace(session.user) && session.user.tenantName ? `${session.user.tenantName} Console` : 'AROFi Developer Admin'
 
   return (
     <DashboardShell initials={initials} session={session} workspaceTitle={workspaceTitle}>

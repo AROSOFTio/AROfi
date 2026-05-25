@@ -9,6 +9,7 @@ import {
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 type HotspotFormState = {
   tenantId: string
@@ -47,7 +48,7 @@ export default function HotspotsManager() {
     voucherRedemptions: 0,
   }
 
-  const tenantWorkspace = session?.user.tenantId ?? null
+  const tenantWorkspace = isVendorWorkspace(session?.user) ? session?.user.tenantId ?? null : null
   const showTenantSelector = !tenantWorkspace && tenants.length > 1
 
   const launchNotes = useMemo(
@@ -76,7 +77,7 @@ export default function HotspotsManager() {
       setTenants(tenantData.items)
       setSession(sessionData)
 
-      const defaultTenantId = sessionData.user.tenantId ?? tenantData.items[0]?.id ?? ''
+      const defaultTenantId = isVendorWorkspace(sessionData.user) ? sessionData.user.tenantId ?? '' : tenantData.items[0]?.id ?? ''
       setFormState((previous) =>
         previous.tenantId
           ? previous

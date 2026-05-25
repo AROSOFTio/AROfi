@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
+import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
 
 type NavItem = {
   href: string;
@@ -63,11 +64,14 @@ const navItems: NavGroup[] = [
 type SidebarUser = AdminSessionResponse['user']
 
 function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: boolean, tenantOnly?: boolean) {
-  if (platformOnly && user.tenantId) {
+  const isVendor = isVendorWorkspace(user)
+  const isPlatform = isPlatformAdmin(user)
+
+  if (platformOnly && !isPlatform) {
     return false
   }
 
-  if (tenantOnly && !user.tenantId) {
+  if (tenantOnly && !isVendor) {
     return false
   }
 
@@ -80,6 +84,7 @@ function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: bo
 
 export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname()
+  const isVendor = isVendorWorkspace(user)
   const visibleGroups = navItems
     .map((group) => ({
       ...group,
@@ -87,7 +92,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
     }))
     .filter((group) => group.items.length > 0)
 
-  const workspaceLabel = user.tenantName ? 'Vendor Workspace' : 'Developer Admin Workspace'
+  const workspaceLabel = isVendor ? 'Vendor Workspace' : 'Developer Admin Workspace'
 
   return (
     <aside className="sidebar">
@@ -97,8 +102,8 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>
           <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{user.tenantId ? 'Vendor' : 'Platform'} - {user.role}</span>
-            {user.tenantName && (
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Vendor' : 'Platform'} - {user.role}</span>
+            {isVendor && user.tenantName && (
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
             )}
           </div>
@@ -106,7 +111,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
       </div>
       {visibleGroups.map((group) => (
         <div key={group.section} className="sidebar-section">
-          {group.section === '' && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
+          {group.section === '' && isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
           {group.section && <div className="sidebar-section-label">{group.section}</div>}
           {group.items.map((item) => (
             <Link

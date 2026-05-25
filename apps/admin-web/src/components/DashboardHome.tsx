@@ -10,13 +10,14 @@ import {
 } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
+import { isVendorWorkspace } from '@/lib/workspace'
 import type { CSSProperties } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
 
 export default async function DashboardHome({ searchParams }: { searchParams?: DashboardSearchParams }) {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
-  const isVendor = Boolean(session?.user.tenantId)
+  const isVendor = isVendorWorkspace(session?.user)
 
   if (isVendor) {
     return <VendorDashboard session={session} searchParams={searchParams} />

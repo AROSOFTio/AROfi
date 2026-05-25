@@ -5,6 +5,7 @@ import { AdminSessionResponse, SupportTicketResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 type Ticket = SupportTicketResponse['items'][number]
 
@@ -25,7 +26,7 @@ export default function SupportPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  const isVendor = Boolean(session?.user.tenantId)
+  const isVendor = isVendorWorkspace(session?.user)
   const tickets = data?.items ?? []
   const selectedTicket = useMemo(
     () => tickets.find((ticket) => ticket.id === selectedTicketId) ?? tickets[0] ?? null,

@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 const tenantOnlyPaths = new Set([
   '/agents',
@@ -36,7 +37,7 @@ export default function WorkspaceRouteGuard({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const isVendor = Boolean(user.tenantId)
+  const isVendor = isVendorWorkspace(user)
   const basePath = `/${pathname.split('/').filter(Boolean)[0] ?? 'dashboard'}`
   const wrongWorkspace = (!isVendor && tenantOnlyPaths.has(basePath)) || (isVendor && platformOnlyPaths.has(basePath))
 
