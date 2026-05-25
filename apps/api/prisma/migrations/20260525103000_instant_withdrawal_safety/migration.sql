@@ -34,19 +34,4 @@ ALTER TABLE "TenantPayoutNumber"
   ADD COLUMN IF NOT EXISTS "changedAt" TIMESTAMP(3),
   ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT;
 
-UPDATE "TenantPayoutNumber"
-SET "status" = 'VERIFIED',
-    "verifiedAt" = COALESCE("verifiedAt", "createdAt")
-WHERE "status" = 'ACTIVE';
-
-WITH ranked AS (
-  SELECT id, ROW_NUMBER() OVER (PARTITION BY "tenantId" ORDER BY "createdAt" ASC) AS rn
-  FROM "TenantPayoutNumber"
-  WHERE "status" = 'VERIFIED'
-)
-UPDATE "TenantPayoutNumber" number
-SET "isPrimary" = true
-FROM ranked
-WHERE number.id = ranked.id AND ranked.rn = 1 AND number."isPrimary" = false;
-
 CREATE INDEX IF NOT EXISTS "TenantPayoutNumber_tenantId_isPrimary_idx" ON "TenantPayoutNumber"("tenantId", "isPrimary");
