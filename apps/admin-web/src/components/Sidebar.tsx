@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
 
@@ -17,47 +17,84 @@ type NavItem = {
 type NavGroup = {
   section: string;
   items: NavItem[];
+  defaultOpen?: boolean;
 };
 
 const navItems: NavGroup[] = [
   {
-    section: '',
+    section: 'Workspace',
+    defaultOpen: true,
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: <HomeIcon /> },
+      { href: '/support', label: 'Support Hub', icon: <SupportIcon />, required: ['support.read'], tenantOnly: true },
+      { href: '/docs', label: 'Docs', icon: <ReportIcon /> },
+    ]
+  },
+  {
+    section: 'Network Operations',
+    defaultOpen: true,
+    items: [
       { href: '/routers', label: 'Router', icon: <RouterIcon />, required: ['routers.read'], tenantOnly: true },
       { href: '/sessions', label: 'Usage Analytics', icon: <UsageIcon />, required: ['sessions.read'], tenantOnly: true },
-      { href: '/support', label: 'Support Hub', icon: <SupportIcon />, required: ['support.read'], tenantOnly: true },
-      { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'], tenantOnly: true },
-      { href: '/float', label: 'Earnings', icon: <FloatIcon />, required: ['agents.read'], tenantOnly: true },
-      { href: '/users', label: 'Users', icon: <UsersIcon />, required: ['users.read'], tenantOnly: true },
-      { href: '/packages', label: 'Packages', icon: <PackageIcon />, required: ['packages.read'], tenantOnly: true },
-      { href: '/transactions', label: 'Transactions', icon: <BillingIcon />, required: ['billing.read'], tenantOnly: true },
-      { href: '/disbursements', label: 'Disbursements', icon: <SettlementIcon />, required: ['disbursements.read'], tenantOnly: true },
-      { href: '/agents', label: 'Agent PoS', icon: <AgentIcon />, required: ['agents.read'], tenantOnly: true },
-      { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon />, required: ['vouchers.read'], tenantOnly: true },
+      { href: '/hotspots', label: 'Hotspots', icon: <HotspotIcon />, required: ['hotspots.read'], tenantOnly: true },
       { href: '/routers', label: 'Remote Access', icon: <RemoteIcon />, required: ['routers.read'], tenantOnly: true },
+    ]
+  },
+  {
+    section: 'Sales & Earnings',
+    defaultOpen: true,
+    items: [
+      { href: '/packages', label: 'Packages', icon: <PackageIcon />, required: ['packages.read'], tenantOnly: true },
+      { href: '/vouchers', label: 'Vouchers', icon: <VoucherIcon />, required: ['vouchers.read'], tenantOnly: true },
+      { href: '/sales', label: 'Sales', icon: <PaymentIcon />, required: ['billing.read'], tenantOnly: true },
+      { href: '/transactions', label: 'Transactions', icon: <BillingIcon />, required: ['billing.read'], tenantOnly: true },
+      { href: '/float', label: 'Earnings', icon: <FloatIcon />, required: ['agents.read'], tenantOnly: true },
+      { href: '/disbursements', label: 'Disbursements', icon: <SettlementIcon />, required: ['disbursements.read'], tenantOnly: true },
+    ]
+  },
+  {
+    section: 'People & Settings',
+    defaultOpen: false,
+    items: [
+      { href: '/users', label: 'Staff & Customers', icon: <UsersIcon />, required: ['users.read'], tenantOnly: true },
+      { href: '/agents', label: 'Agent PoS', icon: <AgentIcon />, required: ['agents.read'], tenantOnly: true },
       { href: '/settings', label: 'Settings', icon: <SettingsIcon />, tenantOnly: true },
     ]
   },
   {
-    section: 'Platform Operations',
+    section: 'Vendor Management',
+    defaultOpen: true,
     items: [
       { href: '/tenants', label: 'Vendors / Tenants', icon: <TenantIcon />, required: ['tenants.read'], platformOnly: true },
-      { href: '/routers', label: 'Router Support', icon: <RouterIcon />, required: ['routers.read'], platformOnly: true },
-      { href: '/support', label: 'Support Tickets', icon: <SupportIcon />, required: ['support.read'], platformOnly: true },
-      { href: '/payments', label: 'Payment Health', icon: <PaymentPulseIcon />, required: ['payments.read'], platformOnly: true },
-      { href: '/disbursements', label: 'Withdrawal Control', icon: <SettlementIcon />, required: ['disbursements.read'], platformOnly: true },
-      { href: '/settings', label: 'Platform Settings', icon: <SettingsIcon />, required: ['settings.manage'], platformOnly: true },
       { href: '/users', label: 'Platform Users', icon: <UsersIcon />, required: ['users.read'], platformOnly: true },
-      { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'], platformOnly: true },
-      { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'], platformOnly: true },
+      { href: '/settings', label: 'Platform Settings', icon: <SettingsIcon />, required: ['settings.manage'], platformOnly: true },
     ]
   },
   {
-    section: 'Account',
+    section: 'Router Support',
+    defaultOpen: true,
     items: [
-      { href: '/billing', label: 'Billing', icon: <BillingIcon />, required: ['billing.read'], tenantOnly: true },
-      { href: '/support', label: 'Support', icon: <SupportIcon />, required: ['support.read'], tenantOnly: true },
+      { href: '/routers', label: 'Router Support', icon: <RouterIcon />, required: ['routers.read'], platformOnly: true },
+      { href: '/sessions', label: 'Sessions & RADIUS', icon: <UsageIcon />, required: ['sessions.read'], platformOnly: true },
+      { href: '/hotspots', label: 'Hotspot Sites', icon: <HotspotIcon />, required: ['hotspots.read'], platformOnly: true },
+    ]
+  },
+  {
+    section: 'Finance & Approvals',
+    defaultOpen: true,
+    items: [
+      { href: '/payments', label: 'Payment Health', icon: <PaymentPulseIcon />, required: ['payments.read'], platformOnly: true },
+      { href: '/disbursements', label: 'Phone / Withdrawal Approval', icon: <SettlementIcon />, required: ['disbursements.read'], platformOnly: true },
+      { href: '/transactions', label: 'All Transactions', icon: <BillingIcon />, required: ['billing.read'], platformOnly: true },
+    ]
+  },
+  {
+    section: 'Platform Governance',
+    defaultOpen: false,
+    items: [
+      { href: '/support', label: 'Support Tickets', icon: <SupportIcon />, required: ['support.read'], platformOnly: true },
+      { href: '/audit-logs', label: 'Audit Logs', icon: <AuditIcon />, required: ['audit.read'], platformOnly: true },
+      { href: '/feature-limits', label: 'Feature Limits', icon: <LimitIcon />, required: ['feature_limits.read'], platformOnly: true },
       { href: '/docs', label: 'Docs', icon: <ReportIcon /> },
     ]
   },
@@ -87,12 +124,18 @@ function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: bo
 export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname()
   const isVendor = isVendorWorkspace(user)
-  const visibleGroups = navItems
+  const visibleGroups = useMemo(() => navItems
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly, item.tenantOnly)),
     }))
-    .filter((group) => group.items.length > 0)
+    .filter((group) => group.items.length > 0), [user])
+  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>(() =>
+    navItems.reduce<Record<string, boolean>>((accumulator, group) => {
+      accumulator[group.section] = group.defaultOpen === false
+      return accumulator
+    }, {}),
+  )
 
   const workspaceLabel = isVendor ? 'Vendor Workspace' : 'Developer Admin Workspace'
 
@@ -113,18 +156,30 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
       </div>
       {visibleGroups.map((group) => (
         <div key={group.section} className="sidebar-section">
-          {group.section === '' && isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
-          {group.section && <div className="sidebar-section-label">{group.section}</div>}
-          {group.items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`nav-item ${pathname === item.href ? 'active' : ''}`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
+          {group.section === 'Workspace' && isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
+          <button
+            type="button"
+            className="sidebar-group-toggle"
+            aria-expanded={!closedGroups[group.section]}
+            onClick={() => setClosedGroups((previous) => ({ ...previous, [group.section]: !previous[group.section] }))}
+          >
+            <span>{group.section}</span>
+            <span>{closedGroups[group.section] ? '+' : '-'}</span>
+          </button>
+          {!closedGroups[group.section] && (
+            <div className="sidebar-group-items">
+              {group.items.map((item) => (
+                <Link
+                  key={`${group.section}-${item.href}-${item.label}`}
+                  href={item.href}
+                  className={`nav-item ${pathname === item.href ? 'active' : ''}`}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </aside>

@@ -44,6 +44,8 @@ type RouterFormState = {
   tags: string
 }
 
+type RouterView = 'overview' | 'setup' | 'inventory' | 'health'
+
 const initialGroupForm: GroupFormState = {
   tenantId: '',
   name: '',
@@ -112,6 +114,7 @@ export default function RoutersManager() {
   const [showAdvancedRouterSettings, setShowAdvancedRouterSettings] = useState(false)
   const [groupModalOpen, setGroupModalOpen] = useState(false)
   const [routerModalOpen, setRouterModalOpen] = useState(false)
+  const [activeRouterView, setActiveRouterView] = useState<RouterView>('overview')
   const [groupProcessText, setGroupProcessText] = useState('')
   const [routerProcessText, setRouterProcessText] = useState('')
   const [groupFormError, setGroupFormError] = useState('')
@@ -368,6 +371,8 @@ export default function RoutersManager() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-primary" onClick={() => { setRouterFormError(''); setRouterProcessText(''); setRouterModalOpen(true) }}>Register Router</button>
+          <button type="button" className="btn btn-ghost" onClick={() => { setGroupFormError(''); setGroupProcessText(''); setGroupModalOpen(true) }}>Create Group</button>
           <span className="badge badge-info" style={{ padding: '8px 12px' }}>
             {overview?.radiusFoundation.serverHost ?? 'RADIUS pending'}:{overview?.radiusFoundation.authPort ?? 1812}
           </span>
@@ -395,7 +400,25 @@ export default function RoutersManager() {
         ))}
       </div>
 
-      <div className="charts-grid">
+      <div className="tabs-bar router-workbench-tabs" style={{ marginBottom: 18 }}>
+        {[
+          ['overview', 'Overview'],
+          ['setup', 'Provisioning'],
+          ['inventory', 'Inventory'],
+          ['health', 'Health Checks'],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={`tab-button ${activeRouterView === key ? 'active' : ''}`}
+            onClick={() => setActiveRouterView(key as RouterView)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeRouterView === 'overview' && <div className="charts-grid">
         <div className="card">
           <div className="card-header">
             <span className="card-title">Tenant Launch Sequence</span>
@@ -487,24 +510,7 @@ export default function RoutersManager() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="charts-grid">
-        <div className="card">
-          <div className="card-header"><span className="card-title">Router Groups</span></div>
-          <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>Group routers by branch, region, or site before registering MikroTik devices.</p>
-            <button type="button" className="btn btn-primary" onClick={() => { setGroupFormError(''); setGroupProcessText(''); setGroupModalOpen(true) }}>Create Router Group</button>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><span className="card-title">MikroTik Registration</span></div>
-          <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>Register a MikroTik, generate the RouterOS script, then verify callback, RADIUS, accounting, and optional API reachability.</p>
-            <button type="button" className="btn btn-primary" onClick={() => { setRouterFormError(''); setRouterProcessText(''); setRouterModalOpen(true) }}>Register MikroTik Router</button>
-          </div>
-        </div>
-      </div>
+      </div>}
 
       {groupModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingGroup && setGroupModalOpen(false)}>
@@ -555,7 +561,7 @@ export default function RoutersManager() {
         </div>
       )}
 
-      <div className="charts-grid">
+      {activeRouterView === 'setup' && <div className="charts-grid">
         <div className="card">
           <div className="card-header">
             <span className="card-title">Provisioning Checklist</span>
@@ -621,16 +627,17 @@ export default function RoutersManager() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
-      <RouterInventoryTable
+      {(activeRouterView === 'inventory' || activeRouterView === 'health') && <RouterInventoryTable
+        view={activeRouterView}
         loading={loading}
         routers={overview?.routers ?? []}
         recentHealthChecks={overview?.recentHealthChecks ?? []}
         onLoadSetup={(routerId) => void loadSetup(routerId)}
         onHealthCheck={(routerId) => void handleHealthCheck(routerId)}
         runningHealthCheckId={runningHealthCheckId}
-      />
+      />}
     </>
   )
 }
@@ -761,10 +768,26 @@ function RouterCreateCard({
   )
 }
 
-function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetup, onHealthCheck, runningHealthCheckId }: { loading: boolean; routers: RouterOverviewResponse['routers']; recentHealthChecks: RouterOverviewResponse['recentHealthChecks']; onLoadSetup: (routerId: string) => void; onHealthCheck: (routerId: string) => void; runningHealthCheckId: string | null }) {
+function RouterInventoryTable({
+  view,
+  loading,
+  routers,
+  recentHealthChecks,
+  onLoadSetup,
+  onHealthCheck,
+  runningHealthCheckId,
+}: {
+  view: 'inventory' | 'health'
+  loading: boolean
+  routers: RouterOverviewResponse['routers']
+  recentHealthChecks: RouterOverviewResponse['recentHealthChecks']
+  onLoadSetup: (routerId: string) => void
+  onHealthCheck: (routerId: string) => void
+  runningHealthCheckId: string | null
+}) {
   return (
     <>
-      <div className="card">
+      {view === 'inventory' && <div className="card">
         <div className="card-header"><span className="card-title">Router Inventory</span></div>
         <div className="table-wrap">
           <table>
@@ -811,9 +834,9 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
-      <div className="card">
+      {view === 'health' && <div className="card">
         <div className="card-header"><span className="card-title">Recent Health Checks</span></div>
         <div className="table-wrap">
           <table>
@@ -834,7 +857,7 @@ function RouterInventoryTable({ loading, routers, recentHealthChecks, onLoadSetu
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
     </>
   )
 }
