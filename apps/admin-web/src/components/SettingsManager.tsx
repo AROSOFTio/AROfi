@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { clientPatchApi } from '@/lib/client-api'
 
 type AdminUser = {
@@ -82,6 +83,7 @@ export default function SettingsManager({
   initialPlatformSettings: PlatformSettings | null
   initialTenantSettings: TenantSettings | null
 }) {
+  const searchParams = useSearchParams()
   const isDevAdmin = user.permissions.includes('ALL')
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>('Business Profile')
   const [platform, setPlatform] = useState(initialPlatformSettings)
@@ -92,6 +94,13 @@ export default function SettingsManager({
 
   const effectiveMobileFee = tenant?.settings.tenantMobileMoneyFeePercent ?? platform?.mobileMoneyFeePercent ?? 7
   const effectiveVoucherFee = tenant?.settings.tenantVoucherFeePercent ?? platform?.voucherFeePercent ?? 2
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab')
+    if (tabs.includes(requestedTab as (typeof tabs)[number])) {
+      setActiveTab(requestedTab as (typeof tabs)[number])
+    }
+  }, [searchParams])
 
   async function savePlatform(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

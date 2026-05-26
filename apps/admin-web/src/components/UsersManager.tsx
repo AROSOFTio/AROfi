@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { UsersOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
@@ -36,6 +37,7 @@ type CustomerDirectory = {
 }
 
 export default function UsersManager({ initialData }: { initialData: UsersOverviewResponse | null }) {
+  const searchParams = useSearchParams()
   const [data, setData] = useState(initialData)
   const [activeTab, setActiveTab] = useState<'staff' | 'customers'>('staff')
   const [customers, setCustomers] = useState<CustomerDirectory | null>(null)
@@ -64,6 +66,15 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   })
 
   const users = data?.users ?? []
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'customers') {
+      void openCustomers()
+    } else if (tab === 'staff') {
+      setActiveTab('staff')
+    }
+  }, [searchParams])
 
   async function openCustomers() {
     setActiveTab('customers')

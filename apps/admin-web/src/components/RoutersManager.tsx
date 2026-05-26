@@ -156,6 +156,13 @@ export default function RoutersManager() {
     void loadData()
   }, [])
 
+  useEffect(() => {
+    const requestedView = searchParams.get('view')
+    if (requestedView === 'overview' || requestedView === 'setup' || requestedView === 'inventory' || requestedView === 'health') {
+      setActiveRouterView(requestedView)
+    }
+  }, [searchParams])
+
   async function loadData(preferredRouterId?: string) {
     try {
       setLoading(true)
