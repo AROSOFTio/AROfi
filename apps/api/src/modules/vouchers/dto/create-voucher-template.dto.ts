@@ -16,9 +16,9 @@ export class CreateVoucherTemplateDto {
   @MinLength(2)
   code: string
 
+  @IsOptional()
   @IsString()
-  @MinLength(2)
-  prefix: string
+  prefix?: string
 
   @IsOptional()
   @IsInt()

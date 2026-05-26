@@ -1,4 +1,7 @@
-import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength, ValidateIf } from 'class-validator'
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min, ValidateIf } from 'class-validator'
+
+export const voucherCodeFormats = ['NUMBERS', 'MIXED', 'UPPERCASE_TEXT', 'LOWERCASE_TEXT'] as const
+export type VoucherCodeFormatDto = (typeof voucherCodeFormats)[number]
 
 export class CreateVoucherBatchDto {
   @IsUUID()
@@ -15,10 +18,19 @@ export class CreateVoucherBatchDto {
   @IsUUID()
   generatedByUserId?: string
 
-  @ValidateIf((object: CreateVoucherBatchDto) => !object.templateId)
+  @IsOptional()
   @IsString()
-  @MinLength(2)
   prefix?: string
+
+  @IsOptional()
+  @IsIn(voucherCodeFormats)
+  codeFormat?: VoucherCodeFormatDto
+
+  @IsOptional()
+  @IsInt()
+  @Min(6)
+  @Max(24)
+  codeLength?: number
 
   @ValidateIf((object: CreateVoucherBatchDto) => !object.templateId)
   @IsInt()

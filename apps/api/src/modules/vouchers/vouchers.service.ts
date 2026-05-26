@@ -16,7 +16,7 @@ import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
-import { VoucherCodeService } from './voucher-code.service'
+import { VoucherCodeFormat, VoucherCodeService } from './voucher-code.service'
 import PDFDocument = require('pdfkit')
 import * as QRCode from 'qrcode'
 
@@ -301,7 +301,7 @@ export class VouchersService {
         packageId: dto.packageId,
         name: dto.name.trim(),
         code: dto.code.trim().toUpperCase(),
-        prefix: dto.prefix.trim().toUpperCase(),
+        prefix: this.resolveTemplatePrefix(dto.prefix),
         defaultQuantity: dto.defaultQuantity ?? 100,
         faceValueUgx: dto.faceValueUgx,
         expiresAfterDays: dto.expiresAfterDays,
@@ -368,7 +368,7 @@ export class VouchersService {
         packageId: dto.packageId,
         name: dto.name?.trim(),
         code: dto.code?.trim().toUpperCase(),
-        prefix: dto.prefix?.trim().toUpperCase(),
+        prefix: dto.prefix === undefined ? undefined : this.resolveTemplatePrefix(dto.prefix),
         defaultQuantity: dto.defaultQuantity,
         faceValueUgx: dto.faceValueUgx,
         expiresAfterDays: dto.expiresAfterDays,
@@ -424,19 +424,17 @@ export class VouchersService {
       throw new BadRequestException('Template package does not match the selected package')
     }
 
-    const resolvedPrefix = (dto.prefix ?? template?.prefix)?.toUpperCase()
+    const resolvedCodeFormat = this.resolveVoucherCodeFormat(dto.codeFormat)
+    const resolvedCodeLength = dto.codeLength ?? 10
+    const codeModeLabel = this.getCodeModeLabel(resolvedCodeFormat)
     const resolvedQuantity = dto.quantity ?? template?.defaultQuantity
-    const batchNumber = this.voucherCodeService.generateBatchNumber(resolvedPrefix ?? '')
+    const batchNumber = this.voucherCodeService.generateBatchNumber(codeModeLabel)
     const faceValueUgx = dto.faceValueUgx ?? template?.faceValueUgx ?? pkg.prices[0]?.amountUgx
     const resolvedExpiresAt = dto.expiresAt
       ? new Date(dto.expiresAt)
       : template?.expiresAfterDays
         ? new Date(Date.now() + template.expiresAfterDays * 24 * 60 * 60 * 1000)
         : null
-
-    if (!resolvedPrefix) {
-      throw new BadRequestException('Prefix is required (direct input or template)')
-    }
 
     if (!resolvedQuantity) {
       throw new BadRequestException('Quantity is required (direct input or template)')
@@ -447,6 +445,7 @@ export class VouchersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const voucherCodes = await this.generateUniqueVoucherCodes(tx, resolvedQuantity, resolvedCodeFormat, resolvedCodeLength)
       const batch = await tx.voucherBatch.create({
         data: {
           tenantId: dto.tenantId,
@@ -454,7 +453,7 @@ export class VouchersService {
           templateId: template?.id,
           generatedByUserId: dto.generatedByUserId,
           batchNumber,
-          prefix: resolvedPrefix,
+          prefix: codeModeLabel,
           quantity: resolvedQuantity,
           faceValueUgx,
           expiresAt: resolvedExpiresAt,
@@ -468,7 +467,7 @@ export class VouchersService {
           tenantId: dto.tenantId,
           batchId: batch.id,
           packageId: dto.packageId,
-          code: this.voucherCodeService.generateVoucherCode(resolvedPrefix, batchNumber, index + 1),
+          code: voucherCodes[index],
           serialNumber: this.voucherCodeService.generateSerialNumber(batchNumber, index + 1),
           faceValueUgx,
           expiresAt: resolvedExpiresAt,
@@ -1053,7 +1052,14 @@ export class VouchersService {
 
   private getVoucherCodeLookupVariants(input: string) {
     const normalized = this.normalizeVoucherCodeInput(input)
+    const compactRaw = (input ?? '').trim().replace(/[\u2010-\u2015]/g, '-').replace(/\s+/g, '')
     const variants = new Set<string>()
+
+    if (compactRaw) {
+      variants.add(compactRaw)
+      variants.add(compactRaw.toUpperCase())
+      variants.add(compactRaw.toLowerCase())
+    }
 
     if (normalized) {
       variants.add(normalized)
@@ -1084,6 +1090,78 @@ export class VouchersService {
       .replace(/[\u2010-\u2015]/g, '-')
       .replace(/\s+/g, '')
       .toUpperCase()
+  }
+
+  private resolveTemplatePrefix(prefix?: string | null) {
+    return prefix?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'RANDOM'
+  }
+
+  private resolveVoucherCodeFormat(format?: string | null): VoucherCodeFormat {
+    if (format === 'NUMBERS' || format === 'UPPERCASE_TEXT' || format === 'LOWERCASE_TEXT' || format === 'MIXED') {
+      return format
+    }
+
+    return 'MIXED'
+  }
+
+  private getCodeModeLabel(format: VoucherCodeFormat) {
+    switch (format) {
+      case 'NUMBERS':
+        return 'NUMBERS'
+      case 'UPPERCASE_TEXT':
+        return 'UPPERCASE'
+      case 'LOWERCASE_TEXT':
+        return 'LOWERCASE'
+      case 'MIXED':
+      default:
+        return 'MIXED'
+    }
+  }
+
+  private async generateUniqueVoucherCodes(
+    tx: Prisma.TransactionClient,
+    quantity: number,
+    format: VoucherCodeFormat,
+    length: number,
+  ) {
+    const codes = new Set<string>()
+    let attempts = 0
+
+    while (codes.size < quantity && attempts < quantity * 20) {
+      codes.add(this.voucherCodeService.generateVoucherCode(format, length))
+      attempts += 1
+    }
+
+    if (codes.size < quantity) {
+      throw new BadRequestException('Could not generate enough unique voucher codes. Increase voucher code length.')
+    }
+
+    const existingCodes = await tx.voucher.findMany({
+      where: { code: { in: Array.from(codes) } },
+      select: { code: true },
+    })
+
+    for (const existing of existingCodes) {
+      codes.delete(existing.code)
+    }
+
+    attempts = 0
+    while (codes.size < quantity && attempts < quantity * 20) {
+      const nextCode = this.voucherCodeService.generateVoucherCode(format, length)
+      if (!codes.has(nextCode)) {
+        const existing = await tx.voucher.findUnique({ where: { code: nextCode }, select: { id: true } })
+        if (!existing) {
+          codes.add(nextCode)
+        }
+      }
+      attempts += 1
+    }
+
+    if (codes.size < quantity) {
+      throw new BadRequestException('Could not generate enough unique voucher codes. Increase voucher code length.')
+    }
+
+    return Array.from(codes)
   }
 
   private drawVoucherDetail(

@@ -17,7 +17,6 @@ type TemplateFormState = {
   packageId: string
   name: string
   code: string
-  prefix: string
   defaultQuantity: string
   faceValueUgx: string
   expiresAfterDays: string
@@ -30,7 +29,8 @@ type BatchFormState = {
   tenantId: string
   packageId: string
   templateId: string
-  prefix: string
+  codeFormat: 'NUMBERS' | 'MIXED' | 'UPPERCASE_TEXT' | 'LOWERCASE_TEXT'
+  codeLength: string
   quantity: string
   faceValueUgx: string
   expiresAt: string
@@ -42,7 +42,6 @@ const initialTemplateForm: TemplateFormState = {
   packageId: '',
   name: '',
   code: '',
-  prefix: '',
   defaultQuantity: '100',
   faceValueUgx: '',
   expiresAfterDays: '',
@@ -55,7 +54,8 @@ const initialBatchForm: BatchFormState = {
   tenantId: '',
   packageId: '',
   templateId: '',
-  prefix: '',
+  codeFormat: 'MIXED',
+  codeLength: '10',
   quantity: '100',
   faceValueUgx: '',
   expiresAt: '',
@@ -114,6 +114,29 @@ const printTemplates = [
     muted: '#64748B',
   },
 ]
+
+const voucherCodeFormats = [
+  {
+    value: 'MIXED',
+    label: 'Mixed numbers and text',
+    hint: 'Random uppercase letters and numbers, best for most vendors.',
+  },
+  {
+    value: 'NUMBERS',
+    label: 'Numbers only',
+    hint: 'Digits only, easier to type on phones.',
+  },
+  {
+    value: 'UPPERCASE_TEXT',
+    label: 'Uppercase text only',
+    hint: 'Random capital letters only.',
+  },
+  {
+    value: 'LOWERCASE_TEXT',
+    label: 'Lowercase text only',
+    hint: 'Random lowercase letters only.',
+  },
+] as const
 
 type PrintTemplate = (typeof printTemplates)[number]
 
@@ -245,7 +268,6 @@ export default function VouchersManager() {
         packageId: templateForm.packageId || undefined,
         name: templateForm.name.trim(),
         code: templateForm.code.trim().toUpperCase(),
-        prefix: templateForm.prefix.trim().toUpperCase(),
         defaultQuantity: parseOptionalInt(templateForm.defaultQuantity),
         faceValueUgx: parseOptionalInt(templateForm.faceValueUgx),
         expiresAfterDays: parseOptionalInt(templateForm.expiresAfterDays),
@@ -293,7 +315,8 @@ export default function VouchersManager() {
         tenantId: batchForm.tenantId,
         packageId: batchForm.packageId,
         templateId: batchForm.templateId || undefined,
-        prefix: batchForm.prefix.trim() || undefined,
+        codeFormat: batchForm.codeFormat,
+        codeLength: parseOptionalInt(batchForm.codeLength),
         quantity: parseOptionalInt(batchForm.quantity),
         faceValueUgx: parseOptionalInt(batchForm.faceValueUgx),
         expiresAt: batchForm.expiresAt || undefined,
@@ -422,10 +445,6 @@ export default function VouchersManager() {
                 <input className="form-input" value={templateForm.code} onChange={(event) => setTemplateForm((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))} placeholder="DAILY-SCRATCH" required />
               </div>
               <div className="form-group">
-                <label className="form-label">Voucher Prefix</label>
-                <input className="form-input" value={templateForm.prefix} onChange={(event) => setTemplateForm((previous) => ({ ...previous, prefix: event.target.value.toUpperCase() }))} placeholder="DAY" required />
-              </div>
-              <div className="form-group">
                 <label className="form-label">Default Quantity</label>
                 <input className="form-input" type="number" min={1} value={templateForm.defaultQuantity} onChange={(event) => setTemplateForm((previous) => ({ ...previous, defaultQuantity: event.target.value }))} />
               </div>
@@ -511,14 +530,29 @@ export default function VouchersManager() {
                   <option value="">No template (manual fields)</option>
                   {tenantTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
-                      {template.name} ({template.prefix})
+                      {template.name}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Prefix</label>
-                <input className="form-input" value={batchForm.prefix} onChange={(event) => setBatchForm((previous) => ({ ...previous, prefix: event.target.value.toUpperCase() }))} placeholder="AUTO when template is set" />
+                <label className="form-label">Voucher Code Type</label>
+                <select
+                  className="form-input"
+                  value={batchForm.codeFormat}
+                  onChange={(event) => setBatchForm((previous) => ({ ...previous, codeFormat: event.target.value as BatchFormState['codeFormat'] }))}
+                >
+                  {voucherCodeFormats.map((format) => (
+                    <option key={format.value} value={format.value}>{format.label}</option>
+                  ))}
+                </select>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {voucherCodeFormats.find((format) => format.value === batchForm.codeFormat)?.hint}
+                </p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Voucher Code Length</label>
+                <input className="form-input" type="number" min={6} max={24} value={batchForm.codeLength} onChange={(event) => setBatchForm((previous) => ({ ...previous, codeLength: event.target.value }))} />
               </div>
               <div className="form-group">
                 <label className="form-label">Quantity</label>
@@ -575,7 +609,6 @@ export default function VouchersManager() {
                 <th>Template</th>
                 <th>Tenant</th>
                 <th>Package</th>
-                <th>Prefix</th>
                 <th>Default Qty</th>
                 <th>Face Value</th>
                 <th>Status</th>
@@ -584,7 +617,7 @@ export default function VouchersManager() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={6}>
                     <div className="empty-state">
                       <p>Loading templates...</p>
                     </div>
@@ -593,7 +626,7 @@ export default function VouchersManager() {
               )}
               {!loading && templateItems.length === 0 && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={6}>
                     <div className="empty-state">
                       <p>No voucher templates created yet.</p>
                     </div>
@@ -608,7 +641,6 @@ export default function VouchersManager() {
                   </td>
                   <td>{template.tenant.name}</td>
                   <td>{template.package?.name ?? 'Any package'}</td>
-                  <td>{template.prefix}</td>
                   <td>{template.defaultQuantity}</td>
                   <td>{formatCurrency(template.faceValueUgx ?? 0)}</td>
                   <td>
@@ -657,7 +689,7 @@ export default function VouchersManager() {
                 <tr key={batch.id}>
                   <td>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{batch.batchNumber}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{batch.prefix}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Random {batch.prefix.toLowerCase()} codes</div>
                   </td>
                   <td>{batch.tenant.name}</td>
                   <td>{batch.package.name}</td>
