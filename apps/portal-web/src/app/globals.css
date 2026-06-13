@@ -4,7 +4,11 @@
 
 body {
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: #f4f7ff;
+  background-image:
+    radial-gradient(900px 600px at 12% -8%, rgba(21, 93, 252, 0.12), transparent 60%),
+    radial-gradient(800px 520px at 100% 0%, rgba(79, 134, 255, 0.10), transparent 55%);
+  background-attachment: fixed;
   color: #0f172a;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -15,6 +19,6 @@ body {
 }
 
 ::selection {
-  background: rgba(22, 163, 74, 0.22);
-  color: #14532d;
+  background: rgba(21, 93, 252, 0.22);
+  color: #0c2f7a;
 }

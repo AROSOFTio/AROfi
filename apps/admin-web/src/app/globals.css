@@ -23,10 +23,20 @@
   --text-secondary: var(--text-2);
   --text-muted: var(--text-3);
 
-  --green:       #2db879;
-  --green-light: #e9fbf2;
-  --green-mid:   #a7f3d0;
-  --green-dark:  #0f8a57;
+  /* Brand accent (AROFi blue #155DFC). Kept under --green* names so every
+     existing reference recolors instantly. */
+  --green:       #155DFC;
+  --green-light: #e8efff;
+  --green-mid:   #9dbcff;
+  --green-dark:  #0c44c4;
+  --green-soft:  #eef3ff;
+  --brand:       #155DFC;
+  --brand-2:     #4f86ff;
+
+  /* Glassy translucent surfaces */
+  --glass-bg:     rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur:   16px;
 
   --success-bg:  #f0fdf4;
   --success-fg:  #15803d;
@@ -62,10 +72,17 @@
   --text-secondary: var(--text-2);
   --text-muted: var(--text-3);
 
-  --green:       #3fb950;
-  --green-light: rgba(63, 185, 80, 0.12);
-  --green-mid:   rgba(63, 185, 80, 0.25);
-  --green-dark:  #3fb950;
+  --green:       #5b8cff;
+  --green-light: rgba(21, 93, 252, 0.16);
+  --green-mid:   rgba(21, 93, 252, 0.34);
+  --green-dark:  #7aa3ff;
+  --green-soft:  rgba(21, 93, 252, 0.12);
+  --brand:       #5b8cff;
+  --brand-2:     #155DFC;
+
+  --glass-bg:     rgba(22, 27, 34, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur:   16px;
 
   --success-bg:  rgba(63, 185, 80, 0.10);
   --success-fg:  #3fb950;
@@ -93,10 +110,28 @@ html { -webkit-font-smoothing: antialiased; }
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--bg-app);
+  background-image:
+    radial-gradient(900px 600px at 12% -8%, rgba(21, 93, 252, 0.10), transparent 60%),
+    radial-gradient(800px 520px at 100% 0%, rgba(79, 134, 255, 0.08), transparent 55%);
+  background-attachment: fixed;
   color: var(--text-1);
   font-size: 14px;
   line-height: 1.5;
   transition: background 0.2s, color 0.2s;
+}
+
+[data-theme="dark"] body {
+  background-image:
+    radial-gradient(900px 600px at 12% -8%, rgba(21, 93, 252, 0.18), transparent 60%),
+    radial-gradient(800px 520px at 100% 0%, rgba(91, 140, 255, 0.12), transparent 55%);
+}
+
+/* Glassmorphism helpers */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -108,7 +143,9 @@ body {
 ═══════════════════════════════════════════════ */
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--bg-sidebar);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
   border-right: 1px solid var(--border);
   height: 100vh;
   position: fixed;
@@ -212,7 +249,9 @@ body {
 ═══════════════════════════════════════════════ */
 .topbar {
   height: 56px;
-  background: var(--bg-card);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -349,17 +388,23 @@ body {
 }
 
 .stat-card {
-  background: var(--bg-card);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 18px 20px;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
 }
 
-.stat-card:hover { box-shadow: var(--shadow-md); }
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--green-mid);
+}
 
-/* Primary revenue card gets a green top border accent */
+/* Primary revenue card gets a brand top border accent */
 .stat-card.vibrant {
   border-top: 3px solid var(--green);
 }
@@ -399,9 +444,11 @@ body {
    CARDS
 ═══════════════════════════════════════════════ */
 .card {
-  background: var(--bg-card);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   margin-bottom: 20px;
   box-shadow: var(--shadow-sm);
@@ -542,10 +589,11 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 .btn-primary {
-  background: var(--green);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand));
   color: #fff;
+  box-shadow: 0 6px 16px rgba(21, 93, 252, 0.28);
 }
-.btn-primary:hover { opacity: 0.88; }
+.btn-primary:hover { filter: brightness(1.05); box-shadow: 0 8px 22px rgba(21, 93, 252, 0.36); }
 
 .btn-ghost {
   background: transparent;
@@ -644,8 +692,8 @@ tr:hover td { background: var(--bg-hover); }
 .home-shell {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 20% 20%, rgba(22, 163, 74, 0.15), transparent 32%),
-    radial-gradient(circle at 80% 0%, rgba(14, 165, 233, 0.12), transparent 28%),
+    radial-gradient(circle at 18% 12%, rgba(21, 93, 252, 0.20), transparent 38%),
+    radial-gradient(circle at 86% -4%, rgba(79, 134, 255, 0.16), transparent 34%),
     var(--bg-app);
   color: var(--text-1);
   padding: 24px;
@@ -732,8 +780,13 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 .home-panel {
-  border-radius: 18px;
+  border-radius: 20px;
   padding: 28px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 24px 60px rgba(21, 93, 252, 0.16);
   animation: slideUp 0.5s ease both;
 }
 
@@ -902,8 +955,8 @@ tr:hover td { background: var(--bg-hover); }
   inset: 0 0 auto 0;
   z-index: 200;
   height: var(--titlebar-height);
-  background: var(--green);
-  color: #06170f;
+  background: linear-gradient(90deg, var(--brand-2), var(--brand));
+  color: #ffffff;
   display: flex;
   align-items: center;
   gap: 8px;
