@@ -43,7 +43,6 @@ function assertRequiredProductionConfig() {
   const required = [
     'DATABASE_URL',
     'POSTGRES_PASSWORD',
-    'REDIS_PASSWORD',
     'JWT_SECRET',
     'PORTAL_TOKEN_SECRET',
     'ROUTER_CREDENTIAL_SECRET',
@@ -54,7 +53,6 @@ function assertRequiredProductionConfig() {
   // Payment provider credentials are validated by provider adapters at request time.
   // The API must still boot so admins can configure keys and vendors can use
   // non-payment workflows while MTN/Airtel credentials are pending.
-
   const missing = required.filter((key) => {
     const value = process.env[key]
     return !value || value.startsWith('change_') || value.startsWith('replace_with') || value.startsWith('CHANGE_ME')
