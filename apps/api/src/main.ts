@@ -19,7 +19,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  await app.listen(Number.parseInt(process.env.PORT ?? '3000', 10));
+  await app.listen(Number.parseInt(process.env.PORT ?? '3000', 10), '0.0.0.0');
 }
 bootstrap();
 
