@@ -31,6 +31,8 @@ RUN apk add --no-cache openssl libc6-compat freeradius-utils
 COPY --from=builder /usr/src/app ./
 
 EXPOSE 3000
+# Default service to run if SERVICE_NAME is not specified in the environment
+ENV SERVICE_NAME=api
 
 # Start appropriate service based on SERVICE_NAME environment variable
 CMD if [ "$SERVICE_NAME" = "api" ]; then \
