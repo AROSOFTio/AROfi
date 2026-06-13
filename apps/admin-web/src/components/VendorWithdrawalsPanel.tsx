@@ -169,8 +169,6 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
     }
 
     const form = new FormData(event.currentTarget)
-    const confirmed = window.confirm(`You are withdrawing ${formatCurrency(withdrawalMath.amountUgx)} to ${primaryNumber?.network} ${maskPhone(primaryNumber?.normalizedPhone ?? '')}. Platform/withdrawal fee ${formatCurrency(withdrawalMath.feeAmountUgx)}. You will receive ${formatCurrency(withdrawalMath.amountUgx)}.`)
-    if (!confirmed) return
 
     await run('Withdrawal sent successfully. If the provider later fails, your balance will be restored automatically.', () =>
       clientPostApi('/wallets/withdrawals', {

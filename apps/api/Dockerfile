@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 RUN apk add --no-cache python3 make g++ openssl libc6-compat
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
-RUN npm ci --workspace apps/api --include-workspace-root
+RUN NODE_ENV=development npm ci --workspace apps/api --include-workspace-root
 
 COPY apps/api ./apps/api
 
