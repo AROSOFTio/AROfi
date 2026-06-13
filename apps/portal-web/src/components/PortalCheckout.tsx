@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, useRef, useCallback, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Loader2, LogIn, Ticket, Wifi } from 'lucide-react'
@@ -256,7 +256,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
-  const [autoConnectAttempted, setAutoConnectAttempted] = useState(false)
+  const autoConnectAttemptedRef = useRef(false)
   const [qrVoucherCode, setQrVoucherCode] = useState('')
   const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
@@ -282,14 +282,81 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     void bootstrap()
   }, [])
 
-  useEffect(() => {
-    if (!qrVoucherCode || qrVoucherRedeemAttempted || isBooting || isVoucherLoading) {
+  const handleVoucherRedeem = useCallback(async (overrideCode?: string) => {
+    setErrorMessage('')
+    setStatusMessage('')
+
+    const codeToRedeem = normalizeVoucherCode(overrideCode ?? voucherCode)
+    if (!codeToRedeem) {
+      setErrorMessage('Enter your voucher code before redeeming.')
       return
     }
 
+    setIsVoucherLoading(true)
+
+    try {
+      const response = await fetch('/api/portal/redeem-voucher', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: codeToRedeem,
+          phoneNumber: phoneNumber || undefined,
+          customerReference: customerReference || phoneNumber || undefined,
+          macAddress: hotspotParams.macAddress || undefined,
+          clientIp: hotspotParams.clientIp || undefined,
+          loginUrl: hotspotParams.loginUrl || undefined,
+          routerId: hotspotParams.routerId || undefined,
+          routerKey: hotspotParams.routerKey || undefined,
+          hotspotServerName: hotspotParams.hotspotServerName || undefined,
+        }),
+      })
+
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setErrorMessage((body as { message?: string }).message ?? 'Voucher redemption failed.')
+        return
+      }
+
+      const redemption = body as PortalRedeemVoucherResponse
+      setVoucherCode('')
+      setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
+
+      if (redemption.reconnect?.loginUrl && redemption.reconnect.username && redemption.reconnect.password) {
+        setConnectionStatus('reconnecting')
+        setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
+        window.setTimeout(() => autoSubmitHotspotLogin(redemption.reconnect), 250)
+        return
+      }
+
+      if (redemption.accessToken && redemption.session) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(portalStorageKey, redemption.accessToken)
+        }
+        setPortalToken(redemption.accessToken)
+        setPortalSession(redemption.session)
+        setPhoneNumber(redemption.session.customer.phoneNumber)
+        setCustomerReference(redemption.session.customer.customerReference ?? '')
+        await loadContext(redemption.session.customer.phoneNumber, redemption.accessToken, hotspotParams)
+        router.push('/session')
+      } else if (phoneNumber) {
+        await loadContext(phoneNumber, portalToken, hotspotParams)
+      } else {
+        await loadContext(undefined, undefined, hotspotParams)
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Voucher redemption failed. Please retry.')
+    } finally {
+      setIsVoucherLoading(false)
+    }
+  }, [hotspotParams, phoneNumber, customerReference, portalToken, voucherCode])
+
+  useEffect(() => {
+    if (!qrVoucherCode || qrVoucherRedeemAttempted || isBooting || isVoucherLoading) return
     setQrVoucherRedeemAttempted(true)
     void handleVoucherRedeem(qrVoucherCode)
-  }, [qrVoucherCode, qrVoucherRedeemAttempted, isBooting, isVoucherLoading])
+  }, [qrVoucherCode, qrVoucherRedeemAttempted, isBooting, isVoucherLoading, handleVoucherRedeem])
 
   useEffect(() => {
     if (!currentPayment || !pendingStatuses.includes(currentPayment.status)) {
@@ -316,23 +383,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [isBooting, paymentReturnHandled])
 
   useEffect(() => {
-    if (!context?.returningDevice?.existingActiveAccess || autoConnectAttempted) {
+    if (!context?.returningDevice?.existingActiveAccess || autoConnectAttemptedRef.current) {
       return
     }
-
-    setAutoConnectAttempted(true)
-    setConnectionStatus(portalSession ? 'reconnecting' : 'connecting')
-    setStatusMessage(portalSession ? 'Welcome back. Reconnecting you now...' : 'Access confirmed. Connecting you now...')
-    const timeout = window.setTimeout(() => {
-      setConnectionStatus('failed')
-      setErrorMessage('Automatic HotSpot login did not complete. Tap Connect Now to retry.')
-    }, 4500)
+    autoConnectAttemptedRef.current = true
+    setConnectionStatus('connecting')
+    setStatusMessage('Welcome back. Connecting you now...')
     window.setTimeout(() => {
       autoSubmitHotspotLogin(context.returningDevice?.reconnect)
-    }, 350)
-
-    return () => window.clearTimeout(timeout)
-  }, [context?.returningDevice?.existingActiveAccess, autoConnectAttempted, portalSession])
+    }, 300)
+  }, [context?.returningDevice?.existingActiveAccess])
 
   async function bootstrap() {
     setIsBooting(true)
@@ -364,12 +424,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         hotspotServerName: '',
       }
     }
-
     const params = new URLSearchParams(window.location.search)
+    const loginUrl =
+      params.get('link-login') ??
+      params.get('loginUrl') ??
+      params.get('link_login') ??
+      params.get('link-login-only') ?? // some MikroTik versions use this directly
+      ''
+
+    // Persist loginUrl as soon as we see it — it won't be in the URL after redirect
+    if (loginUrl && typeof window !== 'undefined') {
+      sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
+    }
+
     return {
       macAddress: params.get('mac') ?? params.get('client_mac') ?? params.get('mac-address') ?? '',
       clientIp: params.get('ip') ?? params.get('client_ip') ?? '',
-      loginUrl: params.get('link-login') ?? params.get('loginUrl') ?? params.get('link_login') ?? '',
+      loginUrl,
       routerId: params.get('routerId') ?? '',
       routerKey: params.get('routerKey') ?? '',
       hotspotServerName: params.get('server') ?? params.get('hotspot') ?? '',
@@ -441,10 +512,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     const data = await readJson<PortalContextResponse>(response)
     setContext(data)
-    if (data.returningDevice?.existingActiveAccess) {
-      setStatusMessage('Welcome back. Your package is still active.')
-      setAutoConnectAttempted(false)
-    }
     setCurrentPayment(data.latestPayment ?? null)
     setSelectedPackage((previous) => {
       if (previous) {
@@ -635,91 +702,52 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  async function handleVoucherRedeem(overrideCode?: string) {
-    setErrorMessage('')
-    setStatusMessage('')
 
-    const codeToRedeem = normalizeVoucherCode(overrideCode ?? voucherCode)
-    if (!codeToRedeem) {
-      setErrorMessage('Enter your voucher code before redeeming.')
-      return
-    }
-
-    setIsVoucherLoading(true)
-
-    try {
-      const response = await fetch('/api/portal/redeem-voucher', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: codeToRedeem,
-          phoneNumber: phoneNumber || undefined,
-          customerReference: customerReference || phoneNumber || undefined,
-          macAddress: hotspotParams.macAddress || undefined,
-          clientIp: hotspotParams.clientIp || undefined,
-          loginUrl: hotspotParams.loginUrl || undefined,
-          routerId: hotspotParams.routerId || undefined,
-          routerKey: hotspotParams.routerKey || undefined,
-          hotspotServerName: hotspotParams.hotspotServerName || undefined,
-        }),
-      })
-
-      const body = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setErrorMessage((body as { message?: string }).message ?? 'Voucher redemption failed.')
-        return
-      }
-
-      const redemption = body as PortalRedeemVoucherResponse
-      setVoucherCode('')
-      setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
-
-      if (redemption.reconnect?.loginUrl && redemption.reconnect.username && redemption.reconnect.password) {
-        setConnectionStatus('reconnecting')
-        setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
-        window.setTimeout(() => autoSubmitHotspotLogin(redemption.reconnect), 250)
-        return
-      }
-
-      if (redemption.accessToken && redemption.session) {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(portalStorageKey, redemption.accessToken)
-        }
-        setPortalToken(redemption.accessToken)
-        setPortalSession(redemption.session)
-        setPhoneNumber(redemption.session.customer.phoneNumber)
-        setCustomerReference(redemption.session.customer.customerReference ?? '')
-        await loadContext(redemption.session.customer.phoneNumber, redemption.accessToken, hotspotParams)
-        router.push('/session')
-      } else if (phoneNumber) {
-        await loadContext(phoneNumber, portalToken, hotspotParams)
-      } else {
-        await loadContext(undefined, undefined, hotspotParams)
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Voucher redemption failed. Please retry.')
-    } finally {
-      setIsVoucherLoading(false)
-    }
-  }
 
   async function handleCompletedPayment(payment: PortalPayment) {
-    setStatusMessage('Payment confirmed. Connecting this device now...')
+    setStatusMessage('Payment confirmed! Connecting this device now...')
 
-    if (payment.reconnect?.loginUrl && payment.reconnect.username && payment.reconnect.password) {
+    // Build best possible loginUrl from all sources
+    const effectiveLoginUrl =
+      payment.reconnect?.loginUrl ||
+      hotspotParams.loginUrl ||
+      (typeof window !== 'undefined' ? sessionStorage.getItem('arofi.lastLoginUrl') : null) ||
+      null
+
+    const hasCredentials = payment.reconnect?.username && payment.reconnect?.password
+
+    if (effectiveLoginUrl && hasCredentials) {
       setConnectionStatus('reconnecting')
-      window.setTimeout(() => autoSubmitHotspotLogin(payment.reconnect), 250)
+      window.setTimeout(() => {
+        autoSubmitHotspotLogin(
+          { ...payment.reconnect, loginUrl: effectiveLoginUrl },
+          effectiveLoginUrl,
+        )
+      }, 250)
       return
     }
 
-    if (payment.reconnect?.fallbackMessage) {
-      setErrorMessage(payment.reconnect.fallbackMessage)
+    if (hasCredentials && !effectiveLoginUrl) {
+      // Payment confirmed, credentials ready, but no login URL
+      // Show credentials and a "Connect Now" button that opens the MikroTik login page
       setConnectionStatus('failed')
+      setStatusMessage(
+        `Payment confirmed! Your credentials: ` +
+        `Username: ${payment.reconnect!.username} | ` +
+        `Password: ${payment.reconnect!.password}. ` +
+        `If you are still on the WiFi network, tap Connect Now.`
+      )
+      return
     }
 
-    await loginWithPhone(payment.phoneNumber, initialView !== 'home', hotspotParams)
+    // No credentials yet — try to get them by logging in with phone number
+    if (payment.phoneNumber) {
+      try {
+        await loginWithPhone(payment.phoneNumber, false, hotspotParams)
+      } catch {
+        // ignore — session will update on next poll
+      }
+    }
   }
 
   async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
@@ -758,26 +786,51 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  function autoSubmitHotspotLogin(reconnect: ReconnectPayload | null | undefined = context?.returningDevice?.reconnect) {
-    if (!reconnect?.loginUrl || !reconnect.username || !reconnect.password) {
-      setErrorMessage('Reconnect is available, but this browser did not receive a MikroTik login URL. Reopen the captive portal from the WiFi network.')
+  function autoSubmitHotspotLogin(
+    reconnect: ReconnectPayload | null | undefined = context?.returningDevice?.reconnect,
+    fallbackLoginUrl?: string,
+  ) {
+    // Build the best possible loginUrl from all available sources
+    const loginUrl =
+      reconnect?.loginUrl ||
+      fallbackLoginUrl ||
+      hotspotParams.loginUrl ||
+      (typeof window !== 'undefined' ? sessionStorage.getItem('arofi.lastLoginUrl') : null) ||
+      null
+
+    if (!loginUrl || !reconnect?.username || !reconnect?.password) {
       setConnectionStatus('failed')
+      if (reconnect?.username && reconnect?.password) {
+        // We have credentials but no URL — show them to the user for manual entry
+        setErrorMessage(
+          `Connected! Enter these on the WiFi login page — ` +
+          `Username: ${reconnect.username} | Password: ${reconnect.password}`
+        )
+      } else {
+        setErrorMessage(
+          'Auto-connect needs the WiFi login page to be open. ' +
+          'Reconnect to the WiFi network and open this portal again.'
+        )
+      }
       return
+    }
+
+    // Save loginUrl for future sessions on this device
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
     }
 
     try {
       const form = document.createElement('form')
       form.method = 'POST'
-      form.action = new URL(reconnect.loginUrl, window.location.href).toString()
+      form.action = new URL(loginUrl, window.location.href).toString()
       form.style.display = 'none'
-
       const fields: Record<string, string> = {
         username: reconnect.username,
         password: reconnect.password,
         dst: 'http://neverssl.com/',
         popup: 'false',
       }
-
       for (const [name, value] of Object.entries(fields)) {
         const input = document.createElement('input')
         input.type = 'hidden'
@@ -785,22 +838,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         input.value = value
         form.appendChild(input)
       }
-
       document.body.appendChild(form)
       form.submit()
     } catch {
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = reconnect.loginUrl
-      for (const [name, value] of Object.entries({ username: reconnect.username, password: reconnect.password, dst: 'http://neverssl.com/', popup: 'false' })) {
-        const input = document.createElement('input')
-        input.type = 'hidden'
-        input.name = name
-        input.value = value ?? ''
-        form.appendChild(input)
-      }
-      document.body.appendChild(form)
-      form.submit()
+      setConnectionStatus('failed')
+      setErrorMessage('Could not submit login form. Tap Connect Now to retry.')
     }
   }
 

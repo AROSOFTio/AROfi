@@ -770,12 +770,17 @@ export class PaymentsService {
     routerId?: string | null
     hotspotServerName?: string | null
     endsAt?: Date
+    metadata?: Prisma.JsonValue | null
   } | null; metadata?: Prisma.JsonValue | null } | null>(payment: T) {
     if (!payment || payment.status !== PaymentStatus.COMPLETED || !payment.activation) {
       return payment
     }
 
-    const loginUrl = this.readMetadataString(payment.metadata, 'loginUrl')
+    const loginUrl =
+      this.readMetadataString(payment.metadata, 'loginUrl') ||
+      this.readMetadataString(payment.activation.metadata, 'loginUrl') ||
+      null   // keep null if not found — frontend will try sessionStorage fallback
+
     const username = payment.activation.radiusCredential?.username ?? payment.activation.radiusUsername
     const password = payment.activation.radiusCredential?.password ?? payment.activation.radiusPassword
 
@@ -783,17 +788,18 @@ export class PaymentsService {
       ...payment,
       reconnect: {
         method: 'mikrotik-hotspot-post',
-        loginUrl: loginUrl ?? null,
+        loginUrl,
         username: username ?? null,
         password: password ?? null,
         routerId: payment.activation.routerId ?? this.readMetadataString(payment.metadata, 'routerId') ?? null,
         hotspotServerName:
-          payment.activation.hotspotServerName ?? this.readMetadataString(payment.metadata, 'hotspotServerName') ?? null,
+          payment.activation.hotspotServerName ??
+          this.readMetadataString(payment.metadata, 'hotspotServerName') ??
+          null,
         expiresAt: payment.activation.endsAt ?? null,
-        fallbackMessage:
-          loginUrl && username && password
-            ? null
-            : 'Payment confirmed, but automatic connection needs the hotspot login URL from the router. Tap Connect Now if you are still on the Wi-Fi login page.',
+        fallbackMessage: (!loginUrl || !username || !password)
+          ? 'Payment confirmed. Your access is active — reconnect to the WiFi and this page will connect you automatically.'
+          : null,
       },
     }
   }

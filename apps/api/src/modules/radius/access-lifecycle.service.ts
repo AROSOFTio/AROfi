@@ -43,7 +43,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
 
     this.timer = setInterval(() => {
       void this.runOnce().catch((error) => this.logger.error(error))
-    }, Number.parseInt(process.env.ACCESS_WORKER_INTERVAL_MS ?? '60000', 10))
+    }, Number.parseInt(process.env.ACCESS_WORKER_INTERVAL_MS ?? '5000', 10))
     void this.runOnce().catch((error) => this.logger.error(error))
   }
 

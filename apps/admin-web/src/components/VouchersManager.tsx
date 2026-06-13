@@ -163,14 +163,14 @@ function getVoucherPortalHost() {
 }
 
 function getVoucherQrPortalUrl(code: string) {
-  const configuredBase = process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ?? `${getVoucherPortalOrigin()}/portal`
-  const withProtocol = configuredBase.startsWith('http://') || configuredBase.startsWith('https://')
-    ? configuredBase
-    : `http://${configuredBase}`
-  const normalized = withProtocol.replace(/\/$/, '')
-  const baseUrl = normalized.endsWith('/portal') ? normalized : `${normalized}/portal`
-  const separator = baseUrl.includes('?') ? '&' : '?'
-  return `${baseUrl}${separator}voucher=${encodeURIComponent(code)}`
+  // Always use the configured env var. Never fall back to window.location.origin
+  // because the admin is on a different path/domain than the portal.
+  const base =
+    process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
+    'https://arofi.arosoftlabs.com/portal'
+  const normalized = base.replace(/\/$/, '')
+  const separator = normalized.includes('?') ? '&' : '?'
+  return `${normalized}${separator}voucher=${encodeURIComponent(code)}`
 }
 
 function formatVoucherSupport(phone?: string | null, email?: string | null) {
