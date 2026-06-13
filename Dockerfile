@@ -40,7 +40,6 @@ ENV PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:-dev-portal-secret-change-in-produ
 ENV ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:-dev-router-secret-change-in-production}
 ENV RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:-dev-radius-api-key-change-in-production}
 ENV RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:-dev-radius-secret-change-in-production}
-ENV POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
 
 # Start appropriate service based on SERVICE_NAME environment variable
 CMD if [ "$SERVICE_NAME" = "api" ]; then \
