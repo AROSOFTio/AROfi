@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN NODE_ENV=development npm install --legacy-peer-deps
 COPY . .
-RUN npm run build
+RUN NODE_OPTIONS='--max-old-space-size=1024' NEXT_CPU_LIMIT=1 npm run build
 
 FROM node:20-alpine
 WORKDIR /app

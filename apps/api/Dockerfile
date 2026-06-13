@@ -10,7 +10,7 @@ COPY apps/api ./apps/api
 
 WORKDIR /usr/src/app/apps/api
 RUN npx prisma generate
-RUN npm run build
+RUN NODE_OPTIONS='--max-old-space-size=1024' npm run build
 
 # Runtime stage
 FROM node:20-alpine
