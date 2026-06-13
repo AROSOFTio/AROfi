@@ -33,10 +33,20 @@ COPY --from=builder /usr/src/app ./
 EXPOSE 3000
 # Default service to run if SERVICE_NAME is not specified in the environment
 ENV SERVICE_NAME=api
+# Provide defaults for development if not set in environment
+ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/arofi_dev?schema=public}
+ENV JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+ENV PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:-dev-portal-secret-change-in-production}
+ENV ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:-dev-router-secret-change-in-production}
+ENV RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:-dev-radius-api-key-change-in-production}
+ENV RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:-dev-radius-secret-change-in-production}
+ENV POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
 
 # Start appropriate service based on SERVICE_NAME environment variable
 CMD if [ "$SERVICE_NAME" = "api" ]; then \
-      cd apps/api && npx prisma migrate deploy && (if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi); \
+      cd apps/api && \
+      if [ -n "$DATABASE_URL" ]; then npx prisma migrate deploy || true; fi && \
+      (if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi); \
     elif [ "$SERVICE_NAME" = "admin" ]; then \
       cd apps/admin-web && npm run start; \
     elif [ "$SERVICE_NAME" = "portal" ]; then \

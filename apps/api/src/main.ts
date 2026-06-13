@@ -36,7 +36,11 @@ function resolveAllowedOrigins() {
 }
 
 function assertRequiredProductionConfig() {
-  if (process.env.NODE_ENV !== 'production') {
+  const nodeEnv = process.env.NODE_ENV || 'development'
+  const isProduction = nodeEnv === 'production'
+
+  // Only enforce strict validation in explicit production mode
+  if (!isProduction) {
     return
   }
 
