@@ -1,0 +1,186 @@
+services:
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "4012:4012"
+      - "4016:4012"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - admin-web
+      - portal-web
+      - api
+    networks:
+      - arofi-net
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-arofi_dev}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-arofi_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arofi-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_redis}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_redis}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change_me_redis} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arofi-net
+
+  freeradius:
+    image: freeradius/freeradius-server:latest-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-arofi_dev}
+      RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    volumes:
+      - ./config/freeradius:/arofi-freeradius:ro
+      - ./config/freeradius/entrypoint.sh:/entrypoint.sh:ro
+    command: ["/bin/sh", "/entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "printf 'User-Name = arofi-health\nUser-Password = radius-health\n' | /opt/bin/radclient -x 127.0.0.1 auth $${RADIUS_SHARED_SECRET} | grep -q 'Access-Accept'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - arofi-net
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-arofi_dev}?schema=public
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-change_me_redis}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:?PORTAL_TOKEN_SECRET is required}
+      - NODE_ENV=${NODE_ENV:-development}
+      - PAYMENT_CUSTOMER_LABEL=${PAYMENT_CUSTOMER_LABEL:-Pay}
+      - PAYMENT_DEFAULT_CURRENCY=${PAYMENT_DEFAULT_CURRENCY:-UGX}
+      - MTN_COLLECTION_PROVIDER=${MTN_COLLECTION_PROVIDER:-MTN_MOMO_DIRECT}
+      - AIRTEL_COLLECTION_PROVIDER=${AIRTEL_COLLECTION_PROVIDER:-AIRTEL_MONEY_DIRECT}
+      - MTN_DISBURSEMENT_PROVIDER=${MTN_DISBURSEMENT_PROVIDER:-MTN_MOMO_DIRECT}
+      - AIRTEL_DISBURSEMENT_PROVIDER=${AIRTEL_DISBURSEMENT_PROVIDER:-AIRTEL_MONEY_DIRECT}
+      - PESAPAL_MODE=${PESAPAL_MODE:-sandbox}
+      - PESAPAL_BASE_URL=${PESAPAL_BASE_URL:-https://cybqa.pesapal.com/pesapalv3}
+      - PESAPAL_CONSUMER_KEY=${PESAPAL_CONSUMER_KEY:-}
+      - PESAPAL_CONSUMER_SECRET=${PESAPAL_CONSUMER_SECRET:-}
+      - PESAPAL_IPN_ID=${PESAPAL_IPN_ID:-}
+      - PESAPAL_CALLBACK_URL=${PESAPAL_CALLBACK_URL:-https://arofi.arosoftlabs.com/portal}
+      - PESAPAL_WEBHOOK_TOKEN=${PESAPAL_WEBHOOK_TOKEN:-}
+      - MTN_MOMO_ENV=${MTN_MOMO_ENV:-sandbox}
+      - MTN_MOMO_COLLECTION_BASE_URL=${MTN_MOMO_COLLECTION_BASE_URL:-https://sandbox.momodeveloper.mtn.com}
+      - MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY=${MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY:-}
+      - MTN_MOMO_COLLECTION_API_USER=${MTN_MOMO_COLLECTION_API_USER:-}
+      - MTN_MOMO_COLLECTION_API_KEY=${MTN_MOMO_COLLECTION_API_KEY:-}
+      - MTN_MOMO_TARGET_ENVIRONMENT=${MTN_MOMO_TARGET_ENVIRONMENT:-sandbox}
+      - MTN_MOMO_DISBURSEMENT_BASE_URL=${MTN_MOMO_DISBURSEMENT_BASE_URL:-https://sandbox.momodeveloper.mtn.com}
+      - MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY=${MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY:-}
+      - MTN_MOMO_DISBURSEMENT_API_USER=${MTN_MOMO_DISBURSEMENT_API_USER:-}
+      - MTN_MOMO_DISBURSEMENT_API_KEY=${MTN_MOMO_DISBURSEMENT_API_KEY:-}
+      - MTN_MOMO_CURRENCY=${MTN_MOMO_CURRENCY:-UGX}
+      - MTN_ALLOWED_PREFIXES=${MTN_ALLOWED_PREFIXES:-077,078,076,079,031,039}
+      - AIRTEL_MONEY_ENV=${AIRTEL_MONEY_ENV:-sandbox}
+      - AIRTEL_MONEY_COLLECTION_BASE_URL=${AIRTEL_MONEY_COLLECTION_BASE_URL:-}
+      - AIRTEL_MONEY_DISBURSEMENT_BASE_URL=${AIRTEL_MONEY_DISBURSEMENT_BASE_URL:-}
+      - AIRTEL_MONEY_CLIENT_ID=${AIRTEL_MONEY_CLIENT_ID:-}
+      - AIRTEL_MONEY_CLIENT_SECRET=${AIRTEL_MONEY_CLIENT_SECRET:-}
+      - AIRTEL_MONEY_PUBLIC_KEY=${AIRTEL_MONEY_PUBLIC_KEY:-}
+      - AIRTEL_MONEY_COUNTRY=${AIRTEL_MONEY_COUNTRY:-UG}
+      - AIRTEL_MONEY_CURRENCY=${AIRTEL_MONEY_CURRENCY:-UGX}
+      - AIRTEL_ALLOWED_PREFIXES=${AIRTEL_ALLOWED_PREFIXES:-070,075,074}
+      - ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
+      - RADIUS_SERVER_HOST=${RADIUS_SERVER_HOST:-freeradius}
+      - RADIUS_PUBLIC_HOST=${RADIUS_PUBLIC_HOST:-95.111.234.34}
+      - RADIUS_AUTH_PORT=${RADIUS_AUTH_PORT:-1812}
+      - RADIUS_ACCOUNTING_PORT=${RADIUS_ACCOUNTING_PORT:-1813}
+      - RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+      - RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:4012}
+      - PORTAL_PUBLIC_HOST=${PORTAL_PUBLIC_HOST:-arofi.arosoftlabs.com}
+      - API_PUBLIC_HOST=${API_PUBLIC_HOST:-arofi.arosoftlabs.com}
+      - ACCESS_WORKERS_ENABLED=${ACCESS_WORKERS_ENABLED:-true}
+      - ACCESS_WORKER_INTERVAL_MS=${ACCESS_WORKER_INTERVAL_MS:-5000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - arofi-net
+
+  admin-web:
+    build:
+      context: ./apps/admin-web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - API_SERVER_URL=http://api:3000/api
+      - NEXT_PUBLIC_API_URL=/api
+      - NODE_ENV=${NODE_ENV:-development}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - arofi-net
+
+  portal-web:
+    build:
+      context: ./apps/portal-web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - API_SERVER_URL=http://api:3000/api
+      - NEXT_PUBLIC_API_URL=/api
+      - NODE_ENV=${NODE_ENV:-development}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - arofi-net
+
+networks:
+  arofi-net:
+    driver: bridge
+
+volumes:
+  pg-data:
+  redis-data:
