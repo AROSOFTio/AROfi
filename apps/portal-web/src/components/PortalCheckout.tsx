@@ -363,7 +363,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 5000)
+    // Check immediately, then poll fast so the device auto-connects within
+    // ~2s of the customer approving the mobile-money prompt on their phone.
+    void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
+    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 2000)
     return () => window.clearInterval(interval)
   }, [currentPayment])
 
