@@ -19,6 +19,13 @@ else
 fi
 echo "[start-all] API started on :3001"
 
+# admin-web / portal-web do server-side (SSR) calls to the API. Inside this
+# single container the API is on 127.0.0.1:3001 (nginx owns 3000), and there is
+# no docker service named "api". Force the internal URL so an external value
+# like http://api:3000/api can't break SSR auth and cause a /login reload loop.
+export API_SERVER_URL=http://127.0.0.1:3001/api
+export NEXT_PUBLIC_API_URL=/api
+
 # --- Admin web (port 3002) ---
 cd "$ROOT/apps/admin-web"
 PORT=3002 npm run start &
