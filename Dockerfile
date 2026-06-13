@@ -28,14 +28,20 @@ RUN NODE_OPTIONS='--max-old-space-size=900' NEXT_CPU_LIMIT=1 npx turbo run build
 # Runtime stage
 FROM node:20-alpine
 WORKDIR /usr/src/app
-RUN apk add --no-cache openssl libc6-compat freeradius-utils
+RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
 
 # Copy builds and node_modules from builder
 COPY --from=builder /usr/src/app ./
 
+# nginx config for all-in-one mode + make the startup script executable
+RUN cp config/nginx.coolify.conf /etc/nginx/nginx.conf \
+    && mkdir -p /run/nginx \
+    && chmod +x scripts/start-all.sh
+
 EXPOSE 3000
-# Default service to run if SERVICE_NAME is not specified in the environment
-ENV SERVICE_NAME=api
+# Default service to run. "all" = nginx + api + admin-web + portal-web in one
+# container (single domain). Set SERVICE_NAME=api|admin|portal to run just one.
+ENV SERVICE_NAME=all
 # Provide defaults for development if not set in environment
 ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/arofi_dev?schema=public}
 ENV JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
@@ -45,7 +51,9 @@ ENV RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:-dev-radius-api-key-change
 ENV RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:-dev-radius-secret-change-in-production}
 
 # Start appropriate service based on SERVICE_NAME environment variable
-CMD if [ "$SERVICE_NAME" = "api" ]; then \
+CMD if [ "$SERVICE_NAME" = "all" ]; then \
+      sh scripts/start-all.sh; \
+    elif [ "$SERVICE_NAME" = "api" ]; then \
       cd apps/api && \
       if [ -n "$DATABASE_URL" ]; then npx prisma migrate deploy || true; fi && \
       (if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi); \
@@ -54,5 +62,5 @@ CMD if [ "$SERVICE_NAME" = "api" ]; then \
     elif [ "$SERVICE_NAME" = "portal" ]; then \
       cd apps/portal-web && npm run start; \
     else \
-      echo "Please configure SERVICE_NAME to 'api', 'admin', or 'portal'"; exit 1; \
+      echo "Please configure SERVICE_NAME to 'all', 'api', 'admin', or 'portal'"; exit 1; \
     fi
