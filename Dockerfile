@@ -18,9 +18,12 @@ RUN NODE_ENV=development npm install --legacy-peer-deps
 # Copy source code
 COPY . .
 
-# Generate Prisma Client and build all packages using Turbo
+# Generate Prisma Client and build all packages using Turbo.
+# Build one app at a time (--concurrency=1) and cap Node heap so the build
+# stays within the RAM of a small (4GB) server instead of OOM-killing other
+# containers (including Coolify's own services).
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
-RUN NODE_OPTIONS='--max-old-space-size=1024' NEXT_CPU_LIMIT=1 npx turbo run build
+RUN NODE_OPTIONS='--max-old-space-size=900' NEXT_CPU_LIMIT=1 npx turbo run build --concurrency=1
 
 # Runtime stage
 FROM node:20-alpine

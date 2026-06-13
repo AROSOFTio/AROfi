@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Skip the separate ESLint worker during production builds to reduce peak
+  // memory on small (4GB) build servers. Lint is run separately.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   async headers() {
     return [
       {

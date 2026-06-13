@@ -2,6 +2,11 @@
 const nextConfig = {
     reactStrictMode: true,
     basePath: '/portal',
+    // Skip the separate ESLint worker during production builds to reduce peak
+    // memory on small (4GB) build servers. Lint is run separately.
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
     async redirects() {
         return [
             {
