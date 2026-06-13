@@ -928,8 +928,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         </div>
       ) : (
         <>
-          {errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
-          {statusMessage && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
+          {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
+          {!checkoutOpen && statusMessage && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
           {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Payment confirmed. Connecting you now...</div>}
           {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Reconnecting your device to the internet...</div>}
           {context?.returningDevice?.existingActiveAccess && (
@@ -981,6 +981,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       setSelectedPackage(pkg)
                       setCheckoutOpen(true)
                       setCurrentPayment(null)
+                      setErrorMessage('')
+                      setStatusMessage('')
                     }}
                     className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-4 py-3 text-left shadow-sm ${portalStyle.packageCard}`}
                   >
@@ -1015,8 +1017,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                         <h2 className="text-lg font-extrabold text-slate-950">Pay {formatCurrency(selectedPackage.amountUgx)}</h2>
                         <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} - {formatDuration(selectedPackage.durationMinutes)}</p>
                       </div>
-                      <button type="button" onClick={() => setCheckoutOpen(false)} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Close</button>
+                      <button type="button" onClick={() => {
+                        setCheckoutOpen(false)
+                        setErrorMessage('')
+                        setStatusMessage('')
+                      }} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Close</button>
                     </div>
+                    {errorMessage && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{errorMessage}</div>}
+                    {statusMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{statusMessage}</div>}
                     <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
                       <div>
                         <span className="sr-only">Network</span>

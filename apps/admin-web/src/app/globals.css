@@ -110,28 +110,10 @@ html { -webkit-font-smoothing: antialiased; }
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--bg-app);
-  background-image:
-    radial-gradient(900px 600px at 12% -8%, rgba(21, 93, 252, 0.10), transparent 60%),
-    radial-gradient(800px 520px at 100% 0%, rgba(79, 134, 255, 0.08), transparent 55%);
-  background-attachment: fixed;
   color: var(--text-1);
   font-size: 14px;
   line-height: 1.5;
   transition: background 0.2s, color 0.2s;
-}
-
-[data-theme="dark"] body {
-  background-image:
-    radial-gradient(900px 600px at 12% -8%, rgba(21, 93, 252, 0.18), transparent 60%),
-    radial-gradient(800px 520px at 100% 0%, rgba(91, 140, 255, 0.12), transparent 55%);
-}
-
-/* Glassmorphism helpers */
-.glass {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
-  backdrop-filter: saturate(180%) blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -143,9 +125,7 @@ body {
 ═══════════════════════════════════════════════ */
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
-  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   height: 100vh;
   position: fixed;
@@ -249,9 +229,7 @@ body {
 ═══════════════════════════════════════════════ */
 .topbar {
   height: 56px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
-  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -388,19 +366,16 @@ body {
 }
 
 .stat-card {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
-  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 18px 20px;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
 
 .stat-card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
   border-color: var(--green-mid);
 }
 
@@ -955,7 +930,7 @@ tr:hover td { background: var(--bg-hover); }
   inset: 0 0 auto 0;
   z-index: 200;
   height: var(--titlebar-height);
-  background: linear-gradient(90deg, var(--brand-2), var(--brand));
+  background: var(--brand);
   color: #ffffff;
   display: flex;
   align-items: center;
