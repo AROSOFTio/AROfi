@@ -462,21 +462,24 @@ async function main() {
     },
   })
 
-  const [superAdminPassword, vendorPassword] = await Promise.all([
-    bcrypt.hash('dev-admin-password-change-me', 10),
-    bcrypt.hash('dev-vendor-password-change-me', 10),
-  ])
+  // Super admin (overridable via env). The password is supplied PRE-HASHED
+  // (a bcrypt hash), so it is stored as-is and must NOT be hashed again.
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL ?? 'bangella23@gmail.com'
+  const superAdminPassword =
+    process.env.SUPER_ADMIN_PASSWORD_HASH ??
+    '$2a$12$84Vc8x.v0CAVXwbaW9ghje4L0XTBxWBFpDcI.NQNoZrFMnfFxsXuK'
+  const vendorPassword = await bcrypt.hash('dev-vendor-password-change-me', 10)
 
   const [superAdminUser, vendorAdminUser] = await Promise.all([
     prisma.user.upsert({
-      where: { email: 'admin@example.com' },
+      where: { email: superAdminEmail },
       update: {
         password: superAdminPassword,
         roleId: superAdminRole.id,
         tenantId: masterTenant.id,
       },
       create: {
-        email: 'admin@example.com',
+        email: superAdminEmail,
         password: superAdminPassword,
         firstName: 'System',
         lastName: 'Administrator',
