@@ -36,7 +36,7 @@ ENV SERVICE_NAME=api
 
 # Start appropriate service based on SERVICE_NAME environment variable
 CMD if [ "$SERVICE_NAME" = "api" ]; then \
-      cd apps/api && npx prisma migrate deploy && node dist/main.js; \
+      cd apps/api && npx prisma migrate deploy && (if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi); \
     elif [ "$SERVICE_NAME" = "admin" ]; then \
       cd apps/admin-web && npm run start; \
     elif [ "$SERVICE_NAME" = "portal" ]; then \

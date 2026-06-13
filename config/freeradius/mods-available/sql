@@ -1,8 +1,8 @@
 sql {
 	driver = "rlm_sql_postgresql"
 	dialect = "postgresql"
-	server = "postgres"
-	port = 5432
+	server = "$ENV{POSTGRES_HOST}"
+	port = $ENV{POSTGRES_PORT}
 	login = "$ENV{POSTGRES_USER}"
 	password = "$ENV{POSTGRES_PASSWORD}"
 	radius_db = "$ENV{POSTGRES_DB}"
