@@ -35,6 +35,16 @@ export class MikrotikController {
     return result;
   }
 
+  @Get('heartbeat/:key')
+  async heartbeat(@Param('key') key: string, @Req() request: any) {
+    const sourceIp = this.resolveSourceIp(request);
+    const result = await this.routersService.recordRouterHeartbeatByKey(key, sourceIp);
+    if (!result) {
+      throw new NotFoundException('Router registration key not found');
+    }
+    return result;
+  }
+
   private resolveSourceIp(request: any) {
     const forwardedFor = request.headers?.['x-forwarded-for'];
     const firstForwardedIp = Array.isArray(forwardedFor)

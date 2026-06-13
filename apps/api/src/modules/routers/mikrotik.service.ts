@@ -127,7 +127,10 @@ export class MikrotikService {
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
+    const heartbeatUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
+    const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
+    const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
     const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl)
     const isFreshCaptiveWifi =
       input.mode === 'FRESH_FULL_CAPTIVE_WIFI' || input.mode === 'FRESH_FULL_HOTSPOT'
@@ -195,6 +198,9 @@ export class MikrotikService {
       `# 5. Router AAA accounting`,
       `/user aaa set use-radius=yes accounting=yes default-group=read`,
       `/snmp set enabled=yes`,
+      ``,
+      `# 5b. AROFi heartbeat: lets the dashboard show live/offline quickly, even behind NAT`,
+      ...heartbeatScript,
     ]
 
     if (!isFreshCaptiveWifi) {
@@ -269,6 +275,22 @@ export class MikrotikService {
         (host) =>
           `/ip hotspot walled-garden add dst-host="${this.escape(host)}" action=allow comment="AROFi portal"`,
       ),
+    ]
+  }
+
+  private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
+    const intervalSeconds = Math.max(
+      5,
+      Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '15', 10),
+    )
+    // URLs contain no spaces, so they need no inner quoting inside the script
+    // source — this keeps the generated .rsc free of fragile nested escapes.
+    const source = `:do { /tool fetch url=${heartbeatUrl} mode=https keep-result=no } on-error={ :do { /tool fetch url=${fallbackHeartbeatUrl} mode=http keep-result=no } on-error={} }`
+    return [
+      `/system script remove [find name="arofi-heartbeat"]`,
+      `/system script add name="arofi-heartbeat" source="${source}"`,
+      `/system scheduler remove [find name="arofi-heartbeat"]`,
+      `/system scheduler add name="arofi-heartbeat" interval=${intervalSeconds}s on-event="arofi-heartbeat" comment="AROFi heartbeat"`,
     ]
   }
 

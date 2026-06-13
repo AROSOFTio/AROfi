@@ -3,6 +3,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common'
 import {
   Prisma,
@@ -21,10 +23,13 @@ import { MikrotikService } from './mikrotik.service'
 import { RouterCredentialsService } from './router-credentials.service'
 
 @Injectable()
-export class RoutersService {
+export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutersService.name)
   private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '900', 10)
   private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '86400', 10)
+  private readonly routerProbeIntervalMs = Number.parseInt(process.env.ROUTER_PROBE_INTERVAL_MS ?? '8000', 10)
+  private probeTimer?: ReturnType<typeof setInterval>
+  private probing = false
 
   private readonly authRadiusEventTypes = new Set<RadiusEventType>([
     RadiusEventType.ACCESS_ACCEPT,
@@ -91,6 +96,96 @@ export class RoutersService {
     private readonly mikrotikService: MikrotikService,
     private readonly routerCredentialsService: RouterCredentialsService,
   ) {}
+
+  onModuleInit() {
+    // Background reachability probe: keeps lastSeenAt fresh for routers whose
+    // management API is reachable (public IP / VPN), so the dashboard shows
+    // them live within ~2s. Disabled with ROUTER_PROBE_ENABLED=false.
+    if (process.env.ROUTER_PROBE_ENABLED === 'false') {
+      return
+    }
+    this.probeTimer = setInterval(() => {
+      void this.runReachabilityProbes()
+    }, Math.max(2000, this.routerProbeIntervalMs))
+    // Don't keep the process alive solely for this timer.
+    if (typeof this.probeTimer.unref === 'function') {
+      this.probeTimer.unref()
+    }
+  }
+
+  onModuleDestroy() {
+    if (this.probeTimer) {
+      clearInterval(this.probeTimer)
+    }
+  }
+
+  // Probes routers with a reachable management host and refreshes lastSeenAt on
+  // success. Purely additive: it never marks a router offline, so it cannot make
+  // a working (NAT'd) router falsely appear down.
+  private async runReachabilityProbes() {
+    if (this.probing) {
+      return
+    }
+    this.probing = true
+    try {
+      const routers = await this.prisma.router.findMany({
+        where: { status: { not: RouterStatus.PENDING } },
+        select: { id: true, host: true, apiPort: true },
+      })
+      for (const router of routers) {
+        if (!router.host || this.isPendingSelfServiceHost(router.host)) {
+          continue
+        }
+        try {
+          const probe = await this.mikrotikService.probeConnection(router.host, router.apiPort, 2500)
+          if (probe.reachable) {
+            await this.prisma.router.update({
+              where: { id: router.id },
+              data: {
+                lastSeenAt: new Date(),
+                lastLatencyMs: probe.latencyMs ?? undefined,
+              },
+            })
+          }
+        } catch {
+          // Unreachable routers are left untouched; RADIUS/heartbeat signals
+          // still drive their live state.
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Router reachability probe sweep failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    } finally {
+      this.probing = false
+    }
+  }
+
+  // Called by the router-side scheduler (works behind NAT) to prove it is alive.
+  async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+      select: { id: true, status: true, radiusNasIpAddress: true },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    const normalizedSourceIp = sourceIp.trim()
+    await this.prisma.router.update({
+      where: { id: router.id },
+      data: {
+        lastSeenAt: new Date(),
+        ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.HEALTHY } : {}),
+        ...(normalizedSourceIp && !router.radiusNasIpAddress
+          ? { radiusNasIpAddress: normalizedSourceIp }
+          : {}),
+      },
+    })
+
+    return { ok: true }
+  }
 
   async getOverview(tenantId?: string) {
     const startOfDay = new Date()
