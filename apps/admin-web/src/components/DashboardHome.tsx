@@ -208,15 +208,14 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         />
       </div>
 
+      {/* Money cards only. Active / Online / Data live in the System Insights
+          card above, so they are intentionally not repeated here. */}
       <div className="tenant-stats-compact">
         <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} />
         <DashboardStatCompact title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} />
         <DashboardStatCompact title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} />
         <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} />
-        <DashboardStatCompact title="Active Users" value={`${billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}`} />
-        <DashboardStatCompact title="Online Routers" value={`${billing?.summary.onlineRouters ?? onlineRouters}`} />
         <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
-        <DashboardStatCompact title="Data Used" value={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)} />
       </div>
 
       <div className="dashboard-main-grid">
