@@ -261,8 +261,16 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
                   <div className="sale-meta">{transaction.package?.name ?? 'Package'} · {transaction.channel?.replace('_', ' ') ?? 'Sale'} · {relativeTime(transaction.createdAt)}</div>
                 </div>
                 <div className="sale-amount-col">
-                  <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
-                  {transaction.feeAmountUgx > 0 && <div className="sale-fee">fee {formatCurrency(transaction.feeAmountUgx)}</div>}
+                  {transaction.grossAmountUgx > 0 ? (
+                    <>
+                      <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
+                      {transaction.feeAmountUgx > 0 && (
+                        <div className="sale-fee">fee {formatCurrency(transaction.feeAmountUgx)}</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="sale-redeemed">Redeemed</div>
+                  )}
                 </div>
               </div>
             ))}

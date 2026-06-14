@@ -2507,3 +2507,14 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 @media (max-width: 640px) {
   .system-insights-card { min-width: 0; width: 100%; }
 }
+
+/* Voucher redemption tag in recent sales (no new money moves) */
+.sale-redeemed {
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
