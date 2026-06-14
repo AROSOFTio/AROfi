@@ -69,7 +69,7 @@ export default function SupportPage() {
         subject: form.get('subject'),
         category: form.get('category'),
         priority: form.get('priority'),
-        channel: 'DASHBOARD',
+        channel: 'INTERNAL',
         phoneNumber: form.get('phoneNumber') || undefined,
         email: form.get('email') || session?.user.email,
         openedBy: session?.user.displayName ?? session?.user.email,
