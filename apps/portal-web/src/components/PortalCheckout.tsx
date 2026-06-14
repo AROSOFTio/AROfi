@@ -824,28 +824,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
 
     try {
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = new URL(loginUrl, window.location.href).toString()
-      form.style.display = 'none'
-      const fields: Record<string, string> = {
-        username: reconnect.username,
-        password: reconnect.password,
-        dst: 'http://neverssl.com/',
-        popup: 'false',
-      }
-      for (const [name, value] of Object.entries(fields)) {
-        const input = document.createElement('input')
-        input.type = 'hidden'
-        input.name = name
-        input.value = value
-        form.appendChild(input)
-      }
-      document.body.appendChild(form)
-      form.submit()
+      // The portal is served over HTTPS but the MikroTik hotspot login is plain
+      // HTTP (e.g. http://10.55.0.1/login). A form POST from an HTTPS page to an
+      // HTTP target is blocked by browsers as mixed content, which silently
+      // breaks auto-connect. A top-level GET navigation is NOT blocked, and the
+      // AROFi hotspot profile uses login-by=http-pap, which accepts the
+      // username/password as query params. So navigate the whole page to the
+      // hotspot login URL — the router authenticates via RADIUS and then sends
+      // the device on to the destination.
+      const target = new URL(loginUrl, window.location.href)
+      target.searchParams.set('username', reconnect.username)
+      target.searchParams.set('password', reconnect.password)
+      target.searchParams.set('dst', 'http://neverssl.com/')
+      target.searchParams.set('popup', 'false')
+      window.location.href = target.toString()
     } catch {
       setConnectionStatus('failed')
-      setErrorMessage('Could not submit login form. Tap Connect Now to retry.')
+      setErrorMessage('Could not open the WiFi login page. Tap Connect Now to retry.')
     }
   }
 

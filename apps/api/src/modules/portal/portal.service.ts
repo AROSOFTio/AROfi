@@ -558,8 +558,12 @@ export class PortalService {
     },
     loginUrl?: string | null,
   ) {
+    // Fall back to the AROFi hotspot gateway (set by the provisioning script as
+    // hotspot-address=10.55.0.1) rather than a dead placeholder host, so
+    // auto-login still has a real target when the captive link-login param was
+    // not captured.
     return {
-      loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://wifi.login/login',
+      loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login',
       username: activation.radiusCredential?.username ?? activation.radiusUsername,
       password: activation.radiusCredential?.password ?? activation.radiusPassword,
       method: 'mikrotik-hotspot-post',
