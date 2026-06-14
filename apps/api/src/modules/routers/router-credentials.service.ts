@@ -18,7 +18,9 @@ export class RouterCredentialsService {
   decrypt(payload: string) {
     const [version, ivHex, authTagHex, encryptedHex] = payload.split(':')
 
-    if (version !== 'v1' || !ivHex || !authTagHex || !encryptedHex) {
+    // encryptedHex may legitimately be an empty string when the original value
+    // was empty (e.g. a blank admin password), so only iv/authTag are required.
+    if (version !== 'v1' || !ivHex || !authTagHex || encryptedHex === undefined) {
       throw new Error('Unsupported router credential payload')
     }
 

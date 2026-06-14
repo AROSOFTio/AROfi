@@ -739,7 +739,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const sharedSecret = this.getPlatformRadiusSharedSecret()
-    const adminPassword = this.routerCredentialsService.decrypt(router.passwordCiphertext)
+    const adminPassword = this.safeDecrypt(router.passwordCiphertext)
     const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
 
     return {
@@ -799,7 +799,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const sharedSecret = this.getPlatformRadiusSharedSecret()
-    const adminPassword = this.routerCredentialsService.decrypt(router.passwordCiphertext)
+    const adminPassword = this.safeDecrypt(router.passwordCiphertext)
     const radiusServer = this.mikrotikService.getRadiusServerConfig(sharedSecret)
 
     return this.mikrotikService.buildProvisioningScript({
@@ -1132,6 +1132,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         checkedAt: acceptedAuth?.createdAt ?? null,
       },
     ]
+  }
+
+  // Decrypt that never throws: the admin password is optional and not pushed to
+  // the router by the safe script, so a blank/legacy ciphertext must not break
+  // script generation.
+  private safeDecrypt(ciphertext: string): string {
+    try {
+      return this.routerCredentialsService.decrypt(ciphertext)
+    } catch {
+      return ''
+    }
   }
 
   private buildRadiusClientShortName(name: string) {
