@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useMemo, useState, type ReactNode } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
+import ThemeToggle from './ThemeToggle'
 
 type NavItem = {
   href: string;
@@ -206,6 +207,10 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           )}
         </div>
       ))}
+      <div className="sidebar-footer">
+        <span className="sidebar-footer-label">Appearance</span>
+        <ThemeToggle variant="segmented" />
+      </div>
     </aside>
   )
 }

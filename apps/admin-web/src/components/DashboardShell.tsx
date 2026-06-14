@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import AdminSessionControl from './AdminSessionControl'
 import Sidebar from './Sidebar'
-import ThemeToggle from './ThemeToggle'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
 
 type DashboardShellProps = {
@@ -66,7 +65,6 @@ export default function DashboardShell({ children, initials, session, workspaceT
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
           <div className="topbar-actions">
-            <ThemeToggle />
             <div style={{ display: 'grid', gap: 2, textAlign: 'right' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{session.user.displayName}</span>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{session.user.email}</span>

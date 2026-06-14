@@ -2001,3 +2001,210 @@ td { font-size: 13px; }
 @media (max-width: 560px) {
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* 7. Any stat-grid used INSIDE a form becomes a clean responsive field grid.
+      Covers every existing form app-wide without per-file edits. */
+form .stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px 16px;
+  margin-bottom: 16px;
+}
+form .stats-grid > .form-group { margin-bottom: 0; }
+@media (max-width: 560px) {
+  form .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR — full redesign (light + dark via tokens)
+═══════════════════════════════════════════════ */
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 0 12px 12px;
+  gap: 2px;
+}
+
+.sidebar-logo {
+  height: var(--topbar-height);
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 8px;
+}
+.sidebar-logo img { height: 30px; max-width: 110px; object-fit: contain; }
+
+.sidebar-section { padding: 2px 0; }
+
+/* Group header */
+.sidebar-group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-group-toggle:hover { background: var(--bg-hover); color: var(--text-1); }
+.sidebar-group-toggle.active { color: var(--green); }
+
+.sidebar-group-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sidebar-group-label svg { width: 17px; height: 17px; flex: 0 0 auto; opacity: 0.85; }
+.sidebar-group-toggle.active .sidebar-group-label svg { opacity: 1; }
+
+.sidebar-chevron {
+  width: 15px; height: 15px; flex: 0 0 auto;
+  fill: currentColor; opacity: 0.6;
+  transform: rotate(-90deg);
+  transition: transform 0.18s ease;
+}
+.sidebar-chevron.open { transform: rotate(0deg); opacity: 0.9; }
+
+/* Sub-items with a guide rail */
+.sidebar-group-items {
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 6px;
+  padding: 2px 0 2px 24px;
+  position: relative;
+}
+.sidebar-group-items::before {
+  content: "";
+  position: absolute;
+  left: 17px; top: 4px; bottom: 4px;
+  width: 1px;
+  background: var(--border);
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background 0.14s, color 0.14s;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-1); }
+.nav-item.active {
+  background: var(--green-light);
+  color: var(--green-dark);
+  font-weight: 600;
+}
+[data-theme="dark"] .nav-item.active { color: var(--green-dark); }
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -7px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 16px;
+  border-radius: 0 3px 3px 0;
+  background: var(--green);
+}
+
+/* Footer + theme switch */
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 8px 4px;
+  border-top: 1px solid var(--border-soft);
+  display: grid;
+  gap: 8px;
+}
+.sidebar-footer-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 0 2px;
+}
+
+.theme-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
+.theme-switch-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.theme-switch-option svg { width: 15px; height: 15px; }
+.theme-switch-option:hover { color: var(--text-1); }
+.theme-switch-option.active {
+  background: var(--bg-card);
+  color: var(--green);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Hide the residual tenant-switcher decoration from the old rebuild layer
+   so the redesigned sidebar reads clean. */
+.tenant-switcher::before,
+.tenant-switcher::after { display: none; }
+.tenant-switcher {
+  min-height: 38px;
+  margin: 0 0 8px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* ═══════════════════════════════════════════════
+   DARK MODE remediation — the older "operator console
+   rebuild" layer hardcoded light colors (#fff / #050505 /
+   #18181b) on app surfaces, which broke dark mode. Remap
+   them to tokens so the theme switch flips cleanly.
+   (Voucher print-previews are intentionally left paper-white.)
+═══════════════════════════════════════════════ */
+[data-theme="dark"] .main-content { background: var(--bg-app); }
+[data-theme="dark"] .btn-ghost { background: var(--bg-card); color: var(--text-1); }
+[data-theme="dark"] .form-input { background: var(--bg-app); color: var(--text-1); }
+[data-theme="dark"] th { background: var(--bg-card); color: var(--text-3); }
+[data-theme="dark"] td { color: var(--text-1); }
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .stat-value,
+[data-theme="dark"] .tenant-stat-title,
+[data-theme="dark"] .tenant-stat-value,
+[data-theme="dark"] .system-mini strong,
+[data-theme="dark"] .sale-title,
+[data-theme="dark"] .sale-amount { color: var(--text-1); }
+[data-theme="dark"] .date-pill { background: var(--bg-card); color: var(--text-1); }
+[data-theme="dark"] .tenant-stat,
+[data-theme="dark"] .dashboard-panel { background: var(--bg-card); }
+[data-theme="dark"] .switch-pill.on { background: var(--green); }
