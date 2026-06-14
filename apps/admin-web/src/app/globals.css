@@ -2002,6 +2002,26 @@ td { font-size: 13px; }
   .form-grid { grid-template-columns: 1fr; }
 }
 
+/* Selectable mode cards (replaces dropdowns where the choice is important) */
+.mode-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.mode-card:hover { border-color: var(--green-mid); }
+.mode-card[data-active="true"] {
+  border-color: var(--green);
+  background: var(--green-soft);
+  box-shadow: 0 0 0 3px var(--green-light);
+}
+
 /* 7. Any stat-grid used INSIDE a form becomes a clean responsive field grid.
       Covers every existing form app-wide without per-file edits. */
 form .stats-grid {

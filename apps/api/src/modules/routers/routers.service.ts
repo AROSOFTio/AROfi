@@ -700,6 +700,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return {
       router: this.mapRouter(router),
       radiusServer,
+      oneRunCommand: this.mikrotikService.buildOneRunCommand(router.registrationKey),
       onboardingChecklist: this.mikrotikService.getOnboardingChecklist(router.name),
       provisioningScript: this.mikrotikService.buildProvisioningScript({
         routerName: router.name,

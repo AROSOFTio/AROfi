@@ -891,6 +891,7 @@ export type RouterSetupResponse = {
     accountingPort: number
     sharedSecret: string
   }
+  oneRunCommand?: string
   onboardingChecklist: string[]
   provisioningScript: string
   setupDiagnostics?: Array<{

@@ -92,6 +92,14 @@ export class MikrotikService {
     })
   }
 
+  // Single command the operator pastes into WinBox Terminal. Built server-side
+  // so it always uses the real public API host (API_PUBLIC_HOST) instead of a
+  // domain hardcoded in the frontend.
+  buildOneRunCommand(registrationKey: string) {
+    const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    return `/tool fetch url="${url}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
+  }
+
   getRadiusServerConfig(sharedSecret?: string) {
     const host =
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ??
@@ -121,8 +129,14 @@ export class MikrotikService {
 
     const registrationKey = input.registrationKey ?? 'manual-test-router'
     const profileName = `arofi-${registrationKey.slice(0, 8)}`
-    const hotspotName = input.hotspotServerName || input.hotspotNetworkName || 'hotspot1'
-    const ssid = input.hotspotNetworkName || hotspotName || 'AROFi Free WiFi'
+    const ssid = (input.hotspotNetworkName || input.routerName || 'AROFi Free WiFi').slice(0, 32)
+    const hotspotName = input.hotspotServerName || 'arofi-hotspot'
+    // Isolated hotspot subnet. Chosen to avoid the common 192.168.88.x / 10.0.0.x
+    // ranges so it does not clash with the operator's existing LAN/management.
+    const gatewayIp = '10.55.0.1'
+    const subnet = '10.55.0.0/24'
+    const poolRange = '10.55.0.10-10.55.0.254'
+
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
@@ -132,134 +146,128 @@ export class MikrotikService {
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
     const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
     const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl)
-    const isFreshCaptiveWifi =
-      input.mode === 'FRESH_FULL_CAPTIVE_WIFI' || input.mode === 'FRESH_FULL_HOTSPOT'
 
-    const safeScript = [
-      `# AROFi MikroTik onboarding script`,
-      `# Mode: ${input.mode ?? 'SAFE_EXISTING_ROUTER'}`,
+    // SAFE_EXISTING_ROUTER = the operator already has a working HotSpot; we only
+    // wire it to AROFi RADIUS/portal. Any other mode builds a fresh customer
+    // HotSpot, but ADDITIVELY on an isolated bridge so it never disturbs the
+    // operator's WAN, management IP, or admin login.
+    const radiusOnly = input.mode === 'SAFE_EXISTING_ROUTER'
+
+    // Shared front matter: enable management access only. We deliberately do NOT
+    // change the admin username/password and do NOT touch WAN or addresses.
+    const header = [
+      `# AROFi MikroTik onboarding script (safe / additive)`,
+      `# Mode: ${radiusOnly ? 'SAFE_EXISTING_ROUTER' : 'ADD_CUSTOMER_HOTSPOT'}`,
       `# Router: ${this.escape(input.routerName.slice(0, 30))}`,
       `# Registration key: ${this.escape(registrationKey)}`,
+      `# This script never changes your admin login and never reconfigures your`,
+      `# WAN or management IP. You can keep using WinBox exactly as before.`,
       ``,
-      `# 1. Identity and RouterOS API service`,
-      `/system identity set name="${this.escape(input.identity.slice(0, 30))}"`,
-      `/ip service enable ${apiService}`,
-      `/ip service set ${apiService} port=${input.apiPort} disabled=no`,
-      `/ip service enable winbox`,
-      `/ip service set winbox port=8291 disabled=no`,
+      `# 1. Make sure management stays reachable (no credential changes)`,
+      `:do { /ip service set ${apiService} port=${input.apiPort} disabled=no } on-error={}`,
+      `:do { /ip service set winbox port=8291 disabled=no } on-error={}`,
       `:do { /tool mac-server set allowed-interface-list=all } on-error={}`,
       `:do { /tool mac-server mac-winbox set allowed-interface-list=all } on-error={}`,
-      ...(input.adminPassword
-        ? [
-            `:do { /user set [find name="${this.escape(input.adminUsername || 'admin')}"] password="${this.escape(input.adminPassword)}" } on-error={ :put "Warning: could not set RouterOS admin password." }`,
-          ]
-        : []),
       ``,
-      `# 2. RADIUS server for HotSpot auth and acct`,
+      `# 2. AROFi RADIUS server for HotSpot auth + accounting`,
       `/radius remove [find where comment="AROFi ${this.escape(registrationKey)}"]`,
-      `/radius remove [find address=${input.radiusHost}]`,
-      `/radius add service=hotspot address=${input.radiusHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=3s comment="AROFi ${this.escape(registrationKey)}"`,
-      ``,
-      `# 3. HotSpot profile integration`,
-      `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={`,
-      `  /ip hotspot profile add name="${profileName}"`,
-      `}`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes`,
-      `/ip hotspot profile set [find name="${profileName}"] radius-accounting=yes`,
-      `/ip hotspot profile set [find name="${profileName}"] radius-interim-update=5m`,
-      `/ip hotspot profile set [find name="${profileName}"] html-directory=hotspot`,
-      `/ip hotspot profile set [find name="${profileName}"] login-by=http-pap`,
-      `/ip hotspot profile set [find name="${profileName}"] radius-location-name="${this.escape(registrationKey)}"`,
-      `/ip hotspot profile set [find name="${profileName}"] radius-location-id="${this.escape(registrationKey)}"`,
-      `/ip hotspot profile set [find name="${profileName}"] split-user-domain=no`,
-      `/ip hotspot user profile set [find default=yes] shared-users=1`,
-      ``,
-      `:if ([:len [/ip hotspot find name="${this.escape(hotspotName)}"]] > 0) do={`,
-      `  /ip hotspot set [find name="${this.escape(hotspotName)}"] profile="${profileName}"`,
-      `} else={`,
-      `  :put "Warning: HotSpot server ${this.escape(hotspotName)} not found."`,
-      `}`,
-      ``,
-      `# 4. Walled garden for portal and payment access`,
-      ...this.buildWalledGarden(input.portalHosts ?? []),
-      ``,
-      `# 4b. Install AROFi captive portal redirect page`,
-      ...loginHtmlInstallScript,
-      `/ip hotspot profile set [find name="${profileName}"] html-directory=hotspot`,
-      ...(input.ttlAntiTetheringEnabled
-        ? [
-            ``,
-            `# Optional TTL anti-tethering`,
-            `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
-            `/ip firewall mangle add chain=forward action=change-ttl new-ttl=set:1 passthrough=yes comment="AROFi anti-tether"`,
-          ]
-        : []),
-      ``,
-      `# 5. Router AAA accounting`,
-      `/user aaa set use-radius=yes accounting=yes default-group=read`,
-      `/snmp set enabled=yes`,
-      ``,
-      `# 5b. AROFi heartbeat: lets the dashboard show live/offline quickly, even behind NAT`,
-      ...heartbeatScript,
+      `/radius add service=hotspot address=${input.radiusHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=5s comment="AROFi ${this.escape(registrationKey)}"`,
+      `:do { /radius incoming set accept=yes } on-error={}`,
     ]
 
-    if (!isFreshCaptiveWifi) {
+    const hotspotProfile = [
+      ``,
+      `# 3. HotSpot profile bound to AROFi RADIUS`,
+      `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=5m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
+      `/ip hotspot user profile set [find default=yes] shared-users=1`,
+    ]
+
+    const walledGarden = [
+      ``,
+      `# 4. Walled garden so the portal + payment pages load before login`,
+      ...this.buildWalledGarden(input.portalHosts ?? []),
+      ``,
+      `# 4b. Install the AROFi captive portal redirect page`,
+      ...loginHtmlInstallScript,
+    ]
+
+    const antiTether = input.ttlAntiTetheringEnabled
+      ? [
+          ``,
+          `# Optional TTL anti-tethering`,
+          `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
+          `/ip firewall mangle add chain=forward action=change-ttl new-ttl=set:1 passthrough=yes comment="AROFi anti-tether"`,
+        ]
+      : []
+
+    const telemetry = [
+      ``,
+      `# 5. AROFi heartbeat (fast live/offline status, works behind NAT)`,
+      ...heartbeatScript,
+      ``,
+      `# 6. Tell AROFi the script imported so it can learn the router NAS IP`,
+      ...callbackScript,
+    ]
+
+    if (radiusOnly) {
       return [
-        ...safeScript,
+        ...header,
+        ...hotspotProfile,
         ``,
-        `# 6. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
-        ...callbackScript,
-        `:put "AROFi router configured."`,
+        `# Bind every existing HotSpot server on this router to the AROFi profile`,
+        `:foreach h in=[/ip hotspot find] do={ /ip hotspot set $h profile="${profileName}" }`,
+        `:if ([:len [/ip hotspot find]] = 0) do={ :put "Warning: no existing HotSpot server found. Re-run in Add Customer HotSpot mode to create one." }`,
+        ...walledGarden,
+        ...antiTether,
+        ...telemetry,
+        `:put "AROFi RADIUS + portal wired to your existing HotSpot."`,
       ].join('\n')
     }
 
     return [
-      ...safeScript,
+      ...header,
+      ...hotspotProfile,
       ``,
-      `# Fresh RouterOS 6/7 captive Wi-Fi setup`,
-      `# This creates bridgeLocal as LAN and ether1 as WAN. Use WinBox MAC login from a LAN port while importing.`,
-      `:if ([:len [/interface bridge find name="bridgeLocal"]] = 0) do={ /interface bridge add name=bridgeLocal comment="AROFi LAN bridge" }`,
-      `/interface bridge port remove [find interface=ether1]`,
-      `/ip dhcp-client remove [find interface=bridgeLocal]`,
-      `/ip dhcp-client remove [find interface=ether1]`,
-      `/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi WAN"`,
-      `/ip address remove [find address="192.168.1.2/24"]`,
-      `/ip address remove [find address="10.50.0.1/24"]`,
-      `/ip address add address=10.50.0.1/24 interface=bridgeLocal`,
-      ...this.buildBridgeLocalPortSetup(['ether2', 'ether3', 'ether4', 'ether5', 'ether6', 'ether7', 'ether8', 'ether9', 'ether10']),
+      `# 3b. Dedicated, isolated HotSpot bridge — keeps your WAN + management intact`,
+      `:if ([:len [/interface bridge find name="arofi-hotspot"]] = 0) do={ /interface bridge add name=arofi-hotspot comment="AROFi customer hotspot" }`,
+      `/ip address remove [find address="${gatewayIp}/24"]`,
+      `/ip address add address=${gatewayIp}/24 interface=arofi-hotspot comment="AROFi hotspot gateway"`,
       ``,
-      `# Fresh captive Wi-Fi setup. Supports RouterOS v7 /interface wifi and legacy /interface wireless.`,
-      ...this.buildOpenWifiScript(ssid),
+      `# 3c. Put Wi-Fi (RouterOS v6 wireless and v7 wifi) on the hotspot bridge`,
+      ...this.buildHotspotWirelessScript(ssid),
       ``,
-      `# Device-mode note: if RouterOS blocks HotSpot/Wi-Fi changes, confirm the device-mode prompt physically and reboot, then import this script again.`,
+      `# 3d. DHCP, DNS and NAT for hotspot clients (additive; your existing NAT is untouched)`,
       `/ip pool remove [find name=arofi-pool]`,
-      `/ip pool add name=arofi-pool ranges=10.50.0.10-10.50.0.254`,
+      `/ip pool add name=arofi-pool ranges=${poolRange}`,
+      `/ip dhcp-server network remove [find address="${subnet}"]`,
+      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
-      `/ip dhcp-server network remove [find address="10.50.0.0/24"]`,
-      `/ip dhcp-server network add address=10.50.0.0/24 gateway=10.50.0.1 dns-server=1.1.1.1,8.8.8.8`,
-      `/ip dhcp-server add name=arofi-dhcp interface=bridgeLocal address-pool=arofi-pool disabled=no`,
-      `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
-      `/ip firewall nat remove [find comment="AROFi nat"]`,
-      `/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="AROFi nat"`,
-      `/ip hotspot profile set [find name="${profileName}"] hotspot-address=10.50.0.1`,
-      `/ip hotspot remove [find name="${this.escape(hotspotName)}"]`,
-      `/ip hotspot add name="${this.escape(hotspotName)}" interface=bridgeLocal address-pool=arofi-pool profile="${profileName}" disabled=no`,
+      `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
+      `/ip dns set allow-remote-requests=yes`,
+      `:if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=1.1.1.1,8.8.8.8 }`,
+      `/ip firewall nat remove [find comment="AROFi hotspot nat"]`,
+      `/ip firewall nat add chain=srcnat src-address=${subnet} action=masquerade comment="AROFi hotspot nat"`,
       ``,
-      `# 6. Tell AROFi this script was imported. This lets AROFi learn the router public/NAT IP for RADIUS.`,
-      ...callbackScript,
-      `:put "AROFi fresh setup completed."`,
+      `# 3e. Create the HotSpot server on the isolated bridge`,
+      `/ip hotspot profile set [find name="${profileName}"] hotspot-address=${gatewayIp}`,
+      `/ip hotspot remove [find interface=arofi-hotspot]`,
+      `/ip hotspot add name="${this.escape(hotspotName)}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=2 disabled=no`,
+      ...walledGarden,
+      ...antiTether,
+      ...telemetry,
+      `:put "AROFi customer HotSpot is live. Broadcasting SSID: ${this.escape(ssid)}"`,
     ].join('\n')
   }
 
   getOnboardingChecklist(routerName: string) {
     return [
-      `Paste/import the provisioning script into ${routerName} from WinBox, WebFig, or SSH Terminal.`,
-      'Confirm the script prints "AROFi provisioning callback sent." If it fails, the router has no HTTPS/DNS internet path to AROFi.',
-      'Fresh captive Wi-Fi mode should create an OPEN SSID and install hotspot/login.html automatically. If no SSID appears, the router has no supported /interface wifi or /interface wireless interface.',
-      'If the router is behind another modem/router, forward UDP 1812 and 1813 traffic outbound to the VPS. No inbound forwarding is needed for RADIUS.',
-      'For AROFi API management checks only, forward TCP 8728/8729 from the public management IP to the MikroTik, or enter a reachable VPN/private IP. HotSpot/RADIUS can work even when this is not reachable.',
-      'Restart FreeRADIUS after the first callback if the router was registered without a real public NAS IP: docker compose restart freeradius.',
-      'Run one real customer login/payment/voucher test so MikroTik sends Access-Request and Accounting-Start packets.',
+      `Make sure ${routerName} already has working internet (WAN) and that you can reach WinBox. This script does NOT set up your WAN or change your admin login.`,
+      'Run the one-run command (or import the .rsc) from WinBox Terminal. Your management session stays connected the whole time.',
+      'Confirm the script prints "AROFi customer HotSpot is live" and "AROFi provisioning callback sent". A callback failure means the router has no HTTPS/DNS path to AROFi.',
+      'On a phone, look for the new OPEN Wi-Fi network (your site/SSID name) and connect. The AROFi portal should pop up automatically.',
+      'If no SSID appears, the board has no /interface wireless (v6) or /interface wifi (v7) radio - use an external AP on the arofi-hotspot bridge instead.',
+      'Run one real voucher/payment test so MikroTik sends Access-Request + Accounting-Start to RADIUS and the router turns live here.',
     ]
   }
 
@@ -327,12 +335,16 @@ export class MikrotikService {
     ]
   }
 
-  private buildBridgeLocalPortSetup(ports: string[]) {
-    return ports.flatMap((port) => [
-      `:if ([:len [/interface ethernet find name="${port}"]] > 0) do={`,
-      `  :if ([:len [/interface bridge port find interface="${port}"]] = 0) do={ /interface bridge port add bridge=bridgeLocal interface=${port} }`,
-      `}`,
-    ])
+  // Moves a Wi-Fi interface onto the isolated arofi-hotspot bridge whether or
+  // not it is currently a bridge port elsewhere (e.g. the operator's LAN).
+  private movePortToHotspotBridge(iface: string) {
+    return [
+      `    :if ([:len [/interface bridge port find interface="${iface}"]] = 0) do={`,
+      `      /interface bridge port add bridge=arofi-hotspot interface=${iface}`,
+      `    } else={`,
+      `      /interface bridge port set [find interface="${iface}"] bridge=arofi-hotspot`,
+      `    }`,
+    ]
   }
 
   buildLoginHtml(registrationKey: string, portalBaseUrl?: string | null) {
@@ -377,41 +389,38 @@ export class MikrotikService {
     ].join('\n')
   }
 
-  private buildOpenWifiScript(ssid: string) {
+  // Brings up an OPEN customer SSID on whatever radios the board has and binds
+  // them to the isolated arofi-hotspot bridge. Supports RouterOS v6 wireless
+  // (wlan1/wlan2) and v7 wifi (wifi1/wifi2). Every step is wrapped so a missing
+  // radio or locked device-mode never aborts the rest of the import.
+  private buildHotspotWirelessScript(ssid: string) {
     const escapedSsid = this.escape(ssid.slice(0, 32) || 'AROFi Free WiFi')
 
+    const v6 = (iface: string, putOnError: string) => [
+      `:do {`,
+      `  :if ([:len [/interface wireless find name="${iface}"]] > 0) do={`,
+      `    /interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open`,
+      ...this.movePortToHotspotBridge(iface),
+      `  }`,
+      `} on-error={ :put "${putOnError}" }`,
+    ]
+
+    const v7 = (iface: string, putOnError: string) => [
+      `:do {`,
+      `  :if ([:len [/interface wifi find name="${iface}"]] > 0) do={`,
+      `    /interface wifi set [find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""`,
+      ...this.movePortToHotspotBridge(iface),
+      `  }`,
+      `} on-error={ :put "${putOnError}" }`,
+    ]
+
     return [
-      `:do { /interface wireless cap set enabled=no } on-error={ :put "AROFi: CAP wireless mode not enabled or not available." }`,
-      `:do { /interface wireless security-profiles remove [find name="arofi-open"] } on-error={}`,
-      `:do { /interface wireless security-profiles add name="arofi-open" mode=none authentication-types="" } on-error={}`,
-      `:do {`,
-      `  :if ([:len [/interface wireless find name="wlan1"]] > 0) do={`,
-      `    /interface wireless set [find name="wlan1"] disabled=no mode=ap-bridge ssid="${escapedSsid}" security-profile=arofi-open`,
-      `    /interface bridge port remove [find interface=wlan1]`,
-      `    /interface bridge port add bridge=bridgeLocal interface=wlan1`,
-      `  }`,
-      `} on-error={ :put "AROFi: RouterOS 6 wlan1 setup skipped." }`,
-      `:do {`,
-      `  :if ([:len [/interface wireless find name="wlan2"]] > 0) do={`,
-      `    /interface wireless set [find name="wlan2"] disabled=no mode=ap-bridge ssid="${escapedSsid}" security-profile=arofi-open`,
-      `    /interface bridge port remove [find interface=wlan2]`,
-      `    /interface bridge port add bridge=bridgeLocal interface=wlan2`,
-      `  }`,
-      `} on-error={}`,
-      `:do {`,
-      `  :if ([:len [/interface wifi find name="wifi1"]] > 0) do={`,
-      `    /interface wifi set [find name="wifi1"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""`,
-      `    /interface bridge port remove [find interface=wifi1]`,
-      `    /interface bridge port add bridge=bridgeLocal interface=wifi1`,
-      `  }`,
-      `} on-error={ :put "AROFi: RouterOS 7 wifi1 setup skipped." }`,
-      `:do {`,
-      `  :if ([:len [/interface wifi find name="wifi2"]] > 0) do={`,
-      `    /interface wifi set [find name="wifi2"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""`,
-      `    /interface bridge port remove [find interface=wifi2]`,
-      `    /interface bridge port add bridge=bridgeLocal interface=wifi2`,
-      `  }`,
-      `} on-error={}`,
+      `:do { /interface wireless cap set enabled=no } on-error={}`,
+      `:do { /interface wireless security-profiles add name="arofi-open" mode=none authentication-types="" } on-error={ :do { /interface wireless security-profiles set [find name="arofi-open"] mode=none authentication-types="" } on-error={} }`,
+      ...v6('wlan1', 'AROFi: wlan1 (RouterOS 6) not available - skipped.'),
+      ...v6('wlan2', 'AROFi: wlan2 not available - skipped.'),
+      ...v7('wifi1', 'AROFi: wifi1 (RouterOS 7) not available - skipped.'),
+      ...v7('wifi2', 'AROFi: wifi2 not available - skipped.'),
     ]
   }
 

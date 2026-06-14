@@ -25,13 +25,12 @@ describe('MikrotikService', () => {
       sharedSecret: radius.sharedSecret,
     })
 
-    expect(script).toContain('/ip service enable api')
+    expect(script).toContain('/ip service set api')
     expect(script).toContain('address=radius.example.com')
     expect(script).toContain('authentication-port=1812')
     expect(script).toContain('accounting-port=1813')
     expect(script).toContain('secret="dev_radius_shared_secret"')
     expect(script).toContain('/radius remove [find where comment="AROFi')
-    expect(script).toContain('/radius remove [find address=radius.example.com]')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=5m')
@@ -40,10 +39,19 @@ describe('MikrotikService', () => {
     expect(script).toContain('/api/mikrotik/provisioned/')
     expect(script).toContain('/api/mikrotik/login-html/')
     expect(script).toContain('dst-path="hotspot/login.html"')
-    expect(script).toContain('/ip hotspot set [find name="hotspot1"] profile="arofi-')
+    // Default mode builds an isolated customer hotspot, never touching the LAN.
+    expect(script).toContain('/ip hotspot add name="arofi-hotspot" interface=arofi-hotspot')
+
+    // Safety guarantees: never change admin credentials, never rebuild WAN/LAN.
+    expect(script).not.toContain('/user set [find name=')
+    expect(script).not.toContain('password=')
+    expect(script).not.toContain('/interface bridge port remove [find interface=ether1]')
+    expect(script).not.toContain('/ip address remove [find address="192.168')
+    expect(script).not.toContain('/ip address remove [find address="10.50.0.1/24"]')
+    expect(script).not.toContain('/ip dhcp-client add interface=ether1')
   })
 
-  it('builds a fuller fresh captive Wi-Fi setup with open SSID, bridge, DHCP, DNS, NAT, and server binding', () => {
+  it('builds an additive customer Wi-Fi hotspot on an isolated bridge without disturbing WAN or admin login', () => {
     const service = new MikrotikService(new ConfigService({}))
 
     const script = service.buildProvisioningScript({
@@ -63,28 +71,52 @@ describe('MikrotikService', () => {
       mode: 'FRESH_FULL_CAPTIVE_WIFI',
     })
 
-    expect(script).toContain('/ip service enable winbox')
-    expect(script).toContain('password="KnownPassword123"')
-    expect(script).toContain('/interface bridge add name=bridgeLocal')
-    expect(script).toContain('/interface bridge port remove [find interface=ether1]')
-    expect(script).toContain('/ip dhcp-client add interface=ether1')
+    expect(script).toContain('/ip service set winbox')
+    expect(script).toContain('/interface bridge add name=arofi-hotspot')
     expect(script).toContain('AROFi provisioning callback sent')
     expect(script).toContain('/api/mikrotik/login-html/fresh-router-token')
     expect(script).toContain('dst-path="hotspot/login.html"')
     expect(script).toContain('/interface wifi find name="wifi1"')
     expect(script).toContain('security.authentication-types=""')
     expect(script).toContain('/interface wireless find name="wlan1"')
-    expect(script).toContain('/interface wireless cap set enabled=no')
     expect(script).toContain('security-profile=arofi-open')
     expect(script).toContain('ssid="AROFi Free WiFi"')
-    expect(script).toContain('/interface bridge port add bridge=bridgeLocal')
-    expect(script).toContain('/ip address add address=10.50.0.1/24 interface=bridgeLocal')
+    expect(script).toContain('bridge=arofi-hotspot')
+    expect(script).toContain('/ip address add address=10.55.0.1/24 interface=arofi-hotspot')
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    expect(script).toContain('/ip firewall nat remove [find comment="AROFi nat"]')
-    expect(script).toContain('/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade')
-    expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=bridgeLocal')
+    expect(script).toContain('/ip firewall nat add chain=srcnat src-address=10.55.0.0/24 action=masquerade')
+    expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=arofi-hotspot')
+
+    // The KEY safety guarantees that prevent the lockout we hit before.
+    expect(script).not.toContain('password="KnownPassword123"')
+    expect(script).not.toContain('/interface bridge port remove [find interface=ether1]')
+    expect(script).not.toContain('/ip address remove [find address="192.168')
+    expect(script).not.toContain('/ip address remove [find address="10.50.0.1/24"]')
+  })
+
+  it('wires an existing hotspot to RADIUS only, creating no bridge or Wi-Fi, in SAFE_EXISTING_ROUTER mode', () => {
+    const service = new MikrotikService(new ConfigService({}))
+
+    const script = service.buildProvisioningScript({
+      routerName: 'Existing Router',
+      identity: 'existing-router',
+      registrationKey: 'existing-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'existing-secret',
+      mode: 'SAFE_EXISTING_ROUTER',
+    })
+
+    expect(script).toContain(':foreach h in=[/ip hotspot find] do={')
+    expect(script).toContain('use-radius=yes')
+    expect(script).not.toContain('/interface bridge add name=arofi-hotspot')
+    expect(script).not.toContain('ssid=')
+    expect(script).not.toContain('/ip address add')
   })
 
   it('serves a MikroTik login page that forwards captive portal parameters to AROFi', () => {

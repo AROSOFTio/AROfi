@@ -326,11 +326,17 @@ export default function RoutersManager() {
     }
   }
 
+  function oneRunCommand() {
+    if (!selectedSetup) return ''
+    return (
+      selectedSetup.oneRunCommand ??
+      `/tool fetch url="https://arofi.arosoftlabs.com/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
+    )
+  }
+
   async function copyScript() {
-    if (!selectedSetup?.provisioningScript) {
-      return
-    }
-    const cmd = `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
+    const cmd = oneRunCommand()
+    if (!cmd) return
     await navigator.clipboard.writeText(cmd)
     setSuccess('One-run RouterOS command copied to clipboard.')
   }
@@ -568,73 +574,63 @@ export default function RoutersManager() {
         </div>
       )}
 
-      {activeRouterView === 'setup' && <div className="charts-grid">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Provisioning Checklist</span>
-          </div>
-          <div style={{ padding: 20, display: 'grid', gap: 10 }}>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
-              Open WinBox, WebFig, or SSH Terminal, paste the script, then press Enter. The script now calls AROFi back so the platform can learn the router public/NAT IP. AROFi becomes live only after real RADIUS authentication or accounting traffic is received.
-            </div>
-            {(selectedSetup?.onboardingChecklist ?? []).length === 0 && (
-              <div className="empty-state">
-                <p>Register a router to receive MikroTik onboarding instructions.</p>
+      {activeRouterView === 'setup' && (!selectedSetup ? (
+        <div className="card"><div className="empty-state"><p>Register a router to get its safe one-run setup command.</p></div></div>
+      ) : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {/* Action card — the single thing to do: copy one command into WinBox */}
+          <div className="card">
+            <div className="card-header">
+              <div style={{ display: 'grid', gap: 2 }}>
+                <span className="card-title">Run on {selectedSetup.router.name}</span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Paste this one line into WinBox → New Terminal, then press Enter. It will not change your admin login or WAN.</span>
               </div>
-            )}
-            {(selectedSetup?.onboardingChecklist ?? []).map((item, index) => (
-              <div key={item} style={{ display: 'flex', gap: 10 }}>
-                <span className="badge badge-info" style={{ minWidth: 28, justifyContent: 'center' }}>{index + 1}</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{item}</span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy command</button>
+                <button type="button" className="btn btn-ghost" onClick={downloadScript}>Download .rsc</button>
+                <button type="button" className="btn btn-ghost" onClick={() => void handleRotateSecret(selectedSetup.router.id)}>Rotate secret</button>
+                <button type="button" className="btn btn-ghost" onClick={() => void handleHealthCheck(selectedSetup.router.id)} disabled={runningHealthCheckId === selectedSetup.router.id}>{runningHealthCheckId === selectedSetup.router.id ? 'Checking…' : 'Re-check status'}</button>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">One-Run RouterOS Setup</span>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-primary" onClick={() => void copyScript()} disabled={!selectedSetup?.provisioningScript}>Copy One-Run Command</button>
-              <button type="button" className="btn btn-ghost" onClick={downloadScript} disabled={!selectedSetup?.provisioningScript}>Download .rsc</button>
-              <button type="button" className="btn btn-ghost" onClick={() => selectedSetup && void handleRotateSecret(selectedSetup.router.id)} disabled={!selectedSetup}>Rotate Secret</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+              <pre className="mono" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#0b1220', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 12.5, lineHeight: 1.6, color: '#dbe7ff', margin: 0 }}>
+                {oneRunCommand()}
+              </pre>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
+                <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.provisioningCallbackReceived ? 'Callback received' : 'Waiting for callback'}</span>
+                <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
+              </div>
             </div>
           </div>
-          <div style={{ padding: 20, display: 'grid', gap: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 12 }}>
-              {[
-                { title: '1. Register', text: 'Router is saved in AROFi and has a unique registration key.' },
-                { title: '2. Copy', text: 'Paste one command in WinBox Terminal. It fetches and imports the real .rsc file.' },
-                { title: '3. Verify', text: 'Script configures WAN, LAN, WiFi, HotSpot, RADIUS, and callback.' },
-              ].map((step) => (
-                <div key={step.title} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: 'var(--surface-muted)' }}>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{step.title}</div>
-                  <div style={{ marginTop: 6, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.45 }}>{step.text}</div>
-                </div>
-              ))}
+
+          <div className="charts-grid" style={{ margin: 0 }}>
+            <div className="card">
+              <div className="card-header"><span className="card-title">What happens</span></div>
+              <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+                {selectedSetup.onboardingChecklist.map((item, index) => (
+                  <div key={item} style={{ display: 'flex', gap: 10 }}>
+                    <span className="badge badge-info" style={{ minWidth: 26, justifyContent: 'center' }}>{index + 1}</span>
+                    <span style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div style={{ border: '1px solid var(--green-mid)', borderRadius: 12, background: 'var(--green-light)', padding: 14, color: 'var(--green-dark)', fontSize: 13, lineHeight: 1.55 }}>
-              The generated .rsc now uses <strong>bridgeLocal</strong>, configures <strong>ether1 as WAN</strong>, creates <strong>arofi-pool</strong> before HotSpot, disables CAP mode for RouterOS 6 wireless, and applies the Admin Password from the registration form when provided.
-            </div>
-
-            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#07111f', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 1.65, color: '#d6fbe8', minHeight: 96 }}>
-              {selectedSetup?.router.registrationKey
-                ? `/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
-                : 'Register a MikroTik router first, then copy the one-run command from here.'}
-            </pre>
-
-            <div style={{ display: 'grid', gap: 8 }}>
-              {(selectedSetup?.setupDiagnostics ?? []).map((check) => (
-                <div key={check.code} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{check.label}</span>
-                  <span className={check.ok ? 'badge badge-success' : 'badge badge-warning'}>{check.ok ? 'pass' : 'pending'}</span>
-                </div>
-              ))}
+            <div className="card">
+              <div className="card-header"><span className="card-title">Live checks</span></div>
+              <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+                {(selectedSetup.setupDiagnostics ?? []).map((check) => (
+                  <div key={check.code} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-2)', fontSize: 13 }}>{check.label}</span>
+                    <span className={check.ok ? 'badge badge-success' : 'badge badge-warning'}>{check.ok ? 'pass' : 'pending'}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>}
+      ))}
 
       {(activeRouterView === 'inventory' || activeRouterView === 'health') && <RouterInventoryTable
         view={activeRouterView}
@@ -719,6 +715,7 @@ function RouterCreateCard({
   showAdvanced: boolean
   setShowAdvanced: Dispatch<SetStateAction<boolean>>
 }) {
+  const isSafeMode = formState.scriptMode === 'SAFE_EXISTING_ROUTER'
   return (
     <div className="card">
       <div className="card-header"><span className="card-title">Register MikroTik Router</span></div>
@@ -726,52 +723,72 @@ function RouterCreateCard({
         <form onSubmit={onSubmit}>
           <div className="form-grid" style={{ marginBottom: 12 }}>
             {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
-            <InputField label="Router Display Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
-            <InputField label="Branch / Site Name" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Kiseka Arcade" />
-            <InputField label="HotSpot Server Name" value={formState.hotspotServerName} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotServerName: value }))} placeholder="Leave blank to use AROFi" />
-            <SelectField label="Script Mode" value={formState.scriptMode} onChange={(value) => setFormState((previous) => ({ ...previous, scriptMode: value as RouterFormState['scriptMode'] }))} options={[{ value: 'FRESH_FULL_CAPTIVE_WIFI', label: 'Fresh full captive Wi-Fi (open SSID)' }, { value: 'SAFE_EXISTING_ROUTER', label: 'Safe existing HotSpot integration' }, { value: 'FRESH_FULL_HOTSPOT', label: 'Legacy fresh HotSpot setup' }]} />
-            <SelectField label="Router Group" value={formState.groupId} onChange={(value) => setFormState((previous) => ({ ...previous, groupId: value }))} options={[{ value: '', label: 'No group yet' }, ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.code})` }))]} />
-            <SelectField label="Hotspot Site" value={formState.hotspotId} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotId: value }))} options={[{ value: '', label: 'Link later' }, ...hotspots.map((hotspot) => ({ value: hotspot.id, label: hotspot.name }))]} />
+            <InputField label="Router name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
+            <InputField label="Wi-Fi / site name (SSID)" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Mutungo Hill WiFi" />
+            <SelectField label="Router group (optional)" value={formState.groupId} onChange={(value) => setFormState((previous) => ({ ...previous, groupId: value }))} options={[{ value: '', label: 'No group' }, ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.code})` }))]} />
           </div>
-          <div style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.5 }}>
-            Fresh full captive Wi-Fi configures WAN on ether1, creates an open SSID, installs the AROFi HotSpot redirect page, and binds HotSpot to RADIUS. Use safe mode only when an operator already built the MikroTik HotSpot manually.
+
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label">Setup mode</label>
+            <div className="form-grid" style={{ gap: 10 }}>
+              <ModeCard
+                active={!isSafeMode}
+                title="Create customer Wi-Fi hotspot"
+                badge="Recommended"
+                desc="Builds an open SSID + captive portal on an isolated bridge. Never changes your admin login, WAN, or management IP."
+                onClick={() => setFormState((previous) => ({ ...previous, scriptMode: 'FRESH_FULL_CAPTIVE_WIFI' }))}
+              />
+              <ModeCard
+                active={isSafeMode}
+                title="I already have a hotspot"
+                desc="Only connects your existing MikroTik HotSpot to AROFi RADIUS + portal. Nothing else is created."
+                onClick={() => setFormState((previous) => ({ ...previous, scriptMode: 'SAFE_EXISTING_ROUTER' }))}
+              />
+            </div>
           </div>
+
           <button type="button" className="btn btn-ghost" onClick={() => setShowAdvanced((previous) => !previous)} style={{ marginBottom: 12 }}>
-            {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+            {showAdvanced ? 'Hide advanced (optional)' : 'Advanced (optional)'}
           </button>
           {showAdvanced && (
-            <>
-              <div className="form-grid" style={{ marginBottom: 12 }}>
-                <InputField label="Management Host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Optional, for health checks" />
-                <InputField label="Identity" value={formState.identity} onChange={(value) => setFormState((previous) => ({ ...previous, identity: value }))} placeholder="Optional RouterOS identity" />
-                <SelectField label="Connection Mode" value={formState.connectionMode} onChange={(value) => setFormState((previous) => ({ ...previous, connectionMode: value as RouterFormState['connectionMode'] }))} options={[{ value: 'ROUTEROS_API', label: 'RouterOS API' }, { value: 'ROUTEROS_API_SSL', label: 'RouterOS API SSL' }]} />
-                <InputField label="API Port" value={formState.apiPort} onChange={(value) => setFormState((previous) => ({ ...previous, apiPort: value }))} placeholder="8728" />
-                <InputField label="Admin Username" value={formState.username} onChange={(value) => setFormState((previous) => ({ ...previous, username: value }))} placeholder="Optional, for health checks" />
-                <InputField label="Router Admin Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} placeholder="Optional, set on MikroTik by script" />
-                <InputField label="RADIUS Shared Secret" value={formState.sharedSecret} onChange={(value) => setFormState((previous) => ({ ...previous, sharedSecret: value }))} placeholder="Generated automatically" />
-                <InputField label="RouterOS Major Version" value={formState.routerOsVersion} onChange={(value) => setFormState((previous) => ({ ...previous, routerOsVersion: value }))} placeholder="Optional" />
-                <InputField label="Model" value={formState.model} onChange={(value) => setFormState((previous) => ({ ...previous, model: value }))} placeholder="RB951Ui-2HnD" />
-              </div>
-              <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
-                <InputField label="Extra Walled Garden Hosts" value={formState.portalWalledGardenHosts} onChange={(value) => setFormState((previous) => ({ ...previous, portalWalledGardenHosts: value }))} placeholder="extra.example.com" />
+            <div className="form-grid" style={{ marginBottom: 12 }}>
+              <SelectField label="Link a hotspot site" value={formState.hotspotId} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotId: value }))} options={[{ value: '', label: 'Link later' }, ...hotspots.map((hotspot) => ({ value: hotspot.id, label: hotspot.name }))]} />
+              <InputField label="Management host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Only for API health checks" />
+              <div className="form-span-2">
                 <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
                   <input type="checkbox" checked={formState.ttlAntiTetheringEnabled} onChange={(event) => setFormState((previous) => ({ ...previous, ttlAntiTetheringEnabled: event.target.checked }))} />
-                  Enable optional TTL anti-tethering rule. This reduces common sharing but cannot guarantee detection of every NAT tethering case.
+                  Enable optional TTL anti-tethering (reduces casual hotspot sharing).
                 </label>
               </div>
-              <InputField label="Tags" value={formState.tags} onChange={(value) => setFormState((previous) => ({ ...previous, tags: value }))} placeholder="backbone, tower-a, hotspot-core" />
-            </>
+            </div>
           )}
-          <div style={{ marginTop: 12 }}>
-            <FormProcessStatus busy={submitting} error={formError} text={processText || 'Registering router. This modal closes after AROFi saves the router and generates setup details.'} />
+          <div style={{ marginTop: 8 }}>
+            <FormProcessStatus busy={submitting} error={formError} text={processText || 'AROFi saves the router and generates a safe one-run setup command.'} />
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Registering router...' : 'Register Router'}</button>
-            {showAdvanced && <button type="button" className="btn btn-ghost" onClick={() => setFormState((previous) => ({ ...previous, sharedSecret: generateSecret() }))}>Regenerate Secret</button>}
+            <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Registering...' : 'Register & generate script'}</button>
           </div>
         </form>
       </div>
     </div>
+  )
+}
+
+function ModeCard({ active, title, desc, badge, onClick }: { active: boolean; title: string; desc: string; badge?: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mode-card"
+      aria-pressed={active}
+      data-active={active}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <strong style={{ fontSize: 13.5, color: 'var(--text-1)' }}>{title}</strong>
+        {badge && <span className="badge badge-info" style={{ fontSize: 10.5 }}>{badge}</span>}
+      </div>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{desc}</span>
+    </button>
   )
 }
 
