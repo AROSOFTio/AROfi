@@ -62,6 +62,11 @@ const initialBatchForm: BatchFormState = {
   notes: '',
 }
 
+// Advertisement line printed at the bottom of every voucher. Override per call
+// with the adLine prop (e.g. wire to a platform/tenant setting later).
+const DEFAULT_VOUCHER_AD =
+  'Powered by AROSOFT Innovations · Custom Systems · ERP · SaaS · Software Solutions · 0787726388'
+
 const printTemplates = [
   {
     id: 'signal',
@@ -864,6 +869,7 @@ function VoucherSampleCard({
   amount,
   support,
   portalHost,
+  adLine = DEFAULT_VOUCHER_AD,
   compact = false,
 }: {
   tenantName: string
@@ -873,6 +879,7 @@ function VoucherSampleCard({
   amount: string
   support: string
   portalHost: string
+  adLine?: string
   compact?: boolean
 }) {
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
@@ -918,10 +925,12 @@ function VoucherSampleCard({
           <div><span>DURATION</span>{duration}</div>
           <div><span>HELP</span>{portalHost}</div>
         </div>
-        <div className="voucher-sample-help">Help: {support} | {portalHost}</div>
+        <div className="voucher-sample-help">Help: {support}</div>
+        {adLine ? <div className="voucher-sample-ad">{adLine}</div> : null}
       </div>
       <div className="voucher-sample-qr">
         {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for voucher ${code}`} /> : null}
+        <span className="voucher-sample-scan">Scan to connect</span>
       </div>
     </div>
   )

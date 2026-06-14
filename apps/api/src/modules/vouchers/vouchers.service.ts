@@ -20,6 +20,10 @@ import { VoucherCodeFormat, VoucherCodeService } from './voucher-code.service'
 import PDFDocument = require('pdfkit')
 import * as QRCode from 'qrcode'
 
+// Advertisement line printed on every voucher card in the PDF sheet.
+const VOUCHER_AD_LINE =
+  'AROSOFT Innovations · Custom Systems · ERP · SaaS · Software Solutions · 0787726388'
+
 type VoucherPdfTemplate = 'signal' | 'wave' | 'receipt' | 'agent' | 'thermal'
 
 const voucherPdfTemplates: Record<
@@ -869,7 +873,7 @@ export class VouchersService {
     const pageMargin = 18
     const cardGap = 8
     const cardWidth = (doc.page.width - pageMargin * 2 - cardGap * 2) / 3
-    const cardHeight = 92
+    const cardHeight = 106
     let x = pageMargin
     let y = pageMargin
 
@@ -1041,10 +1045,27 @@ export class VouchersService {
     this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 18, detailWidth, template)
     this.drawVoucherDetail(doc, 'HELP', input.portalHost, innerX + detailWidth + 8, detailY + 18, detailWidth, template)
 
-    doc.fillColor(template.ink).font('Helvetica').fontSize(4.4)
-      .text(`Help: ${input.support} | ${input.portalHost}`, innerX, y + height - 8, {
+    doc.fillColor(template.ink).font('Helvetica').fontSize(4.2)
+      .text(`Help: ${input.support}  |  ${input.portalHost}`, innerX, y + height - 16, {
         width: width - railWidth - 16,
         align: 'left',
+        ellipsis: true,
+      })
+
+    // Advertisement band: an AROSOFT promo line printed on every voucher.
+    doc.save()
+    doc.moveTo(innerX, y + height - 10)
+      .lineTo(x + width - 8, y + height - 10)
+      .dash(1.2, { space: 1.4 })
+      .strokeColor('#C7D2E5')
+      .lineWidth(0.4)
+      .stroke()
+    doc.undash()
+    doc.restore()
+    doc.fillColor('#2563EB').font('Helvetica-Bold').fontSize(4.3)
+      .text(VOUCHER_AD_LINE, innerX, y + height - 7, {
+        width: width - railWidth - 16,
+        align: 'center',
         ellipsis: true,
       })
     doc.restore()
