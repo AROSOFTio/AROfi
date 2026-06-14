@@ -411,7 +411,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
     const password = dto.password ?? ''
-    const router = await this.prisma.router.create({
+    const nasIpAddress = dto.radiusNasIpAddress?.trim() || host
+    let router: { id: string }
+    try {
+      router = await this.prisma.router.create({
       data: {
         tenantId: dto.tenantId,
         groupId: dto.groupId,
@@ -435,7 +438,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         model: dto.model,
         serialNumber: dto.serialNumber,
         routerOsVersion: dto.routerOsVersion,
-        radiusNasIpAddress: dto.radiusNasIpAddress ?? dto.host,
+        radiusNasIpAddress: nasIpAddress,
         hotspotServerName: dto.hotspotServerName,
         portalWalledGardenHosts: dto.portalWalledGardenHosts ?? [],
         ttlAntiTetheringEnabled: dto.ttlAntiTetheringEnabled ?? false,
@@ -444,14 +447,14 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           create: {
             tenantId: dto.tenantId,
             shortName: this.buildRadiusClientShortName(dto.name),
-            ipAddress: dto.radiusNasIpAddress ?? host,
+            ipAddress: nasIpAddress,
             secretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
           },
         },
         nasClient: {
           create: {
             tenantId: dto.tenantId,
-            nasname: dto.radiusNasIpAddress ?? host,
+            nasname: nasIpAddress,
             shortname: this.buildRadiusClientShortName(dto.name),
             type: 'mikrotik',
             secret: sharedSecret,
@@ -461,11 +464,46 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         },
       },
       include: this.routerInclude,
-    })
+      })
+    } catch (error) {
+      throw this.translateRouterCreateError(error)
+    }
 
     this.reloadFreeradiusNasClients()
 
     return this.getRouterSetup(router.id)
+  }
+
+  // Turns raw Prisma/Postgres failures into actionable messages instead of a
+  // bare "Internal server error". The most common production cause is the
+  // nas.secret column still being VARCHAR(60) because the widen migration has
+  // not been applied yet.
+  private translateRouterCreateError(error: unknown): Error {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2000: value too long for a column (e.g. nas.secret VARCHAR(60) vs a
+      // long RADIUS_SHARED_SECRET). Tell the operator exactly what to do.
+      if (error.code === 'P2000') {
+        this.logger.error(`Router create failed: value too long for a column. ${error.message}`)
+        return new BadRequestException(
+          'Router could not be saved: a value is too long for the database (likely the RADIUS secret vs the nas.secret column). Run `prisma migrate deploy` (migration 20260614000000_widen_nas_secret) on the API, then retry.',
+        )
+      }
+      if (error.code === 'P2002') {
+        const target = (error.meta?.target as string[] | undefined)?.join(', ') ?? 'a unique field'
+        return new BadRequestException(`A router with the same ${target} already exists for this tenant.`)
+      }
+      if (error.code === 'P2003' || error.code === 'P2025') {
+        return new BadRequestException('A referenced tenant, group, or hotspot no longer exists. Refresh and try again.')
+      }
+      this.logger.error(`Router create failed (${error.code}): ${error.message}`)
+      return new BadRequestException(`Router could not be saved (database error ${error.code}). Check the API logs.`)
+    }
+
+    this.logger.error(
+      `Router create failed: ${error instanceof Error ? error.message : String(error)}`,
+      error instanceof Error ? error.stack : undefined,
+    )
+    return error instanceof Error ? error : new Error('Router could not be saved')
   }
 
   async runHealthCheck(routerId: string, tenantId?: string) {

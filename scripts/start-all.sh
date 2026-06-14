@@ -10,7 +10,16 @@ ROOT=/usr/src/app
 cd "$ROOT/apps/api"
 if [ -n "$DATABASE_URL" ]; then
   echo "[start-all] Running prisma migrate deploy..."
-  npx prisma migrate deploy || echo "[start-all] migrate deploy failed (continuing)"
+  if npx prisma migrate deploy; then
+    echo "[start-all] migrate deploy OK"
+  else
+    echo "[start-all] WARNING: migrate deploy failed. Forcing critical column widths so router registration still works."
+    # Idempotent safety net: guarantees the columns that block onboarding are
+    # wide enough even if a migration could not be applied cleanly.
+    npx prisma db execute --url "$DATABASE_URL" --stdin <<'SQL' || echo "[start-all] safety-net SQL skipped"
+ALTER TABLE "nas" ALTER COLUMN "secret" TYPE VARCHAR(128);
+SQL
+  fi
 fi
 if [ -f dist/main.js ]; then
   PORT=3001 node dist/main.js &
