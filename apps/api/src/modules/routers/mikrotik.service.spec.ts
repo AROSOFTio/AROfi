@@ -76,11 +76,15 @@ describe('MikrotikService', () => {
     expect(script).toContain('AROFi provisioning callback sent')
     expect(script).toContain('/api/mikrotik/login-html/fresh-router-token')
     expect(script).toContain('dst-path="hotspot/login.html"')
-    expect(script).toContain('/interface wifi find name="wifi1"')
-    expect(script).toContain('security.authentication-types=""')
-    expect(script).toContain('/interface wireless find name="wlan1"')
+    // Radio commands are deferred through [:parse] so a missing menu on the
+    // wrong RouterOS version is a catchable runtime error, not a fatal compile
+    // error. The inner quotes are therefore escaped inside the parse string.
+    expect(script).toContain('[:parse ')
+    expect(script).toContain('/interface wifi find name=\\"wifi1\\"')
+    expect(script).toContain('security.authentication-types=\\"\\"')
+    expect(script).toContain('/interface wireless find name=\\"wlan1\\"')
     expect(script).toContain('security-profile=arofi-open')
-    expect(script).toContain('ssid="AROFi Free WiFi"')
+    expect(script).toContain('ssid=\\"AROFi Free WiFi\\"')
     expect(script).toContain('bridge=arofi-hotspot')
     expect(script).toContain('/ip address add address=10.55.0.1/24 interface=arofi-hotspot')
     expect(script).toContain('/ip pool add name=arofi-pool')

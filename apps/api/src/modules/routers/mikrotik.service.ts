@@ -337,16 +337,6 @@ export class MikrotikService {
 
   // Moves a Wi-Fi interface onto the isolated arofi-hotspot bridge whether or
   // not it is currently a bridge port elsewhere (e.g. the operator's LAN).
-  private movePortToHotspotBridge(iface: string) {
-    return [
-      `    :if ([:len [/interface bridge port find interface="${iface}"]] = 0) do={`,
-      `      /interface bridge port add bridge=arofi-hotspot interface=${iface}`,
-      `    } else={`,
-      `      /interface bridge port set [find interface="${iface}"] bridge=arofi-hotspot`,
-      `    }`,
-    ]
-  }
-
   buildLoginHtml(registrationKey: string, portalBaseUrl?: string | null) {
     const target = this.resolvePortalBaseUrl(portalBaseUrl)
     const escapedTarget = this.escapeHtml(target)
@@ -391,40 +381,45 @@ export class MikrotikService {
 
   // Brings up an OPEN customer SSID on whatever radios the board has and binds
   // them to the isolated arofi-hotspot bridge. Supports RouterOS v6 wireless
-  // (wlan1/wlan2) and v7 wifi (wifi1/wifi2). Every step is wrapped so a missing
-  // radio or locked device-mode never aborts the rest of the import.
+  // (wlan1/wlan2) and v7 wifi (wifi1/wifi2).
+  //
+  // CRITICAL: RouterOS v6 has no /interface wifi menu and v7-wifiwave2 boards
+  // have no /interface wireless menu. A bare statement that references a missing
+  // menu is a COMPILE error that ":do {} on-error" cannot catch, which aborts a
+  // whole /import on the wrong RouterOS version. So every radio command is kept
+  // as TEXT and only compiled at runtime via [:parse]; a missing menu then
+  // becomes a catchable runtime error and the rest of the script still runs.
   private buildHotspotWirelessScript(ssid: string) {
     const escapedSsid = this.escape(ssid.slice(0, 32) || 'AROFi Free WiFi')
 
-    const v6 = (iface: string, putOnError: string) => [
-      `:do {`,
-      `  :if ([:len [/interface wireless find name="${iface}"]] > 0) do={`,
-      `    /interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open`,
-      ...this.movePortToHotspotBridge(iface),
-      `  }`,
-      `} on-error={ :put "${putOnError}" }`,
-    ]
+    const bridgePort = (iface: string) =>
+      `:if ([:len [/interface bridge port find interface="${iface}"]]=0) do={/interface bridge port add bridge=arofi-hotspot interface=${iface}} else={/interface bridge port set [find interface="${iface}"] bridge=arofi-hotspot}`
 
-    const v7 = (iface: string, putOnError: string) => [
-      `:do {`,
-      `  :if ([:len [/interface wifi find name="${iface}"]] > 0) do={`,
-      `    /interface wifi set [find name="${iface}"] disabled=no`,
-      `    /interface wifi set [find name="${iface}"] configuration.mode=ap`,
-      `    /interface wifi set [find name="${iface}"] configuration.ssid="${escapedSsid}"`,
-      `    /interface wifi set [find name="${iface}"] security.authentication-types=""`,
-      ...this.movePortToHotspotBridge(iface),
-      `  }`,
-      `} on-error={ :put "${putOnError}" }`,
-    ]
+    const v6Inner = (iface: string) =>
+      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
+
+    const v7Inner = (iface: string) =>
+      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""; ${bridgePort(iface)}}`
+
+    const securityProfile =
+      `:if ([:len [/interface wireless security-profiles find name="arofi-open"]]>0) do={/interface wireless security-profiles set [find name="arofi-open"] mode=none authentication-types=""} else={/interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""}`
 
     return [
-      `:do { /interface wireless cap set enabled=no } on-error={}`,
-      `:do { /interface wireless security-profiles add name="arofi-open" mode=none authentication-types="" } on-error={ :do { /interface wireless security-profiles set [find name="arofi-open"] mode=none authentication-types="" } on-error={} }`,
-      ...v6('wlan1', 'AROFi: wlan1 (RouterOS 6) not available - skipped.'),
-      ...v6('wlan2', 'AROFi: wlan2 not available - skipped.'),
-      ...v7('wifi1', 'AROFi: wifi1 (RouterOS 7) not available - skipped.'),
-      ...v7('wifi2', 'AROFi: wifi2 not available - skipped.'),
+      ...this.parseGuard('/interface wireless cap set enabled=no', 'AROFi: no wireless CAP menu - skipped.'),
+      ...this.parseGuard(securityProfile, 'AROFi: wireless security-profiles not available - skipped.'),
+      ...this.parseGuard(v6Inner('wlan1'), 'AROFi: wlan1 (RouterOS 6 wireless) not available - skipped.'),
+      ...this.parseGuard(v6Inner('wlan2'), 'AROFi: wlan2 not available - skipped.'),
+      ...this.parseGuard(v7Inner('wifi1'), 'AROFi: wifi1 (RouterOS 7 wifi) not available - skipped.'),
+      ...this.parseGuard(v7Inner('wifi2'), 'AROFi: wifi2 not available - skipped.'),
     ]
+  }
+
+  // Wraps a RouterOS command string so it is compiled at runtime via [:parse]
+  // and any failure (e.g. a menu that does not exist on this RouterOS version)
+  // is caught instead of aborting the import.
+  private parseGuard(inner: string, putOnError: string) {
+    const escaped = inner.replace(/"/g, '\\"')
+    return [`:do { :local arofiApply [:parse "${escaped}"]; $arofiApply } on-error={ :put "${putOnError}" }`]
   }
 
   private escape(value: string) {
