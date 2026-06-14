@@ -14,7 +14,13 @@ server default {
 	authorize {
 		preprocess
 		chap
+		files
 		sql
+		if ("%{sql:SELECT ch.value FROM radcheck ch JOIN \"RadiusCredential\" rc ON rc.username = ch.username JOIN \"PackageActivation\" pa ON pa.id = rc.\"activationId\" WHERE ch.username = '%{User-Name}' AND ch.attribute = 'Cleartext-Password' AND rc.status = 'ACTIVE' AND pa.status = 'ACTIVE' AND rc.\"expiresAt\" > timezone('utc', now()) AND pa.\"endsAt\" > timezone('utc', now()) ORDER BY ch.id LIMIT 1}" != "") {
+			update control {
+				Cleartext-Password := "%{sql:SELECT ch.value FROM radcheck ch JOIN \"RadiusCredential\" rc ON rc.username = ch.username JOIN \"PackageActivation\" pa ON pa.id = rc.\"activationId\" WHERE ch.username = '%{User-Name}' AND ch.attribute = 'Cleartext-Password' AND rc.status = 'ACTIVE' AND pa.status = 'ACTIVE' AND rc.\"expiresAt\" > timezone('utc', now()) AND pa.\"endsAt\" > timezone('utc', now()) ORDER BY ch.id LIMIT 1}"
+			}
+		}
 		expiration
 		logintime
 		pap
