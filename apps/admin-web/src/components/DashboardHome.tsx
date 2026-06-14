@@ -193,7 +193,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
     <div className="tenant-dashboard">
       <div className="dashboard-toolbar">
         <h1 className="page-title">Dashboard</h1>
-        <DateRangeLinks active={range.key} />
+        <DateRangeFilter from={range.from} to={range.to} />
       </div>
 
       <div className="tenant-stats">
@@ -287,28 +287,32 @@ function resolveDashboardRange(searchParams?: DashboardSearchParams) {
     const from = new Date(searchParams.from)
     const to = new Date(searchParams.to)
     if (Number.isFinite(from.getTime()) && Number.isFinite(to.getTime())) {
+      // Include the whole "to" day so a same-day range still shows that day.
+      to.setHours(23, 59, 59, 999)
       return { key, from, to }
     }
   }
   return { key: 'this-month', from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }
 }
 
-function DateRangeLinks({ active }: { active: string }) {
-  const options = [
-    ['today', 'Today'],
-    ['yesterday', 'Yesterday'],
-    ['last-7', 'Last 7 days'],
-    ['this-month', 'This month'],
-    ['last-month', 'Last month'],
-  ]
+// Real date-range picker + Filter button. Implemented as a plain GET form so it
+// works inside this server component with no client JS: submitting navigates to
+// /dashboard?range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD.
+function DateRangeFilter({ from, to }: { from: Date; to: Date }) {
+  const toInput = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
   return (
-    <div className="tabs-bar">
-      {options.map(([key, label]) => (
-        <a key={key} className={`tab-button ${active === key ? 'active' : ''}`} href={`/dashboard?range=${key}`}>
-          {label}
-        </a>
-      ))}
-    </div>
+    <form className="date-filter" action="/dashboard" method="get">
+      <input type="hidden" name="range" value="custom" />
+      <input type="date" name="from" className="form-input date-filter-input" defaultValue={toInput(from)} aria-label="From date" />
+      <span className="date-filter-sep">to</span>
+      <input type="date" name="to" className="form-input date-filter-input" defaultValue={toInput(to)} aria-label="To date" />
+      <button type="submit" className="btn btn-primary date-filter-btn">Filter</button>
+    </form>
   )
 }
 

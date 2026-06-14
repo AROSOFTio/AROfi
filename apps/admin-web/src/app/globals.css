@@ -2316,3 +2316,23 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   .home-metric-row { grid-template-columns: 1fr; }
   .home-metric { display: flex; align-items: baseline; justify-content: space-between; }
 }
+
+/* Dashboard date-range filter (picker + Filter button) */
+.date-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.date-filter-input {
+  width: auto;
+  min-height: 38px;
+  min-width: 150px;
+  font-size: 13px;
+}
+.date-filter-sep { font-size: 12.5px; color: var(--text-3); }
+.date-filter-btn { min-height: 38px; }
+@media (max-width: 560px) {
+  .date-filter { width: 100%; }
+  .date-filter-input { flex: 1; min-width: 0; }
+}
