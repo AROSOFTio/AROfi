@@ -1067,43 +1067,61 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           )}
 
           {initialView === 'login' && (
-            <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Portal login</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">Sign in with your access number</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Use the same phone number that paid for the package or redeemed the voucher. We'll load your current access and recent usage automatically.
-                </p>
-                <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                  <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
-                  <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
-                    {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                    {isLoginLoading ? 'Signing in...' : 'Sign in'}
-                  </button>
-                </form>
-              </div>
-
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Current customer state</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-                  {portalSession?.summary.hasActiveAccess ? 'Access is active' : 'No active portal session'}
-                </h2>
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  {portalSession ? (
-                    <>
-                      <div>Phone: {portalSession.customer.phoneNumber}</div>
-                      <div className="mt-2">Package: {portalSession.activeActivation?.package.name ?? 'Awaiting activation'}</div>
-                      <div className="mt-2">Remaining time: {portalSession.summary.activeMinutesRemaining} min</div>
-                      <Link href="/session" className="mt-4 inline-flex items-center gap-2 font-semibold text-emerald-700">
-                        Open session dashboard
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </>
-                  ) : (
-                    <div>Buy a package or redeem a voucher first, then sign in here to view your session.</div>
-                  )}
+            <section className="mx-auto w-full max-w-md">
+              {portalSession?.summary.hasActiveAccess ? (
+                // Already signed in with active access — celebrate + route to session.
+                <div className="rounded-[28px] border border-blue-200 bg-gradient-to-b from-blue-50 to-white p-6 text-center shadow-sm sm:p-8">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white">
+                    <Wifi className="h-7 w-7" />
+                  </div>
+                  <h2 className="mt-4 text-2xl font-bold text-slate-950">You’re connected</h2>
+                  <p className="mt-1 text-sm text-slate-600">{portalSession.activeActivation?.package.name ?? 'Active plan'}</p>
+                  <div className="mt-5 rounded-2xl border border-blue-100 bg-white p-4">
+                    <div className="text-3xl font-extrabold tracking-tight text-blue-700">{portalSession.summary.activeMinutesRemaining} min</div>
+                    <div className="mt-1 text-xs font-medium uppercase tracking-wider text-slate-400">time remaining</div>
+                  </div>
+                  <Link href="/session" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+                    Open my session
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </div>
-              </div>
+              ) : (
+                // The "already bought" sign-in: one number, one big button.
+                <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                    <LogIn className="h-6 w-6" />
+                  </div>
+                  <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-950">Already bought access?</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    Enter the phone number you paid with or redeemed your voucher on. We’ll reconnect you instantly.
+                  </p>
+                  <form onSubmit={handleLoginSubmit} className="mt-6 space-y-3">
+                    <input
+                      value={phoneNumber}
+                      onChange={(event) => setPhoneNumber(event.target.value)}
+                      placeholder="07XX XXX XXX"
+                      inputMode="tel"
+                      autoFocus
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-lg text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-base font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500">
+                      {isLoginLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+                      {isLoginLoading ? 'Reconnecting…' : 'Sign in & reconnect'}
+                    </button>
+                  </form>
+
+                  {portalSession && (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      We found {portalSession.customer.phoneNumber}, but it has no active plan right now.
+                    </div>
+                  )}
+
+                  <div className="mt-6 border-t border-slate-100 pt-5 text-center text-sm text-slate-500">
+                    Haven’t bought yet?{' '}
+                    <Link href="/" className="font-semibold text-blue-600 hover:text-blue-700">Buy access</Link>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
