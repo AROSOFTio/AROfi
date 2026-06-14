@@ -1,4 +1,4 @@
-const CACHE_NAME = 'arofi-admin-v2'
+const CACHE_NAME = 'arofi-admin-v3'
 const APP_SHELL = ['/', '/dashboard', '/login', '/logo.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {

@@ -196,6 +196,14 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         <DateRangeFilter from={range.from} to={range.to} />
       </div>
 
+      <SystemInsights
+        live={onlineRouters > 0}
+        activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
+        onlineRouters={billing?.summary.onlineRouters ?? onlineRouters}
+        dataUsedLabel={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)}
+        statusColor={routerStatusColor}
+      />
+
       <div className="tenant-stats">
         <DashboardStat title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} note={dateRange} icon="+" />
         <DashboardStat title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} note="Received less platform fee" icon="%" />
@@ -313,6 +321,37 @@ function DateRangeFilter({ from, to }: { from: Date; to: Date }) {
       <input type="date" name="to" className="form-input date-filter-input" defaultValue={toInput(to)} aria-label="To date" />
       <button type="submit" className="btn btn-primary date-filter-btn">Filter</button>
     </form>
+  )
+}
+
+function SystemInsights({
+  live,
+  activeUsers,
+  onlineRouters,
+  dataUsedLabel,
+  statusColor,
+}: {
+  live: boolean
+  activeUsers: number
+  onlineRouters: number
+  dataUsedLabel: string
+  statusColor: string
+}) {
+  return (
+    <div className="system-insights">
+      <div className="system-insights-head">
+        <span className="system-insights-title">System Insights</span>
+        <span className={`live-pill ${live ? 'is-live' : 'is-offline'}`}>
+          <span className="live-dot" style={{ background: live ? '#16a34a' : statusColor }} />
+          {live ? 'Live' : 'Offline'}
+        </span>
+      </div>
+      <div className="system-insights-metrics">
+        <div className="system-insights-metric"><strong>{activeUsers}</strong><span>Active</span></div>
+        <div className="system-insights-metric"><strong>{onlineRouters}</strong><span>Online routers</span></div>
+        <div className="system-insights-metric"><strong>{dataUsedLabel}</strong><span>Data usage</span></div>
+      </div>
+    </div>
   )
 }
 
