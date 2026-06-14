@@ -281,14 +281,45 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       activeAccountingByNas.set(row.nasipaddress, (activeAccountingByNas.get(row.nasipaddress) ?? 0) + 1)
     }
 
+    // MikroTik does not always report a NAS-IP-Address that matches the public
+    // IP we learned, so matching live sessions purely on nasipaddress can read 0
+    // even with a connected customer. Also map open sessions to a router via the
+    // RADIUS username (which is bound to the router that issued the credential).
+    const openSessionUsernames = Array.from(
+      new Set(recentAccountingRows.filter((row) => !row.acctstoptime && row.username).map((row) => row.username as string)),
+    )
+    const credentialsForOpenSessions = openSessionUsernames.length
+      ? await this.prisma.radiusCredential.findMany({
+          where: { username: { in: openSessionUsernames }, ...(tenantId ? { tenantId } : {}) },
+          select: { username: true, routerId: true },
+        })
+      : []
+    const routerIdByUsername = new Map(
+      credentialsForOpenSessions
+        .filter((credential): credential is { username: string; routerId: string } => Boolean(credential.routerId))
+        .map((credential) => [credential.username, credential.routerId]),
+    )
+    const activeAccountingByRouterId = new Map<string, number>()
+    for (const row of recentAccountingRows) {
+      if (row.acctstoptime || !row.username) {
+        continue
+      }
+      const routerId = routerIdByUsername.get(row.username)
+      if (routerId) {
+        activeAccountingByRouterId.set(routerId, (activeAccountingByRouterId.get(routerId) ?? 0) + 1)
+      }
+    }
+
     const radAcctNasIps = new Set(recentAccountingRows.map((row) => row.nasipaddress).filter(Boolean))
     const mappedRouters = routers.map((router) => {
       const mapped = this.mapRouter(router)
       const nasCandidates = this.getRouterNasCandidates(router)
-      const hasRadAcct = nasCandidates.some((candidate) => radAcctNasIps.has(candidate))
-      const activeRadAcctSessions = nasCandidates.reduce(
-        (total, candidate) => total + (activeAccountingByNas.get(candidate) ?? 0),
-        0,
+      const sessionsByUsername = activeAccountingByRouterId.get(router.id) ?? 0
+      const hasRadAcct =
+        nasCandidates.some((candidate) => radAcctNasIps.has(candidate)) || sessionsByUsername > 0
+      const activeRadAcctSessions = Math.max(
+        nasCandidates.reduce((total, candidate) => total + (activeAccountingByNas.get(candidate) ?? 0), 0),
+        sessionsByUsername,
       )
 
       if (!hasRadAcct) {
