@@ -23,42 +23,64 @@ echo "[radius] image:      $IMAGE"
 echo "[radius] config dir: $CFG_DIR"
 [ -f "$CFG_DIR/entrypoint.sh" ] || { echo "ERROR: $CFG_DIR/entrypoint.sh missing. Run from the AROFi repo root."; exit 1; }
 
-# 1. Find the AROFi Postgres container.
-PG="$(docker ps --format '{{.ID}} {{.Names}}' | grep -i postgres | awk '{print $1}' | head -n1)"
-[ -n "$PG" ] || { echo "ERROR: no running postgres container found (docker ps | grep postgres)."; exit 1; }
-PG_NAME="$(docker inspect -f '{{.Name}}' "$PG" | sed 's#^/##')"
-echo "[radius] postgres:   $PG_NAME"
-
-# 2. The docker network postgres is attached to (so FreeRADIUS can reach it by name).
-NET="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$PG" | awk '{print $1}')"
-[ -n "$NET" ] || { echo "ERROR: could not determine postgres network."; exit 1; }
-echo "[radius] network:    $NET"
-
-# 3. Database credentials, read straight from the postgres container.
-PGUSER="$(docker exec "$PG" printenv POSTGRES_USER 2>/dev/null || echo arofi)"
-PGPASS="$(docker exec "$PG" printenv POSTGRES_PASSWORD 2>/dev/null || true)"
-PGDB="$(docker exec "$PG" printenv POSTGRES_DB 2>/dev/null || echo arofi)"
-[ -n "$PGPASS" ] || { echo "ERROR: could not read POSTGRES_PASSWORD from $PG_NAME."; exit 1; }
-
-# 4. RADIUS shared secret, detected from whichever running container has it set
-#    (the AROFi API/all-in-one container). Must match the routers' scripts.
-SECRET=""
+# --- Find the AROFi APP container (the one that has RADIUS_SHARED_SECRET set). --
+APP=""
 for c in $(docker ps -q); do
-  v="$(docker exec "$c" printenv RADIUS_SHARED_SECRET 2>/dev/null || true)"
-  if [ -n "$v" ]; then SECRET="$v"; break; fi
+  if [ -n "$(docker exec "$c" printenv RADIUS_SHARED_SECRET 2>/dev/null || true)" ]; then APP="$c"; break; fi
 done
-[ -n "$SECRET" ] || { echo "ERROR: RADIUS_SHARED_SECRET not found in any container. Pass it: RADIUS_SHARED_SECRET=... sh scripts/deploy-freeradius.sh"; exit 1; }
-SECRET="${RADIUS_SHARED_SECRET:-$SECRET}"
+[ -n "$APP" ] || { echo "ERROR: could not find the AROFi app container (none has RADIUS_SHARED_SECRET). Is the app deployed?"; exit 1; }
+echo "[radius] app container: $(docker inspect -f '{{.Name}}' "$APP" | sed 's#^/##')"
+
+appenv() { docker exec "$APP" printenv "$1" 2>/dev/null || true; }
+
+SECRET="$(appenv RADIUS_SHARED_SECRET)"
+PGHOST="$(appenv POSTGRES_HOST)"
+PGPORT="$(appenv POSTGRES_PORT)"
+PGUSER="$(appenv POSTGRES_USER)"
+PGPASS="$(appenv POSTGRES_PASSWORD)"
+PGDB="$(appenv POSTGRES_DB)"
+
+# Fallback: parse anything missing out of DATABASE_URL
+# (postgresql://USER:PASS@HOST:PORT/DB?...). Assumes no '@' or ':' in the password.
+DBURL="$(appenv DATABASE_URL)"
+if [ -n "$DBURL" ]; then
+  rest="${DBURL#*://}"; creds="${rest%%@*}"; hostportdb="${rest#*@}"
+  [ -n "$PGUSER" ] || PGUSER="${creds%%:*}"
+  [ -n "$PGPASS" ] || PGPASS="${creds#*:}"
+  hp="${hostportdb%%/*}"
+  [ -n "$PGHOST" ] || PGHOST="${hp%%:*}"
+  if [ -z "$PGPORT" ]; then PGPORT="${hp#*:}"; [ "$PGPORT" = "$hp" ] && PGPORT=5432; fi
+  if [ -z "$PGDB" ]; then dbpart="${hostportdb#*/}"; PGDB="${dbpart%%\?*}"; fi
+fi
+[ -n "$PGPORT" ] || PGPORT=5432
+
+[ -n "$SECRET" ] && [ -n "$PGHOST" ] && [ -n "$PGPASS" ] && [ -n "$PGDB" ] || {
+  echo "ERROR: missing DB settings. host='$PGHOST' db='$PGDB' user='$PGUSER' pass set=$([ -n "$PGPASS" ] && echo yes || echo no) secret set=$([ -n "$SECRET" ] && echo yes || echo no)"
+  exit 1
+}
+echo "[radius] db host:    $PGHOST:$PGPORT/$PGDB  user=$PGUSER"
 echo "[radius] shared secret detected (${#SECRET} chars)"
 
-# 5. (Re)create the FreeRADIUS container.
+# --- Find the network where $PGHOST resolves: the Postgres container's network. -
+# Postgres is matched by image (its container name is a random Coolify id).
+PG="$(docker ps --format '{{.ID}}|{{.Image}}|{{.Names}}' | grep -i postgres | head -n1 | cut -d'|' -f1)"
+if [ -n "$PG" ]; then
+  NET="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$PG" | awk '{print $1}')"
+else
+  # Fallback: use the app container's first network (it already reaches Postgres).
+  NET="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$APP" | awk '{print $1}')"
+fi
+[ -n "$NET" ] || { echo "ERROR: could not determine a docker network to join."; exit 1; }
+echo "[radius] network:    $NET"
+
+# --- (Re)create the FreeRADIUS container. ---
 docker rm -f arofi-freeradius 2>/dev/null || true
 docker run -d --name arofi-freeradius --restart unless-stopped \
   --network "$NET" \
   -p 1812:1812/udp -p 1813:1813/udp \
   -v "$CFG_DIR":/arofi-freeradius:ro \
-  -e POSTGRES_HOST="$PG_NAME" \
-  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_HOST="$PGHOST" \
+  -e POSTGRES_PORT="$PGPORT" \
   -e POSTGRES_USER="$PGUSER" \
   -e POSTGRES_PASSWORD="$PGPASS" \
   -e POSTGRES_DB="$PGDB" \
@@ -66,7 +88,12 @@ docker run -d --name arofi-freeradius --restart unless-stopped \
   --entrypoint /bin/sh \
   "$IMAGE" /arofi-freeradius/entrypoint.sh
 
+sleep 3
 echo ""
-echo "[radius] started. Watch it authenticate a real customer with:"
-echo "         docker logs -f arofi-freeradius"
-echo "[radius] If config is bad it prints the exact error and exits — read the logs."
+echo "[radius] container state:"
+docker ps --filter name=arofi-freeradius --format '  {{.Names}}  {{.Status}}'
+echo ""
+echo "[radius] last log lines:"
+docker logs --tail 25 arofi-freeradius 2>&1 || true
+echo ""
+echo "[radius] Watch it authenticate a real customer with:  docker logs -f arofi-freeradius"
