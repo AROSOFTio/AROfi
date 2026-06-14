@@ -207,14 +207,6 @@ export class PortalService {
   }
 
   async redeemVoucher(dto: PortalRedeemVoucherDto, userAgent?: string) {
-    const resolvedHotspot = await this.resolveHotspotContext({
-      macAddress: dto.macAddress,
-      ipAddress: dto.clientIp,
-      routerId: dto.routerId,
-      routerKey: dto.routerKey,
-      hotspotServerName: dto.hotspotServerName,
-      loginUrl: dto.loginUrl,
-    })
     const phoneNumber =
       this.tryNormalizePhoneNumber(dto.phoneNumber) ??
       this.tryNormalizePhoneNumber(dto.customerReference)
@@ -222,6 +214,17 @@ export class PortalService {
 
     let result: Awaited<ReturnType<VouchersService['redeemVoucher']>>
     try {
+      // resolveHotspotContext used to run OUTSIDE this try, so any failure there
+      // (a DB hiccup, a bad routerKey lookup) surfaced as an opaque
+      // "Internal server error". Everything that can throw is now wrapped.
+      const resolvedHotspot = await this.resolveHotspotContext({
+        macAddress: dto.macAddress,
+        ipAddress: dto.clientIp,
+        routerId: dto.routerId,
+        routerKey: dto.routerKey,
+        hotspotServerName: dto.hotspotServerName,
+        loginUrl: dto.loginUrl,
+      })
       result = await this.vouchersService.redeemVoucher({
         code: this.normalizeVoucherCode(dto.code),
         hotspotId: dto.hotspotId,
@@ -239,11 +242,12 @@ export class PortalService {
         throw error
       }
 
+      const message = error instanceof Error ? error.message : String(error)
       this.logger.error(
-        `Voucher redemption failed for code ${this.maskVoucherCode(dto.code)} router=${resolvedHotspot.routerId ?? 'unknown'} mac=${this.normalizeMac(dto.macAddress) ?? 'unknown'}`,
-        error instanceof Error ? error.stack : String(error),
+        `Voucher redemption failed for code ${this.maskVoucherCode(dto.code)} router=${dto.routerId ?? dto.routerKey ?? 'unknown'} mac=${this.normalizeMac(dto.macAddress) ?? 'unknown'}: ${message}`,
+        error instanceof Error ? error.stack : undefined,
       )
-      throw new InternalServerErrorException('Voucher activation failed. Please retry or contact support.')
+      throw new InternalServerErrorException(`Voucher could not be redeemed: ${message}`)
     }
     // The voucher is already redeemed and committed at this point. Everything
     // below is best-effort convenience (auto-connect payload + session token):
