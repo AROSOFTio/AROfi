@@ -2388,3 +2388,78 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 @media (max-width: 560px) {
   .system-insights-metrics { grid-template-columns: 1fr; }
 }
+
+/* Compact dashboard layout */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.dashboard-header h1 { margin: 0; }
+
+/* Compact System Insights pill (top-right) */
+.system-insights-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+  min-width: 180px;
+}
+.live-pill-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.live-pill-mini.is-live { background: #dcfce7; color: #15803d; }
+.live-pill-mini.is-offline { background: #fee2e2; color: #b91c1c; }
+.live-dot-mini { width: 6px; height: 6px; border-radius: 999px; }
+.live-pill-mini.is-live .live-dot-mini { animation: pulseDot 1.6s infinite; }
+
+.system-insights-mini-metrics {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+.system-insights-mini-metrics > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.system-insights-mini-metrics strong { font-size: 14px; font-weight: 800; color: var(--text-1); }
+.system-insights-mini-metrics span { color: var(--text-3); font-weight: 600; }
+
+/* Compact stat cards grid (4 columns, tight spacing) */
+.tenant-stats-compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.tenant-stat-compact {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tenant-stat-compact-title { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; }
+.tenant-stat-compact-value { font-size: 18px; font-weight: 800; color: var(--text-1); letter-spacing: -0.02em; }
+
+@media (max-width: 1024px) {
+  .tenant-stats-compact { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .dashboard-header { flex-direction: column; }
+  .system-insights-compact { align-items: flex-start; min-width: auto; width: 100%; }
+  .system-insights-mini-metrics { width: 100%; justify-content: space-around; }
+  .tenant-stats-compact { grid-template-columns: repeat(2, 1fr); }
+}

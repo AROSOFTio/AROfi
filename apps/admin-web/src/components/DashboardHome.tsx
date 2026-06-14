@@ -191,28 +191,29 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
   return (
     <div className="tenant-dashboard">
-      <div className="dashboard-toolbar">
-        <h1 className="page-title">Dashboard</h1>
-        <DateRangeFilter from={range.from} to={range.to} />
+      <div className="dashboard-header">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <DateRangeFilter from={range.from} to={range.to} />
+        </div>
+        <SystemInsightsCompact
+          live={onlineRouters > 0}
+          activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
+          onlineRouters={billing?.summary.onlineRouters ?? onlineRouters}
+          dataUsedLabel={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)}
+          statusColor={routerStatusColor}
+        />
       </div>
 
-      <SystemInsights
-        live={onlineRouters > 0}
-        activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
-        onlineRouters={billing?.summary.onlineRouters ?? onlineRouters}
-        dataUsedLabel={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)}
-        statusColor={routerStatusColor}
-      />
-
-      <div className="tenant-stats">
-        <DashboardStat title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} note={dateRange} icon="+" />
-        <DashboardStat title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} note="Received less platform fee" icon="%" />
-        <DashboardStat title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} note="Vendor earning after fees" icon="=" />
-        <DashboardStat title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} note="Available settlement balance" icon="$" />
-        <DashboardStat title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} note="Reserved or processing" icon="~" />
-        <DashboardStat title="Active Users" value={`${billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}`} note="Live customer sessions" icon="[]" />
-        <DashboardStat title="Online Routers" value={`${billing?.summary.onlineRouters ?? onlineRouters}`} note={routerStatusLabel} icon="^" />
-        <DashboardStat title="Data Used" value={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)} note="Selected date range" icon="MB" />
+      <div className="tenant-stats-compact">
+        <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} />
+        <DashboardStatCompact title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} />
+        <DashboardStatCompact title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} />
+        <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} />
+        <DashboardStatCompact title="Active Users" value={`${billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}`} />
+        <DashboardStatCompact title="Online Routers" value={`${billing?.summary.onlineRouters ?? onlineRouters}`} />
+        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
+        <DashboardStatCompact title="Data Used" value={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)} />
       </div>
 
       <div className="dashboard-main-grid">
@@ -351,6 +352,43 @@ function SystemInsights({
         <div className="system-insights-metric"><strong>{onlineRouters}</strong><span>Online routers</span></div>
         <div className="system-insights-metric"><strong>{dataUsedLabel}</strong><span>Data usage</span></div>
       </div>
+    </div>
+  )
+}
+
+function SystemInsightsCompact({
+  live,
+  activeUsers,
+  onlineRouters,
+  dataUsedLabel,
+  statusColor,
+}: {
+  live: boolean
+  activeUsers: number
+  onlineRouters: number
+  dataUsedLabel: string
+  statusColor: string
+}) {
+  return (
+    <div className="system-insights-compact">
+      <span className={`live-pill-mini ${live ? 'is-live' : 'is-offline'}`}>
+        <span className="live-dot-mini" style={{ background: live ? '#16a34a' : statusColor }} />
+        {live ? 'Live' : 'Offline'}
+      </span>
+      <div className="system-insights-mini-metrics">
+        <div><strong>{activeUsers}</strong><span>Active</span></div>
+        <div><strong>{onlineRouters}</strong><span>Online</span></div>
+        <div><strong>{dataUsedLabel}</strong><span>Data</span></div>
+      </div>
+    </div>
+  )
+}
+
+function DashboardStatCompact({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="tenant-stat-compact">
+      <div className="tenant-stat-compact-title">{title}</div>
+      <div className="tenant-stat-compact-value">{value}</div>
     </div>
   )
 }
