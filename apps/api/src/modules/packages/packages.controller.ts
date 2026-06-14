@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -7,6 +7,7 @@ import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { CreatePackageDto } from './dto/create-package.dto'
 import { CreatePackagePriceDto } from './dto/create-package-price.dto'
+import { UpdatePackageDto } from './dto/update-package.dto'
 import { PackagesService } from './packages.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -32,6 +33,17 @@ export class PackagesController {
       ...dto,
       tenantId,
     })
+  }
+
+  @RequirePermissions(PERMISSIONS.packagesManage)
+  @Patch(':packageId')
+  updatePackage(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('packageId') packageId: string,
+    @Body() dto: UpdatePackageDto,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.packagesService.updatePackage(packageId, dto, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.packagesManage)

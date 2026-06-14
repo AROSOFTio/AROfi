@@ -2518,3 +2518,10 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   border-radius: 999px;
   white-space: nowrap;
 }
+
+/* Small button (table row actions like Edit) */
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  min-height: 30px;
+}

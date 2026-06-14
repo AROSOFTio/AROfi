@@ -3,6 +3,7 @@ import { PackageStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { CreatePackageDto } from './dto/create-package.dto'
 import { CreatePackagePriceDto } from './dto/create-package-price.dto'
+import { UpdatePackageDto } from './dto/update-package.dto'
 
 @Injectable()
 export class PackagesService {
@@ -104,6 +105,47 @@ export class PackagesService {
         },
         prices: true,
       },
+    })
+  }
+
+  async updatePackage(packageId: string, dto: UpdatePackageDto, tenantId?: string) {
+    const pkg = await this.prisma.package.findUnique({ where: { id: packageId } })
+    if (!pkg || (tenantId && pkg.tenantId !== tenantId)) {
+      throw new NotFoundException('Package not found')
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.package.update({
+        where: { id: packageId },
+        data: {
+          name: dto.name,
+          description: dto.description,
+          durationMinutes: dto.durationMinutes,
+          dataLimitMb: dto.dataLimitMb,
+          deviceLimit: dto.deviceLimit,
+          downloadSpeedKbps: dto.downloadSpeedKbps,
+          uploadSpeedKbps: dto.uploadSpeedKbps,
+          isFeatured: dto.isFeatured,
+          status: dto.status,
+        },
+      })
+
+      // A price change ends the current default price and adds a new one, so
+      // history is preserved and existing activations keep their old price.
+      if (dto.priceUgx !== undefined) {
+        await tx.packagePrice.updateMany({
+          where: { packageId, endsAt: null },
+          data: { isDefault: false, endsAt: new Date() },
+        })
+        await tx.packagePrice.create({
+          data: { packageId, amountUgx: dto.priceUgx, isDefault: true },
+        })
+      }
+
+      return tx.package.findUnique({
+        where: { id: packageId },
+        include: { tenant: { select: { id: true, name: true } }, prices: true },
+      })
     })
   }
 

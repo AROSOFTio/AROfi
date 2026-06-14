@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { PackageCatalogResponse, TenantOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
-import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDuration } from '@/lib/format'
 
 type PackageFormState = {
@@ -52,8 +52,39 @@ export default function PackagesManager() {
   const [processText, setProcessText] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  function startEdit(item: PackageCatalogResponse['items'][number]) {
+    setError(null)
+    setFormError(null)
+    setSuccess(null)
+    setProcessText('')
+    setEditingId(item.id)
+    setFormState({
+      tenantId: item.tenant.id,
+      name: item.name,
+      code: item.code,
+      description: item.description ?? '',
+      durationMinutes: String(item.durationMinutes),
+      dataLimitMb: item.dataLimitMb != null ? String(item.dataLimitMb) : '',
+      deviceLimit: item.deviceLimit != null ? String(item.deviceLimit) : '',
+      downloadSpeedKbps: item.downloadSpeedKbps != null ? String(item.downloadSpeedKbps) : '',
+      uploadSpeedKbps: item.uploadSpeedKbps != null ? String(item.uploadSpeedKbps) : '',
+      initialPriceUgx: String(item.activePriceUgx),
+      isFeatured: item.isFeatured,
+    })
+    setCreateOpen(true)
+  }
+
+  function startCreate() {
+    setEditingId(null)
+    setFormError(null)
+    setProcessText('')
+    setFormState((previous) => ({ ...initialFormState, tenantId: previous.tenantId }))
+    setCreateOpen(true)
+  }
 
   const items = catalog?.items ?? []
 
@@ -95,26 +126,41 @@ export default function PackagesManager() {
     }
 
     setSubmitting(true)
-    setProcessText('Creating package with server-side pricing and limits.')
+    setProcessText(editingId ? 'Saving package changes.' : 'Creating package with server-side pricing and limits.')
 
     try {
-      await clientPostApi('/packages', {
-        tenantId: formState.tenantId,
-        name: formState.name.trim(),
-        code: formState.code.trim().toUpperCase(),
-        description: formState.description.trim() || undefined,
-        durationMinutes: Number.parseInt(formState.durationMinutes, 10),
-        dataLimitMb: parseOptionalInt(formState.dataLimitMb),
-        deviceLimit: parseOptionalInt(formState.deviceLimit),
-        downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
-        uploadSpeedKbps: parseOptionalInt(formState.uploadSpeedKbps),
-        initialPriceUgx: Number.parseInt(formState.initialPriceUgx, 10),
-        isFeatured: formState.isFeatured,
-        status: 'ACTIVE',
-      })
+      if (editingId) {
+        await clientPatchApi(`/packages/${editingId}`, {
+          name: formState.name.trim(),
+          description: formState.description.trim() || undefined,
+          durationMinutes: Number.parseInt(formState.durationMinutes, 10),
+          dataLimitMb: parseOptionalInt(formState.dataLimitMb),
+          deviceLimit: parseOptionalInt(formState.deviceLimit),
+          downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
+          uploadSpeedKbps: parseOptionalInt(formState.uploadSpeedKbps),
+          priceUgx: Number.parseInt(formState.initialPriceUgx, 10),
+          isFeatured: formState.isFeatured,
+        })
+      } else {
+        await clientPostApi('/packages', {
+          tenantId: formState.tenantId,
+          name: formState.name.trim(),
+          code: formState.code.trim().toUpperCase(),
+          description: formState.description.trim() || undefined,
+          durationMinutes: Number.parseInt(formState.durationMinutes, 10),
+          dataLimitMb: parseOptionalInt(formState.dataLimitMb),
+          deviceLimit: parseOptionalInt(formState.deviceLimit),
+          downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
+          uploadSpeedKbps: parseOptionalInt(formState.uploadSpeedKbps),
+          initialPriceUgx: Number.parseInt(formState.initialPriceUgx, 10),
+          isFeatured: formState.isFeatured,
+          status: 'ACTIVE',
+        })
+      }
 
       setProcessText('Refreshing package catalog.')
-      setSuccess('Package created successfully')
+      setSuccess(editingId ? 'Package updated successfully' : 'Package created successfully')
+      setEditingId(null)
       setFormState({
         ...initialFormState,
         tenantId: formState.tenantId,
@@ -122,7 +168,7 @@ export default function PackagesManager() {
       await loadData()
       setCreateOpen(false)
     } catch (requestError) {
-      const failure = requestError instanceof Error ? requestError.message : 'Unable to create package'
+      const failure = requestError instanceof Error ? requestError.message : editingId ? 'Unable to update package' : 'Unable to create package'
       setError(failure)
       setFormError(failure)
     } finally {
@@ -145,7 +191,7 @@ export default function PackagesManager() {
           <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
             <div className="modal-kicker">Package catalog</div>
-            <h2 className="modal-title">Create Package</h2>
+            <h2 className="modal-title">{editingId ? 'Edit Package' : 'Create Package'}</h2>
             <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 16 }}>
               <div className="form-group">
@@ -155,6 +201,7 @@ export default function PackagesManager() {
                   value={formState.tenantId}
                   onChange={(event) => setFormState((previous) => ({ ...previous, tenantId: event.target.value }))}
                   required
+                  disabled={Boolean(editingId)}
                 >
                   <option value="">Select tenant</option>
                   {tenants.map((tenant) => (
@@ -170,7 +217,7 @@ export default function PackagesManager() {
               </div>
               <div className="form-group">
                 <label className="form-label">Code</label>
-                <input className="form-input" value={formState.code} onChange={(event) => setFormState((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))} placeholder="STARTER-2H" required />
+                <input className="form-input" value={formState.code} onChange={(event) => setFormState((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))} placeholder="STARTER-2H" required disabled={Boolean(editingId)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Duration (minutes)</label>
@@ -207,7 +254,7 @@ export default function PackagesManager() {
                 Mark as featured
               </label>
               <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Creating package...' : 'Create Package'}
+                {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Create Package'}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => setFormState((previous) => ({ ...initialFormState, tenantId: previous.tenantId }))}>
                 Reset
@@ -225,7 +272,7 @@ export default function PackagesManager() {
       <div className="table-toolbar">
         <input className="form-input" placeholder="Filter packages..." style={{ width: 244 }} />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setCreateOpen(true) }}>
+          <button type="button" className="btn btn-primary" onClick={startCreate}>
             + Create Package
           </button>
           <button type="button" className="btn btn-ghost">Columns v</button>
@@ -285,7 +332,9 @@ export default function PackagesManager() {
                   <td>
                     <span className={`switch-pill ${item.status === 'ACTIVE' ? 'on' : ''}`} aria-label={item.status} />
                   </td>
-                  <td style={{ textAlign: 'center', fontWeight: 800 }}>...</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Edit</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
