@@ -408,7 +408,10 @@ export class MikrotikService {
     const v7 = (iface: string, putOnError: string) => [
       `:do {`,
       `  :if ([:len [/interface wifi find name="${iface}"]] > 0) do={`,
-      `    /interface wifi set [find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""`,
+      `    /interface wifi set [find name="${iface}"] disabled=no`,
+      `    /interface wifi set [find name="${iface}"] configuration.mode=ap`,
+      `    /interface wifi set [find name="${iface}"] configuration.ssid="${escapedSsid}"`,
+      `    /interface wifi set [find name="${iface}"] security.authentication-types=""`,
       ...this.movePortToHotspotBridge(iface),
       `  }`,
       `} on-error={ :put "${putOnError}" }`,
