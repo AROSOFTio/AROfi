@@ -12,6 +12,7 @@ import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
 import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
+import { Cpu, Database, Users } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -257,9 +258,12 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
                 <div className="sale-avatar">{transaction.voucher ? '[]' : initialsFor(transaction.customerReference ?? 'Customer')}</div>
                 <div>
                   <div className="sale-title">{transaction.customerReference ?? transaction.voucher?.code ?? 'Customer'}</div>
-                  <div className="sale-meta">{transaction.package?.name ?? 'Package'} - {transaction.channel?.replace('_', ' ') ?? 'Sale'} - fee {formatCurrency(transaction.feeAmountUgx)}</div>
+                  <div className="sale-meta">{transaction.package?.name ?? 'Package'} · {transaction.channel?.replace('_', ' ') ?? 'Sale'} · {relativeTime(transaction.createdAt)}</div>
                 </div>
-                <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
+                <div className="sale-amount-col">
+                  <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
+                  {transaction.feeAmountUgx > 0 && <div className="sale-fee">fee {formatCurrency(transaction.feeAmountUgx)}</div>}
+                </div>
               </div>
             ))}
           </div>
@@ -268,6 +272,20 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       </div>
     </div>
   )
+}
+
+function relativeTime(iso: string) {
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return ''
+  const diffSec = Math.round((Date.now() - then) / 1000)
+  if (diffSec < 60) return 'just now'
+  const mins = Math.round(diffSec / 60)
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.round(hours / 24)
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`
+  return new Date(then).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function resolveDashboardRange(searchParams?: DashboardSearchParams) {
@@ -372,15 +390,18 @@ function SystemInsightsCompact({
   statusColor: string
 }) {
   return (
-    <div className="system-insights-compact">
-      <span className={`live-pill-mini ${live ? 'is-live' : 'is-offline'}`}>
-        <span className="live-dot-mini" style={{ background: live ? '#16a34a' : statusColor }} />
-        {live ? 'Live' : 'Offline'}
-      </span>
-      <div className="system-insights-mini-metrics">
-        <div><strong>{activeUsers}</strong><span>Active</span></div>
-        <div><strong>{onlineRouters}</strong><span>Online</span></div>
-        <div><strong>{dataUsedLabel}</strong><span>Data</span></div>
+    <div className="system-insights-card">
+      <div className="system-insights-card-head">
+        <span className="system-insights-card-title">System Insights</span>
+        <span className={`live-pill-mini ${live ? 'is-live' : 'is-offline'}`}>
+          <span className="live-dot-mini" style={{ background: live ? '#16a34a' : statusColor }} />
+          {live ? 'Live' : 'Offline'}
+        </span>
+      </div>
+      <div className="system-insights-card-metrics">
+        <div className="sic-metric"><Users size={15} /><div><strong>{activeUsers}</strong><span>Active</span></div></div>
+        <div className="sic-metric"><Cpu size={15} /><div><strong>{onlineRouters}</strong><span>Online</span></div></div>
+        <div className="sic-metric"><Database size={15} /><div><strong>{dataUsedLabel}</strong><span>Data</span></div></div>
       </div>
     </div>
   )

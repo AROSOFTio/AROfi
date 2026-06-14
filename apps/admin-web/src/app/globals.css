@@ -2463,3 +2463,47 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   .system-insights-mini-metrics { width: 100%; justify-content: space-around; }
   .tenant-stats-compact { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* System Insights bordered card with icons (matches reference design) */
+.system-insights-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+  min-width: 320px;
+}
+.system-insights-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.system-insights-card-title { font-size: 14px; font-weight: 700; color: var(--text-1); }
+.system-insights-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.sic-metric {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-app);
+}
+.sic-metric svg { color: var(--text-3); flex-shrink: 0; }
+.sic-metric > div { display: flex; flex-direction: column; line-height: 1.15; }
+.sic-metric strong { font-size: 16px; font-weight: 800; color: var(--text-1); letter-spacing: -0.02em; }
+.sic-metric span { font-size: 11px; font-weight: 600; color: var(--text-3); }
+
+/* Recent sale amount column with optional fee line */
+.sale-amount-col { margin-left: auto; text-align: right; }
+.sale-fee { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+@media (max-width: 640px) {
+  .system-insights-card { min-width: 0; width: 100%; }
+}
