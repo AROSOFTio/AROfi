@@ -27,8 +27,12 @@ import { RouterCredentialsService } from './router-credentials.service'
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutersService.name)
-  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '900', 10)
-  private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '86400', 10)
+  // The router heartbeats every 15s. A LIVE router must have signalled within
+  // ~3 missed beats so the dashboard flips to offline within ~45s of the box
+  // going down (and back to live within one beat of it returning), instead of
+  // the old 15-minute window that showed routers "live" long after they died.
+  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '45', 10)
+  private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '120', 10)
   private readonly routerProbeIntervalMs = Number.parseInt(process.env.ROUTER_PROBE_INTERVAL_MS ?? '8000', 10)
   private probeTimer?: ReturnType<typeof setInterval>
   private probing = false

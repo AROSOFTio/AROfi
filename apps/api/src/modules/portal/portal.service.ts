@@ -245,30 +245,42 @@ export class PortalService {
       )
       throw new InternalServerErrorException('Voucher activation failed. Please retry or contact support.')
     }
-    const reconnect = result.activation ? this.issueReconnectLoginPayload(result.activation, dto.loginUrl) : null
+    // The voucher is already redeemed and committed at this point. Everything
+    // below is best-effort convenience (auto-connect payload + session token):
+    // a failure here must NOT turn a successful redemption into a 500, or the
+    // customer sees "internal error" even though their voucher was consumed.
+    let reconnect: ReturnType<PortalService['issueReconnectLoginPayload']> | null = null
+    try {
+      reconnect = result.activation ? this.issueReconnectLoginPayload(result.activation, dto.loginUrl) : null
+    } catch (error) {
+      this.logger.error(
+        `Voucher redeemed but reconnect payload failed (code ${this.maskVoucherCode(dto.code)})`,
+        error instanceof Error ? error.stack : String(error),
+      )
+    }
 
     if (!phoneNumber) {
-      return {
-        ...result,
-        accessToken: null,
-        session: null,
-        reconnect,
-      }
+      return { ...result, accessToken: null, session: null, reconnect }
     }
 
-    const accessToken = this.createAccessToken({
-      tenantId: result.redemption.tenantId,
-      phoneNumber,
-      issuedAt: Date.now(),
-      expiresAt: Date.now() + this.portalTokenLifetimeMs,
-    })
-
-    return {
-      ...result,
-      accessToken,
-      session: await this.getSessionFromAccessToken(accessToken),
-      reconnect,
+    let accessToken: string | null = null
+    let session: Awaited<ReturnType<PortalService['getSessionFromAccessToken']>> | null = null
+    try {
+      accessToken = this.createAccessToken({
+        tenantId: result.redemption.tenantId,
+        phoneNumber,
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + this.portalTokenLifetimeMs,
+      })
+      session = await this.getSessionFromAccessToken(accessToken)
+    } catch (error) {
+      this.logger.error(
+        `Voucher redeemed but session token failed (code ${this.maskVoucherCode(dto.code)})`,
+        error instanceof Error ? error.stack : String(error),
+      )
     }
+
+    return { ...result, accessToken, session, reconnect }
   }
 
   async reconnect(input: {

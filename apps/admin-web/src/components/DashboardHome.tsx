@@ -11,6 +11,7 @@ import {
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
+import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import type { CSSProperties } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -191,15 +192,16 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
   return (
     <div className="tenant-dashboard">
+      <DashboardAutoRefresh />
       <div className="dashboard-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
           <DateRangeFilter from={range.from} to={range.to} />
         </div>
         <SystemInsightsCompact
-          live={onlineRouters > 0}
+          live={liveRouters > 0}
           activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
-          onlineRouters={billing?.summary.onlineRouters ?? onlineRouters}
+          onlineRouters={liveRouters}
           dataUsedLabel={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)}
           statusColor={routerStatusColor}
         />

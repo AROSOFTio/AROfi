@@ -324,6 +324,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
 
       if (redemption.reconnect?.loginUrl && redemption.reconnect.username && redemption.reconnect.password) {
+        if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
         setConnectionStatus('reconnecting')
         setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
         window.setTimeout(() => autoSubmitHotspotLogin(redemption.reconnect), 250)
@@ -391,27 +392,41 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
     autoConnectAttemptedRef.current = true
 
-    // Auto-connect at most once per ~12s window. If the hotspot login bounced
-    // the device straight back to the portal (e.g. RADIUS not ready), retrying
-    // instantly just creates an endless "Connecting you now…" loop. Instead we
-    // show the manual "Reconnect to internet" button so the customer controls
-    // the retry.
+    // Keep auto-connecting until the device is actually online. Each attempt
+    // navigates the page to the hotspot login; if the login bounces back here
+    // (e.g. RADIUS still warming up), the portal reloads and this effect runs
+    // again. We throttle attempts to ~8s apart so we don't hammer the router,
+    // and cap the automatic burst so a genuinely-broken setup doesn't trap the
+    // customer in an endless redirect — after the cap we fall back to the manual
+    // "Reconnect to internet" button (which retries the same flow).
     const now = Date.now()
+    const minGapMs = 8000
+    const maxAutoAttempts = 12
+    const attempts =
+      typeof window !== 'undefined' ? Number(sessionStorage.getItem('arofi.autoConnectCount') ?? '0') : 0
     const lastAuto =
       typeof window !== 'undefined' ? Number(sessionStorage.getItem('arofi.lastAutoConnect') ?? '0') : 0
-    if (now - lastAuto < 12000) {
+
+    if (attempts >= maxAutoAttempts) {
       setConnectionStatus('idle')
-      setStatusMessage('Your package is active. Tap “Reconnect to internet” to get back online.')
+      setStatusMessage('Still connecting… tap “Reconnect to internet” to keep trying, or use your login code below.')
       return
     }
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('arofi.lastAutoConnect', String(now))
+
+    const fire = () => {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('arofi.lastAutoConnect', String(Date.now()))
+        sessionStorage.setItem('arofi.autoConnectCount', String(attempts + 1))
+      }
+      setConnectionStatus('connecting')
+      setStatusMessage(`Connecting you to the internet… (try ${attempts + 1})`)
+      autoSubmitHotspotLogin(context.returningDevice?.reconnect)
     }
+
+    const sinceLast = now - lastAuto
     setConnectionStatus('connecting')
     setStatusMessage('Welcome back. Connecting you now...')
-    window.setTimeout(() => {
-      autoSubmitHotspotLogin(context.returningDevice?.reconnect)
-    }, 300)
+    window.setTimeout(fire, sinceLast >= minGapMs ? 300 : minGapMs - sinceLast)
   }, [context?.returningDevice?.existingActiveAccess])
 
   async function bootstrap() {
@@ -737,6 +752,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const hasCredentials = payment.reconnect?.username && payment.reconnect?.password
 
     if (effectiveLoginUrl && hasCredentials) {
+      if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
       setConnectionStatus('reconnecting')
       window.setTimeout(() => {
         autoSubmitHotspotLogin(
