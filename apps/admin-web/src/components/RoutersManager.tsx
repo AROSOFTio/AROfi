@@ -673,7 +673,7 @@ function RouterGroupCard({
       <div className="card-header"><span className="card-title">Create Router Group</span></div>
       <div className="content" style={{ paddingTop: 16 }}>
         <form onSubmit={onSubmit}>
-          <div className="stats-grid" style={{ marginBottom: 12 }}>
+          <div className="form-grid" style={{ marginBottom: 12 }}>
             {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
             <InputField label="Group Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Primary Site" required />
             <InputField label="Group Code" value={formState.code} onChange={(value) => setFormState((previous) => ({ ...previous, code: value.toUpperCase() }))} placeholder="PRIMARY" required />
@@ -724,7 +724,7 @@ function RouterCreateCard({
       <div className="card-header"><span className="card-title">Register MikroTik Router</span></div>
       <div className="content" style={{ paddingTop: 16 }}>
         <form onSubmit={onSubmit}>
-          <div className="stats-grid" style={{ marginBottom: 12 }}>
+          <div className="form-grid" style={{ marginBottom: 12 }}>
             {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
             <InputField label="Router Display Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
             <InputField label="Branch / Site Name" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Kiseka Arcade" />
@@ -741,7 +741,7 @@ function RouterCreateCard({
           </button>
           {showAdvanced && (
             <>
-              <div className="stats-grid" style={{ marginBottom: 12 }}>
+              <div className="form-grid" style={{ marginBottom: 12 }}>
                 <InputField label="Management Host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Optional, for health checks" />
                 <InputField label="Identity" value={formState.identity} onChange={(value) => setFormState((previous) => ({ ...previous, identity: value }))} placeholder="Optional RouterOS identity" />
                 <SelectField label="Connection Mode" value={formState.connectionMode} onChange={(value) => setFormState((previous) => ({ ...previous, connectionMode: value as RouterFormState['connectionMode'] }))} options={[{ value: 'ROUTEROS_API', label: 'RouterOS API' }, { value: 'ROUTEROS_API_SSL', label: 'RouterOS API SSL' }]} />

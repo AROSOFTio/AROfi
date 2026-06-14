@@ -791,7 +791,7 @@ model NasClient {
   shortname   String   @db.VarChar(32)
   type        String   @default("mikrotik") @db.VarChar(30)
   ports       Int?
-  secret      String   @db.VarChar(60)
+  secret      String   @db.VarChar(128)
   server      String?  @db.VarChar(64)
   community   String?  @db.VarChar(50)
   description String?  @db.VarChar(200)

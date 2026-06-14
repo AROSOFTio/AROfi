@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
@@ -108,11 +109,12 @@
 html { -webkit-font-smoothing: antialiased; }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--bg-app);
   color: var(--text-1);
   font-size: 14px;
   line-height: 1.5;
+  letter-spacing: -0.006em;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -1928,4 +1930,74 @@ body.mobile-nav-locked {
   .dashboard-main-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ═══════════════════════════════════════════════
+   AROFi PREMIUM REFINEMENT (2026-06)
+   Single appended layer — wins the cascade so the
+   retune is easy to review or revert in one place.
+   Goals: refined blue primary, Geist type, less bulk,
+   and forms that lay out cleanly instead of abusing
+   the dense stat-grid.
+═══════════════════════════════════════════════ */
+
+/* 1. Refined, slightly deeper/more premium blue. Light + default only,
+      so dark-mode tokens above are left untouched. */
+:root:not([data-theme="dark"]) {
+  --green:       #2563EB;
+  --green-light: #eef3ff;
+  --green-mid:   #b9ccff;
+  --green-dark:  #1b4dd1;
+  --green-soft:  #f3f7ff;
+  --brand:       #2563EB;
+  --brand-2:     #5b8cff;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 12px 30px rgba(20, 50, 120, 0.10);
+}
+
+/* 2. Typeface + monospace */
+body { font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif; }
+code, pre, .mono, [style*="monospace"] {
+  font-family: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace !important;
+}
+
+/* 3. Primary action uses the key brand color (was hardcoded near-black) */
+.btn-primary {
+  background: var(--green);
+  color: #fff;
+  border: 1px solid var(--green);
+}
+.btn-primary:hover { background: var(--green-dark); border-color: var(--green-dark); }
+
+/* 4. De-bulk the type scale (the rebuild layer was set at a 16px base) */
+.page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.page-subtitle { font-size: 13.5px; }
+.stat-label, .tenant-stat-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.01em; }
+.stat-value, .tenant-stat-value, .dashboard-panel-title { font-size: 24px; }
+.dashboard-panel-subtitle, .sale-title, .sale-meta { font-size: 13px; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-3); }
+td { font-size: 13px; }
+
+/* 5. Inputs: calmer height, sane font size, consistent radius */
+.form-input {
+  font-size: 13.5px;
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.form-label { font-size: 12.5px; }
+.form-group { margin-bottom: 14px; }
+
+/* 6. Dedicated responsive form grid — use instead of .stats-grid in forms.
+      Auto-fits at a readable min width and collapses to one column on phones. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px 16px;
+  margin-bottom: 4px;
+}
+.form-grid .form-group { margin-bottom: 0; }
+.form-grid .form-span-2 { grid-column: 1 / -1; }
+@media (max-width: 560px) {
+  .form-grid { grid-template-columns: 1fr; }
 }
