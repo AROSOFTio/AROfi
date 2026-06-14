@@ -390,6 +390,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
     autoConnectAttemptedRef.current = true
+
+    // Auto-connect at most once per ~12s window. If the hotspot login bounced
+    // the device straight back to the portal (e.g. RADIUS not ready), retrying
+    // instantly just creates an endless "Connecting you now…" loop. Instead we
+    // show the manual "Reconnect to internet" button so the customer controls
+    // the retry.
+    const now = Date.now()
+    const lastAuto =
+      typeof window !== 'undefined' ? Number(sessionStorage.getItem('arofi.lastAutoConnect') ?? '0') : 0
+    if (now - lastAuto < 12000) {
+      setConnectionStatus('idle')
+      setStatusMessage('Your package is active. Tap “Reconnect to internet” to get back online.')
+      return
+    }
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('arofi.lastAutoConnect', String(now))
+    }
     setConnectionStatus('connecting')
     setStatusMessage('Welcome back. Connecting you now...')
     window.setTimeout(() => {
