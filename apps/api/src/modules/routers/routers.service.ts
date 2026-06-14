@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   OnModuleDestroy,
@@ -465,23 +467,25 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
       include: this.routerInclude,
       })
+
+      this.reloadFreeradiusNasClients()
+
+      return await this.getRouterSetup(router.id)
     } catch (error) {
       throw this.translateRouterCreateError(error)
     }
-
-    this.reloadFreeradiusNasClients()
-
-    return this.getRouterSetup(router.id)
   }
 
-  // Turns raw Prisma/Postgres failures into actionable messages instead of a
-  // bare "Internal server error". The most common production cause is the
-  // nas.secret column still being VARCHAR(60) because the widen migration has
-  // not been applied yet.
+  // Turns raw Prisma/Postgres failures into actionable messages that actually
+  // reach the UI, instead of NestJS masking everything as a bare
+  // "Internal server error". Covers the whole create + setup flow.
   private translateRouterCreateError(error: unknown): Error {
+    // Pass real HTTP errors (NotFound/BadRequest from validation or setup) through.
+    if (error instanceof HttpException) {
+      return error
+    }
+
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      // P2000: value too long for a column (e.g. nas.secret VARCHAR(60) vs a
-      // long RADIUS_SHARED_SECRET). Tell the operator exactly what to do.
       if (error.code === 'P2000') {
         this.logger.error(`Router create failed: value too long for a column. ${error.message}`)
         return new BadRequestException(
@@ -496,14 +500,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         return new BadRequestException('A referenced tenant, group, or hotspot no longer exists. Refresh and try again.')
       }
       this.logger.error(`Router create failed (${error.code}): ${error.message}`)
-      return new BadRequestException(`Router could not be saved (database error ${error.code}). Check the API logs.`)
+      return new BadRequestException(`Router could not be saved (database error ${error.code}: ${error.message}).`)
     }
 
+    // Anything else (encryption key issues, Prisma init errors, bugs in setup):
+    // surface the real message so it is visible in the UI, not hidden as 500.
+    const message = error instanceof Error ? error.message : String(error)
     this.logger.error(
-      `Router create failed: ${error instanceof Error ? error.message : String(error)}`,
+      `Router create failed: ${message}`,
       error instanceof Error ? error.stack : undefined,
     )
-    return error instanceof Error ? error : new Error('Router could not be saved')
+    return new InternalServerErrorException(`Router could not be saved: ${message}`)
   }
 
   async runHealthCheck(routerId: string, tenantId?: string) {
