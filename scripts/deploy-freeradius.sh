@@ -61,15 +61,22 @@ fi
 echo "[radius] db host:    $PGHOST:$PGPORT/$PGDB  user=$PGUSER"
 echo "[radius] shared secret detected (${#SECRET} chars)"
 
-# --- Find the network where $PGHOST resolves: the Postgres container's network. -
-# Postgres is matched by image (its container name is a random Coolify id).
-PG="$(docker ps --format '{{.ID}}|{{.Image}}|{{.Names}}' | grep -i postgres | head -n1 | cut -d'|' -f1)"
-if [ -n "$PG" ]; then
-  NET="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$PG" | awk '{print $1}')"
-else
-  # Fallback: use the app container's first network (it already reaches Postgres).
-  NET="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$APP" | awk '{print $1}')"
-fi
+# --- Find the compose network the AROFi app is on. ---
+# The APP container is always on the CURRENT compose network (Coolify attaches it
+# there on every redeploy). Joining the APP's network guarantees the "postgres"
+# DNS alias resolves, because Coolify's compose projects add service-name aliases
+# to their project networks.
+#
+# The APP may also be on the Coolify proxy network (named "coolify*") — we skip
+# that; it doesn't have the postgres alias.
+NET=""
+for n in $(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$APP"); do
+  case "$n" in coolify*) continue ;; esac
+  NET="$n"
+  break
+done
+# Absolute fallback: use the first network the APP is on (handles edge cases).
+[ -n "$NET" ] || NET="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$APP" | awk '{print $1}')"
 [ -n "$NET" ] || { echo "ERROR: could not determine a docker network to join."; exit 1; }
 echo "[radius] network:    $NET"
 
