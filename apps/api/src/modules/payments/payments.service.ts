@@ -315,6 +315,9 @@ export class PaymentsService {
     const method = PaymentMethod.MOBILE_MONEY
     const phoneNumber = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, network)
     const normalizedMac = this.normalizeMac(dto.macAddress)
+    if (!normalizedMac) {
+      console.warn(`[payments] Payment initiated without MAC address — credentials will not be device-bound. package=${dto.packageId} phone=****${dto.phoneNumber?.slice(-4)}`)
+    }
 
     const idempotencyKey = dto.idempotencyKey?.trim() || randomUUID()
     const existingPayment = await this.prisma.payment.findUnique({
@@ -395,7 +398,8 @@ export class PaymentsService {
         },
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to submit the payment request'
+      const rawMessage = error instanceof Error ? error.message : 'Unable to submit the payment request'
+      const message = rawMessage.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300) || 'Payment gateway error. Please try again.'
 
       await this.prisma.payment.update({
         where: { id: payment.id },

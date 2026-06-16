@@ -35,7 +35,7 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
     const text = await response.text()
     const body = this.parseJson(text)
     if (!response.ok) {
-      throw new ServiceUnavailableException(`Pesapal auth failed: ${this.readError(body) ?? text}`)
+      throw new ServiceUnavailableException(this.sanitizeErrorMessage(this.readError(body) ?? text, response.status))
     }
 
     const token = this.readString(body, ['token', 'access_token'])
@@ -80,7 +80,7 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
     const text = await response.text()
     const body = this.parseJson(text)
     if (!response.ok) {
-      throw new ServiceUnavailableException(`Pesapal checkout request failed: ${this.readError(body) ?? text}`)
+      throw new ServiceUnavailableException(this.sanitizeErrorMessage(this.readError(body) ?? text, response.status))
     }
 
     const orderTrackingId = this.readString(body, ['order_tracking_id', 'orderTrackingId'])
@@ -116,7 +116,7 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
     const text = await response.text()
     const body = this.parseJson(text)
     if (!response.ok) {
-      throw new ServiceUnavailableException(`Pesapal status check failed: ${this.readError(body) ?? text}`)
+      throw new ServiceUnavailableException(this.sanitizeErrorMessage(this.readError(body) ?? text, response.status))
     }
 
     const rawStatus = (
@@ -212,6 +212,15 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
       }
     }
     return undefined
+  }
+
+  private sanitizeErrorMessage(raw: string, httpStatus?: number): string {
+    if (httpStatus === 401) return 'Payment gateway authentication failed. Check PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET.'
+    if (httpStatus === 403) return 'Payment gateway access denied. The Pesapal account may lack required permissions.'
+    if (httpStatus === 429) return 'Payment gateway rate limit exceeded. Please try again in a moment.'
+    if (httpStatus && httpStatus >= 500) return 'Payment gateway is temporarily unavailable. Please try again.'
+    const stripped = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    return stripped.length > 200 ? `${stripped.slice(0, 200)}…` : stripped || 'Payment gateway error'
   }
 
   private readError(source: Record<string, unknown>) {

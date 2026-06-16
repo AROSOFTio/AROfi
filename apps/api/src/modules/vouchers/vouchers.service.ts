@@ -678,15 +678,23 @@ export class VouchersService {
     const settings = await this.prisma.tenantSetting.upsert({
       where: { tenantId: voucher.tenantId },
       update: {},
-      create: { tenantId: voucher.tenantId },
+      create: { tenantId: voucher.tenantId, redeemableWhenGenerated: true },
     })
 
-    const redeemableGeneratedStates: VoucherStatus[] = [VoucherStatus.GENERATED, VoucherStatus.PRINTED];
+    const redeemableGeneratedStates: VoucherStatus[] = [VoucherStatus.GENERATED, VoucherStatus.PRINTED]
+    // Treat null/undefined as true — new tenants and migrated rows default to allowing GENERATED vouchers
+    const allowGenerated = settings.redeemableWhenGenerated !== false
     if (
       voucher.status !== VoucherStatus.SOLD &&
-      !(settings.redeemableWhenGenerated && redeemableGeneratedStates.includes(voucher.status))
+      !(allowGenerated && redeemableGeneratedStates.includes(voucher.status))
     ) {
-      throw new BadRequestException('Voucher is not redeemable in its current state')
+      throw new BadRequestException(
+        voucher.status === VoucherStatus.REDEEMED
+          ? 'This voucher has already been used.'
+          : voucher.status === VoucherStatus.EXPIRED
+            ? 'This voucher has expired.'
+            : 'This voucher code is not valid for redemption.',
+      )
     }
 
     if (voucher.expiresAt && voucher.expiresAt <= new Date()) {

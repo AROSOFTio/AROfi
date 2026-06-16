@@ -124,6 +124,11 @@ const portalTemplateStyles: Record<
   },
 }
 
+function sanitizeUserMessage(msg?: string | null): string {
+  if (!msg) return ''
+  return msg.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)
+}
+
 function formatCurrency(value: number) {
   return `UGX ${new Intl.NumberFormat('en-UG').format(value)}`
 }
@@ -323,12 +328,19 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode('')
       setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
 
-      if (redemption.reconnect?.loginUrl && redemption.reconnect.username && redemption.reconnect.password) {
-        if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-        setConnectionStatus('reconnecting')
-        setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
-        window.setTimeout(() => autoSubmitHotspotLogin(redemption.reconnect), 250)
-        return
+      if (redemption.reconnect?.username && redemption.reconnect?.password) {
+        const effectiveLoginUrl =
+          redemption.reconnect.loginUrl ||
+          (typeof window !== 'undefined' ? sessionStorage.getItem('arofi.lastLoginUrl') : null) ||
+          hotspotParams.loginUrl ||
+          null
+        if (effectiveLoginUrl) {
+          if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
+          setConnectionStatus('reconnecting')
+          setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
+          window.setTimeout(() => autoSubmitHotspotLogin({ ...redemption.reconnect, loginUrl: effectiveLoginUrl }), 100)
+          return
+        }
       }
 
       if (redemption.accessToken && redemption.session) {
@@ -651,7 +663,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         window.localStorage.removeItem(paymentReturnStorageKey)
       }
     } else if (payment.status === 'FAILED') {
-      setErrorMessage(payment.statusMessage ?? 'The payment did not complete successfully.')
+      setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'The payment did not complete successfully.')
     } else if (pendingStatuses.includes(payment.status)) {
       setStatusMessage('Payment is being confirmed. Keep this page open.')
     }
@@ -723,7 +735,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setCurrentPayment(payment)
 
       if (payment.status === 'FAILED') {
-        setErrorMessage(payment.statusMessage ?? 'The payment request could not be started. Check payment gateway settings.')
+        setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'The payment request could not be started. Please try again.')
         return
       }
 
@@ -1005,7 +1017,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               <div className="mt-5 flex gap-2">
                 <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`} />
                 <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className={`rounded-lg px-5 py-3 text-sm font-bold ${portalStyle.button}`}>
-                  {isVoucherLoading ? '...' : 'Login'}
+                  {isVoucherLoading ? 'Connecting…' : 'Connect'}
                 </button>
               </div>
 
