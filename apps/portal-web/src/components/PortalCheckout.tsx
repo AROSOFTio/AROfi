@@ -364,11 +364,24 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Check immediately, then poll fast so the device auto-connects within
-    // ~2s of the customer approving the mobile-money prompt on their phone.
+    // Check immediately, then poll at 1500ms so the device auto-connects within
+    // ~1.5s of the customer approving the mobile-money prompt on their phone.
     void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 2000)
-    return () => window.clearInterval(interval)
+    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 1500)
+
+    // Rapid double-check when user switches back from their banking app: fire at
+    // 0ms and 500ms so we catch the approval the instant they return.
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
+      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 500)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [currentPayment])
 
   useEffect(() => {
@@ -632,6 +645,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setCurrentPayment(payment)
 
     if (payment.activation) {
+      setErrorMessage('')
       await handleCompletedPayment(payment)
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
@@ -928,6 +942,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             </Link>
             <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
               Session
+            </Link>
+            <Link href="/support" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+              Support
             </Link>
             {portalSession && (
               <button

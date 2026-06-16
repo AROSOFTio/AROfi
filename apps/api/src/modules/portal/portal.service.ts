@@ -255,7 +255,15 @@ export class PortalService {
     // customer sees "internal error" even though their voucher was consumed.
     let reconnect: ReturnType<PortalService['issueReconnectLoginPayload']> | null = null
     try {
-      reconnect = result.activation ? this.issueReconnectLoginPayload(result.activation, dto.loginUrl) : null
+      if (result.activation) {
+        // Re-fetch with radiusCredential included; the activation returned from
+        // the redemption transaction may not carry that nested relation yet.
+        const fullActivation = await this.prisma.packageActivation.findUnique({
+          where: { id: result.activation.id },
+          include: { radiusCredential: true },
+        })
+        reconnect = fullActivation ? this.issueReconnectLoginPayload(fullActivation, dto.loginUrl) : null
+      }
     } catch (error) {
       this.logger.error(
         `Voucher redeemed but reconnect payload failed (code ${this.maskVoucherCode(dto.code)})`,
@@ -1006,5 +1014,76 @@ export class PortalService {
 
   private toJsonValue(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue
+  }
+
+  async createPortalSupportTicket(dto: {
+    tenantId: string
+    phoneNumber?: string
+    subject: string
+    category: string
+    body?: string
+    customerReference?: string
+  }) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: dto.tenantId },
+      select: { id: true },
+    })
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found')
+    }
+
+    const reference = `PRT-${Date.now().toString(36).toUpperCase().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`
+
+    const ticket = await this.prisma.supportTicket.create({
+      data: {
+        tenantId: dto.tenantId,
+        reference,
+        subject: dto.subject.trim(),
+        category: dto.category.trim(),
+        channel: 'PORTAL',
+        phoneNumber: dto.phoneNumber?.trim(),
+        customerReference: dto.customerReference?.trim() ?? dto.phoneNumber?.trim(),
+        openedBy: dto.phoneNumber ?? 'Portal customer',
+      },
+      include: { messages: true },
+    })
+
+    if (dto.body?.trim()) {
+      await this.prisma.supportTicketMessage.create({
+        data: {
+          ticketId: ticket.id,
+          authorName: dto.phoneNumber ?? 'Customer',
+          authorRole: 'Customer',
+          body: dto.body.trim(),
+          isInternal: false,
+        },
+      })
+    }
+
+    return this.prisma.supportTicket.findUniqueOrThrow({
+      where: { id: ticket.id },
+      include: { messages: { where: { isInternal: false }, orderBy: { createdAt: 'asc' } } },
+    })
+  }
+
+  async getPortalSupportTicket(reference: string, tenantId?: string) {
+    const ticket = await this.prisma.supportTicket.findFirst({
+      where: {
+        reference: reference.toUpperCase().trim(),
+        ...(tenantId ? { tenantId } : {}),
+      },
+      include: {
+        messages: {
+          where: { isInternal: false },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    })
+
+    if (!ticket) {
+      throw new NotFoundException('Support ticket not found. Check the reference number and try again.')
+    }
+
+    return ticket
   }
 }

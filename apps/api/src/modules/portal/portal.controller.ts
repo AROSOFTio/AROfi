@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common'
 import { PortalLoginDto } from './dto/portal-login.dto'
 import { PortalRedeemVoucherDto } from './dto/portal-redeem-voucher.dto'
 import { PortalService } from './portal.service'
@@ -57,5 +57,28 @@ export class PortalController {
     },
   ) {
     return this.portalService.reconnect(dto)
+  }
+
+  @Post('support-tickets')
+  createSupportTicket(
+    @Body()
+    dto: {
+      tenantId: string
+      phoneNumber?: string
+      subject: string
+      category: string
+      body?: string
+      customerReference?: string
+    },
+  ) {
+    return this.portalService.createPortalSupportTicket(dto)
+  }
+
+  @Get('support-tickets/by-reference/:reference')
+  getSupportTicket(
+    @Param('reference') reference: string,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.portalService.getPortalSupportTicket(reference, tenantId)
   }
 }

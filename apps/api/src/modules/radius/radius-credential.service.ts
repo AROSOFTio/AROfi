@@ -46,15 +46,20 @@ export class RadiusCredentialService {
       },
     })
 
+    // Use a 30-second buffer against clock drift: an activation created
+    // mid-millisecond can arrive here with endsAt <= now even though it is
+    // genuinely fresh, causing the credential to land as DISABLED and leaving
+    // no radCheck/radReply rows → FreeRADIUS rejects the auth → no internet.
+    const isActive =
+      activation.status === PackageActivationStatus.ACTIVE &&
+      activation.endsAt.getTime() > Date.now() - 30_000
+
     const credential = await tx.radiusCredential.upsert({
       where: { activationId: activation.id },
       update: {
         username,
         password,
-        status:
-          activation.status === PackageActivationStatus.ACTIVE && activation.endsAt > now
-            ? RadiusCredentialStatus.ACTIVE
-            : RadiusCredentialStatus.DISABLED,
+        status: isActive ? RadiusCredentialStatus.ACTIVE : RadiusCredentialStatus.DISABLED,
         boundMacAddress: input.boundMacAddress ?? activation.boundMacAddress,
         routerId: input.routerId ?? activation.routerId,
         expiresAt: activation.endsAt,
@@ -64,10 +69,7 @@ export class RadiusCredentialService {
         activationId: activation.id,
         username,
         password,
-        status:
-          activation.status === PackageActivationStatus.ACTIVE && activation.endsAt > now
-            ? RadiusCredentialStatus.ACTIVE
-            : RadiusCredentialStatus.DISABLED,
+        status: isActive ? RadiusCredentialStatus.ACTIVE : RadiusCredentialStatus.DISABLED,
         boundMacAddress: input.boundMacAddress ?? activation.boundMacAddress,
         routerId: input.routerId ?? activation.routerId,
         expiresAt: activation.endsAt,
@@ -116,6 +118,9 @@ export class RadiusCredentialService {
       }
 
       await tx.radReply.createMany({ data: replies })
+      console.log(
+        `[RADIUS] Provisioned username=${username} activationId=${activation.id} expiresAt=${activation.endsAt.toISOString()}`,
+      )
     }
 
     return credential

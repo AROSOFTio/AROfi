@@ -58,6 +58,15 @@ export async function clientPatchApi<T>(path: string, payload: unknown): Promise
   return parseResponse<T>(response)
 }
 
+export async function clientDeleteApi<T>(path: string): Promise<T> {
+  const response = await fetch(`${browserApiBase}${path}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: buildAuthHeaders(),
+  })
+  return parseResponse<T>(response)
+}
+
 function buildAuthHeaders(baseHeaders: Record<string, string> = {}) {
   const token = getBrowserAdminToken()
 

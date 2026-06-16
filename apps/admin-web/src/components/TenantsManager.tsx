@@ -3,8 +3,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { TenantOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
-import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
+import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+
+type TenantItem = TenantOverviewResponse['items'][number]
 
 type TenantFormState = {
   name: string
@@ -37,6 +39,9 @@ export default function TenantsManager() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [busyTenantId, setBusyTenantId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<TenantItem | null>(null)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     void loadData()
@@ -97,6 +102,23 @@ export default function TenantsManager() {
       setError(requestError instanceof Error ? requestError.message : 'Unable to update vendor control')
     } finally {
       setBusyTenantId(null)
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget || deleteConfirmName !== deleteTarget.name) return
+    setIsDeleting(true)
+    setError(null)
+    try {
+      await clientDeleteApi(`/tenants/${deleteTarget.id}`)
+      setSuccess(`Tenant "${deleteTarget.name}" and all associated data have been permanently deleted.`)
+      setDeleteTarget(null)
+      setDeleteConfirmName('')
+      await loadData()
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete tenant')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -171,114 +193,187 @@ export default function TenantsManager() {
         </div>
       )}
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">All Tenants</span>
+      {deleteTarget && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card" style={{ maxWidth: 480 }}>
+            <button type="button" className="modal-close" onClick={() => { setDeleteTarget(null); setDeleteConfirmName('') }} disabled={isDeleting}>Close</button>
+            <div className="modal-kicker" style={{ color: 'var(--danger-fg)' }}>Destructive Action</div>
+            <h2 className="modal-title">Delete Tenant</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.6 }}>
+              This will permanently delete <strong>{deleteTarget.name}</strong> and ALL associated data including
+              hotspots, routers, vouchers, packages, payments, agents, wallets, and sessions.
+              <strong style={{ color: 'var(--danger-fg)' }}> This cannot be undone.</strong>
+            </p>
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label" style={{ color: 'var(--danger-fg)' }}>
+                Type <strong>{deleteTarget.name}</strong> to confirm
+              </label>
+              <input
+                className="form-input"
+                style={{ borderColor: deleteConfirmName && deleteConfirmName !== deleteTarget.name ? 'var(--danger-fg)' : undefined }}
+                value={deleteConfirmName}
+                onChange={(event) => setDeleteConfirmName(event.target.value)}
+                placeholder={deleteTarget.name}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ background: 'var(--danger-fg)', color: '#fff', flex: 1, opacity: deleteConfirmName !== deleteTarget.name || isDeleting ? 0.5 : 1 }}
+                disabled={deleteConfirmName !== deleteTarget.name || isDeleting}
+                onClick={() => void handleDeleteConfirm()}
+              >
+                {isDeleting ? 'Deleting...' : 'Permanently Delete Tenant'}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => { setDeleteTarget(null); setDeleteConfirmName('') }} disabled={isDeleting}>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Tenant Name</th>
-                <th>Domain</th>
-                <th>Packages</th>
-                <th>Hotspots</th>
-                <th>Routers</th>
-                <th>Portal</th>
-                <th>Balance (UGX)</th>
-                <th>Earnings</th>
-                <th>Account</th>
-                <th>Payout</th>
-                <th>Support</th>
-                <th>Created</th>
-                <th>Controls</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={13}>
-                    <div className="empty-state">
-                      <p>Loading tenants...</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {!loading && items.length === 0 && (
-                <tr>
-                  <td colSpan={13}>
-                    <div className="empty-state">
-                      <p>No tenants registered yet.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {items.map((tenant) => (
-                <tr key={tenant.id}>
-                  <td>{tenant.name}</td>
-                  <td>{tenant.domain ?? 'N/A'}</td>
-                  <td>{tenant.counts.packages}</td>
-                  <td>{tenant.counts.hotspots}</td>
-                  <td>{tenant.counts.routers}</td>
-                  <td>{tenant.portalTemplate ?? 'classic'}</td>
-                  <td>{formatCurrency(tenant.wallet?.balanceUgx ?? 0)}</td>
-                  <td>
-                    <strong>{formatCurrency(tenant.earnings?.netEarningsUgx ?? 0)}</strong>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      Gross {formatCurrency(tenant.earnings?.grossSalesUgx ?? 0)} · Fees {formatCurrency(tenant.earnings?.platformFeesUgx ?? 0)}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      Paid out {formatCurrency(tenant.earnings?.completedWithdrawalUgx ?? 0)} · Pending {formatCurrency(tenant.earnings?.pendingWithdrawalUgx ?? 0)}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={getStatusBadgeClass(tenant.status?.accountActive === false ? 'FAILED' : tenant.status?.fraudHold ? 'WARNING' : 'SUCCESS')}>
-                      {tenant.status?.accountActive === false ? 'suspended' : tenant.status?.fraudHold ? 'fraud hold' : 'active'}
-                    </span>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                      KYC {tenant.status?.kycCompleted === false ? 'needed' : 'complete'}
-                    </div>
-                  </td>
-                  <td>
-                    {(tenant.payoutNumbers ?? []).slice(0, 2).map((number) => (
-                      <div key={number.id} style={{ fontSize: 12, marginBottom: 4 }}>
-                        {number.network} {maskPhone(number.normalizedPhone)} <span className={getStatusBadgeClass(number.status)}>{number.status.toLowerCase().replace(/_/g, ' ')}</span>
-                      </div>
-                    ))}
-                    {(tenant.payoutNumbers ?? []).length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>No payout number</span>}
-                    {(tenant.payoutNumberChangeRequests ?? []).filter((item) => item.status.includes('PENDING')).length > 0 && (
-                      <div style={{ color: 'var(--warning-fg)', fontSize: 12, marginTop: 4 }}>Change pending</div>
-                    )}
-                  </td>
-                  <td>{tenant.supportPhone ?? tenant.supportEmail ?? 'N/A'}</td>
-                  <td style={{ fontSize: 12 }}>{formatDate(tenant.createdAt)}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {tenant.status?.accountActive === false ? (
-                        <button className="btn btn-primary" style={controlButtonStyle} disabled={busyTenantId === tenant.id} onClick={() => updateTenantControl(tenant.id, { accountActive: true, fraudHold: false }, 'Vendor account activated.')}>Activate</button>
-                      ) : (
-                        <button className="btn btn-ghost" style={controlButtonStyle} disabled={busyTenantId === tenant.id} onClick={() => updateTenantControl(tenant.id, { accountActive: false }, 'Vendor account suspended.')}>Suspend</button>
-                      )}
-                      {tenant.status?.fraudHold ? (
-                        <button className="btn btn-ghost" style={controlButtonStyle} disabled={busyTenantId === tenant.id} onClick={() => updateTenantControl(tenant.id, { fraudHold: false }, 'Fraud hold released.')}>Release Hold</button>
-                      ) : (
-                        <button className="btn btn-ghost" style={controlButtonStyle} disabled={busyTenantId === tenant.id} onClick={() => updateTenantControl(tenant.id, { fraudHold: true }, 'Vendor placed on fraud hold.')}>Fraud Hold</button>
-                      )}
-                      <a className="btn btn-ghost" style={controlButtonStyle} href={`/routers?tenantId=${tenant.id}`}>Routers</a>
-                      <a className="btn btn-ghost" style={controlButtonStyle} href={`/settings?tenantId=${tenant.id}`}>Settings</a>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      )}
+
+      {loading ? (
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading tenants...</div>
+      ) : items.length === 0 ? (
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>No tenants registered yet.</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))' }}>
+          {items.map((tenant) => (
+            <TenantCard
+              key={tenant.id}
+              tenant={tenant}
+              busy={busyTenantId === tenant.id}
+              onActivate={() => updateTenantControl(tenant.id, { accountActive: true, fraudHold: false }, 'Vendor account activated.')}
+              onSuspend={() => updateTenantControl(tenant.id, { accountActive: false }, 'Vendor account suspended.')}
+              onFraudHold={() => updateTenantControl(tenant.id, { fraudHold: true }, 'Vendor placed on fraud hold.')}
+              onReleaseHold={() => updateTenantControl(tenant.id, { fraudHold: false }, 'Fraud hold released.')}
+              onDelete={() => { setDeleteTarget(tenant); setDeleteConfirmName('') }}
+            />
+          ))}
         </div>
-      </div>
+      )}
     </>
   )
 }
 
-const controlButtonStyle = { padding: '7px 10px', fontSize: 12 }
+type TenantCardProps = {
+  tenant: TenantItem
+  busy: boolean
+  onActivate: () => void
+  onSuspend: () => void
+  onFraudHold: () => void
+  onReleaseHold: () => void
+  onDelete: () => void
+}
+
+function TenantCard({ tenant, busy, onActivate, onSuspend, onFraudHold, onReleaseHold, onDelete }: TenantCardProps) {
+  const isActive = tenant.status?.accountActive !== false
+  const isFraudHold = Boolean(tenant.status?.fraudHold)
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {tenant.logoUrl ? (
+          <img src={tenant.logoUrl} alt={tenant.name} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain', border: '1px solid var(--border)' }} />
+        ) : (
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--bg-hover)', display: 'grid', placeItems: 'center', fontSize: 16, fontWeight: 700, color: 'var(--text-2)' }}>
+            {tenant.name.slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tenant.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{tenant.domain ?? 'No domain'}</div>
+        </div>
+        <span className={getStatusBadgeClass(isActive === false ? 'FAILED' : isFraudHold ? 'WARNING' : 'SUCCESS')} style={{ flexShrink: 0 }}>
+          {isActive === false ? 'Suspended' : isFraudHold ? 'Fraud Hold' : 'Active'}
+        </span>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid var(--border)' }}>
+        {[
+          { label: 'Packages', value: tenant.counts.packages },
+          { label: 'Hotspots', value: tenant.counts.hotspots },
+          { label: 'Routers', value: tenant.counts.routers },
+          { label: 'Users', value: tenant.counts.users },
+        ].map(({ label, value }) => (
+          <div key={label} style={{ padding: '10px 14px', textAlign: 'center', borderRight: '1px solid var(--border)' }} className="last:border-r-0">
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-1)' }}>{value}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Financials */}
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Wallet Balance</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginTop: 2 }}>{formatCurrency(tenant.wallet?.balanceUgx ?? 0)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Net Earnings</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--success-fg)', marginTop: 2 }}>{formatCurrency(tenant.earnings?.netEarningsUgx ?? 0)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Gross Sales</div>
+          <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 2 }}>{formatCurrency(tenant.earnings?.grossSalesUgx ?? 0)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pending Withdrawal</div>
+          <div style={{ fontSize: 13, color: 'var(--warn-fg)', marginTop: 2 }}>{formatCurrency(tenant.earnings?.pendingWithdrawalUgx ?? 0)}</div>
+        </div>
+      </div>
+
+      {/* Payout numbers */}
+      {(tenant.payoutNumbers ?? []).length > 0 && (
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Payout Numbers</div>
+          {(tenant.payoutNumbers ?? []).slice(0, 2).map((number) => (
+            <div key={number.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{number.network} {maskPhone(number.normalizedPhone)}</span>
+              <span className={getStatusBadgeClass(number.status)}>{number.status.toLowerCase().replace(/_/g, ' ')}</span>
+            </div>
+          ))}
+          {(tenant.payoutNumberChangeRequests ?? []).filter((item) => item.status.includes('PENDING')).length > 0 && (
+            <div style={{ color: 'var(--warn-fg)', fontSize: 12, marginTop: 4 }}>Change request pending</div>
+          )}
+        </div>
+      )}
+
+      {/* Metadata */}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
+        <span>Portal: <strong>{tenant.portalTemplate ?? 'classic'}</strong></span>
+        {(tenant.supportPhone ?? tenant.supportEmail) && <span>Support: {tenant.supportPhone ?? tenant.supportEmail}</span>}
+        <span>Created: {formatDate(tenant.createdAt)}</span>
+      </div>
+
+      {/* Actions */}
+      <div style={{ padding: '10px 16px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {isActive === false ? (
+          <button className="btn btn-primary" style={actionBtnStyle} disabled={busy} onClick={onActivate}>Activate</button>
+        ) : (
+          <button className="btn btn-ghost" style={actionBtnStyle} disabled={busy} onClick={onSuspend}>Suspend</button>
+        )}
+        {isFraudHold ? (
+          <button className="btn btn-ghost" style={actionBtnStyle} disabled={busy} onClick={onReleaseHold}>Release Hold</button>
+        ) : (
+          <button className="btn btn-ghost" style={actionBtnStyle} disabled={busy} onClick={onFraudHold}>Fraud Hold</button>
+        )}
+        <a className="btn btn-ghost" style={actionBtnStyle} href={`/routers?tenantId=${tenant.id}`}>Routers</a>
+        <a className="btn btn-ghost" style={actionBtnStyle} href={`/settings?tenantId=${tenant.id}`}>Settings</a>
+        <button className="btn" style={{ ...actionBtnStyle, background: 'var(--danger-bg)', color: 'var(--danger-fg)', border: '1px solid var(--danger-fg)', marginLeft: 'auto' }} disabled={busy} onClick={onDelete}>
+          Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const actionBtnStyle: React.CSSProperties = { padding: '6px 10px', fontSize: 12 }
 
 function maskPhone(value: string) {
   if (value.length <= 6) return value

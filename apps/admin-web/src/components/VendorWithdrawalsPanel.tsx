@@ -209,7 +209,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1.15fr) minmax(320px, 0.85fr)', gap: 18, padding: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 18, padding: 22 }}>
         <section style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 22, background: 'var(--bg-card)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
             <div>
@@ -258,7 +258,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         </section>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 0.42fr)', gap: 18, padding: '0 22px 22px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 18, padding: '0 22px 22px' }}>
         <section className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 12 }}>
           <table>
             <thead>

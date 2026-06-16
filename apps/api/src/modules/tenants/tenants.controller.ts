@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -27,6 +27,15 @@ export class TenantsController {
   @Post()
   create(@Body() dto: CreateTenantDto) {
     return this.tenantsService.create(dto)
+  }
+
+  @RequirePermissions(PERMISSIONS.tenantsManage)
+  @Delete(':id')
+  deleteTenant(@CurrentUser() user: AuthenticatedAdminUser, @Param('id') id: string) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only SuperAdmins can delete tenants')
+    }
+    return this.tenantsService.deleteTenant(id)
   }
 }
 

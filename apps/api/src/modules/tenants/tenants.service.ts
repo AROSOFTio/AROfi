@@ -163,4 +163,99 @@ export class TenantsService {
       },
     })
   }
+
+  async deleteTenant(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } })
+    if (!tenant) throw new BadRequestException('Tenant not found')
+
+    await this.prisma.$transaction(async (tx) => {
+      // Collect RADIUS usernames before deletion — radcheck/radreply use plain
+      // username strings with no FK, so we must clean them up manually.
+      const creds = await tx.radiusCredential.findMany({ where: { tenantId }, select: { username: true } })
+      const usernames = creds.map((c) => c.username)
+      if (usernames.length) {
+        await tx.radCheck.deleteMany({ where: { username: { in: usernames } } })
+        await tx.radReply.deleteMany({ where: { username: { in: usernames } } })
+      }
+
+      // Activation leaf records (all have FK → PackageActivation)
+      await tx.reconnectionLog.deleteMany({ where: { tenantId } })
+      await tx.disconnectionAttempt.deleteMany({ where: { tenantId } })
+      await tx.suspiciousAccessAttempt.deleteMany({ where: { tenantId } })
+      await tx.deviceBindingReset.deleteMany({ where: { tenantId } })
+
+      // RadiusEvent → NetworkSession (must precede NetworkSession)
+      await tx.radiusEvent.deleteMany({ where: { tenantId } })
+
+      // NetworkSession → PackageActivation + VoucherRedemption
+      await tx.networkSession.deleteMany({ where: { tenantId } })
+
+      // RadiusCredential → PackageActivation (explicit; onDelete Cascade would
+      // handle it, but we already stripped radcheck/radreply above)
+      await tx.radiusCredential.deleteMany({ where: { tenantId } })
+
+      // Financial leaf records that depend on BillingTransaction / Settlement
+      await tx.agentCommission.deleteMany({ where: { tenantId } })
+      await tx.disbursement.deleteMany({ where: { tenantId } })
+      await tx.settlement.deleteMany({ where: { tenantId } })
+
+      // PackageActivation → Payment + VoucherRedemption
+      await tx.packageActivation.deleteMany({ where: { tenantId } })
+
+      // VoucherRedemption → Voucher, Package, Hotspot
+      await tx.voucherRedemption.deleteMany({ where: { tenantId } })
+
+      // PaymentWebhook → Payment
+      await tx.paymentWebhook.deleteMany({ where: { tenantId } })
+
+      // Payment → BillingTransaction
+      await tx.payment.deleteMany({ where: { tenantId } })
+
+      // VoucherPrintLog → VoucherBatch
+      await tx.voucherPrintLog.deleteMany({ where: { tenantId } })
+
+      // BillingTransaction → LedgerTransaction, Wallet, Agent, Package, Voucher
+      await tx.billingTransaction.deleteMany({ where: { tenantId } })
+
+      // LedgerEntry + LedgerTransaction
+      await tx.ledgerEntry.deleteMany({ where: { tenantId } })
+      await tx.ledgerTransaction.deleteMany({ where: { tenantId } })
+
+      // Voucher tree
+      await tx.voucher.deleteMany({ where: { tenantId } })
+      await tx.voucherBatch.deleteMany({ where: { tenantId } })
+      await tx.voucherTemplate.deleteMany({ where: { tenantId } })
+
+      // Package + prices
+      await tx.packagePrice.deleteMany({ where: { package: { tenantId } } })
+      await tx.package.deleteMany({ where: { tenantId } })
+
+      // Router infrastructure
+      await tx.routerHealthCheck.deleteMany({ where: { tenantId } })
+      await tx.radiusClient.deleteMany({ where: { tenantId } })
+      await tx.nasClient.deleteMany({ where: { tenantId } })
+      await tx.router.deleteMany({ where: { tenantId } })
+      await tx.routerGroup.deleteMany({ where: { tenantId } })
+      await tx.hotspot.deleteMany({ where: { tenantId } })
+
+      // Wallet + Agent (Wallet has FK → Agent so wallet first)
+      await tx.wallet.deleteMany({ where: { tenantId } })
+      await tx.agent.deleteMany({ where: { tenantId } })
+
+      // Tenant-level metadata
+      await tx.auditLog.deleteMany({ where: { tenantId } })
+      await tx.supportTicket.deleteMany({ where: { tenantId } }) // messages cascade
+      await tx.featureLimit.deleteMany({ where: { tenantId } })
+      await tx.tenantSetting.deleteMany({ where: { tenantId } })
+      await tx.tenantPayoutNumberChangeRequest.deleteMany({ where: { tenantId } })
+      await tx.tenantPayoutNumber.deleteMany({ where: { tenantId } })
+      await tx.tenantPayoutProfile.deleteMany({ where: { tenantId } })
+      await tx.paymentProviderConfig.deleteMany({ where: { tenantId } })
+      await tx.user.deleteMany({ where: { tenantId } })
+
+      await tx.tenant.delete({ where: { id: tenantId } })
+    }, { timeout: 60_000 })
+
+    return { deleted: true, tenantId }
+  }
 }
