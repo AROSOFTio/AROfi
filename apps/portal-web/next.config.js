@@ -2,8 +2,6 @@
 const nextConfig = {
     reactStrictMode: true,
     basePath: '/portal',
-    // Skip the separate ESLint worker during production builds to reduce peak
-    // memory on small (4GB) build servers. Lint is run separately.
     eslint: {
         ignoreDuringBuilds: true,
     },
@@ -20,20 +18,19 @@ const nextConfig = {
     async headers() {
         return [
             {
+                // Next.js static assets are content-hashed — safe to cache for a year
+                source: '/_next/static/:path*',
+                headers: [
+                    { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+                ],
+            },
+            {
+                // HTML pages and API routes must never be stale
                 source: '/:path*',
                 headers: [
-                    {
-                        key: 'Cache-Control',
-                        value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                    },
-                    {
-                        key: 'Pragma',
-                        value: 'no-cache',
-                    },
-                    {
-                        key: 'Expires',
-                        value: '0',
-                    },
+                    { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' },
+                    { key: 'Pragma', value: 'no-cache' },
+                    { key: 'Expires', value: '0' },
                 ],
             },
         ]

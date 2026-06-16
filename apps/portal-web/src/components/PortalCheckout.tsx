@@ -129,6 +129,25 @@ function sanitizeUserMessage(msg?: string | null): string {
   return msg.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)
 }
 
+const CONTEXT_CACHE_KEY = 'arofi.ctx.v1'
+
+function readCachedContext(): PortalContextResponse | null {
+  try {
+    const raw = typeof window !== 'undefined' ? sessionStorage.getItem(CONTEXT_CACHE_KEY) : null
+    return raw ? (JSON.parse(raw) as PortalContextResponse) : null
+  } catch {
+    return null
+  }
+}
+
+function writeCachedContext(ctx: PortalContextResponse) {
+  try {
+    sessionStorage.setItem(CONTEXT_CACHE_KEY, JSON.stringify(ctx))
+  } catch {
+    // storage full — not critical
+  }
+}
+
 function formatCurrency(value: number) {
   return `UGX ${new Intl.NumberFormat('en-UG').format(value)}`
 }
@@ -244,17 +263,18 @@ function extractCheckoutUrl(payment: PortalPayment) {
 
 export default function PortalCheckout({ initialView = 'home' }: { initialView?: PortalView }) {
   const router = useRouter()
-  const [context, setContext] = useState<PortalContextResponse | null>(null)
+  const cachedCtx = readCachedContext()
+  const [context, setContext] = useState<PortalContextResponse | null>(cachedCtx)
   const [portalSession, setPortalSession] = useState<PortalCustomerSession | null>(null)
   const [portalToken, setPortalToken] = useState<string | null>(null)
-  const [selectedPackage, setSelectedPackage] = useState<PortalPackage | null>(null)
+  const [selectedPackage, setSelectedPackage] = useState<PortalPackage | null>(cachedCtx?.packages[0] ?? null)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [currentPayment, setCurrentPayment] = useState<PortalPayment | null>(null)
   const [selectedNetwork, setSelectedNetwork] = useState<MobileMoneyNetwork>('MTN')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [customerReference, setCustomerReference] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
-  const [isBooting, setIsBooting] = useState(true)
+  const [isContextLoading, setIsContextLoading] = useState(!cachedCtx)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
   const [isVoucherLoading, setIsVoucherLoading] = useState(false)
   const [isLoginLoading, setIsLoginLoading] = useState(false)
@@ -366,10 +386,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [hotspotParams, phoneNumber, customerReference, portalToken, voucherCode])
 
   useEffect(() => {
-    if (!qrVoucherCode || qrVoucherRedeemAttempted || isBooting || isVoucherLoading) return
+    if (!qrVoucherCode || qrVoucherRedeemAttempted || isContextLoading || isVoucherLoading) return
     setQrVoucherRedeemAttempted(true)
     void handleVoucherRedeem(qrVoucherCode)
-  }, [qrVoucherCode, qrVoucherRedeemAttempted, isBooting, isVoucherLoading, handleVoucherRedeem])
+  }, [qrVoucherCode, qrVoucherRedeemAttempted, isContextLoading, isVoucherLoading, handleVoucherRedeem])
 
   useEffect(() => {
     if (!currentPayment || !pendingStatuses.includes(currentPayment.status)) {
@@ -397,7 +417,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [currentPayment])
 
   useEffect(() => {
-    if (isBooting || paymentReturnHandled || typeof window === 'undefined') {
+    if (isContextLoading || paymentReturnHandled || typeof window === 'undefined') {
       return
     }
 
@@ -409,7 +429,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     setPaymentReturnHandled(true)
     void handlePaymentReturn(paymentId, params.get('token'))
-  }, [isBooting, paymentReturnHandled])
+  }, [isContextLoading, paymentReturnHandled])
 
   useEffect(() => {
     if (!context?.returningDevice?.existingActiveAccess || autoConnectAttemptedRef.current) {
@@ -455,7 +475,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [context?.returningDevice?.existingActiveAccess])
 
   async function bootstrap() {
-    setIsBooting(true)
     const detected = mergeHotspotParams(readStoredPaymentReturn()?.hotspotParams, readHotspotParams())
     setHotspotParams(detected)
     const storedToken = typeof window === 'undefined' ? null : window.localStorage.getItem(portalStorageKey)
@@ -464,13 +483,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       const session = await loadPortalSession(storedToken)
       if (session) {
         await loadContext(session.customer.phoneNumber, storedToken, detected)
-        setIsBooting(false)
+        setIsContextLoading(false)
         return
       }
     }
 
     await loadContext(undefined, undefined, detected)
-    setIsBooting(false)
+    setIsContextLoading(false)
   }
 
   function readHotspotParams() {
@@ -571,6 +590,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
 
     const data = await readJson<PortalContextResponse>(response)
+    writeCachedContext(data)
     setContext(data)
     setCurrentPayment(data.latestPayment ?? null)
     setSelectedPackage((previous) => {
@@ -978,13 +998,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       </section>
       )}
 
-      {isBooting ? (
-        <div className="flex min-h-[220px] items-center justify-center rounded-[28px] border border-slate-200 bg-white text-sm text-slate-600">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Loading portal...
-        </div>
-      ) : (
-        <>
+      <>
           {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
           {!checkoutOpen && statusMessage && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
           {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Payment confirmed. Connecting you now...</div>}
@@ -1029,7 +1043,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
 
               <div className="mt-6 grid gap-3">
-                {packages.length === 0 && <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>No packages are published for this portal yet.</div>}
+                {isContextLoading && packages.length === 0 && (
+                  <>
+                    <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
+                    <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
+                  </>
+                )}
+                {!isContextLoading && packages.length === 0 && <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>No packages are published for this portal yet.</div>}
                 {packages.map((pkg) => (
                   <button
                     key={pkg.id}
@@ -1258,8 +1278,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </div>
             </section>
           )}
-        </>
-      )}
+      </>
     </div>
   )
 }
