@@ -1,0 +1,9 @@
+services:
+  app:
+    ports:
+      - "3000:3000"
+    environment:
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - APP_BASE_URL=http://localhost:3000
+      - ADMIN_BASE_URL=http://localhost:3000/admin
+      - PORTAL_BASE_URL=http://localhost:3000/portal

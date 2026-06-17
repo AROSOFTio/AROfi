@@ -1,0 +1,103 @@
+# Local Docker Desktop development / testing compose.
+#
+# Runs the same all-in-one image used in production (SERVICE_NAME=all):
+#   nginx (port 3000) -> api (3001) + admin-web (3002) + portal-web (3003)
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up --build
+#
+# Access:
+#   Admin   -> http://localhost:3000
+#   Portal  -> http://localhost:3000/portal
+#   API     -> http://localhost:3000/api
+#
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - SERVICE_NAME=all
+      - NODE_ENV=production
+
+      # Database (points to the local postgres service below)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-arofi}:${POSTGRES_PASSWORD:-localpassword}@postgres:5432/${POSTGRES_DB:-arofi}?schema=public
+
+      # Secrets — use values from .env.local or the defaults below
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      - PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:-dev-portal-secret-change-in-production}
+      - ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:-dev-router-secret-change-in-production}
+      - RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:-dev-radius-api-key-change-in-production}
+      - RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:-dev-radius-secret-change-in-production}
+
+      # Public URLs — all relative to localhost:3000
+      - APP_BASE_URL=http://localhost:3000
+      - ADMIN_BASE_URL=http://localhost:3000
+      - PORTAL_BASE_URL=http://localhost:3000/portal
+      - VOUCHER_QR_BASE_URL=http://localhost:3000/portal
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+
+      # API routing (SSR inside the container uses the internal address)
+      - NEXT_PUBLIC_API_URL=/api
+      - API_SERVER_URL=http://127.0.0.1:3001/api
+      - API_PUBLIC_HOST=localhost:3000
+      - PORTAL_PUBLIC_HOST=localhost:3000
+
+      # RADIUS — disabled locally; set RADIUS_SERVER_HOST to your RADIUS server
+      # IP/hostname if you want to test actual auth
+      - RADIUS_SERVER_HOST=${RADIUS_SERVER_HOST:-127.0.0.1}
+      - RADIUS_PUBLIC_HOST=${RADIUS_PUBLIC_HOST:-127.0.0.1}
+      - RADIUS_AUTH_PORT=${RADIUS_AUTH_PORT:-1812}
+      - RADIUS_ACCOUNTING_PORT=${RADIUS_ACCOUNTING_PORT:-1813}
+      - RADIUS_DISCONNECT_ENABLED=${RADIUS_DISCONNECT_ENABLED:-false}
+
+      # Background workers
+      - ACCESS_WORKERS_ENABLED=${ACCESS_WORKERS_ENABLED:-true}
+      - ACCESS_WORKER_INTERVAL_MS=${ACCESS_WORKER_INTERVAL_MS:-5000}
+
+      # Payments (sandbox by default locally)
+      - PAYMENT_CUSTOMER_LABEL=${PAYMENT_CUSTOMER_LABEL:-Pay}
+      - PAYMENT_DEFAULT_CURRENCY=${PAYMENT_DEFAULT_CURRENCY:-UGX}
+      - MTN_COLLECTION_PROVIDER=${MTN_COLLECTION_PROVIDER:-AGGREGATOR}
+      - AIRTEL_COLLECTION_PROVIDER=${AIRTEL_COLLECTION_PROVIDER:-AGGREGATOR}
+      - MTN_DISBURSEMENT_PROVIDER=${MTN_DISBURSEMENT_PROVIDER:-MTN_MOMO_DIRECT}
+      - AIRTEL_DISBURSEMENT_PROVIDER=${AIRTEL_DISBURSEMENT_PROVIDER:-AIRTEL_MONEY_DIRECT}
+      - PESAPAL_MODE=${PESAPAL_MODE:-sandbox}
+      - PESAPAL_BASE_URL=${PESAPAL_BASE_URL:-https://cybqa.pesapal.com/pesapalv3}
+      - PESAPAL_CONSUMER_KEY=${PESAPAL_CONSUMER_KEY:-}
+      - PESAPAL_CONSUMER_SECRET=${PESAPAL_CONSUMER_SECRET:-}
+      - PESAPAL_IPN_ID=${PESAPAL_IPN_ID:-}
+      - PESAPAL_CALLBACK_URL=${PESAPAL_CALLBACK_URL:-http://localhost:3000/portal}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-arofi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-arofi}
+    volumes:
+      - pg-data-local:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"          # expose locally so you can inspect the DB with pgAdmin etc.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arofi} -d ${POSTGRES_DB:-arofi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg-data-local:

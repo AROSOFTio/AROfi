@@ -12,6 +12,9 @@ import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
 import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
+import { RevenueChart } from '@/components/charts/RevenueChart'
+import { SalesMixChart } from '@/components/charts/SalesMixChart'
+import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
 import { Cpu, Database, Users } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
@@ -222,24 +225,11 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         <section className="dashboard-panel">
           <div className="dashboard-panel-header">
             <div>
-              <div className="dashboard-panel-title">Overview</div>
+              <div className="dashboard-panel-title">Revenue Overview</div>
               <div className="dashboard-panel-subtitle">{dateRange}</div>
             </div>
-            <select className="form-input" style={{ width: 212, minHeight: 46 }}>
-              <option>All ...</option>
-            </select>
           </div>
-          <div className="chart-shell">
-            <div className="chart-grid" />
-            <div className="chart-axis">
-              {overviewTicks.map((tick, index) => <span key={`${tick}-${index}`}>{tick}</span>)}
-            </div>
-            <div className="chart-legend">
-              <span style={{ '--legend-color': 'var(--green)' } as CSSProperties}>Proceeds</span>
-              <span style={{ '--legend-color': '#111827' } as CSSProperties}>Commission</span>
-              <span style={{ '--legend-color': '#818cf8' } as CSSProperties}>Gross Revenue</span>
-            </div>
-          </div>
+          <RevenueChart data={billing?.chart ?? []} />
         </section>
 
         <section className="dashboard-panel">
@@ -276,6 +266,27 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           </div>
           <div className="recent-sales-footer">Showing {Math.min(recentTransactions.length, 20)} recent sales</div>
         </section>
+      </div>
+
+      {/* Secondary charts row */}
+      <div className="charts-grid" style={{ marginTop: 16 }}>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Sales Mix</span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{dateRange}</span>
+          </div>
+          <SalesMixChart
+            mobileMoneyUgx={billing?.summary.mobileMoneyGrossUgx ?? 0}
+            voucherUgx={billing?.summary.voucherGrossUgx ?? 0}
+          />
+        </div>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Data Usage by Router</span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Today</span>
+          </div>
+          <RouterUsageChart data={sessions?.usageByRouter ?? []} />
+        </div>
       </div>
     </div>
   )
