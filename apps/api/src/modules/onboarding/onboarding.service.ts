@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common'
 import { FeatureLimitCategory, WalletOwnerType } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { randomUUID } from 'crypto'
@@ -89,6 +89,8 @@ const DEFAULT_FEATURE_LIMITS = [
 
 @Injectable()
 export class OnboardingService {
+  private readonly logger = new Logger(OnboardingService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
@@ -96,6 +98,19 @@ export class OnboardingService {
   ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
+    try {
+      return await this._registerTenant(dto)
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error
+      this.logger.error('registerTenant failed', error instanceof Error ? error.stack : String(error))
+      throw new InternalServerErrorException(
+        error instanceof Error ? error.message : 'Workspace creation failed — check server logs',
+      )
+    }
+  }
+
+  private async _registerTenant(dto: RegisterTenantDto) {
+    // Ensure standard roles exist before every registration attempt
     await this.roleCatalogService.ensureStandardRoles()
 
     const tenantName = dto.tenantName.trim()
