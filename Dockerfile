@@ -12,6 +12,8 @@ COPY turbo.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/admin-web/package.json ./apps/admin-web/package.json
 COPY apps/portal-web/package.json ./apps/portal-web/package.json
+COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
+
 
 # Install dependencies in development mode to ensure compilers are available
 RUN --mount=type=cache,target=/root/.npm \
