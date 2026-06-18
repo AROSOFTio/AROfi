@@ -247,6 +247,11 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
                 <div className="sale-avatar">{transaction.voucher ? '[]' : initialsFor(transaction.customerReference ?? 'Customer')}</div>
                 <div>
                   <div className="sale-title">{transaction.customerReference ?? transaction.voucher?.code ?? 'Customer'}</div>
+                  {transaction.channel === 'MOBILE_MONEY' && transaction.payment?.phoneNumber && transaction.customerReference !== transaction.payment.phoneNumber && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {transaction.payment.phoneNumber}
+                    </div>
+                  )}
                   <div className="sale-meta">{transaction.package?.name ?? 'Package'} · {transaction.channel?.replace('_', ' ') ?? 'Sale'} · {relativeTime(transaction.createdAt)}</div>
                 </div>
                 <div className="sale-amount-col">

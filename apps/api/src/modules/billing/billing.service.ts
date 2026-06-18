@@ -89,6 +89,13 @@ export class BillingService {
         description: true,
       },
     },
+    payment: {
+      select: {
+        id: true,
+        phoneNumber: true,
+        normalizedPhone: true,
+      },
+    },
   }
 
   constructor(
@@ -389,7 +396,8 @@ export class BillingService {
       (transaction) =>
         transaction.status === BillingTransactionStatus.COMPLETED &&
         (transaction.type === BillingTransactionType.MOBILE_MONEY_SALE ||
-          transaction.type === BillingTransactionType.VOUCHER_SALE),
+          transaction.type === BillingTransactionType.VOUCHER_SALE ||
+          transaction.type === BillingTransactionType.VOUCHER_REDEMPTION),
     )
 
     const mobileMoneyGrossUgx = completedSales
@@ -463,7 +471,11 @@ export class BillingService {
       where: {
         ...this.buildTransactionWhere(tenantId, filters),
         type: {
-          in: [BillingTransactionType.MOBILE_MONEY_SALE, BillingTransactionType.VOUCHER_SALE],
+          in: [
+            BillingTransactionType.MOBILE_MONEY_SALE,
+            BillingTransactionType.VOUCHER_SALE,
+            BillingTransactionType.VOUCHER_REDEMPTION,
+          ],
         },
       },
       include: this.transactionInclude,

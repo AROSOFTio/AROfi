@@ -48,6 +48,12 @@ type PayoutProfile = {
     failedSecretAttemptsBeforeLock?: number
     withdrawalLockMinutes?: number
   }
+  metrics?: {
+    totalCollectedUgx: number
+    totalFeesUgx: number
+    agentCommissionUgx: number
+    availableBalanceUgx: number
+  } | null
 }
 
 type PanelAction = 'withdraw' | 'secret' | 'number' | 'change' | null
@@ -229,6 +235,26 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
               )}
               {pendingChange && (
                 <Notice tone="danger" text="Payout number change pending. Withdrawals are disabled until verified or approved." />
+              )}
+              {profile?.metrics && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginTop: 18, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-2)' }}>Total Collected (Mobile Money)</span>
+                    <strong style={{ color: 'var(--text-1)' }}>{formatCurrency(profile.metrics.totalCollectedUgx)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-2)' }}>Agent Commission</span>
+                    <strong style={{ color: '#ef4444' }}>- {formatCurrency(profile.metrics.agentCommissionUgx)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-2)' }}>System Service Fee</span>
+                    <strong style={{ color: '#ef4444' }}>- {formatCurrency(profile.metrics.totalFeesUgx)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderTop: '1px dashed var(--border)', paddingTop: 8, marginTop: 4 }}>
+                    <span style={{ color: 'var(--text-1)', fontWeight: 700 }}>Available to Withdraw</span>
+                    <strong style={{ color: '#10b981', fontWeight: 800 }}>{formatCurrency(profile.metrics.availableBalanceUgx)}</strong>
+                  </div>
+                </div>
               )}
             </div>
             <button type="button" className="btn btn-primary" onClick={() => setAction('withdraw')} disabled={!canWithdraw}>

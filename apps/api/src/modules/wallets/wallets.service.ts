@@ -121,7 +121,7 @@ export class WalletsService {
 
   async getPayoutProfile(tenantId: string) {
     const platformSettings = await this.getPlatformSettings()
-    const [profile, numbers, changeRequests, wallet, recentWithdrawals] = await Promise.all([
+    const [profile, numbers, changeRequests, wallet, recentWithdrawals, mmGross, agentCommissionTotal] = await Promise.all([
       this.prisma.tenantPayoutProfile.findUnique({
         where: { tenantId },
         select: { id: true, termsVersion: true, createdAt: true, updatedAt: true },
@@ -140,6 +140,25 @@ export class WalletsService {
         where: { tenantId, agentId: null },
         orderBy: { createdAt: 'desc' },
         take: 20,
+      }),
+      this.prisma.billingTransaction.aggregate({
+        where: {
+          tenantId,
+          type: BillingTransactionType.MOBILE_MONEY_SALE,
+          status: BillingTransactionStatus.COMPLETED,
+        },
+        _sum: {
+          grossAmountUgx: true,
+          feeAmountUgx: true,
+        },
+      }),
+      this.prisma.agentCommission.aggregate({
+        where: {
+          tenantId,
+        },
+        _sum: {
+          amountUgx: true,
+        },
       }),
     ])
 
@@ -169,6 +188,12 @@ export class WalletsService {
         minimumPayoutUgx: platformSettings.minimumWithdrawalUgx,
         withdrawalFeeBasisPoints: platformSettings.withdrawalFeeBps,
         withdrawalFlatFeeUgx: platformSettings.withdrawalFlatFeeUgx,
+      },
+      metrics: {
+        totalCollectedUgx: mmGross._sum.grossAmountUgx ?? 0,
+        totalFeesUgx: mmGross._sum.feeAmountUgx ?? 0,
+        agentCommissionUgx: agentCommissionTotal._sum.amountUgx ?? 0,
+        availableBalanceUgx: wallet?.balanceUgx ?? 0,
       },
     }
   }

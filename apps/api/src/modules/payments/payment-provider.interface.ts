@@ -17,6 +17,7 @@ export type PaymentProviderResult = {
   currencyCode?: string
   transactionInitiationDate?: string
   transactionCompletionDate?: string
+  payerName?: string
   rawRequest: string
   rawResponse: string
 }

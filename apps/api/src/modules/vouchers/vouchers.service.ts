@@ -10,6 +10,7 @@ import {
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
+import { FeeEngineService } from '../billing/fee-engine.service'
 import { PackageActivationService } from '../payments/package-activation.service'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
@@ -86,6 +87,7 @@ export class VouchersService {
     private readonly billingService: BillingService,
     private readonly packageActivationService: PackageActivationService,
     private readonly voucherCodeService: VoucherCodeService,
+    private readonly feeEngineService: FeeEngineService,
   ) {}
 
   async getOverview(tenantId?: string) {
@@ -758,10 +760,20 @@ export class VouchersService {
         },
       })
 
+      const breakdown = await this.feeEngineService.calculateBreakdown(
+        BillingChannel.VOUCHER,
+        voucher.faceValueUgx,
+        voucher.tenantId,
+        tx,
+      )
+
       await tx.billingTransaction.upsert({
         where: { externalReference: redemptionReference },
         update: {
-          customerReference: dto.customerReference,
+          customerReference: voucher.code,
+          grossAmountUgx: breakdown.grossAmountUgx,
+          feeAmountUgx: breakdown.feeAmountUgx,
+          netAmountUgx: breakdown.netAmountUgx,
           metadata: {
             hotspotId: dto.hotspotId,
             sessionReference: dto.sessionReference,
@@ -774,10 +786,10 @@ export class VouchersService {
           channel: BillingChannel.VOUCHER,
           type: BillingTransactionType.VOUCHER_REDEMPTION,
           status: BillingTransactionStatus.COMPLETED,
-          grossAmountUgx: 0,
-          feeAmountUgx: 0,
-          netAmountUgx: 0,
-          customerReference: dto.customerReference,
+          grossAmountUgx: breakdown.grossAmountUgx,
+          feeAmountUgx: breakdown.feeAmountUgx,
+          netAmountUgx: breakdown.netAmountUgx,
+          customerReference: voucher.code,
           externalReference: redemptionReference,
           metadata: {
             hotspotId: dto.hotspotId,

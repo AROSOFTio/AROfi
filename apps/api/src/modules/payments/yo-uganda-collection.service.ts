@@ -156,6 +156,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
       const transactionStatus = this.getXmlValue(responseXml, 'transaction_status')
       const amount = this.getXmlValue(responseXml, 'amount')
       const statusMessage = this.getXmlValue(responseXml, 'status_message') || transactionStatus
+      const payerName = this.getXmlValue(responseXml, 'payer_names') || this.getXmlValue(responseXml, 'payer_name')
 
       if (status.toUpperCase() !== 'OK') {
         throw new ServiceUnavailableException(`Yo Uganda status check API error: ${statusMessage}`)
@@ -168,6 +169,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
         transactionReference: referenceId,
         statusMessage,
         amount,
+        payerName: payerName || undefined,
         rawRequest: referenceId,
         rawResponse: responseXml,
       }
@@ -181,6 +183,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
     const externalReference = String(payload.external_ref ?? payload.reference ?? '')
     const providerReference = String(payload.transaction_reference ?? payload.yopayment_reference ?? '')
     const status = String(payload.status ?? payload.transaction_status ?? 'PENDING')
+    const payerNames = String(payload.payer_names ?? payload.payer_name ?? payload.names ?? '')
 
     return {
       externalReference,
@@ -190,6 +193,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
         statusCode: status.toUpperCase() === 'SUCCEEDED' ? 0 : 1,
         transactionStatus: this.mapYoStatus(status),
         transactionReference: providerReference,
+        payerName: payerNames || undefined,
         rawRequest: '',
         rawResponse: JSON.stringify(payload),
       },

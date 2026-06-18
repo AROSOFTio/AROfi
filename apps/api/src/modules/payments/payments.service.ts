@@ -599,10 +599,12 @@ export class PaymentsService {
         gatewayResponse.transactionReference ??
         gatewayResponse.orderTrackingId ??
         payment.providerReference
+      const updatedCustomerRef = gatewayResponse.payerName || payment.customerReference
       await tx.payment.update({
         where: { id: paymentId },
         data: {
           providerReference,
+          customerReference: updatedCustomerRef,
           providerStatus: gatewayResponse.transactionStatus ?? payment.providerStatus,
           statusMessage:
             gatewayResponse.statusMessage ??
@@ -684,7 +686,7 @@ export class PaymentsService {
             type: BillingTransactionType.MOBILE_MONEY_SALE,
             grossAmountUgx: payment.amountUgx,
             description: `${payment.method === PaymentMethod.CARD ? 'Card' : 'Mobile money'} payment - ${payment.network} network`,
-            customerReference: payment.customerReference ?? payment.phoneNumber,
+            customerReference: updatedCustomerRef ?? payment.phoneNumber,
             externalReference: payment.externalReference,
             paymentProvider: payment.provider.replace(/_/g, ' '),
             metadata: this.toJsonValue({
@@ -705,7 +707,7 @@ export class PaymentsService {
           packageId: payment.packageId,
           paymentId: payment.id,
           source: PackageActivationSource.MOBILE_MONEY,
-          customerReference: payment.customerReference ?? payment.phoneNumber,
+          customerReference: updatedCustomerRef ?? payment.phoneNumber,
           accessPhoneNumber: payment.phoneNumber,
           durationMinutes: packageRecord.durationMinutes,
           dataLimitMb: packageRecord.dataLimitMb,

@@ -469,6 +469,11 @@ export type BillingTransactionItem = {
     reference: string
     description: string
   } | null
+  payment?: {
+    id: string
+    phoneNumber: string
+    normalizedPhone?: string | null
+  } | null
 }
 
 export type AgentItem = {
