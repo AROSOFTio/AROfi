@@ -6,6 +6,13 @@ const nextConfig = {
         ignoreDuringBuilds: true,
     },
     compress: true,
+    // Force a single build worker. Next's default (cpu-count - 1) spawns
+    // multiple webpack/SWC worker processes that each carry their own memory
+    // budget independent of NODE_OPTIONS, which overruns small (2-4GB) hosts.
+    experimental: {
+        cpus: 1,
+        memoryBasedWorkersCount: true,
+    },
     images: {
         formats: ['image/avif', 'image/webp'],
         minimumCacheTTL: 86400,
