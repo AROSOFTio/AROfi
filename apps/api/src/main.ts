@@ -2,12 +2,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import * as compression from 'compression';
 
 async function bootstrap() {
   assertRequiredProductionConfig()
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.use(helmet());
+  app.use(compression({
+    level: 5,
+    threshold: 1024,
+  }));
   app.enableCors({
     origin: resolveAllowedOrigins(),
     credentials: true,
