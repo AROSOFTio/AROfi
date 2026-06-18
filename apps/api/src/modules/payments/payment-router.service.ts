@@ -7,6 +7,7 @@ import { MtnMomoCollectionService } from './mtn-momo-collection.service'
 import { MtnMomoDisbursementService } from './mtn-momo-disbursement.service'
 import { PaymentCollectionProvider, PaymentDisbursementProvider } from './payment-provider.interface'
 import { PesapalCollectionService } from './pesapal-collection.service'
+import { YoUgandaCollectionService } from './yo-uganda-collection.service'
 
 @Injectable()
 export class PaymentRouterService {
@@ -15,6 +16,7 @@ export class PaymentRouterService {
     private readonly mtnCollection: MtnMomoCollectionService,
     private readonly airtelCollection: AirtelMoneyCollectionService,
     private readonly pesapalCollection: PesapalCollectionService,
+    private readonly yoCollection: YoUgandaCollectionService,
     private readonly mtnDisbursement: MtnMomoDisbursementService,
     private readonly airtelDisbursement: AirtelMoneyDisbursementService,
   ) {}
@@ -25,7 +27,13 @@ export class PaymentRouterService {
     if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) {
       throw new BadRequestException('Airtel direct collection is not configured. Enable Airtel via aggregator in platform settings.')
     }
-    if (configured === PaymentProvider.AGGREGATOR) return this.pesapalCollection
+    if (configured === PaymentProvider.AGGREGATOR) {
+      const aggregatorProvider = this.configService.get<string>('AGGREGATOR_PROVIDER')?.toUpperCase()
+      if (aggregatorProvider === 'YO_UGANDA') {
+        return this.yoCollection
+      }
+      return this.pesapalCollection
+    }
     throw new BadRequestException(`Collection provider is not configured for ${network}`)
   }
 
@@ -54,7 +62,7 @@ export class PaymentRouterService {
   }
 
   getProviderReadiness() {
-    const aggregatorReady = this.hasPesapalCollectionConfig()
+    const aggregatorReady = this.hasAggregatorCollectionConfig()
     const mtnDirectCollectionReady = this.hasAll([
       'MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY',
       'MTN_MOMO_COLLECTION_API_USER',
@@ -85,7 +93,7 @@ export class PaymentRouterService {
       return false
     }
 
-    if (!this.hasPesapalCollectionConfig()) {
+    if (!this.hasAggregatorCollectionConfig()) {
       return false
     }
 
@@ -100,7 +108,11 @@ export class PaymentRouterService {
     return true
   }
 
-  private hasPesapalCollectionConfig() {
+  private hasAggregatorCollectionConfig() {
+    const aggregatorProvider = this.configService.get<string>('AGGREGATOR_PROVIDER')?.toUpperCase()
+    if (aggregatorProvider === 'YO_UGANDA') {
+      return this.hasAll(['YO_UGANDA_USERNAME', 'YO_UGANDA_PASSWORD'])
+    }
     return this.hasAll(['PESAPAL_CONSUMER_KEY', 'PESAPAL_CONSUMER_SECRET', 'PESAPAL_IPN_ID'])
   }
 

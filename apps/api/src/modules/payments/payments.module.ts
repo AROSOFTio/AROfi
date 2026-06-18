@@ -14,6 +14,7 @@ import { PaymentWebhookService } from './payment-webhook.service'
 import { PesapalCollectionService } from './pesapal-collection.service'
 import { PhoneNumberService } from './phone-number.service'
 import { WalletLedgerService } from './wallet-ledger.service'
+import { YoUgandaCollectionService } from './yo-uganda-collection.service'
 
 @Module({
   imports: [AuthModule, BillingModule, RadiusModule],
@@ -27,10 +28,11 @@ import { WalletLedgerService } from './wallet-ledger.service'
     PaymentRouterService,
     PaymentWebhookService,
     PesapalCollectionService,
+    YoUgandaCollectionService,
     PaymentsService,
     PhoneNumberService,
     WalletLedgerService,
   ],
-  exports: [PackageActivationService, PaymentRouterService, PaymentsService, PhoneNumberService],
+  exports: [PackageActivationService, PaymentRouterService, PaymentsService, PhoneNumberService, YoUgandaCollectionService],
 })
 export class PaymentsModule {}

@@ -948,6 +948,7 @@ export class PaymentsService {
         'TransactionStatusName',
         'payment_status_description',
         'payment_status',
+        'status',
       ]) ??
       'PENDING'
     ).toString()
@@ -967,6 +968,8 @@ export class PaymentsService {
       transactionReference: this.readPayloadValue(payload, [
         'TransactionReference',
         'transactionReference',
+        'transaction_reference',
+        'yopayment_reference',
         'network_ref',
         'providerReference',
         'order_tracking_id',
@@ -993,7 +996,7 @@ export class PaymentsService {
       amount: this.readPayloadValue(payload, ['Amount', 'amount'])?.toString(),
       currencyCode: this.readPayloadValue(payload, ['CurrencyCode', 'currency'])?.toString(),
       orderTrackingId: this.readPayloadValue(payload, ['order_tracking_id', 'OrderTrackingId'])?.toString(),
-      merchantReference: this.readPayloadValue(payload, ['merchant_reference', 'MerchantReference'])?.toString(),
+      merchantReference: this.readPayloadValue(payload, ['merchant_reference', 'MerchantReference', 'reference'])?.toString(),
       rawRequest: '',
       rawResponse: JSON.stringify(payload),
     }
@@ -1006,6 +1009,7 @@ export class PaymentsService {
           'ExternalReference',
           'externalReference',
           'external_ref',
+          'reference',
           'privateTransactionReference',
           'PrivateTransactionReference',
           'merchant_reference',
@@ -1017,6 +1021,8 @@ export class PaymentsService {
         this.readPayloadValue(payload, [
           'TransactionReference',
           'transactionReference',
+          'transaction_reference',
+          'yopayment_reference',
           'network_ref',
           'providerReference',
           'order_tracking_id',

@@ -431,48 +431,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     void handlePaymentReturn(paymentId, params.get('token'))
   }, [isContextLoading, paymentReturnHandled])
 
-  useEffect(() => {
-    if (!context?.returningDevice?.existingActiveAccess || autoConnectAttemptedRef.current) {
-      return
-    }
-    autoConnectAttemptedRef.current = true
 
-    // Keep auto-connecting until the device is actually online. Each attempt
-    // navigates the page to the hotspot login; if the login bounces back here
-    // (e.g. RADIUS still warming up), the portal reloads and this effect runs
-    // again. We throttle attempts to ~8s apart so we don't hammer the router,
-    // and cap the automatic burst so a genuinely-broken setup doesn't trap the
-    // customer in an endless redirect — after the cap we fall back to the manual
-    // "Reconnect to internet" button (which retries the same flow).
-    const now = Date.now()
-    const minGapMs = 8000
-    const maxAutoAttempts = 12
-    const attempts =
-      typeof window !== 'undefined' ? Number(sessionStorage.getItem('arofi.autoConnectCount') ?? '0') : 0
-    const lastAuto =
-      typeof window !== 'undefined' ? Number(sessionStorage.getItem('arofi.lastAutoConnect') ?? '0') : 0
-
-    if (attempts >= maxAutoAttempts) {
-      setConnectionStatus('idle')
-      setStatusMessage('Still connecting… tap “Reconnect to internet” to keep trying, or use your login code below.')
-      return
-    }
-
-    const fire = () => {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('arofi.lastAutoConnect', String(Date.now()))
-        sessionStorage.setItem('arofi.autoConnectCount', String(attempts + 1))
-      }
-      setConnectionStatus('connecting')
-      setStatusMessage(`Connecting you to the internet… (try ${attempts + 1})`)
-      autoSubmitHotspotLogin(context.returningDevice?.reconnect)
-    }
-
-    const sinceLast = now - lastAuto
-    setConnectionStatus('connecting')
-    setStatusMessage('Welcome back. Connecting you now...')
-    window.setTimeout(fire, sinceLast >= minGapMs ? 300 : minGapMs - sinceLast)
-  }, [context?.returningDevice?.existingActiveAccess])
 
   async function bootstrap() {
     const detected = mergeHotspotParams(readStoredPaymentReturn()?.hotspotParams, readHotspotParams())

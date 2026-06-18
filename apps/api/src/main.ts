@@ -4,6 +4,11 @@ import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import * as compression from 'compression';
 
+(BigInt.prototype as any).toJSON = function () {
+  const num = Number(this);
+  return Number.isSafeInteger(num) ? num : this.toString();
+};
+
 async function bootstrap() {
   assertRequiredProductionConfig()
   const app = await NestFactory.create(AppModule);
@@ -14,7 +19,32 @@ async function bootstrap() {
     threshold: 1024,
   }));
   app.enableCors({
-    origin: resolveAllowedOrigins(),
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const isLocalOrHotspot =
+        origin.startsWith('http://10.') ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://172.') ||
+        origin.includes('wifi.login') ||
+        origin.includes('arosoftlabs.com') ||
+        origin.includes('arofi.arosoft.io') ||
+        process.env.NODE_ENV !== 'production';
+
+      if (isLocalOrHotspot) {
+        callback(null, true);
+        return;
+      }
+
+      const allowed = resolveAllowedOrigins();
+      if (allowed === true || (Array.isArray(allowed) && allowed.includes(origin))) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
   });
   app.useGlobalPipes(
