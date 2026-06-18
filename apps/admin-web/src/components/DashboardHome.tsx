@@ -15,7 +15,7 @@ import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
-import { Cpu, Database, Users } from 'lucide-react'
+import { Cpu, Database, Users, Coins, Percent, TrendingUp, Wallet, ArrowUpRight } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -214,11 +214,11 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       {/* Money cards only. Active / Online / Data live in the System Insights
           card above, so they are intentionally not repeated here. */}
       <div className="tenant-stats-compact">
-        <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} />
-        <DashboardStatCompact title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} />
-        <DashboardStatCompact title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} />
-        <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} />
-        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
+        <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} icon={Coins} colorClass="gross" />
+        <DashboardStatCompact title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} icon={Percent} colorClass="fees" />
+        <DashboardStatCompact title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} icon={TrendingUp} colorClass="earnings" />
+        <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} icon={Wallet} colorClass="wallet" />
+        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} icon={ArrowUpRight} colorClass="pending" />
       </div>
 
       <div className="dashboard-main-grid">
@@ -430,11 +430,16 @@ function SystemInsightsCompact({
   )
 }
 
-function DashboardStatCompact({ title, value }: { title: string; value: string }) {
+function DashboardStatCompact({ title, value, icon: Icon, colorClass }: { title: string; value: string; icon: any; colorClass: string }) {
   return (
-    <div className="tenant-stat-compact">
-      <div className="tenant-stat-compact-title">{title}</div>
-      <div className="tenant-stat-compact-value">{value}</div>
+    <div className={`tenant-stat-card ${colorClass}`}>
+      <div className="stat-card-header">
+        <span className="stat-card-title">{title}</span>
+        <div className="stat-card-icon">
+          <Icon size={15} />
+        </div>
+      </div>
+      <div className="stat-card-value">{value}</div>
     </div>
   )
 }

@@ -23,7 +23,7 @@ import * as QRCode from 'qrcode'
 
 // Advertisement line printed on every voucher card in the PDF sheet.
 // Kept short and unobtrusive so it does not interfere with the voucher data.
-const VOUCHER_AD_LINE = 'AROSOFT · Custom Systems · ERP · SaaS · arosoftlabs.com'
+const VOUCHER_AD_LINE = 'AROSOFT · Systems · ERP · SaaS'
 
 type VoucherPdfTemplate = 'signal' | 'wave' | 'receipt' | 'agent' | 'thermal'
 
@@ -917,7 +917,8 @@ export class VouchersService {
         durationMinutes: batch.package.durationMinutes,
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
-        support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
+        supportPhone: batch.tenant.supportPhone,
+        supportEmail: batch.tenant.supportEmail,
         portalHost: this.getVoucherPortalHost(),
         qrPng,
       })
@@ -1020,7 +1021,8 @@ export class VouchersService {
       durationMinutes: number
       amountUgx: number
       voucherCode: string
-      support: string
+      supportPhone?: string | null
+      supportEmail?: string | null
       portalHost: string
       qrPng: Buffer
     },
@@ -1028,7 +1030,7 @@ export class VouchersService {
     const { x, y, width, height, template } = input
     const railWidth = 12
     const innerX = x + railWidth + 6
-    const qrSize = 46
+    const qrSize = 44
     const qrX = x + width - qrSize - 8
     doc.save()
     doc.roundedRect(x, y, width, height, 5).fillAndStroke(template.background, '#D7DEE8')
@@ -1043,7 +1045,7 @@ export class VouchersService {
     doc.fillColor(template.accentDark).font('Helvetica-Bold').fontSize(5.2)
       .text(input.tenantName.toUpperCase(), innerX, y + 7, { width: width - railWidth - 12, align: 'center', ellipsis: true })
 
-    const codeY = y + 28
+    const codeY = y + 23
     this.drawVoucherUserIcon(doc, innerX + 1, codeY - 3)
     const codeFontSize = input.voucherCode.length > 18 ? 7.2 : input.voucherCode.length > 14 ? 8.4 : 9.8
     doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(codeFontSize)
@@ -1054,31 +1056,27 @@ export class VouchersService {
         lineBreak: false,
       })
 
-    doc.moveTo(innerX, y + 44).lineTo(x + width - 5, y + 44).strokeColor(template.accent).lineWidth(1.4).stroke()
+    doc.moveTo(innerX, y + 39).lineTo(x + width - 5, y + 39).strokeColor(template.accent).lineWidth(1.4).stroke()
 
-    doc.image(input.qrPng, qrX, y + 43, { width: qrSize, height: qrSize })
+    doc.image(input.qrPng, qrX, y + 38, { width: qrSize, height: qrSize })
 
-    const detailY = y + 49
+    const detailY = y + 43
     const detailWidth = (qrX - innerX - 10) / 2
     this.drawVoucherDetail(doc, 'PACKAGE', input.packageName, innerX, detailY, detailWidth, template)
     this.drawVoucherDetail(doc, 'PRICE', `UGX ${input.amountUgx.toLocaleString('en-UG')}`, innerX + detailWidth + 8, detailY, detailWidth, template)
-    this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 18, detailWidth, template)
-    this.drawVoucherDetail(doc, 'HELP', input.portalHost, innerX + detailWidth + 8, detailY + 18, detailWidth, template)
+    this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 14, detailWidth, template)
+    this.drawVoucherDetail(doc, 'HELP', input.portalHost, innerX + detailWidth + 8, detailY + 14, detailWidth, template)
 
     // Help line: Call + WhatsApp — printed above the advert band
-    const helpY = y + height - 22
-    doc.fillColor(template.ink).font('Helvetica').fontSize(4.0)
-      .text(`Call: ${input.support}`, innerX, helpY, {
-        width: (width - railWidth - 16) / 2,
-        align: 'left',
-        ellipsis: true,
-      })
-    doc.fillColor('#25D366').font('Helvetica-Bold').fontSize(4.0)
-      .text(`Chat (WhatsApp): ${input.support}`, innerX + (width - railWidth - 16) / 2, helpY, {
-        width: (width - railWidth - 16) / 2,
-        align: 'right',
-        ellipsis: true,
-      })
+    const helpY = y + height - 20
+    const supportText = input.supportPhone || 'Contact Staff'
+    doc.fillColor(template.ink).font('Helvetica-Bold').fontSize(3.8)
+      .text('Call: ', innerX, helpY, { continued: true })
+      .font('Helvetica').text(supportText, { continued: false })
+
+    doc.fillColor('#25D366').font('Helvetica-Bold').fontSize(3.8)
+      .text('Chat: ', innerX + (width - railWidth - 16) / 2, helpY, { continued: true })
+      .font('Helvetica').fillColor(template.ink).text(supportText, { continued: false })
 
     // Advertisement band: subtle AROSOFT promo — small, gray, non-intrusive
     doc.save()
@@ -1091,12 +1089,12 @@ export class VouchersService {
     doc.undash()
     doc.restore()
     // "Powered By: AROSOFT" — bold brand label, link text hidden (no URL shown)
-    doc.fillColor('#374151').font('Helvetica-Bold').fontSize(3.6)
+    doc.fillColor('#374151').font('Helvetica-Bold').fontSize(3.5)
       .text('Powered By: ', innerX, y + height - 9, { continued: true })
-    doc.fillColor('#155DFC').font('Helvetica-Bold').fontSize(3.6)
-      .text('AROSOFT', { continued: false })
+    doc.fillColor('#155DFC').font('Helvetica-Bold').fontSize(3.5)
+      .text('AROSOFT', { continued: false, link: 'https://arosoftlabs.com' })
     // Advert sub-line in light gray
-    doc.fillColor('#9CA3AF').font('Helvetica').fontSize(3.3)
+    doc.fillColor('#9CA3AF').font('Helvetica').fontSize(3.0)
       .text(VOUCHER_AD_LINE, innerX + 56, y + height - 9, {
         width: width - railWidth - 76,
         align: 'right',
