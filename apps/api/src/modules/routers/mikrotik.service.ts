@@ -421,6 +421,34 @@ export class MikrotikService {
       z-index: 10;
       position: relative;
     }
+    .wifi-pulse-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .wifi-pulse-icon {
+      width: 42px;
+      height: 42px;
+      color: var(--accent-color);
+      animation: wifi-pulse 2.2s infinite ease-in-out;
+    }
+    @keyframes wifi-pulse {
+      0% {
+        transform: scale(0.92);
+        opacity: 0.45;
+        filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0));
+      }
+      50% {
+        transform: scale(1.06);
+        opacity: 1;
+        filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6));
+      }
+      100% {
+        transform: scale(0.92);
+        opacity: 0.45;
+        filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0));
+      }
+    }
     .logo-container {
       text-align: center;
       margin-bottom: 24px;
@@ -431,17 +459,20 @@ export class MikrotikService {
       border-radius: 8px;
     }
     .logo-container h1 {
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.025em;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      opacity: 0.65;
+      margin-top: 4px;
       background: linear-gradient(to right, #ffffff, #94a3b8);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
     .logo-container p {
-      font-size: 13px;
+      font-size: 11px;
       color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 2px;
+      opacity: 0.8;
     }
     .tabs {
       display: flex;
@@ -577,6 +608,12 @@ export class MikrotikService {
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
+    .input-container-rel {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
     input {
       width: 100%;
       background: rgba(15, 23, 42, 0.5);
@@ -592,6 +629,18 @@ export class MikrotikService {
       border-color: var(--accent-color);
       box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
       background: rgba(15, 23, 42, 0.7);
+    }
+    .carrier-badge {
+      position: absolute;
+      right: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      display: none;
+      pointer-events: none;
+      letter-spacing: 0.05em;
     }
     .btn {
       width: 100%;
@@ -691,6 +740,32 @@ export class MikrotikService {
       text-decoration: none;
       font-weight: 600;
     }
+    .whatsapp-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #25D366;
+      color: #fff !important;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 10px 18px;
+      border-radius: 10px;
+      margin-top: 8px;
+      font-size: 13px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
+    }
+    .whatsapp-btn:hover {
+      background: #20ba5a;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(37, 211, 102, 0.3);
+    }
+    .whatsapp-icon {
+      width: 18px;
+      height: 18px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -699,6 +774,14 @@ export class MikrotikService {
   
   <div class="card">
     <div class="logo-container" id="logo-sec">
+      <div class="wifi-pulse-container">
+        <svg class="wifi-pulse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"></line>
+        </svg>
+      </div>
       <img id="tenant-logo" src="" style="display:none;" />
       <h1 id="tenant-name">AROFi Hotspot</h1>
       <p id="tenant-tag">Instant high-speed internet access</p>
@@ -718,7 +801,7 @@ export class MikrotikService {
       <div id="tab-momo" class="tab-content active">
         <div class="packages-list" id="packages-list-container"></div>
         
-        <div class="networks">
+        <div class="networks" style="display:none;">
           <div class="network mtn selected" onclick="selectNetwork('MTN')">
             <span class="network-dot"></span>
             MTN MoMo
@@ -731,7 +814,10 @@ export class MikrotikService {
         
         <div class="input-group">
           <label>Phone Number (MTN/Airtel)</label>
-          <input type="tel" id="momo-phone" placeholder="e.g. 0771234567" required>
+          <div class="input-container-rel">
+            <input type="tel" id="momo-phone" placeholder="e.g. 0771234567" required style="padding-right: 110px;">
+            <span id="carrier-badge" class="carrier-badge"></span>
+          </div>
         </div>
         
         <button class="btn" id="btn-pay" onclick="initiatePayment()">Pay and Connect</button>
@@ -751,7 +837,16 @@ export class MikrotikService {
   </div>
   
   <div class="support-footer" id="support-footer-sec" style="display:none;">
-    Need help? Contact support: <span id="support-phone"></span>
+    <div style="margin-bottom: 8px;">Need help? Contact support: <span id="support-phone"></span></div>
+    <a id="whatsapp-btn" href="#" target="_blank" class="whatsapp-btn" style="display:none;">
+      <svg class="whatsapp-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+      </svg>
+      Chat on WhatsApp
+    </a>
+    <div style="margin-top: 12px; font-size: 11px; opacity: 0.8;">
+      Powered by <a href="https://arosoftlabs.com" target="_blank" style="color: var(--accent-color); text-decoration: none; font-weight: 600;">arosoftlabs.com</a>
+    </div>
   </div>
 
   <form id="login-form" method="POST" action="$(link-login-only)" style="display:none;">
@@ -784,6 +879,55 @@ export class MikrotikService {
       } else {
         loadPortalCatalog();
       }
+
+      // Carrier auto-detection logic
+      const phoneInput = document.getElementById("momo-phone");
+      if (phoneInput) {
+        phoneInput.addEventListener("input", function(e) {
+          const val = e.target.value.trim();
+          let clean = val.replace(/\D/g, "");
+          let check = "";
+          if (clean.startsWith("256")) {
+            check = "0" + clean.slice(3, 5);
+          } else if (clean.startsWith("0")) {
+            check = "0" + clean.slice(1, 3);
+          } else if (clean.length === 9) {
+            check = "0" + clean.slice(0, 2);
+          } else {
+            check = "0" + clean.slice(0, 2);
+          }
+          
+          const mtnPrefixes = ["077", "078", "076", "079", "031", "039"];
+          const airtelPrefixes = ["070", "075", "074"];
+          const badge = document.getElementById("carrier-badge");
+          
+          if (mtnPrefixes.includes(check)) {
+            selectedNetwork = 'MTN';
+            phoneInput.style.borderColor = "var(--mtn-yellow)";
+            if (badge) {
+              badge.style.display = "inline-block";
+              badge.style.backgroundColor = "var(--mtn-yellow)";
+              badge.style.color = "#0b1f3a";
+              badge.innerText = "MTN MoMo";
+            }
+          } else if (airtelPrefixes.includes(check)) {
+            selectedNetwork = 'AIRTEL';
+            phoneInput.style.borderColor = "var(--airtel-red)";
+            if (badge) {
+              badge.style.display = "inline-block";
+              badge.style.backgroundColor = "var(--airtel-red)";
+              badge.style.color = "#ffffff";
+              badge.innerText = "Airtel Money";
+            }
+          } else {
+            selectedNetwork = 'MTN'; // Fallback
+            phoneInput.style.borderColor = "rgba(255, 255, 255, 0.1)";
+            if (badge) {
+              badge.style.display = "none";
+            }
+          }
+        });
+      }
     };
     
     async function loadPortalCatalog() {
@@ -812,6 +956,19 @@ export class MikrotikService {
           if (data.tenant.supportPhone) {
             document.getElementById("support-phone").innerText = data.tenant.supportPhone;
             document.getElementById("support-footer-sec").style.display = "block";
+            
+            // Format WhatsApp Support Link
+            let waPhone = data.tenant.supportPhone.replace(/\D/g, "");
+            if (waPhone.startsWith("0")) {
+              waPhone = "256" + waPhone.slice(1);
+            } else if (!waPhone.startsWith("256") && waPhone.length === 9) {
+              waPhone = "256" + waPhone;
+            }
+            const waBtn = document.getElementById("whatsapp-btn");
+            if (waBtn) {
+              waBtn.href = "https://wa.me/" + waPhone;
+              waBtn.style.display = "inline-flex";
+            }
           }
         }
         

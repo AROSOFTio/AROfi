@@ -39,12 +39,12 @@ export default function RootLayout({
             <p className="pb-20 pt-10 text-center text-xs tracking-[0.18em] text-slate-500 sm:pb-6">
               Powered by{' '}
               <a
-                href="https://arosoft.io"
+                href="https://arosoftlabs.com"
                 target="_blank"
                 rel="noreferrer"
                 className="font-semibold text-emerald-700 hover:underline"
               >
-                AROSOFT Innovations Ltd
+                arosoftlabs.com
               </a>
             </p>
           </div>

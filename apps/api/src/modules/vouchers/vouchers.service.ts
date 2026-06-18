@@ -934,13 +934,13 @@ export class VouchersService {
       doc.switchToPage(pageIndex)
       doc.fontSize(6).fillColor('#64748B')
       doc.text(
-        `AROFi vouchers . ${template.label} . Powered by AROSOFT Innovations Ltd . https://arosoft.io`,
+        `AROFi vouchers . ${template.label} . Powered by arosoftlabs.com . https://arosoftlabs.com`,
         pageMargin,
         doc.page.height - 12,
         {
           width: doc.page.width - pageMargin * 2,
           align: 'center',
-          link: 'https://arosoft.io',
+          link: 'https://arosoftlabs.com',
         },
       )
     }

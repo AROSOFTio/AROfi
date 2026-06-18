@@ -226,16 +226,15 @@ function resolvePortalTemplate(template?: string | null): PortalTemplateId {
 
 function detectNetwork(phone: string): MobileMoneyNetwork | undefined {
   const normalized = normalizePhone(phone)
-  const prefix = normalized.slice(3, 6)
-
-  if (['770', '771', '772', '773', '774', '775', '776', '777', '778', '779', '780', '781', '782', '783', '784'].includes(prefix)) {
-    return 'MTN'
+  if (normalized.length >= 5) {
+    const prefix2 = normalized.slice(3, 5)
+    if (['77', '78', '76', '79', '31', '39'].includes(prefix2)) {
+      return 'MTN'
+    }
+    if (['70', '75', '74'].includes(prefix2)) {
+      return 'AIRTEL'
+    }
   }
-
-  if (['700', '701', '702', '703', '704', '705', '706', '707', '708', '709', '750', '751', '752', '753', '754', '755'].includes(prefix)) {
-    return 'AIRTEL'
-  }
-
   return undefined
 }
 
@@ -259,6 +258,17 @@ function extractCheckoutUrl(payment: PortalPayment) {
   }
 
   return null
+}
+
+function getWhatsAppLink(phone?: string | null): string {
+  if (!phone) return '#'
+  let clean = phone.replace(/\D/g, '')
+  if (clean.startsWith('0')) {
+    clean = '256' + clean.slice(1)
+  } else if (!clean.startsWith('256') && clean.length === 9) {
+    clean = '256' + clean
+  }
+  return `https://wa.me/${clean}`
 }
 
 export default function PortalCheckout({ initialView = 'home' }: { initialView?: PortalView }) {
@@ -978,14 +988,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           {initialView === 'home' && (
             <section className={`mx-auto w-full max-w-[430px] ${portalStyle.shell}`}>
               <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
-              <div className="text-center">
-                <div className={`mx-auto mb-2 w-fit ${portalStyle.logoBox}`}>
-                  <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
-                </div>
-                <h1 className={`text-2xl font-extrabold sm:text-3xl ${portalStyle.title}`}>
-                  {context?.tenant.name ?? 'AROFi Hotspot'}
-                </h1>
+              <div className="text-center flex flex-col items-center justify-center">
+              <div className="mb-2 text-emerald-500 animate-pulse flex justify-center items-center">
+                <Wifi className="h-12 w-12" />
               </div>
+              <div className={`mx-auto mb-2 w-fit ${portalStyle.logoBox}`}>
+                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
+              </div>
+              <h1 className={`text-sm font-semibold tracking-wider opacity-60 uppercase mt-1 ${portalStyle.title}`}>
+                {context?.tenant.name ?? 'AROFi Hotspot'}
+              </h1>
+            </div>        
 
               <div className="mt-5 flex gap-2">
                 <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`} />
@@ -1040,9 +1053,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 </div>
               </div>
 
-              <div className={`mt-6 border-t border-slate-300 pt-5 text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-700'}`}>
+              <div className={`mt-6 border-t border-slate-300 pt-5 text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-700'} flex flex-col items-center gap-2`}>
                 <div>Need help? Contact support:</div>
-                <div className={`mt-2 font-bold ${portalStyle.support}`}>{context?.tenant.supportPhone ?? context?.tenant.supportEmail ?? 'Support contact pending'}</div>
+                <div className={`mt-1 font-bold ${portalStyle.support}`}>{context?.tenant.supportPhone ?? context?.tenant.supportEmail ?? 'Support contact pending'}</div>
+                {context?.tenant.supportPhone && (
+                  <a
+                    href={getWhatsAppLink(context.tenant.supportPhone)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#25D366] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#20ba5a] transition"
+                  >
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                    Chat on WhatsApp
+                  </a>
+                )}
               </div>
 
               {checkoutOpen && selectedPackage && (
@@ -1062,7 +1088,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     {errorMessage && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{errorMessage}</div>}
                     {statusMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{statusMessage}</div>}
                     <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
-                      <div>
+                      <div className="hidden">
                         <span className="sr-only">Network</span>
                         <div className="grid grid-cols-2 gap-3">
                           {availableNetworks.map((network) => (
@@ -1084,7 +1110,34 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       </div>
                       <label className="block text-sm font-bold text-slate-700">
                         Phone Number
-                        <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="0771234567 or +256771234567" className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" />
+                        <div className="relative mt-2 flex items-center">
+                          <input
+                            value={phoneNumber}
+                            onChange={(event) => {
+                              const val = event.target.value
+                              setPhoneNumber(val)
+                              const detected = detectNetwork(val)
+                              if (detected) {
+                                setSelectedNetwork(detected)
+                              }
+                            }}
+                            placeholder="0771234567 or +256771234567"
+                            className="w-full rounded-lg border border-slate-300 bg-white pl-4 pr-24 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500"
+                          />
+                          {detectNetwork(phoneNumber) && (
+                            <div className="absolute right-2.5">
+                              {detectNetwork(phoneNumber) === 'MTN' ? (
+                                <span className="rounded bg-[#ffcc00] px-2 py-1 text-[10px] font-black tracking-wide text-[#0b1f3a] shadow-sm">
+                                  MTN MoMo
+                                </span>
+                              ) : (
+                                <span className="rounded bg-[#e60012] px-2 py-1 text-[10px] font-black text-white shadow-sm">
+                                  Airtel Money
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </label>
                       <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
                         {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
