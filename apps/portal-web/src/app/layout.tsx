@@ -113,15 +113,15 @@ export default function RootLayout({
         <main className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eefdf3)]">
           <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 sm:py-6">
             {children}
-            <p className="pb-20 pt-10 text-center text-xs tracking-[0.18em] text-slate-500 sm:pb-6">
-              Powered by{' '}
+            <p className="pb-20 pt-10 text-center sm:pb-6">
               <a
                 href="https://arosoftlabs.com"
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-emerald-700 hover:underline"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textDecoration: 'none', letterSpacing: '0.04em' }}
               >
-                arosoftlabs.com
+                <img src="/logo.png" alt="" aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 2, objectFit: 'contain' }} />
+                AROSOFT
               </a>
             </p>
           </div>

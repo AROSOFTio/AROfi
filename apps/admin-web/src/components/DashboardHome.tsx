@@ -216,7 +216,12 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <div className="tenant-stats-compact">
         <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} />
         <DashboardStatCompact title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} />
-        <DashboardStatCompact title="Net Earnings" value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)} />
+        <DashboardStatCompact
+          title="Net Earnings"
+          value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)}
+          mmUgx={billing?.summary.mobileMoneyGrossUgx}
+          voucherUgx={billing?.summary.voucherGrossUgx}
+        />
         <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} />
         <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
       </div>
@@ -430,11 +435,28 @@ function SystemInsightsCompact({
   )
 }
 
-function DashboardStatCompact({ title, value }: { title: string; value: string }) {
+function DashboardStatCompact({
+  title,
+  value,
+  mmUgx,
+  voucherUgx,
+}: {
+  title: string
+  value: string
+  mmUgx?: number
+  voucherUgx?: number
+}) {
+  const hasSplit = (mmUgx !== undefined || voucherUgx !== undefined) && (mmUgx! + (voucherUgx ?? 0)) > 0
   return (
     <div className="tenant-stat-compact">
       <div className="tenant-stat-compact-title">{title}</div>
       <div className="tenant-stat-compact-value">{value}</div>
+      {hasSplit && (
+        <div className="tenant-stat-compact-split">
+          {mmUgx !== undefined && <span><span className="split-label">MM</span> {formatCurrency(mmUgx)}</span>}
+          {voucherUgx !== undefined && <span><span className="split-label">Vrts</span> {formatCurrency(voucherUgx)}</span>}
+        </div>
+      )}
     </div>
   )
 }

@@ -6,10 +6,10 @@ import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
 
 const features = [
-  { icon: Router, title: 'Onboard MikroTik Routers', text: 'One safe RouterOS terminal command — no lockouts, no console diving. Works with any MikroTik model in Uganda.' },
-  { icon: Ticket, title: 'Sell WiFi Packages & Vouchers', text: 'Packages, hourly & daily bundles, printable voucher batches for field agents — all from one dashboard.' },
-  { icon: BadgeDollarSign, title: 'MTN MoMo & Airtel Money', text: 'Accept mobile money payments automatically. Wallets, settlements and reconciliation built-in. Zero manual work.' },
-  { icon: Users, title: 'Multi-Tenant & Self-Onboarding', text: 'Every WiFi operator gets an isolated branded captive portal. Vendors self-onboard. No IT team required.' },
+  { icon: Router, title: 'MikroTik Hotspot Billing', text: 'One RouterOS command to onboard. No lockouts, no console diving. Any MikroTik model.' },
+  { icon: Ticket, title: 'WiFi Packages & Vouchers', text: 'Sell hourly & daily bundles, print voucher batches for field agents — all from one place.' },
+  { icon: BadgeDollarSign, title: 'MTN MoMo & Airtel Money', text: 'Auto-collect mobile money. Wallets, settlements and reconciliation built-in.' },
+  { icon: Users, title: 'Multi-Tenant · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
 ]
 
 // Decorative, illustrative figures for the hero preview — not live data.
@@ -68,30 +68,31 @@ export default function RootPage() {
   return (
     <main className="home-shell">
       <nav className="home-nav">
+        {/* Logo only — hide text when logo is present */}
         <div className="home-brand">
           <img src="/logo.png" alt="AROFi" />
-          <span>AROFi</span>
+          <span className="home-brand-text" aria-hidden="true">AROFi</span>
         </div>
         <div className="home-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
-          <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started</button>
+          <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started Free</button>
         </div>
       </nav>
 
       <section className="home-hero">
         <div className="home-hero-copy">
-          <div className="home-kicker"><Activity size={15} /> #1 WiFi Hotspot Billing System — Uganda</div>
+          <div className="home-kicker"><Activity size={15} /> Free WiFi Billing · Uganda</div>
           <h1>Run your WiFi<br />like a business.</h1>
-          <p>Uganda&apos;s best hotspot billing software. Onboard MikroTik routers, sell packages and vouchers, collect MTN MoMo &amp; Airtel Money, and track every session — all from one cloud console. <strong>Self-onboarding. No IT team needed.</strong></p>
+          <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, no IT team, free to start.</p>
           <div className="home-cta">
-            <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Start Free — Create Workspace</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Open console</button>
+            <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Start for Free</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
           </div>
           <div className="home-trust">
-            <span><Radio size={13} className="pulse-dot" /> RADIUS-grade auth</span>
-            <span>MTN MoMo &amp; Airtel Money</span>
+            <span><Radio size={13} className="pulse-dot" /> RADIUS auth</span>
+            <span>MTN MoMo &amp; Airtel</span>
             <span>Vouchers &amp; wallets</span>
-            <span>Kampala &amp; Uganda-wide</span>
+            <span>Uganda-wide</span>
           </div>
         </div>
 
@@ -105,7 +106,7 @@ export default function RootPage() {
           <div className="home-console-body">
             <div className="home-metric-row">
               <div className="home-metric">
-                <span>Today’s revenue</span>
+                <span>Today&apos;s revenue</span>
                 <strong>UGX {revenue.toLocaleString()}</strong>
               </div>
               <div className="home-metric">
@@ -149,43 +150,33 @@ export default function RootPage() {
         ))}
       </section>
 
-      {/* SEO Content Section — visible to crawlers, styled accessibly */}
-      <section className="home-seo-section" aria-label="About AROFi WiFi Billing System Uganda">
+      {/* Footer */}
+      <footer className="home-footer">
+        <a
+          href="https://arosoftlabs.com"
+          target="_blank"
+          rel="noreferrer"
+          className="home-footer-brand"
+          aria-label="Powered by AROSOFT"
+        >
+          <img src="/logo.png" alt="" aria-hidden="true" className="home-footer-logo" />
+          <span>AROSOFT</span>
+        </a>
+      </footer>
+
+      {/* SEO-only content — hidden from visual users, fully indexed by crawlers & AI agents */}
+      <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>
         <h2>Best WiFi Hotspot Billing Software in Uganda</h2>
-        <p>
-          AROFi is Uganda&apos;s leading cloud-based WiFi hotspot billing and management platform built by
-          <strong> AROSOFT Innovations Ltd</strong>, headquartered in Kampala. Designed for MikroTik router
-          operators, ISPs, cyber cafés, hotels, schools, and community networks across Uganda and East Africa.
-        </p>
+        <p>AROFi is Uganda&apos;s leading cloud-based WiFi hotspot billing and management platform built by AROSOFT Innovations Ltd, headquartered in Kampala. Designed for MikroTik router operators, ISPs, cyber cafés, hotels, schools, and community networks across Uganda and East Africa.</p>
         <h3>Accept MTN MoMo &amp; Airtel Money for WiFi Payments</h3>
-        <p>
-          AROFi natively integrates with <strong>MTN Mobile Money (MoMo)</strong> and{' '}
-          <strong>Airtel Money Uganda</strong> — your customers pay directly from their phones, and you receive
-          the funds in your wallet instantly. No cash handling, no manual reconciliation.
-        </p>
+        <p>AROFi natively integrates with MTN Mobile Money (MoMo) and Airtel Money Uganda — your customers pay directly from their phones. No cash handling, no manual reconciliation.</p>
         <h3>MikroTik Hotspot Billing Made Easy</h3>
-        <p>
-          Set up your MikroTik hotspot billing in minutes. Paste one RouterOS command and AROFi handles RADIUS
-          authentication, captive portal redirect, session tracking, and billing automatically. Works with{' '}
-          RB951Ui, hAP ac², CCR, CHR, and all RouterOS-based devices.
-        </p>
+        <p>Paste one RouterOS command and AROFi handles RADIUS authentication, captive portal redirect, session tracking, and billing automatically. Works with RB951Ui, hAP ac², CCR, CHR, and all RouterOS-based devices.</p>
         <h3>How to Start a WiFi Business in Uganda</h3>
-        <p>
-          Register on AROFi for free → Add your MikroTik router → Set your WiFi packages → Share the captive
-          portal link → Start collecting MTN MoMo and Airtel Money payments. No upfront software cost. AROFi
-          earns a small commission only when you do.
-        </p>
-        <h3>Multi-Tenant WiFi Management for Operators &amp; Resellers</h3>
-        <p>
-          Run a WiFi reseller business or franchise across Kampala and Uganda. Each tenant gets their own
-          isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents can onboard
-          themselves — no IT team or technical staff needed.
-        </p>
-        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '1.5rem' }}>
-          AROFi by AROSOFT · WiFi Billing · Hotspot Management · MikroTik Billing · MTN MoMo · Airtel Money ·
-          Uganda · Kampala · East Africa · &copy; {new Date().getFullYear()} AROSOFT Innovations Ltd
-        </p>
-      </section>
+        <p>Register free → Add your MikroTik router → Set packages → Start collecting MTN MoMo and Airtel Money. No upfront cost. AROFi earns a small commission only when you do.</p>
+        <h3>Multi-Tenant WiFi for Operators &amp; Resellers Kampala Uganda</h3>
+        <p>Run a WiFi reseller business across Kampala and Uganda. Each tenant gets their own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
+      </div>
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />

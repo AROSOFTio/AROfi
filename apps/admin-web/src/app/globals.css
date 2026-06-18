@@ -2898,3 +2898,66 @@ pre, code.block {
   }
 }
 
+/* ── Home footer ── */
+.home-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 0 2.5rem;
+  border-top: 1px solid var(--border);
+}
+.home-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: color 0.15s;
+}
+.home-footer-brand:hover { color: var(--brand); }
+.home-footer-logo {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+/* ── Nav brand: hide text span when logo image loads ── */
+.home-brand img { display: block; }
+.home-brand-text {
+  display: none; /* hidden — logo is always available */
+}
+/* Fallback: show text if logo fails */
+.home-brand img[data-error] + .home-brand-text { display: block; }
+
+/* ── Stat card split row (MM / Vrts breakdown) ── */
+.tenant-stat-compact-split {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.tenant-stat-compact-split span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--text-3);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.split-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+
