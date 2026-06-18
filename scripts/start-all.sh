@@ -45,6 +45,29 @@ cd "$ROOT/apps/portal-web"
 PORT=3003 npm run start &
 echo "[start-all] portal-web started on :3003"
 
+# --- Wait for all three backends before starting nginx ---
+# Polls each port up to 60s (120 x 0.5s). nginx would 502 immediately if
+# started before Node processes accept connections.
+wait_for_port() {
+  port=$1
+  name=$2
+  i=0
+  echo "[start-all] waiting for $name on :$port..."
+  while ! nc -z 127.0.0.1 "$port" 2>/dev/null; do
+    i=$((i + 1))
+    if [ $i -ge 120 ]; then
+      echo "[start-all] ERROR: $name on :$port did not come up in 60s — starting nginx anyway"
+      break
+    fi
+    sleep 0.5
+  done
+  echo "[start-all] $name is ready on :$port"
+}
+
+wait_for_port 3001 "api"
+wait_for_port 3002 "admin-web"
+wait_for_port 3003 "portal-web"
+
 # --- nginx (foreground, port 3000) ---
 echo "[start-all] starting nginx on :3000"
 exec nginx -g 'daemon off;'
