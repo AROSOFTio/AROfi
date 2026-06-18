@@ -29,6 +29,10 @@ export default function DashboardShell({ children, initials, session, workspaceT
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
+      <div className="app-titlebar" aria-hidden="true">
+        <img src="/logo.png" alt="" />
+        <span>AROFi</span>
+      </div>
       <button
         type="button"
         className="mobile-nav-backdrop"
@@ -42,7 +46,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
         aria-label="Close navigation menu"
         onClick={() => setMenuOpen(false)}
       >
-        ✕
+        x
       </button>
       <div className="main-content">
         <header className="topbar">
@@ -61,9 +65,9 @@ export default function DashboardShell({ children, initials, session, workspaceT
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
           <div className="topbar-actions">
-            <div className="topbar-user">
-              <span className="topbar-user-name">{session.user.displayName}</span>
-              <span className="topbar-user-email">{session.user.email}</span>
+            <div style={{ display: 'grid', gap: 2, textAlign: 'right' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{session.user.displayName}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{session.user.email}</span>
             </div>
             <div className="avatar">{initials}</div>
             <AdminSessionControl />

@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
 import ThemeToggle from './ThemeToggle'
@@ -146,147 +146,70 @@ function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: bo
   return required.every((permission) => user.permissions.includes(permission) || user.permissions.includes('ALL'))
 }
 
-function getItemIcon(label: string) {
-  switch (label) {
-    case 'Dashboard':
-      return <HomeIcon />
-    case 'Support Hub':
-    case 'Support Tickets':
-      return <SupportIcon />
-    case 'Docs':
-      return <AuditIcon />
-    case 'Overview':
-    case 'Support Overview':
-      return <ActivityIcon />
-    case 'Provisioning':
-    case 'Configuration Scripts':
-      return <RemoteIcon />
-    case 'Inventory':
-    case 'Router Inventory':
-      return <RouterIcon />
-    case 'Health Checks':
-      return <PaymentPulseIcon />
-    case 'Hotspots':
-    case 'Hotspot Sites':
-      return <HotspotIcon />
-    case 'Usage Analytics':
-    case 'Sessions & RADIUS':
-      return <UsageIcon />
-    case 'Packages':
-      return <PackageIcon />
-    case 'Vouchers':
-      return <VoucherIcon />
-    case 'Sales Reports':
-      return <ReportIcon />
-    case 'Transactions':
-    case 'All Transactions':
-      return <BillingIcon />
-    case 'Settlement Balance':
-      return <FloatIcon />
-    case 'Withdrawals':
-    case 'Phone Approvals':
-      return <SettlementIcon />
-    case 'Staff':
-    case 'Platform Staff':
-    case 'Customers':
-      return <UsersIcon />
-    case 'Agent PoS':
-      return <AgentIcon />
-    case 'Business Profile':
-    case 'Payments & Fees':
-    case 'Payments':
-    case 'Commission':
-    case 'Router & Portal':
-    case 'Voucher Printing':
-    case 'Security':
-      return <SettingsIcon />
-    case 'Vendors':
-      return <TenantIcon />
-    case 'Feature Limits':
-      return <LimitIcon />
-    case 'Audit Logs':
-      return <AuditIcon />
-    default:
-      return <SettingsIcon />
-  }
-}
-
 export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const isVendor = isVendorWorkspace(user)
   const currentQuery = searchParams.toString()
   const currentHref = currentQuery ? `${pathname}?${currentQuery}` : pathname
-
   const visibleGroups = useMemo(() => navItems
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly, item.tenantOnly)),
     }))
     .filter((group) => group.items.length > 0), [user])
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
-  const workspaceLabel = isVendor ? 'Vendor Workspace' : 'Platform Workspace'
+  const workspaceLabel = isVendor ? 'Vendor Workspace' : 'Developer Admin Workspace'
 
   return (
     <aside className="sidebar">
-      {/* Brand Logo & Name Header */}
       <div className="sidebar-logo">
         <img src="/logo.png" alt="AROFi" />
         <div>
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>
-          <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span className="badge badge-info" style={{ padding: '3px 8px', fontSize: '9px' }}>
-              {isVendor ? 'Vendor' : 'Platform'} - {user.role}
-            </span>
+          <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Vendor' : 'Platform'} - {user.role}</span>
+            {isVendor && user.tenantName && (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Navigation List - Flat modern list grouped by Section Headers */}
-      <div className="sidebar-nav-container" style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
-        {visibleGroups.map((group) => (
-          <div key={group.label} className="sidebar-section" style={{ marginBottom: '18px' }}>
-            <div className="sidebar-section-label" style={{ padding: '0 8px', marginBottom: '6px', fontSize: '10px' }}>
+      {visibleGroups.map((group) => (
+        <div key={group.label} className="sidebar-section">
+          {group.label === 'Overview' && isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
+          <button
+            type="button"
+            className={`sidebar-group-toggle ${group.items.some((item) => isActiveHref(currentHref, item.href)) ? 'active' : ''}`}
+            aria-expanded={Boolean(openGroups[group.label])}
+            onClick={() => setOpenGroups((previous) => ({ ...previous, [group.label]: !previous[group.label] }))}
+          >
+            <span className="sidebar-group-label">
+              {group.icon}
               {group.label}
-            </div>
-            <div className="sidebar-group-items" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            </span>
+            <ChevronIcon open={Boolean(openGroups[group.label])} />
+          </button>
+          {openGroups[group.label] && (
+            <div className="sidebar-group-items">
               {group.items.map((item) => (
                 <Link
                   key={`${group.label}-${item.href}-${item.label}`}
                   href={item.href}
                   className={`nav-item ${isActiveHref(currentHref, item.href) ? 'active' : ''}`}
                 >
-                  {getItemIcon(item.label)}
-                  <span>{item.label}</span>
+                  {item.label}
                 </Link>
               ))}
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Sidebar Footer with appearance control & brand powered by */}
-      <div className="sidebar-footer" style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between', gap: '8px' }}>
-          <span className="sidebar-footer-label" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Theme</span>
-          <div style={{ marginLeft: 'auto' }}>
-            <ThemeToggle variant="segmented" />
-          </div>
+          )}
         </div>
-        
-        <p className="text-[10px] tracking-widest text-slate-400 uppercase font-bold text-center" style={{ marginTop: '4px', fontSize: '9px', opacity: 0.7 }}>
-          Powered By:{' '}
-          <a
-            href="https://arosoftlabs.com"
-            target="_blank"
-            rel="noreferrer"
-            className="font-extrabold text-blue-500 hover:text-blue-600 hover:underline"
-            style={{ textDecoration: 'none' }}
-          >
-            AROSOFT
-          </a>
-        </p>
+      ))}
+      <div className="sidebar-footer">
+        <span className="sidebar-footer-label">Appearance</span>
+        <ThemeToggle variant="segmented" />
       </div>
     </aside>
   )
@@ -297,6 +220,14 @@ function isActiveHref(currentHref: string, href: string) {
     return currentHref === href
   }
   return currentHref.split('?')[0] === href
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg className={`sidebar-chevron ${open ? 'open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5.2 8.2a1.8 1.8 0 012.5 0L12 12.5l4.3-4.3a1.8 1.8 0 112.5 2.6l-5.5 5.5a1.8 1.8 0 01-2.6 0l-5.5-5.5a1.8 1.8 0 010-2.6z" />
+    </svg>
+  )
 }
 
 function HomeIcon() { return <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> }

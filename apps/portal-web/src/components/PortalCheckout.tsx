@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Loader2, LogIn, Ticket, Wifi, Send, Search, CheckCircle, Clock } from 'lucide-react'
+import { ArrowRight, Loader2, LogIn, Ticket, Wifi } from 'lucide-react'
 import type {
   PortalContextResponse,
   PortalCustomerSession,
@@ -13,11 +13,10 @@ import type {
   PortalRedeemVoucherResponse,
 } from '../lib/portal-types'
 
-type PortalView = 'home' | 'login' | 'session' | 'buy' | 'support'
+type PortalView = 'home' | 'login' | 'session'
 type MobileMoneyNetwork = 'MTN' | 'AIRTEL'
 type ConnectionStatus = 'idle' | 'connecting' | 'reconnecting' | 'failed'
 type PortalTemplateId = 'classic' | 'fresh' | 'midnight' | 'sunrise' | 'minimal'
-
 type ReconnectPayload = {
   method?: string
   loginUrl?: string | null
@@ -33,50 +32,96 @@ type HotspotParams = {
   hotspotServerName: string
 }
 
-type SupportTicket = {
-  id: string
-  reference: string
-  subject: string
-  category: string
-  priority: string
-  status: string
-  phoneNumber?: string | null
-  createdAt: string
-  updatedAt: string
-  latestResponseAt?: string | null
-  resolvedAt?: string | null
-  messages: Array<{
-    id: string
-    authorName: string
-    authorRole: string
-    body: string
-    createdAt: string
-  }>
-}
-
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const portalStorageKey = 'arofi.portal.access_token'
 const paymentReturnStorageKey = 'arofi.portal.payment_return'
-
-const supportCategories = [
-  'Router setup',
-  'Payment issue',
-  'Customer connection',
-  'Voucher issue',
-  'Wallet withdrawal',
-  'Billing question',
-  'Other',
-]
-
-const ticketStatuses = ['OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED']
-
-function statusLabel(status: string) {
-  return status.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
-}
-
-function statusIndex(status: string) {
-  const i = ticketStatuses.indexOf(status)
-  return i === -1 ? 0 : i
+const portalTemplateStyles: Record<
+  PortalTemplateId,
+  {
+    shell: string
+    logoBox: string
+    title: string
+    panel: string
+    input: string
+    button: string
+    link: string
+    packageCard: string
+    packagePrice: string
+    buyPill: string
+    accept: string
+    support: string
+  }
+> = {
+  classic: {
+    shell: 'rounded-lg border border-slate-200 bg-slate-50 px-5 py-5 shadow-sm sm:px-6',
+    logoBox: '',
+    title: 'text-emerald-600',
+    panel: 'border-slate-300 bg-white',
+    input: 'border-slate-300 bg-white focus:border-emerald-500',
+    button: 'bg-emerald-500 text-white disabled:bg-slate-300',
+    link: 'border-sky-200 bg-sky-50 text-sky-700',
+    packageCard: 'border-slate-300 bg-white',
+    packagePrice: 'text-emerald-600',
+    buyPill: 'border-green-700/50 bg-green-500 text-white',
+    accept: 'border-slate-300 bg-white',
+    support: 'text-emerald-600',
+  },
+  fresh: {
+    shell: 'rounded-2xl border border-emerald-200 bg-white px-5 py-5 shadow-[0_18px_60px_rgba(16,185,129,0.12)] sm:px-6',
+    logoBox: 'rounded-2xl bg-emerald-50 px-3 py-2',
+    title: 'text-emerald-700',
+    panel: 'border-emerald-200 bg-emerald-50/50',
+    input: 'border-emerald-200 bg-white focus:border-emerald-500',
+    button: 'bg-emerald-600 text-white disabled:bg-slate-300',
+    link: 'border-emerald-200 bg-white text-emerald-700',
+    packageCard: 'border-emerald-200 bg-white',
+    packagePrice: 'text-emerald-700',
+    buyPill: 'border-emerald-700 bg-emerald-600 text-white',
+    accept: 'border-emerald-200 bg-white',
+    support: 'text-emerald-700',
+  },
+  midnight: {
+    shell: 'rounded-2xl border border-sky-900 bg-slate-950 px-5 py-5 shadow-[0_22px_70px_rgba(2,6,23,0.25)] sm:px-6',
+    logoBox: 'rounded-2xl bg-white px-3 py-2',
+    title: 'text-sky-300',
+    panel: 'border-sky-900 bg-slate-900',
+    input: 'border-sky-800 bg-slate-900 text-white placeholder:text-slate-500 focus:border-sky-400',
+    button: 'bg-sky-500 text-slate-950 disabled:bg-slate-700',
+    link: 'border-sky-800 bg-slate-900 text-sky-200',
+    packageCard: 'border-sky-800 bg-slate-900 text-white',
+    packagePrice: 'text-sky-300',
+    buyPill: 'border-sky-300 bg-sky-400 text-slate-950',
+    accept: 'border-sky-800 bg-slate-900 text-white',
+    support: 'text-sky-300',
+  },
+  sunrise: {
+    shell: 'rounded-2xl border border-amber-200 bg-orange-50 px-5 py-5 shadow-[0_18px_60px_rgba(245,158,11,0.14)] sm:px-6',
+    logoBox: 'rounded-2xl bg-white px-3 py-2',
+    title: 'text-amber-700',
+    panel: 'border-amber-200 bg-white',
+    input: 'border-amber-200 bg-white focus:border-amber-500',
+    button: 'bg-amber-500 text-white disabled:bg-slate-300',
+    link: 'border-amber-200 bg-white text-amber-700',
+    packageCard: 'border-amber-200 bg-white',
+    packagePrice: 'text-amber-700',
+    buyPill: 'border-amber-700 bg-amber-500 text-white',
+    accept: 'border-amber-200 bg-white',
+    support: 'text-amber-700',
+  },
+  minimal: {
+    shell: 'rounded-none border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6',
+    logoBox: '',
+    title: 'text-slate-950',
+    panel: 'border-slate-200 bg-white',
+    input: 'border-slate-300 bg-white focus:border-slate-700',
+    button: 'bg-slate-950 text-white disabled:bg-slate-300',
+    link: 'border-slate-200 bg-slate-50 text-slate-700',
+    packageCard: 'border-slate-200 bg-white',
+    packagePrice: 'text-slate-950',
+    buyPill: 'border-slate-950 bg-slate-950 text-white',
+    accept: 'border-slate-200 bg-white',
+    support: 'text-slate-950',
+  },
 }
 
 function sanitizeUserMessage(msg?: string | null): string {
@@ -175,6 +220,10 @@ function normalizeVoucherCode(value?: string | null) {
     .toUpperCase()
 }
 
+function resolvePortalTemplate(template?: string | null): PortalTemplateId {
+  return template && template in portalTemplateStyles ? (template as PortalTemplateId) : 'classic'
+}
+
 function detectNetwork(phone: string): MobileMoneyNetwork | undefined {
   const normalized = normalizePhone(phone)
   if (normalized.length >= 5) {
@@ -229,6 +278,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [portalSession, setPortalSession] = useState<PortalCustomerSession | null>(null)
   const [portalToken, setPortalToken] = useState<string | null>(null)
   const [selectedPackage, setSelectedPackage] = useState<PortalPackage | null>(cachedCtx?.packages[0] ?? null)
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [currentPayment, setCurrentPayment] = useState<PortalPayment | null>(null)
   const [selectedNetwork, setSelectedNetwork] = useState<MobileMoneyNetwork>('MTN')
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -241,6 +291,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
+  const autoConnectAttemptedRef = useRef(false)
   const [qrVoucherCode, setQrVoucherCode] = useState('')
   const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
@@ -252,18 +303,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     hotspotServerName: '',
   })
   const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
-
-  // Navigation state
-  const [view, setView] = useState<PortalView>(initialView)
-
-  // Support states
-  const [supportView, setSupportView] = useState<'menu' | 'submit' | 'lookup' | 'ticket'>('menu')
-  const [supportTicket, setSupportTicket] = useState<SupportTicket | null>(null)
-  const [supportSubmitting, setSupportSubmitting] = useState(false)
-  const [supportLoading, setSupportLoading] = useState(false)
-  const [supportLookupRef, setSupportLookupRef] = useState('')
-  const [supportNewRef, setSupportNewRef] = useState('')
-  const [supportError, setSupportError] = useState('')
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -343,7 +382,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         setPhoneNumber(redemption.session.customer.phoneNumber)
         setCustomerReference(redemption.session.customer.customerReference ?? '')
         await loadContext(redemption.session.customer.phoneNumber, redemption.accessToken, hotspotParams)
-        setView('session')
+        router.push('/session')
       } else if (phoneNumber) {
         await loadContext(phoneNumber, portalToken, hotspotParams)
       } else {
@@ -367,9 +406,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
+    // Check immediately, then poll at 1500ms so the device auto-connects within
+    // ~1.5s of the customer approving the mobile-money prompt on their phone.
     void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
     const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 1500)
 
+    // Rapid double-check when user switches back from their banking app: fire at
+    // 0ms and 500ms so we catch the approval the instant they return.
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
@@ -397,6 +440,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setPaymentReturnHandled(true)
     void handlePaymentReturn(paymentId, params.get('token'))
   }, [isContextLoading, paymentReturnHandled])
+
+
 
   async function bootstrap() {
     const detected = mergeHotspotParams(readStoredPaymentReturn()?.hotspotParams, readHotspotParams())
@@ -432,9 +477,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       params.get('link-login') ??
       params.get('loginUrl') ??
       params.get('link_login') ??
-      params.get('link-login-only') ??
+      params.get('link-login-only') ?? // some MikroTik versions use this directly
       ''
 
+    // Persist loginUrl as soon as we see it — it won't be in the URL after redirect
     if (loginUrl && typeof window !== 'undefined') {
       sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
     }
@@ -579,9 +625,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setPhoneNumber(loginResponse.session.customer.phoneNumber)
     setCustomerReference(loginResponse.session.customer.customerReference ?? '')
     await loadContext(loginResponse.session.customer.phoneNumber, loginResponse.accessToken, detectedParams)
-    setStatusMessage('Portal login successful.')
+    setStatusMessage('Portal login successful. Your access details are now available.')
 
-    setView('session')
+    if (navigateToSession) {
+      router.push('/session')
+    }
   }
 
   async function handleCheckPaymentStatus(paymentId: string, statusToken?: string | null) {
@@ -618,7 +666,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     if (stored?.phoneNumber && !phoneNumber) {
       setPhoneNumber(stored.phoneNumber)
     }
-    setStatusMessage('Payment request submitted. Check phone to approve.')
+    setStatusMessage('Payment request submitted. Check your phone to approve.')
     await handleCheckPaymentStatus(paymentId, token)
   }
 
@@ -633,12 +681,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
 
     if (!phoneNumber.trim()) {
-      setErrorMessage('Enter the customer phone number for payment.')
+      setErrorMessage('Enter the customer phone number for payment verification and session matching.')
       return
     }
 
     if (!availableNetworks.includes(selectedNetwork)) {
-      setErrorMessage(`${selectedNetwork} is not available right now.`)
+      setErrorMessage(`${selectedNetwork === 'AIRTEL' ? 'Airtel' : 'MTN'} is not available for this portal right now.`)
       return
     }
 
@@ -676,7 +724,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setCurrentPayment(payment)
 
       if (payment.status === 'FAILED') {
-        setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'Payment request failed. Please try again.')
+        setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'The payment request could not be started. Please try again.')
         return
       }
 
@@ -693,7 +741,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         return
       }
 
-      setStatusMessage('Payment request sent. Check your phone and approve.')
+      setStatusMessage('Payment request sent. Check your phone and approve the payment.')
       if (payment.activation) {
         await handleCompletedPayment(payment)
       } else {
@@ -704,9 +752,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  async function handleCompletedPayment(payment: PortalPayment) {
-    setStatusMessage('Payment confirmed! Connecting device now...')
 
+
+  async function handleCompletedPayment(payment: PortalPayment) {
+    setStatusMessage('Payment confirmed! Connecting this device now...')
+
+    // Build best possible loginUrl from all sources
     const effectiveLoginUrl =
       payment.reconnect?.loginUrl ||
       hotspotParams.loginUrl ||
@@ -728,21 +779,24 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
 
     if (hasCredentials && !effectiveLoginUrl) {
+      // Payment confirmed, credentials ready, but no login URL
+      // Show credentials and a "Connect Now" button that opens the MikroTik login page
       setConnectionStatus('failed')
       setStatusMessage(
-        `Payment confirmed! Credentials: ` +
+        `Payment confirmed! Your credentials: ` +
         `Username: ${payment.reconnect!.username} | ` +
         `Password: ${payment.reconnect!.password}. ` +
-        `Tap Connect Now to connect.`
+        `If you are still on the WiFi network, tap Connect Now.`
       )
       return
     }
 
+    // No credentials yet — try to get them by logging in with phone number
     if (payment.phoneNumber) {
       try {
         await loginWithPhone(payment.phoneNumber, false, hotspotParams)
       } catch {
-        // ignore
+        // ignore — session will update on next poll
       }
     }
   }
@@ -760,7 +814,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setIsLoginLoading(true)
 
     try {
-      await loginWithPhone(phoneNumber, false, hotspotParams)
+      await loginWithPhone(phoneNumber, initialView !== 'home', hotspotParams)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Portal login failed.')
     } finally {
@@ -777,13 +831,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setCurrentPayment(null)
     setStatusMessage('Portal session signed out.')
     await loadContext(undefined, undefined, hotspotParams)
-    setView('home')
+
+    if (initialView === 'session') {
+      router.push('/login')
+    }
   }
 
   function autoSubmitHotspotLogin(
     reconnect: ReconnectPayload | null | undefined = context?.returningDevice?.reconnect,
     fallbackLoginUrl?: string,
   ) {
+    // Build the best possible loginUrl from all available sources
     const loginUrl =
       reconnect?.loginUrl ||
       fallbackLoginUrl ||
@@ -794,6 +852,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     if (!loginUrl || !reconnect?.username || !reconnect?.password) {
       setConnectionStatus('failed')
       if (reconnect?.username && reconnect?.password) {
+        // We have credentials but no URL — show them to the user for manual entry
         setErrorMessage(
           `Connected! Enter these on the WiFi login page — ` +
           `Username: ${reconnect.username} | Password: ${reconnect.password}`
@@ -801,17 +860,26 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       } else {
         setErrorMessage(
           'Auto-connect needs the WiFi login page to be open. ' +
-          'Reconnect to the WiFi network and try again.'
+          'Reconnect to the WiFi network and open this portal again.'
         )
       }
       return
     }
 
+    // Save loginUrl for future sessions on this device
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
     }
 
     try {
+      // The portal is served over HTTPS but the MikroTik hotspot login is plain
+      // HTTP (e.g. http://10.55.0.1/login). A form POST from an HTTPS page to an
+      // HTTP target is blocked by browsers as mixed content, which silently
+      // breaks auto-connect. A top-level GET navigation is NOT blocked, and the
+      // AROFi hotspot profile uses login-by=http-pap, which accepts the
+      // username/password as query params. So navigate the whole page to the
+      // hotspot login URL — the router authenticates via RADIUS and then sends
+      // the device on to the destination.
       const target = new URL(loginUrl, window.location.href)
       target.searchParams.set('username', reconnect.username)
       target.searchParams.set('password', reconnect.password)
@@ -820,7 +888,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       window.location.href = target.toString()
     } catch {
       setConnectionStatus('failed')
-      setErrorMessage('Could not open WiFi login. Tap Connect Now to retry.')
+      setErrorMessage('Could not open the WiFi login page. Tap Connect Now to retry.')
     }
   }
 
@@ -830,737 +898,425 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     autoSubmitHotspotLogin()
   }
 
-  // Support Handlers
-  async function handleSupportSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!context?.tenant.id) {
-      setSupportError('Portal context not loaded. Please refresh.')
-      return
-    }
-    setSupportSubmitting(true)
-    setSupportError('')
-    const form = new FormData(event.currentTarget)
-    try {
-      const res = await fetch('/api/portal/support-tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: context.tenant.id,
-          subject: form.get('subject'),
-          category: form.get('category'),
-          phoneNumber: form.get('phoneNumber') || undefined,
-          body: form.get('body') || undefined,
-        }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error((body as { message?: string }).message ?? 'Unable to submit ticket')
-      }
-      const created = (await res.json()) as SupportTicket
-      setSupportTicket(created)
-      setSupportNewRef(created.reference)
-      setSupportView('ticket')
-    } catch (err) {
-      setSupportError(err instanceof Error ? err.message : 'Unable to submit ticket')
-    } finally {
-      setSupportSubmitting(false)
-    }
-  }
-
-  async function handleSupportLookup(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault()
-    const ref = supportLookupRef.trim().toUpperCase()
-    if (!ref) {
-      setSupportError('Enter a ticket reference number.')
-      return
-    }
-    setSupportLoading(true)
-    setSupportError('')
-    try {
-      const params = new URLSearchParams({ ...(context?.tenant.id ? { tenantId: context.tenant.id } : {}) })
-      const res = await fetch(`/api/portal/support-tickets/by-reference/${encodeURIComponent(ref)}?${params}`, { cache: 'no-store' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error((body as { message?: string }).message ?? 'Ticket not found')
-      }
-      setSupportTicket((await res.json()) as SupportTicket)
-      setSupportView('ticket')
-    } catch (err) {
-      setSupportError(err instanceof Error ? err.message : 'Ticket not found')
-    } finally {
-      setSupportLoading(false)
-    }
-  }
-
-  async function handleRefreshSupportTicket() {
-    if (!supportTicket) return
-    setSupportLoading(true)
-    try {
-      const params = new URLSearchParams({ ...(context?.tenant.id ? { tenantId: context.tenant.id } : {}) })
-      const res = await fetch(`/api/portal/support-tickets/by-reference/${encodeURIComponent(supportTicket.reference)}?${params}`, { cache: 'no-store' })
-      if (res.ok) {
-        setSupportTicket((await res.json()) as SupportTicket)
-      }
-    } finally {
-      setSupportLoading(false)
-    }
-  }
-
   const activeActivation = portalSession?.activeActivation ?? context?.activeActivation ?? null
   const packages = context?.packages ?? []
   const availableNetworks = (context?.paymentNetworks?.length ? context.paymentNetworks : ['MTN']) as MobileMoneyNetwork[]
+  const portalStyle = portalTemplateStyles[resolvePortalTemplate(context?.tenant.portalTemplate)]
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center py-4 sm:py-8">
-      <section className="w-full max-w-[430px] rounded-3xl border border-slate-100 bg-white/95 p-6 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur-md sm:p-8">
-        
-        {/* Header: Pulsing Wifi Icon + Tenant branding */}
-        <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="relative flex h-14 w-14 items-center justify-center">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-20" />
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-              <Wifi className="h-6 w-6" />
-            </span>
-          </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden p-1">
-            <img src={context?.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-full w-auto object-contain" />
-          </div>
-          <h1 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 opacity-60">
-            {context?.tenant.name ?? 'AROFi Hotspot'}
-          </h1>
-          <p className="text-[11px] font-medium tracking-wide text-slate-400">High-speed internet access</p>
-        </div>
-
-        {/* Global Errors and Connected Status Alerts */}
-        {errorMessage && (
-          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-            {errorMessage}
-          </div>
-        )}
-        {statusMessage && (
-          <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
-            {statusMessage}
-          </div>
-        )}
-        {connectionStatus === 'reconnecting' && (
-          <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
-            Reconnecting your device to the internet...
-          </div>
-        )}
-
-        {context?.returningDevice?.existingActiveAccess && view === 'home' && (
-          <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs text-slate-700">
-            <div className="font-extrabold text-emerald-800">You have active internet access</div>
-            <div className="mt-1 font-medium text-slate-500">
-              Expires {formatDate(context.returningDevice.activation?.endsAt)}.
+    <div className="flex flex-1 flex-col gap-6">
+      {initialView !== 'home' && (
+      <section className="rounded-[28px] border border-emerald-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10">
+                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-700">AROFi Customer Portal</p>
+                <h1 className="mt-2 text-2xl font-semibold text-slate-950 sm:text-3xl">
+                  {context?.tenant.name ?? 'AROFi Hotspot Access'}
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  Buy packages, redeem vouchers, sign in with your phone number, and monitor your hotspot session from one mobile-friendly experience.
+                </p>
+                {(context?.tenant.supportPhone || context?.tenant.supportEmail) && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Support: {context?.tenant.supportPhone ?? context?.tenant.supportEmail}
+                  </p>
+                )}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={connectNow}
-              className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 font-bold text-white shadow-sm transition hover:bg-emerald-700"
-            >
-              <Wifi className="h-3.5 w-3.5" />
-              Reconnect Device
-            </button>
+
+            <div className={`hidden rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] sm:block ${statusTone(activeActivation ? 'ACTIVE' : currentPayment?.status)}`}>
+              {activeActivation ? 'Connected' : currentPayment?.status ?? 'Portal Ready'}
+            </div>
           </div>
-        )}
 
-        {/* Main Views Container */}
-        <div className="min-h-[220px]">
-          
-          {/* HOME VIEW */}
-          {view === 'home' && (
-            <div className="space-y-5">
-              <span className="sr-only">AROFi customer portal menu</span>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+              Buy Access
+            </Link>
+            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+              Login
+            </Link>
+            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+              Session
+            </Link>
+            <Link href="/support" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+              Support
+            </Link>
+            {portalSession && (
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600"
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
 
-              {/* 2x2 Action Tiles */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Buy Access */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (packages.length > 0) {
-                      setSelectedPackage(packages[0])
-                    }
-                    setView('buy')
-                    setErrorMessage('')
-                    setStatusMessage('')
-                  }}
-                  className="group flex flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-left shadow-sm transition hover:border-emerald-300 hover:bg-white active:scale-[0.98]"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm transition group-hover:scale-105">
-                    <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                  </span>
-                  <div>
-                    <p className="text-xs font-black text-slate-900 tracking-wide uppercase">Buy Access</p>
-                    <p className="mt-1 text-[10px] font-semibold text-slate-400">{packages.length} plans active</p>
-                  </div>
-                </button>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SummaryCard label="Live access" value={activeActivation ? 'Active' : 'Ready to buy'} helper={activeActivation ? formatDate(activeActivation.endsAt) : `${packages.length} package${packages.length === 1 ? '' : 's'} available`} />
+            <SummaryCard label="Selected plan" value={selectedPackage?.name ?? activeActivation?.package.name ?? 'Choose a plan'} helper={selectedPackage ? formatCurrency(selectedPackage.amountUgx) : 'Select a network and phone number'} />
+            <SummaryCard label="Usage tracked" value={portalSession ? formatMegabytes(portalSession.summary.totalDataUsedMb) : '0 MB'} helper={portalSession ? `${portalSession.summary.recentSessionCount} recent sessions` : 'Login unlocks session insights'} />
+          </div>
+        </div>
+      </section>
+      )}
 
-                {/* Voucher Focus */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const el = document.getElementById('voucher-input-home')
-                    el?.focus()
-                  }}
-                  className="group flex flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-left shadow-sm transition hover:border-sky-300 hover:bg-white active:scale-[0.98]"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-white shadow-sm transition group-hover:scale-105">
-                    <Ticket className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-xs font-black text-slate-900 tracking-wide uppercase">Redeem Code</p>
-                    <p className="mt-1 text-[10px] font-semibold text-slate-400">Voucher cards</p>
-                  </div>
-                </button>
-
-                {/* Login / Session */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setView(portalSession ? 'session' : 'login')
-                    setErrorMessage('')
-                    setStatusMessage('')
-                  }}
-                  className="group flex flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-left shadow-sm transition hover:border-indigo-300 hover:bg-white active:scale-[0.98]"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-sm transition group-hover:scale-105">
-                    <LogIn className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-xs font-black text-slate-900 tracking-wide uppercase">My Session</p>
-                    <p className="mt-1 text-[10px] font-semibold text-slate-400">{portalSession ? 'Active' : 'Sign in'}</p>
-                  </div>
-                </button>
-
-                {/* Support Hub */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setView('support')
-                    setSupportView('menu')
-                    setSupportError('')
-                  }}
-                  className="group flex flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-left shadow-sm transition hover:border-amber-300 hover:bg-white active:scale-[0.98]"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm transition group-hover:scale-105">
-                    <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 10h8m-8 4h5m-9 7l2.6-2.6A2 2 0 018 17h8a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v14z" /></svg>
-                  </span>
-                  <div>
-                    <p className="text-xs font-black text-slate-900 tracking-wide uppercase">Support</p>
-                    <p className="mt-1 text-[10px] font-semibold text-slate-400">Get assistance</p>
-                  </div>
-                </button>
+      <>
+          {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
+          {!checkoutOpen && statusMessage && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
+          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Payment confirmed. Connecting you now...</div>}
+          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Reconnecting your device to the internet...</div>}
+          {context?.returningDevice?.existingActiveAccess && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              <div className="font-semibold">Welcome back. Your package is still active.</div>
+              <div className="mt-1 text-emerald-700">
+                {context.returningDevice.activation?.package.name ?? 'Active package'} expires {formatDate(context.returningDevice.activation?.endsAt)}.
               </div>
-
-              {/* Voucher Quick Entry */}
-              <div className="pt-2">
-                <div className="flex gap-2">
-                  <input
-                    id="voucher-input-home"
-                    value={voucherCode}
-                    onChange={(event) => setVoucherCode(event.target.value)}
-                    placeholder="Enter voucher code..."
-                    className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleVoucherRedeem()}
-                    disabled={isVoucherLoading || !voucherCode.trim()}
-                    className="rounded-xl bg-emerald-600 px-5 py-3.5 text-xs font-black tracking-wide text-white uppercase transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
-                  >
-                    {isVoucherLoading ? '...' : 'Go'}
-                  </button>
-                </div>
-              </div>
+              <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
+                <Wifi className="h-4 w-4" />
+                {connectionStatus === 'failed' ? 'Connect Now' : 'Reconnect to internet'}
+              </button>
             </div>
           )}
 
-          {/* BUY VIEW */}
-          {view === 'buy' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setView('home')}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 hover:bg-slate-50"
-                >
-                  <ArrowLeft className="h-4 w-4 text-slate-600" />
+          {initialView === 'home' && (
+            <section className={`mx-auto w-full max-w-[430px] ${portalStyle.shell}`}>
+              <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
+              <div className="text-center flex flex-col items-center justify-center">
+              <div className="mb-2 text-emerald-500 animate-pulse flex justify-center items-center">
+                <Wifi className="h-12 w-12" />
+              </div>
+              <div className={`mx-auto mb-2 w-fit ${portalStyle.logoBox}`}>
+                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
+              </div>
+              <h1 className={`text-sm font-semibold tracking-wider opacity-60 uppercase mt-1 ${portalStyle.title}`}>
+                {context?.tenant.name ?? 'AROFi Hotspot'}
+              </h1>
+            </div>        
+
+              <div className="mt-5 flex gap-2">
+                <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`} />
+                <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className={`rounded-lg px-5 py-3 text-sm font-bold ${portalStyle.button}`}>
+                  {isVoucherLoading ? 'Connecting…' : 'Connect'}
                 </button>
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">Select Package</h2>
               </div>
 
-              {/* Package list */}
-              <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2">
-                {packages.length === 0 && (
-                  <p className="text-xs text-slate-400 py-3 text-center">No packages are currently configured.</p>
+              <Link href="/login" className={`mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border px-4 py-2 text-xs font-medium ${portalStyle.link}`}>
+                <LogIn className="h-3 w-3" />
+                Already bought? Find My Voucher
+              </Link>
+
+              <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
+
+              <div className="mt-6 grid gap-3">
+                {isContextLoading && packages.length === 0 && (
+                  <>
+                    <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
+                    <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
+                  </>
                 )}
-                {packages.map((pkg) => {
-                  const isSelected = selectedPackage?.id === pkg.id
-                  return (
-                    <button
-                      key={pkg.id}
-                      type="button"
-                      onClick={() => setSelectedPackage(pkg)}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition ${
-                        isSelected
-                          ? 'border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-500'
-                          : 'border-slate-100 bg-white hover:border-slate-200'
-                      }`}
-                    >
-                      <div>
-                        <p className="font-extrabold text-slate-900 text-xs">{pkg.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          Duration: {formatDuration(pkg.durationMinutes)}
-                          {pkg.dataLimitMb ? ` · Limit: ${formatMegabytes(pkg.dataLimitMb)}` : ''}
-                        </p>
-                      </div>
-                      <div className={`font-black text-[10px] px-2 py-1 rounded ${isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                        {formatCurrency(pkg.amountUgx)}
-                      </div>
-                    </button>
-                  )
-                })}
+                {!isContextLoading && packages.length === 0 && <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>No packages are published for this portal yet.</div>}
+                {packages.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPackage(pkg)
+                      setCheckoutOpen(true)
+                      setCurrentPayment(null)
+                      setErrorMessage('')
+                      setStatusMessage('')
+                    }}
+                    className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-4 py-3 text-left shadow-sm ${portalStyle.packageCard}`}
+                  >
+                    <span>
+                      <span className={`block text-base font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>{pkg.name}</span>
+                      <span className={`block text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-400' : 'text-slate-500'}`}>{formatDuration(pkg.durationMinutes)}</span>
+                    </span>
+                    <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{formatCurrency(pkg.amountUgx)}</span>
+                    <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>BUY</span>
+                  </button>
+                ))}
               </div>
 
-              {/* Pay form */}
-              {selectedPackage && (
-                <form onSubmit={handlePaymentSubmit} className="space-y-3 pt-2">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      Mobile Money Number
-                    </label>
-                    <div className="relative mt-2 flex items-center">
-                      <input
-                        value={phoneNumber}
-                        onChange={(event) => {
-                          const val = event.target.value
-                          setPhoneNumber(val)
-                          const detected = detectNetwork(val)
-                          if (detected) {
-                            setSelectedNetwork(detected)
-                          }
-                        }}
-                        placeholder="0771234567"
-                        className="w-full rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white"
-                      />
-                      {detectNetwork(phoneNumber) && (
-                        <div className="absolute right-3">
-                          {detectNetwork(phoneNumber) === 'MTN' ? (
-                            <span className="rounded bg-[#ffcc00] px-2 py-0.5 text-[8px] font-black tracking-wide text-[#0b1f3a] shadow-sm uppercase">
-                              MTN
-                            </span>
-                          ) : (
-                            <span className="rounded bg-[#e60012] px-2 py-0.5 text-[8px] font-black text-white shadow-sm uppercase">
-                              Airtel
-                            </span>
+              <div className={`mt-6 rounded-lg border px-4 py-4 text-center ${portalStyle.accept}`}>
+                <div className={`text-sm font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>We accept:</div>
+                <div className="mt-3 flex items-center justify-center gap-3">
+                  <NetworkIcon network="MTN" />
+                  <NetworkIcon network="AIRTEL" />
+                </div>
+              </div>
+
+              <div className={`mt-6 border-t border-slate-300 pt-5 text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-700'} flex flex-col items-center gap-2`}>
+                <div>Need help? Contact support:</div>
+                <div className={`mt-1 font-bold ${portalStyle.support}`}>{context?.tenant.supportPhone ?? context?.tenant.supportEmail ?? 'Support contact pending'}</div>
+                {context?.tenant.supportPhone && (
+                  <a
+                    href={getWhatsAppLink(context.tenant.supportPhone)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#25D366] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#20ba5a] transition"
+                  >
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                    Chat on WhatsApp
+                  </a>
+                )}
+              </div>
+
+              {checkoutOpen && selectedPackage && (
+                <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 px-4">
+                  <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-extrabold text-slate-950">Pay {formatCurrency(selectedPackage.amountUgx)}</h2>
+                        <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} - {formatDuration(selectedPackage.durationMinutes)}</p>
+                      </div>
+                      <button type="button" onClick={() => {
+                        setCheckoutOpen(false)
+                        setErrorMessage('')
+                        setStatusMessage('')
+                      }} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Close</button>
+                    </div>
+                    {errorMessage && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{errorMessage}</div>}
+                    {statusMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{statusMessage}</div>}
+                    <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
+                      <div className="hidden">
+                        <span className="sr-only">Network</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          {availableNetworks.map((network) => (
+                            <button
+                              key={network}
+                              type="button"
+                              onClick={() => setSelectedNetwork(network)}
+                              aria-label={network === 'MTN' ? 'MTN' : 'Airtel'}
+                              aria-pressed={selectedNetwork === network}
+                              className={`grid h-16 place-items-center rounded-lg border transition ${selectedNetwork === network ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white'}`}
+                            >
+                              <NetworkIcon network={network} />
+                            </button>
+                          ))}
+                        </div>
+                        {!availableNetworks.includes('AIRTEL') && (
+                          <div className="mt-2 text-xs text-slate-500">Airtel is disabled until a working collection route is configured.</div>
+                        )}
+                      </div>
+                      <label className="block text-sm font-bold text-slate-700">
+                        Phone Number
+                        <div className="relative mt-2 flex items-center">
+                          <input
+                            value={phoneNumber}
+                            onChange={(event) => {
+                              const val = event.target.value
+                              setPhoneNumber(val)
+                              const detected = detectNetwork(val)
+                              if (detected) {
+                                setSelectedNetwork(detected)
+                              }
+                            }}
+                            placeholder="0771234567 or +256771234567"
+                            className="w-full rounded-lg border border-slate-300 bg-white pl-4 pr-24 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500"
+                          />
+                          {detectNetwork(phoneNumber) && (
+                            <div className="absolute right-2.5">
+                              {detectNetwork(phoneNumber) === 'MTN' ? (
+                                <span className="rounded bg-[#ffcc00] px-2 py-1 text-[10px] font-black tracking-wide text-[#0b1f3a] shadow-sm">
+                                  MTN MoMo
+                                </span>
+                              ) : (
+                                <span className="rounded bg-[#e60012] px-2 py-1 text-[10px] font-black text-white shadow-sm">
+                                  Airtel Money
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isPaymentLoading}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-xs font-black tracking-wider text-white uppercase transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
-                  >
-                    {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                    {isPaymentLoading ? 'Initiating momo...' : `Pay ${formatCurrency(selectedPackage.amountUgx)}`}
-                  </button>
-
-                  {currentPayment && pendingStatuses.includes(currentPayment.status) && (
-                    <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-[11px] text-amber-800 space-y-2">
-                      <div className="font-extrabold">Awaiting mobile money approval...</div>
-                      <div>Approve the prompt on your phone, then we'll connect you.</div>
-                      <button
-                        type="button"
-                        onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)}
-                        className="w-full py-1.5 rounded-lg bg-white border border-amber-300 font-extrabold text-amber-700 hover:bg-amber-100/50 uppercase text-[9px]"
-                      >
-                        Check connection
+                      </label>
+                      <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
+                        {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                        {isPaymentLoading ? 'Sending payment request...' : 'Pay'}
                       </button>
-                    </div>
-                  )}
-                </form>
-              )}
-            </div>
-          )}
-
-          {/* LOGIN VIEW */}
-          {view === 'login' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setView('home')}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 hover:bg-slate-50"
-                >
-                  <ArrowLeft className="h-4 w-4 text-slate-600" />
-                </button>
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">Sign In</h2>
-              </div>
-
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Enter the phone number you paid with or redeemed your voucher on. We'll reconnect you instantly.
-              </p>
-
-              <form onSubmit={handleLoginSubmit} className="space-y-3 pt-2">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                    Phone Number
-                  </label>
-                  <input
-                    value={phoneNumber}
-                    onChange={(event) => setPhoneNumber(event.target.value)}
-                    placeholder="0771234567"
-                    inputMode="tel"
-                    className="w-full mt-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoginLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-xs font-black tracking-wider text-white uppercase transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
-                >
-                  {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                  {isLoginLoading ? 'Connecting...' : 'Sign In & Reconnect'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* SESSION VIEW */}
-          {view === 'session' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setView('home')}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 hover:bg-slate-50"
-                >
-                  <ArrowLeft className="h-4 w-4 text-slate-600" />
-                </button>
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">Active Session</h2>
-              </div>
-
-              {portalSession ? (
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-1.5 text-xs text-slate-700">
-                    <div className="flex justify-between">
-                      <span className="font-semibold text-slate-400 uppercase text-[9px] tracking-wider">Phone</span>
-                      <span className="font-bold text-slate-800">{portalSession.customer.phoneNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold text-slate-400 uppercase text-[9px] tracking-wider">Package</span>
-                      <span className="font-bold text-slate-800">{portalSession.activeActivation?.package.name ?? 'Awaiting activation'}</span>
-                    </div>
-                    {portalSession.activeActivation && (
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-slate-400 uppercase text-[9px] tracking-wider">Expires</span>
-                        <span className="font-bold text-slate-800">{formatDate(portalSession.activeActivation.endsAt)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="font-semibold text-slate-400 uppercase text-[9px] tracking-wider">Total Usage</span>
-                      <span className="font-bold text-slate-800">{formatMegabytes(portalSession.summary.totalDataUsedMb)}</span>
-                    </div>
+                      {currentPayment && (
+                        <button type="button" onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-50 py-2 text-sm font-bold text-emerald-700">
+                          Check payment status
+                        </button>
+                      )}
+                    </form>
                   </div>
+                </div>
+              )}
+            </section>
+          )}
 
-                  <button
-                    type="button"
-                    onClick={() => void handleLogout()}
-                    className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 uppercase tracking-wider transition"
-                  >
-                    Sign Out
-                  </button>
+          {initialView === 'login' && (
+            <section className="mx-auto w-full max-w-md">
+              {portalSession?.summary.hasActiveAccess ? (
+                // Already signed in with active access — celebrate + route to session.
+                <div className="rounded-[28px] border border-blue-200 bg-gradient-to-b from-blue-50 to-white p-6 text-center shadow-sm sm:p-8">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white">
+                    <Wifi className="h-7 w-7" />
+                  </div>
+                  <h2 className="mt-4 text-2xl font-bold text-slate-950">You’re connected</h2>
+                  <p className="mt-1 text-sm text-slate-600">{portalSession.activeActivation?.package.name ?? 'Active plan'}</p>
+                  <div className="mt-5 rounded-2xl border border-blue-100 bg-white p-4">
+                    <div className="text-3xl font-extrabold tracking-tight text-blue-700">{portalSession.summary.activeMinutesRemaining} min</div>
+                    <div className="mt-1 text-xs font-medium uppercase tracking-wider text-slate-400">time remaining</div>
+                  </div>
+                  <Link href="/session" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+                    Open my session
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </div>
               ) : (
-                <div className="text-center py-4 space-y-3">
-                  <p className="text-xs text-slate-400">No active portal session found.</p>
-                  <button
-                    type="button"
-                    onClick={() => setView('login')}
-                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider"
-                  >
-                    Sign In Now
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* SUPPORT VIEW */}
-          {view === 'support' && (
-            <div className="space-y-4">
-              
-              {/* Header with Breadcrumb */}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (supportView === 'menu') {
-                      setView('home')
-                    } else if (supportView === 'ticket') {
-                      setSupportView('lookup')
-                      setSupportTicket(null)
-                    } else {
-                      setSupportView('menu')
-                    }
-                    setSupportError('')
-                  }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 hover:bg-slate-50"
-                >
-                  <ArrowLeft className="h-4 w-4 text-slate-600" />
-                </button>
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">
-                  {supportView === 'menu' && 'Support Hub'}
-                  {supportView === 'submit' && 'Submit Ticket'}
-                  {supportView === 'lookup' && 'Track Ticket'}
-                  {supportView === 'ticket' && 'Ticket Details'}
-                </h2>
-              </div>
-
-              {supportError && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                  {supportError}
-                </div>
-              )}
-
-              {/* Support Menu */}
-              {supportView === 'menu' && (
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSupportView('submit')
-                      setSupportError('')
-                    }}
-                    className="flex flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-left shadow-sm transition hover:border-emerald-300 hover:bg-white"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm">
-                      <Send className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-black text-slate-900 tracking-wide uppercase">Open Ticket</p>
-                      <p className="mt-1 text-[9px] font-semibold text-slate-400">Report connection issue</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSupportView('lookup')
-                      setSupportError('')
-                    }}
-                    className="flex flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-left shadow-sm transition hover:border-sky-300 hover:bg-white"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-white shadow-sm">
-                      <Search className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-black text-slate-900 tracking-wide uppercase">Track Status</p>
-                      <p className="mt-1 text-[9px] font-semibold text-slate-400">Check existing replies</p>
-                    </div>
-                  </button>
-                </div>
-              )}
-
-              {/* Submit Ticket Form */}
-              {supportView === 'submit' && (
-                <form onSubmit={handleSupportSubmit} className="space-y-3 pt-1">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Phone (Optional)</label>
+                // The "already bought" sign-in: one number, one big button.
+                <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                    <LogIn className="h-6 w-6" />
+                  </div>
+                  <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-950">Already bought access?</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    Enter the phone number you paid with or redeemed your voucher on. We’ll reconnect you instantly.
+                  </p>
+                  <form onSubmit={handleLoginSubmit} className="mt-6 space-y-3">
                     <input
-                      name="phoneNumber"
-                      type="tel"
-                      className="w-full mt-1.5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-500 focus:bg-white"
-                      placeholder="0771234567"
+                      value={phoneNumber}
+                      onChange={(event) => setPhoneNumber(event.target.value)}
+                      placeholder="07XX XXX XXX"
+                      inputMode="tel"
+                      autoFocus
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-lg text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Category</label>
-                    <select
-                      name="category"
-                      required
-                      className="w-full mt-1.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs font-semibold outline-none focus:border-emerald-500 focus:bg-white"
-                    >
-                      {supportCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Subject</label>
-                    <input
-                      name="subject"
-                      required
-                      maxLength={180}
-                      className="w-full mt-1.5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-xs font-semibold outline-none focus:border-emerald-500 focus:bg-white"
-                      placeholder="Brief summary of connection issue"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Details</label>
-                    <textarea
-                      name="body"
-                      rows={3}
-                      maxLength={2000}
-                      className="w-full mt-1.5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold outline-none focus:border-emerald-500 focus:bg-white"
-                      placeholder="Describe what happened..."
-                    />
-                  </div>
+                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-base font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500">
+                      {isLoginLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+                      {isLoginLoading ? 'Reconnecting…' : 'Sign in & reconnect'}
+                    </button>
+                  </form>
 
-                  <button
-                    type="submit"
-                    disabled={supportSubmitting}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black tracking-wider text-white uppercase transition hover:bg-emerald-700 disabled:bg-slate-200"
-                  >
-                    {supportSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                    {supportSubmitting ? 'Submitting...' : 'Submit Support Ticket'}
-                  </button>
-                </form>
-              )}
-
-              {/* Lookup Form */}
-              {supportView === 'lookup' && (
-                <form onSubmit={handleSupportLookup} className="space-y-4 pt-1">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Ticket Reference</label>
-                    <input
-                      value={supportLookupRef}
-                      onChange={(e) => setSupportLookupRef(e.target.value)}
-                      placeholder="PRT-XXXX-XXXX"
-                      required
-                      className="w-full mt-1.5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-mono uppercase tracking-widest text-slate-800 outline-none focus:border-sky-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={supportLoading}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-xs font-black tracking-wider text-white uppercase transition hover:bg-sky-700 disabled:bg-slate-200"
-                  >
-                    {supportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-                    {supportLoading ? 'Searching...' : 'Find Ticket'}
-                  </button>
-                </form>
-              )}
-
-              {/* Support Ticket Details */}
-              {supportView === 'ticket' && supportTicket && (
-                <div className="space-y-4">
-                  {supportTicket.reference === supportNewRef && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] text-slate-700">
-                      <div className="font-extrabold text-emerald-800 flex items-center gap-1.5">
-                        <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                        Ticket Submitted!
-                      </div>
-                      <div className="mt-1 font-medium">
-                        Reference: <span className="font-mono font-bold text-slate-900">{supportTicket.reference}</span>
-                      </div>
+                  {portalSession && (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      We found {portalSession.customer.phoneNumber}, but it has no active plan right now.
                     </div>
                   )}
 
-                  {/* Summary card */}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 text-xs text-slate-700 space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <span className="font-mono font-bold text-slate-500 uppercase text-[9px] tracking-widest">{supportTicket.reference}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
-                        supportTicket.status === 'RESOLVED' || supportTicket.status === 'CLOSED'
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-sky-50 text-sky-700'
-                      }`}>
-                        {statusLabel(supportTicket.status)}
-                      </span>
-                    </div>
-                    <div className="font-bold text-slate-900">{supportTicket.subject}</div>
-                    <div className="text-[10px] text-slate-400">Opened: {formatDate(supportTicket.createdAt)}</div>
-                  </div>
-
-                  {/* Chat / messages */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Updates &amp; Replies</span>
-                    <button
-                      type="button"
-                      onClick={() => void handleRefreshSupportTicket()}
-                      disabled={supportLoading}
-                      className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-slate-800"
-                    >
-                      {supportLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Clock className="h-3 w-3" />}
-                      Refresh
-                    </button>
-                  </div>
-
-                  <div className="max-h-[140px] overflow-y-auto space-y-2 pr-1">
-                    {supportTicket.messages.length === 0 ? (
-                      <p className="text-[11px] text-slate-400 py-4 text-center">No messages yet. Support agent will reply soon.</p>
-                    ) : (
-                      supportTicket.messages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`rounded-xl p-3 text-xs leading-relaxed ${
-                            msg.authorRole === 'Customer'
-                              ? 'border border-slate-100 bg-slate-50/40 text-slate-700 ml-4'
-                              : 'border border-sky-100 bg-sky-50/50 text-slate-800 mr-4'
-                          }`}
-                        >
-                          <div className="flex justify-between items-center mb-1 text-[9px] font-bold text-slate-400">
-                            <span>{msg.authorRole === 'Customer' ? 'You' : 'Agent'}</span>
-                            <span>{formatDate(msg.createdAt)}</span>
-                          </div>
-                          <p>{msg.body}</p>
-                        </div>
-                      ))
-                    )}
+                  <div className="mt-6 border-t border-slate-100 pt-5 text-center text-sm text-slate-500">
+                    Haven’t bought yet?{' '}
+                    <Link href="/" className="font-semibold text-blue-600 hover:text-blue-700">Buy access</Link>
                   </div>
                 </div>
               )}
-
-            </div>
+            </section>
           )}
 
-        </div>
+          {initialView === 'session' && (
+            <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Session overview</p>
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+                  {portalSession ? 'Your active internet session' : 'Sign in to view your session'}
+                </h2>
+                {portalSession ? (
+                  <div className="mt-5 space-y-3 text-sm text-slate-600">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div>Phone: {portalSession.customer.phoneNumber}</div>
+                      <div className="mt-2">Package: {portalSession.activeActivation?.package.name ?? 'Awaiting activation'}</div>
+                      <div className="mt-2">Expires: {portalSession.activeActivation ? formatDate(portalSession.activeActivation.endsAt) : 'N/A'}</div>
+                      <div className="mt-2">Recent usage: {formatMegabytes(portalSession.summary.totalDataUsedMb)}</div>
+                    </div>
 
-        {/* Footer Support Contacts */}
-        <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-          {context?.tenant.supportPhone && (
-            <div className="mb-4 flex items-center justify-center gap-4 text-xs">
-              <a
-                href={`tel:${context.tenant.supportPhone}`}
-                className="flex items-center gap-1.5 font-extrabold text-slate-500 hover:text-emerald-600 transition"
-              >
-                <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                Call Support
-              </a>
-              <span className="text-slate-200">|</span>
-              <a
-                href={getWhatsAppLink(context.tenant.supportPhone)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 font-extrabold text-[#25D366] hover:text-[#1aad52] transition"
-              >
-                <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
-                WhatsApp Support
-              </a>
-            </div>
+                    {portalSession.recentSessions.map((session) => (
+                      <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-slate-950">{session.packageName}</div>
+                            <div className="mt-1 text-xs text-slate-500">{formatDate(session.startedAt)}</div>
+                          </div>
+                          <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(session.status)}`}>{session.status}</span>
+                        </div>
+                        <div className="mt-3 text-sm text-slate-500">
+                          {formatMegabytes(session.dataUsedMb)} used . {session.hotspot?.name ?? 'Hotspot pending'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
+                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
+                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
+                      {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
+                      {isLoginLoading ? 'Signing in...' : 'Load session'}
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Recent payments</p>
+                  <div className="mt-5 space-y-3">
+                    {(portalSession?.recentPayments ?? []).length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No recent mobile money payments were found for this phone number yet.</div>}
+                    {(portalSession?.recentPayments ?? []).map((payment) => (
+                      <div key={payment.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-slate-950">{payment.package.name}</div>
+                            <div className="mt-1 text-sm text-slate-500">{formatCurrency(payment.amountUgx)} . {formatDate(payment.createdAt)}</div>
+                          </div>
+                          <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(payment.status)}`}>{payment.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Recent voucher redemptions</p>
+                  <div className="mt-5 space-y-3">
+                    {(portalSession?.recentVoucherRedemptions ?? []).length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Voucher redemption history will appear here after codes are used on this phone number.</div>}
+                    {(portalSession?.recentVoucherRedemptions ?? []).map((redemption) => (
+                      <div key={redemption.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="font-semibold text-slate-950">{redemption.package.name}</div>
+                        <div className="mt-1 text-sm text-slate-500">Voucher {redemption.voucher.code} . {formatDate(redemption.createdAt)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
           )}
-
-          {/* Branding Footer Link (link not seen, but clickable text) */}
-          <p className="text-[9px] font-black tracking-widest text-slate-300 uppercase">
-            Powered By:{' '}
-            <a
-              href="https://arosoftlabs.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-slate-400 hover:text-emerald-600 no-underline transition"
-            >
-              AROSOFT
-            </a>
-          </p>
-        </div>
-
-      </section>
+      </>
     </div>
+  )
+}
+
+function SummaryCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className="mt-2 text-lg font-semibold text-slate-950">{value}</div>
+      <div className="mt-1 text-sm text-slate-500">{helper}</div>
+    </div>
+  )
+}
+
+function NetworkIcon({ network }: { network: MobileMoneyNetwork }) {
+  if (network === 'MTN') {
+    return (
+      <span className="grid h-10 w-16 place-items-center rounded-full bg-[#ffcc00] text-sm font-black tracking-wide text-[#0b1f3a] shadow-sm ring-1 ring-black/10">
+        MTN
+      </span>
+    )
+  }
+
+  return (
+    <span className="grid h-10 w-16 place-items-center rounded-full bg-[#e60012] text-xs font-black text-white shadow-sm ring-1 ring-black/10">
+      airtel
+    </span>
   )
 }
