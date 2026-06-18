@@ -22,8 +22,8 @@ import PDFDocument = require('pdfkit')
 import * as QRCode from 'qrcode'
 
 // Advertisement line printed on every voucher card in the PDF sheet.
-const VOUCHER_AD_LINE =
-  'AROSOFT Innovations · Custom Systems · ERP · SaaS · Software Solutions · 0787726388'
+// Kept short and unobtrusive so it does not interfere with the voucher data.
+const VOUCHER_AD_LINE = 'AROSOFT · Custom Systems · ERP · SaaS · arosoftlabs.com'
 
 type VoucherPdfTemplate = 'signal' | 'wave' | 'receipt' | 'agent' | 'thermal'
 
@@ -1065,27 +1065,41 @@ export class VouchersService {
     this.drawVoucherDetail(doc, 'DURATION', this.formatVoucherDuration(input.durationMinutes), innerX, detailY + 18, detailWidth, template)
     this.drawVoucherDetail(doc, 'HELP', input.portalHost, innerX + detailWidth + 8, detailY + 18, detailWidth, template)
 
-    doc.fillColor(template.ink).font('Helvetica').fontSize(4.2)
-      .text(`Help: ${input.support}  |  ${input.portalHost}`, innerX, y + height - 16, {
-        width: width - railWidth - 16,
+    // Help line: Call + WhatsApp — printed above the advert band
+    const helpY = y + height - 22
+    doc.fillColor(template.ink).font('Helvetica').fontSize(4.0)
+      .text(`Call: ${input.support}`, innerX, helpY, {
+        width: (width - railWidth - 16) / 2,
         align: 'left',
         ellipsis: true,
       })
+    doc.fillColor('#25D366').font('Helvetica-Bold').fontSize(4.0)
+      .text(`Chat (WhatsApp): ${input.support}`, innerX + (width - railWidth - 16) / 2, helpY, {
+        width: (width - railWidth - 16) / 2,
+        align: 'right',
+        ellipsis: true,
+      })
 
-    // Advertisement band: an AROSOFT promo line printed on every voucher.
+    // Advertisement band: subtle AROSOFT promo — small, gray, non-intrusive
     doc.save()
-    doc.moveTo(innerX, y + height - 10)
-      .lineTo(x + width - 8, y + height - 10)
-      .dash(1.2, { space: 1.4 })
-      .strokeColor('#C7D2E5')
-      .lineWidth(0.4)
+    doc.moveTo(innerX, y + height - 12)
+      .lineTo(x + width - 8, y + height - 12)
+      .dash(1.0, { space: 1.2 })
+      .strokeColor('#DDE3EE')
+      .lineWidth(0.3)
       .stroke()
     doc.undash()
     doc.restore()
-    doc.fillColor('#2563EB').font('Helvetica-Bold').fontSize(4.3)
-      .text(VOUCHER_AD_LINE, innerX, y + height - 7, {
-        width: width - railWidth - 16,
-        align: 'center',
+    // "Powered By: AROSOFT" — bold brand label, link text hidden (no URL shown)
+    doc.fillColor('#374151').font('Helvetica-Bold').fontSize(3.6)
+      .text('Powered By: ', innerX, y + height - 9, { continued: true })
+    doc.fillColor('#155DFC').font('Helvetica-Bold').fontSize(3.6)
+      .text('AROSOFT', { continued: false })
+    // Advert sub-line in light gray
+    doc.fillColor('#9CA3AF').font('Helvetica').fontSize(3.3)
+      .text(VOUCHER_AD_LINE, innerX + 56, y + height - 9, {
+        width: width - railWidth - 76,
+        align: 'right',
         ellipsis: true,
       })
     doc.restore()

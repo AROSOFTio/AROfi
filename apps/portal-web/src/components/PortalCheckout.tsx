@@ -986,68 +986,232 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           )}
 
           {initialView === 'home' && (
-            <section className={`mx-auto w-full max-w-[430px] ${portalStyle.shell}`}>
-              <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
-              <div className="text-center flex flex-col items-center justify-center">
-              <div className="mb-2 text-emerald-500 animate-pulse flex justify-center items-center">
-                <Wifi className="h-12 w-12" />
+            <section className="mx-auto w-full max-w-[430px]">
+              <span className="sr-only">AROFi customer portal</span>
+
+              {/* Header: WiFi pulse icon + logo + tenant name */}
+              <div className="mb-6 flex flex-col items-center gap-2 text-center">
+                <div className="relative flex h-16 w-16 items-center justify-center">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-20" />
+                  <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                    <Wifi className="h-7 w-7" />
+                  </span>
+                </div>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-100 bg-white shadow-sm`}>
+                  <img src={context?.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-8 w-auto" />
+                </div>
+                <h1 className="text-base font-bold uppercase tracking-[0.18em] text-slate-400">
+                  {context?.tenant.name ?? 'AROFi Hotspot'}
+                </h1>
+                <p className="text-xs text-slate-400">High-speed internet access</p>
               </div>
-              <div className={`mx-auto mb-2 w-fit ${portalStyle.logoBox}`}>
-                <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
-              </div>
-              <h1 className={`text-sm font-semibold tracking-wider opacity-60 uppercase mt-1 ${portalStyle.title}`}>
-                {context?.tenant.name ?? 'AROFi Hotspot'}
-              </h1>
-            </div>        
 
-              <div className="mt-5 flex gap-2">
-                <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`} />
-                <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className={`rounded-lg px-5 py-3 text-sm font-bold ${portalStyle.button}`}>
-                  {isVoucherLoading ? 'Connecting…' : 'Connect'}
-                </button>
-              </div>
-
-              <Link href="/login" className={`mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border px-4 py-2 text-xs font-medium ${portalStyle.link}`}>
-                <LogIn className="h-3 w-3" />
-                Already bought? Find My Voucher
-              </Link>
-
-              <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
-
-              <div className="mt-6 grid gap-3">
-                {isContextLoading && packages.length === 0 && (
-                  <>
-                    <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
-                    <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
-                  </>
-                )}
-                {!isContextLoading && packages.length === 0 && <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>No packages are published for this portal yet.</div>}
-                {packages.map((pkg) => (
-                  <button
-                    key={pkg.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPackage(pkg)
+              {/* 2×2 Action tiles */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Buy Access */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const first = packages[0]
+                    if (first) {
+                      setSelectedPackage(first)
                       setCheckoutOpen(true)
                       setCurrentPayment(null)
                       setErrorMessage('')
                       setStatusMessage('')
-                    }}
-                    className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-4 py-3 text-left shadow-sm ${portalStyle.packageCard}`}
-                  >
-                    <span>
-                      <span className={`block text-base font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>{pkg.name}</span>
-                      <span className={`block text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-400' : 'text-slate-500'}`}>{formatDuration(pkg.durationMinutes)}</span>
-                    </span>
-                    <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{formatCurrency(pkg.amountUgx)}</span>
-                    <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>BUY</span>
-                  </button>
-                ))}
+                    }
+                  }}
+                  className="group flex flex-col items-start gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 text-left shadow-sm transition hover:border-emerald-400 hover:shadow-md active:scale-[0.98]"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm group-hover:bg-emerald-600">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                  </span>
+                  <div>
+                    <div className="text-sm font-extrabold text-slate-900">Buy Access</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{packages.length > 0 ? `${packages.length} plan${packages.length === 1 ? '' : 's'} available` : 'Mobile money'}</div>
+                  </div>
+                </button>
+
+                {/* Voucher / Connect */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = voucherCode.trim()
+                    if (code) {
+                      void handleVoucherRedeem()
+                    } else {
+                      const el = document.getElementById('voucher-input-home')
+                      el?.focus()
+                    }
+                  }}
+                  className="group flex flex-col items-start gap-3 rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 text-left shadow-sm transition hover:border-sky-400 hover:shadow-md active:scale-[0.98]"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500 text-white shadow-sm group-hover:bg-sky-600">
+                    <Ticket className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-extrabold text-slate-900">Voucher</div>
+                    <div className="mt-0.5 text-xs text-slate-500">Enter your code</div>
+                  </div>
+                </button>
+
+                {/* Login / Session */}
+                <Link
+                  href="/login"
+                  className="group flex flex-col items-start gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-5 text-left shadow-sm transition hover:border-indigo-400 hover:shadow-md active:scale-[0.98]"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-sm group-hover:bg-indigo-600">
+                    <LogIn className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-extrabold text-slate-900">Sign In</div>
+                    <div className="mt-0.5 text-xs text-slate-500">Already bought access?</div>
+                  </div>
+                </Link>
+
+                {/* Support */}
+                <Link
+                  href="/support"
+                  className="group flex flex-col items-start gap-3 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 text-left shadow-sm transition hover:border-amber-400 hover:shadow-md active:scale-[0.98]"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm group-hover:bg-amber-600">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8m-8 4h5m-9 7l2.6-2.6A2 2 0 018 17h8a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v14z" /></svg>
+                  </span>
+                  <div>
+                    <div className="text-sm font-extrabold text-slate-900">Support</div>
+                    <div className="mt-0.5 text-xs text-slate-500">Get help</div>
+                  </div>
+                </Link>
               </div>
 
-              <div className={`mt-6 rounded-lg border px-4 py-4 text-center ${portalStyle.accept}`}>
-                <div className={`text-sm font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>We accept:</div>
-                <div className="mt-3 flex items-center justify-center gap-3">
+              {/* Voucher quick-entry */}
+              <div className="mt-4 flex gap-2">
+                <input
+                  id="voucher-input-home"
+                  value={voucherCode}
+                  onChange={(event) => setVoucherCode(event.target.value)}
+                  placeholder="Enter voucher code..."
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleVoucherRedeem()}
+                  disabled={isVoucherLoading || !voucherCode.trim()}
+                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
+                >
+                  {isVoucherLoading ? '…' : 'Go'}
+                </button>
+              </div>
+
+              {/* Call / WhatsApp contact strip */}
+              {(context?.tenant.supportPhone) && (
+                <div className="mt-5 flex items-center justify-center gap-4 border-t border-slate-100 pt-4 text-xs text-slate-500">
+                  <a href={`tel:${context.tenant.supportPhone}`} className="flex items-center gap-1.5 font-semibold text-slate-600 hover:text-emerald-600">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                    Call
+                  </a>
+                  <span className="text-slate-300">|</span>
+                  <a
+                    href={getWhatsAppLink(context.tenant.supportPhone)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 font-semibold text-[#25D366] hover:text-[#1aad52]"
+                  >
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
+                    Chat
+                  </a>
+                </div>
+              )}
+
+              {/* Footer: Powered By AROSOFT (link hidden, text shown) */}
+              <p className="mt-5 text-center text-[10px] tracking-widest text-slate-300 uppercase">
+                Powered By:{' '}
+                <a href="https://arosoftlabs.com" target="_blank" rel="noreferrer" className="font-black text-slate-400 hover:text-emerald-500 no-underline">
+                  AROSOFT
+                </a>
+              </p>
+
+              {checkoutOpen && selectedPackage && (
+                <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 px-4">
+                  <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-extrabold text-slate-950">Pay {formatCurrency(selectedPackage.amountUgx)}</h2>
+                        <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} · {formatDuration(selectedPackage.durationMinutes)}</p>
+                      </div>
+                      <button type="button" onClick={() => {
+                        setCheckoutOpen(false)
+                        setErrorMessage('')
+                        setStatusMessage('')
+                      }} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">✕</button>
+                    </div>
+                    {errorMessage && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{errorMessage}</div>}
+                    {statusMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{statusMessage}</div>}
+                    <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
+                      <div className="hidden">
+                        <span className="sr-only">Network</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          {availableNetworks.map((network) => (
+                            <button
+                              key={network}
+                              type="button"
+                              onClick={() => setSelectedNetwork(network)}
+                              aria-label={network === 'MTN' ? 'MTN' : 'Airtel'}
+                              aria-pressed={selectedNetwork === network}
+                              className={`grid h-16 place-items-center rounded-lg border transition ${selectedNetwork === network ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white'}`}
+                            >
+                              <NetworkIcon network={network} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <label className="block text-sm font-bold text-slate-700">
+                        Phone Number
+                        <div className="relative mt-2 flex items-center">
+                          <input
+                            value={phoneNumber}
+                            onChange={(event) => {
+                              const val = event.target.value
+                              setPhoneNumber(val)
+                              const detected = detectNetwork(val)
+                              if (detected) {
+                                setSelectedNetwork(detected)
+                              }
+                            }}
+                            placeholder="0771234567 or +256771234567"
+                            className="w-full rounded-xl border border-slate-300 bg-white pl-4 pr-24 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                          />
+                          {detectNetwork(phoneNumber) && (
+                            <div className="absolute right-2.5">
+                              {detectNetwork(phoneNumber) === 'MTN' ? (
+                                <span className="rounded bg-[#ffcc00] px-2 py-1 text-[10px] font-black tracking-wide text-[#0b1f3a] shadow-sm">
+                                  MTN MoMo
+                                </span>
+                              ) : (
+                                <span className="rounded bg-[#e60012] px-2 py-1 text-[10px] font-black text-white shadow-sm">
+                                  Airtel Money
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
+                        {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                        {isPaymentLoading ? 'Sending payment request...' : 'Pay Now'}
+                      </button>
+                      {currentPayment && (
+                        <button type="button" onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)} className="w-full rounded-xl border border-emerald-500/40 bg-emerald-50 py-2 text-sm font-bold text-emerald-700">
+                          Check payment status
+                        </button>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
                   <NetworkIcon network="MTN" />
                   <NetworkIcon network="AIRTEL" />
                 </div>
