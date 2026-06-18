@@ -51,7 +51,6 @@ function assertRequiredProductionConfig() {
 
   const required = [
     'DATABASE_URL',
-    'POSTGRES_PASSWORD',
     'JWT_SECRET',
     'PORTAL_TOKEN_SECRET',
     'ROUTER_CREDENTIAL_SECRET',
