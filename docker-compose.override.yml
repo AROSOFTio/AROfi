@@ -1,9 +1,17 @@
 services:
-  app:
+  nginx:
     ports:
       - "3000:3000"
+  api:
     environment:
       - CORS_ALLOWED_ORIGINS=http://localhost:3000
       - APP_BASE_URL=http://localhost:3000
       - ADMIN_BASE_URL=http://localhost:3000/admin
+      - PORTAL_BASE_URL=http://localhost:3000/portal
+  admin:
+    environment:
+      - APP_BASE_URL=http://localhost:3000
+      - ADMIN_BASE_URL=http://localhost:3000/admin
+  portal:
+    environment:
       - PORTAL_BASE_URL=http://localhost:3000/portal

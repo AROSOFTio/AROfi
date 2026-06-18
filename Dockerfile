@@ -69,6 +69,9 @@ CMD if [ "$SERVICE_NAME" = "all" ]; then \
       cd apps/admin-web && npm run start; \
     elif [ "$SERVICE_NAME" = "portal" ]; then \
       cd apps/portal-web && npm run start; \
+    elif [ "$SERVICE_NAME" = "nginx" ]; then \
+      cp config/nginx.split.conf /etc/nginx/nginx.conf && \
+      exec nginx -g 'daemon off;'; \
     else \
-      echo "Please configure SERVICE_NAME to 'all', 'api', 'admin', or 'portal'"; exit 1; \
+      echo "Please configure SERVICE_NAME to 'all', 'api', 'admin', 'portal', or 'nginx'"; exit 1; \
     fi
