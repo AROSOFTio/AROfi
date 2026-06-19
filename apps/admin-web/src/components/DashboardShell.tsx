@@ -29,10 +29,6 @@ export default function DashboardShell({ children, initials, session, workspaceT
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
-      <div className="app-titlebar" aria-hidden="true">
-        <img src="/logo.png" alt="" />
-        <span>AROFi</span>
-      </div>
       <button
         type="button"
         className="mobile-nav-backdrop"

@@ -966,44 +966,28 @@ tr:hover td { background: var(--bg-hover); }
   }
 }
 
-/* Operator console rebuild */
+/* ── Titlebar: completely removed — clean, no chrome bar ── */
 .app-titlebar {
-  position: fixed;
-  inset: 0 0 auto 0;
-  z-index: 200;
-  height: var(--titlebar-height);
-  background: var(--brand);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  font-size: 14px;
-  font-weight: 500;
+  display: none !important;
 }
 
-.app-titlebar img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  background: #fff;
-}
-
-.app-titlebar-spacer { flex: 1; }
-
+/* Sidebar: full height from top-0, clean right shadow separation */
 .sidebar {
-  top: var(--titlebar-height);
-  height: calc(100vh - var(--titlebar-height));
+  top: 0;
+  height: 100vh;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 12px rgba(15,23,42,0.05);
 }
 
 .sidebar-logo {
-  height: var(--topbar-height);
-  padding: 9px 26px;
+  height: auto;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .sidebar-logo img {
-  height: 38px;
-  max-width: 112px;
+  height: 34px;
+  max-width: 100px;
   object-fit: contain;
 }
 
@@ -1045,14 +1029,24 @@ tr:hover td { background: var(--bg-hover); }
   font-size: 16px;
 }
 
-.sidebar-section { padding: 8px 14px 0; }
+/* Sidebar section dividers — subtle separators between nav groups */
+.sidebar-section {
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.sidebar-section:last-of-type {
+  border-bottom: none;
+}
+
 .sidebar-section-label {
-  padding: 12px 0 8px;
+  padding: 10px 0 6px;
   margin: 0;
-  color: var(--text-2);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
 }
 
 .sidebar-group-toggle {
@@ -1137,38 +1131,49 @@ tr:hover td { background: var(--bg-hover); }
   opacity: 0.95;
 }
 
+/* Main content: no titlebar padding needed */
 .main-content {
-  padding-top: var(--titlebar-height);
-  background: #fff;
+  padding-top: 0;
+  background: var(--bg-app);
 }
 
 .topbar {
-  top: var(--titlebar-height);
+  top: 0;
   height: var(--topbar-height);
-  padding: 0 36px;
+  padding: 0 28px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
 }
 
-.topbar-title { font-size: 0; }
+/* Show topbar title again for context */
+.topbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: -0.2px;
+}
 
+/* Show user email/name in topbar */
 .topbar-actions > div:not(.avatar) {
-  display: none !important;
+  display: grid !important;
 }
 
 .theme-toggle {
   width: 36px;
   height: 36px;
-  border: 0;
-  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  background: #fb923c;
-  border: 4px solid var(--green);
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand));
+  border: none;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .topbar .btn {
@@ -1200,10 +1205,19 @@ tr:hover td { background: var(--bg-hover); }
   color: var(--text-2);
 }
 
+/* Cards — unified premium look: soft border, rounded corners */
 .card,
 .stat-card {
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,0.08);
+  box-shadow: 0 1px 4px rgba(15,23,42,0.05), 0 0 0 0.5px rgba(15,23,42,0.04);
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .stat-card {
+  border-color: rgba(255,255,255,0.07);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
 .stat-card {
@@ -1346,14 +1360,20 @@ td {
   gap: 14px;
 }
 
+/* Tenant stat cards — consistent premium border + radius */
 .tenant-stat {
   position: relative;
-  min-height: 162px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
-  padding: 22px;
-  box-shadow: var(--shadow-sm);
+  min-height: 148px;
+  border: 1px solid rgba(15,23,42,0.08);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  transition: box-shadow 0.2s;
+}
+
+[data-theme="dark"] .tenant-stat {
+  border-color: rgba(255,255,255,0.07);
 }
 
 .tenant-stat-icon {
@@ -1408,13 +1428,18 @@ td {
   gap: 18px;
 }
 
+/* Dashboard panels — consistent with card style */
 .dashboard-panel {
-  min-height: 506px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
-  padding: 26px 28px;
-  box-shadow: var(--shadow-sm);
+  min-height: 480px;
+  border: 1px solid rgba(15,23,42,0.08);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 24px 26px;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.05);
+}
+
+[data-theme="dark"] .dashboard-panel {
+  border-color: rgba(255,255,255,0.07);
 }
 
 .dashboard-panel-header {
@@ -2484,12 +2509,16 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 }
 .tenant-stat-compact {
   padding: 12px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
   background: var(--bg-card);
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+[data-theme="dark"] .tenant-stat-compact {
+  border-color: rgba(255, 255, 255, 0.07);
 }
 .tenant-stat-compact-title { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; }
 .tenant-stat-compact-value { font-size: 18px; font-weight: 800; color: var(--text-1); letter-spacing: -0.02em; }
