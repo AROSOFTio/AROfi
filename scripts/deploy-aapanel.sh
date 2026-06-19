@@ -77,9 +77,14 @@ require_env_value ROUTER_CREDENTIAL_SECRET
 require_env_value RADIUS_SHARED_SECRET
 require_env_value RADIUS_INTERNAL_API_KEY
 
-require_env_value MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY
-require_env_value MTN_MOMO_COLLECTION_API_USER
-require_env_value MTN_MOMO_COLLECTION_API_KEY
+# Payment gateway: Yo! Uganda is the only active provider
+require_env_value YO_UGANDA_USERNAME
+require_env_value YO_UGANDA_PASSWORD
+
+# MTN / Airtel direct and Pesapal are disabled — Yo! Uganda handles all networks
+# require_env_value MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY
+# require_env_value MTN_MOMO_COLLECTION_API_USER
+# require_env_value MTN_MOMO_COLLECTION_API_KEY
 
 echo "Pulling public images..."
 compose pull --ignore-buildable || true

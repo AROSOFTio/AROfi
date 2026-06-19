@@ -312,10 +312,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode(code)
       setQrVoucherCode(code)
       setQrVoucherRedeemAttempted(false)
-      setStatusMessage('Voucher loaded from QR. Connecting this device...')
     }
     void bootstrap()
   }, [])
+
+  // Auto-connect when context loads with a returning device that has active
+  // access and reconnect credentials — fires once, no user action required.
+  useEffect(() => {
+    if (!context?.returningDevice?.existingActiveAccess) return
+    if (autoConnectAttemptedRef.current) return
+    const reconnect = context.returningDevice.reconnect
+    if (!reconnect?.username || !reconnect?.password) return
+
+    autoConnectAttemptedRef.current = true
+    setConnectionStatus('reconnecting')
+    autoSubmitHotspotLogin(reconnect)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context?.returningDevice])
 
   const handleVoucherRedeem = useCallback(async (overrideCode?: string) => {
     setErrorMessage('')
@@ -406,17 +419,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Check immediately, then poll at 1500ms so the device auto-connects within
-    // ~1.5s of the customer approving the mobile-money prompt on their phone.
+    // Poll at 800ms for near-instant auto-connect the moment the customer
+    // approves the Yo! Uganda Mobile Money PIN on their phone.
     void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 1500)
+    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 800)
 
-    // Rapid double-check when user switches back from their banking app: fire at
-    // 0ms and 500ms so we catch the approval the instant they return.
+    // Triple-check when user switches back from their banking app.
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 500)
+      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 300)
+      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 800)
     }
     document.addEventListener('visibilitychange', onVisible)
 
@@ -647,14 +660,19 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     if (payment.activation) {
       setErrorMessage('')
+      setStatusMessage('')
+      // Payment confirmed — close checkout modal and auto-connect immediately.
+      setCheckoutOpen(false)
       await handleCompletedPayment(payment)
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
       }
     } else if (payment.status === 'FAILED') {
-      setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'The payment did not complete successfully.')
+      setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'Payment was not completed. Please try again.')
+      setStatusMessage('')
     } else if (pendingStatuses.includes(payment.status)) {
-      setStatusMessage('Payment is being confirmed. Keep this page open.')
+      // Keep minimal status — don't flood with poll messages
+      setStatusMessage('Waiting for PIN approval on your phone...')
     }
 
     await loadContext(payment.phoneNumber, portalToken, hotspotParams)
@@ -694,6 +712,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     try {
       const normalizedPhone = normalizePhone(phoneNumber)
+      // Auto-detect network from phone number for Yo! Uganda (handles both MTN & Airtel)
+      const detectedNetwork = detectNetwork(normalizedPhone) ?? selectedNetwork
       const response = await fetch('/api/payments/portal/initiate', {
         method: 'POST',
         headers: {
@@ -703,7 +723,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           packageId: selectedPackage.id,
           phoneNumber: normalizedPhone,
           customerReference: customerReference || normalizedPhone,
-          network: selectedNetwork,
+          network: detectedNetwork,
           idempotencyKey: crypto.randomUUID(),
           macAddress: hotspotParams.macAddress || undefined,
           clientIp: hotspotParams.clientIp || undefined,
@@ -724,27 +744,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setCurrentPayment(payment)
 
       if (payment.status === 'FAILED') {
-        setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'The payment request could not be started. Please try again.')
+        setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'Payment request failed. Please try again.')
         return
       }
 
-      const checkoutUrl = extractCheckoutUrl(payment)
-      if (checkoutUrl && typeof window !== 'undefined') {
-        setStatusMessage('Opening secure payment checkout...')
-        window.localStorage.setItem(paymentReturnStorageKey, JSON.stringify({
-          paymentId: payment.id,
-          statusToken: payment.statusToken,
-          phoneNumber: payment.phoneNumber,
-          hotspotParams,
-        }))
-        window.location.href = checkoutUrl
-        return
-      }
-
-      setStatusMessage('Payment request sent. Check your phone and approve the payment.')
+      // Yo! Uganda sends a direct USSD push — no checkout redirect needed.
+      // Just show the PIN prompt message and start polling.
       if (payment.activation) {
+        // Instantly confirmed (rare edge case)
+        setCheckoutOpen(false)
         await handleCompletedPayment(payment)
       } else {
+        setStatusMessage('Enter your Mobile Money PIN on your phone to approve.')
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       }
     } finally {
@@ -755,8 +766,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
 
   async function handleCompletedPayment(payment: PortalPayment) {
-    setStatusMessage('Payment confirmed! Connecting this device now...')
-
     // Build best possible loginUrl from all sources
     const effectiveLoginUrl =
       payment.reconnect?.loginUrl ||
@@ -767,27 +776,21 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const hasCredentials = payment.reconnect?.username && payment.reconnect?.password
 
     if (effectiveLoginUrl && hasCredentials) {
+      // Auto-connect immediately — no delay, no intermediate message
       if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
       setConnectionStatus('reconnecting')
-      window.setTimeout(() => {
-        autoSubmitHotspotLogin(
-          { ...payment.reconnect, loginUrl: effectiveLoginUrl },
-          effectiveLoginUrl,
-        )
-      }, 250)
+      setStatusMessage('')
+      autoSubmitHotspotLogin(
+        { ...payment.reconnect, loginUrl: effectiveLoginUrl },
+        effectiveLoginUrl,
+      )
       return
     }
 
     if (hasCredentials && !effectiveLoginUrl) {
-      // Payment confirmed, credentials ready, but no login URL
-      // Show credentials and a "Connect Now" button that opens the MikroTik login page
+      // Has credentials but no login URL — show Connect Now button
       setConnectionStatus('failed')
-      setStatusMessage(
-        `Payment confirmed! Your credentials: ` +
-        `Username: ${payment.reconnect!.username} | ` +
-        `Password: ${payment.reconnect!.password}. ` +
-        `If you are still on the WiFi network, tap Connect Now.`
-      )
+      setStatusMessage('')
       return
     }
 
@@ -969,18 +972,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       <>
           {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
-          {!checkoutOpen && statusMessage && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
-          {connectionStatus === 'connecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Payment confirmed. Connecting you now...</div>}
-          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Reconnecting your device to the internet...</div>}
-          {context?.returningDevice?.existingActiveAccess && (
+          {!checkoutOpen && statusMessage && !pendingStatuses.includes(currentPayment?.status ?? '') && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
+          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Connecting to internet...</span></div>}
+          {context?.returningDevice?.existingActiveAccess && connectionStatus !== 'reconnecting' && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-              <div className="font-semibold">Welcome back. Your package is still active.</div>
+              <div className="font-semibold">Welcome back — your package is still active.</div>
               <div className="mt-1 text-emerald-700">
-                {context.returningDevice.activation?.package.name ?? 'Active package'} expires {formatDate(context.returningDevice.activation?.endsAt)}.
+                {context.returningDevice.activation?.package.name ?? 'Active package'} · expires {formatDate(context.returningDevice.activation?.endsAt)}.
               </div>
               <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
                 <Wifi className="h-4 w-4" />
-                {connectionStatus === 'failed' ? 'Connect Now' : 'Reconnect to internet'}
+                Connect Now
               </button>
             </div>
           )}
@@ -1077,39 +1079,33 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h2 className="text-lg font-extrabold text-slate-950">Pay {formatCurrency(selectedPackage.amountUgx)}</h2>
-                        <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} - {formatDuration(selectedPackage.durationMinutes)}</p>
+                        <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} · {formatDuration(selectedPackage.durationMinutes)}</p>
                       </div>
                       <button type="button" onClick={() => {
                         setCheckoutOpen(false)
                         setErrorMessage('')
                         setStatusMessage('')
-                      }} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Close</button>
+                        setCurrentPayment(null)
+                      }} className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600">✕</button>
                     </div>
-                    {errorMessage && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{errorMessage}</div>}
-                    {statusMessage && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{statusMessage}</div>}
-                    <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
-                      <div className="hidden">
-                        <span className="sr-only">Network</span>
-                        <div className="grid grid-cols-2 gap-3">
-                          {availableNetworks.map((network) => (
-                            <button
-                              key={network}
-                              type="button"
-                              onClick={() => setSelectedNetwork(network)}
-                              aria-label={network === 'MTN' ? 'MTN' : 'Airtel'}
-                              aria-pressed={selectedNetwork === network}
-                              className={`grid h-16 place-items-center rounded-lg border transition ${selectedNetwork === network ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white'}`}
-                            >
-                              <NetworkIcon network={network} />
-                            </button>
-                          ))}
+
+                    {errorMessage && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{errorMessage}</div>}
+
+                    {/* PIN prompt — shown while polling after payment sent */}
+                    {statusMessage && pendingStatuses.includes(currentPayment?.status ?? '') && (
+                      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+                        <div className="flex items-center gap-2 font-semibold">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {statusMessage}
                         </div>
-                        {!availableNetworks.includes('AIRTEL') && (
-                          <div className="mt-2 text-xs text-slate-500">Airtel is disabled until a working collection route is configured.</div>
-                        )}
+                        <div className="mt-1 text-xs text-emerald-600">This page will auto-connect once approved.</div>
                       </div>
+                    )}
+
+                    <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
+                      {/* Network auto-detected by Yo! Uganda — selector hidden */}
                       <label className="block text-sm font-bold text-slate-700">
-                        Phone Number
+                        Mobile Money Number
                         <div className="relative mt-2 flex items-center">
                           <input
                             value={phoneNumber}
@@ -1117,37 +1113,38 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                               const val = event.target.value
                               setPhoneNumber(val)
                               const detected = detectNetwork(val)
-                              if (detected) {
-                                setSelectedNetwork(detected)
-                              }
+                              if (detected) setSelectedNetwork(detected)
                             }}
-                            placeholder="0771234567 or +256771234567"
-                            className="w-full rounded-lg border border-slate-300 bg-white pl-4 pr-24 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500"
+                            placeholder="07XX XXX XXX"
+                            inputMode="tel"
+                            autoFocus
+                            className="w-full rounded-lg border border-slate-300 bg-white pl-4 pr-24 py-3 text-base text-slate-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                           />
                           {detectNetwork(phoneNumber) && (
                             <div className="absolute right-2.5">
                               {detectNetwork(phoneNumber) === 'MTN' ? (
-                                <span className="rounded bg-[#ffcc00] px-2 py-1 text-[10px] font-black tracking-wide text-[#0b1f3a] shadow-sm">
-                                  MTN MoMo
-                                </span>
+                                <span className="rounded bg-[#ffcc00] px-2 py-1 text-[10px] font-black tracking-wide text-[#0b1f3a] shadow-sm">MTN MoMo</span>
                               ) : (
-                                <span className="rounded bg-[#e60012] px-2 py-1 text-[10px] font-black text-white shadow-sm">
-                                  Airtel Money
-                                </span>
+                                <span className="rounded bg-[#e60012] px-2 py-1 text-[10px] font-black text-white shadow-sm">Airtel Money</span>
                               )}
                             </div>
                           )}
                         </div>
                       </label>
-                      <button type="submit" disabled={isPaymentLoading} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-extrabold text-white disabled:bg-slate-300">
-                        {isPaymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                        {isPaymentLoading ? 'Sending payment request...' : 'Pay'}
+
+                      <button
+                        type="submit"
+                        disabled={isPaymentLoading || pendingStatuses.includes(currentPayment?.status ?? '')}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3.5 text-sm font-extrabold text-white transition hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500"
+                      >
+                        {isPaymentLoading ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+                        ) : pendingStatuses.includes(currentPayment?.status ?? '') ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Waiting for PIN...</>
+                        ) : (
+                          <><ArrowRight className="h-4 w-4" /> Pay with Mobile Money</>
+                        )}
                       </button>
-                      {currentPayment && (
-                        <button type="button" onClick={() => handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-50 py-2 text-sm font-bold text-emerald-700">
-                          Check payment status
-                        </button>
-                      )}
                     </form>
                   </div>
                 </div>

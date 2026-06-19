@@ -22,6 +22,12 @@ export class PaymentRouterService {
   ) {}
 
   resolveCollection(network: PaymentNetwork): PaymentCollectionProvider {
+    // ── Yo! Uganda only ─────────────────────────────────────────────────────
+    // All other collection providers (MTN direct, Airtel direct, Pesapal) are
+    // disabled. Route every network through the Yo! Uganda aggregator.
+    return this.yoCollection
+
+    /* MTN / Airtel direct and Pesapal — commented out
     const configured = this.providerFor(network, 'COLLECTION')
     if (configured === PaymentProvider.MTN_MOMO_DIRECT) return this.mtnCollection
     if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) {
@@ -35,6 +41,7 @@ export class PaymentRouterService {
       return this.pesapalCollection
     }
     throw new BadRequestException(`Collection provider is not configured for ${network}`)
+    */
   }
 
   resolveDisbursement(network: PaymentNetwork): PaymentDisbursementProvider {
@@ -62,27 +69,22 @@ export class PaymentRouterService {
   }
 
   getProviderReadiness() {
-    const aggregatorReady = this.hasAggregatorCollectionConfig()
-    const mtnDirectCollectionReady = this.hasAll([
-      'MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY',
-      'MTN_MOMO_COLLECTION_API_USER',
-      'MTN_MOMO_COLLECTION_API_KEY',
-    ])
-    const airtelDirectCollectionReady = false
+    // Yo! Uganda is the only active collection provider.
+    const yoReady = this.hasAll(['YO_UGANDA_USERNAME', 'YO_UGANDA_PASSWORD'])
 
     return {
       collection: {
         MTN: {
-          directConfigured: mtnDirectCollectionReady,
-          aggregatorConfigured: aggregatorReady,
-          ready: mtnDirectCollectionReady || aggregatorReady,
+          directConfigured: false,
+          aggregatorConfigured: yoReady,
+          ready: yoReady,
         },
         AIRTEL: {
-          directConfigured: airtelDirectCollectionReady,
-          aggregatorConfigured: aggregatorReady,
-          directStatus: 'Not configured',
-          aggregatorStatus: aggregatorReady ? 'Active' : 'Inactive',
-          ready: aggregatorReady,
+          directConfigured: false,
+          aggregatorConfigured: yoReady,
+          directStatus: 'Disabled — using Yo! Uganda aggregator',
+          aggregatorStatus: yoReady ? 'Active' : 'Inactive',
+          ready: yoReady,
         },
       },
     }
