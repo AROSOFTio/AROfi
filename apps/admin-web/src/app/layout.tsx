@@ -181,7 +181,7 @@ export const metadata: Metadata = {
     'ai-primary-use-case': 'MikroTik hotspot billing with MTN MoMo and Airtel Money',
     // Schema hints for crawlers
     'application-name': 'AROFi',
-    'msapplication-TileColor': '#155DFC',
+    'msapplication-TileColor': '#ffffff',
     'msapplication-TileImage': '/logo.png',
     // Verification placeholders (replace with real tokens after submitting to Search Console)
     // 'google-site-verification': 'REPLACE_WITH_REAL_TOKEN',
@@ -190,7 +190,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#155DFC',
+  themeColor: '#ffffff',
   width: 'device-width',
   initialScale: 1,
 }

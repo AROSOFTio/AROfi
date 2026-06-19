@@ -423,7 +423,7 @@ body {
 
 /* Primary revenue card gets a brand top border accent */
 .stat-card.vibrant {
-  border-top: 3px solid var(--green);
+  /* border-top: 3px solid var(--green); */
 }
 
 .stat-label {
@@ -2105,7 +2105,7 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 .sidebar {
   width: var(--sidebar-width);
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border);
+  border-right: 1.5px solid var(--border);
   padding: 0 12px 12px;
   gap: 2px;
 }
@@ -2116,12 +2116,18 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1.5px solid var(--border-soft);
   margin-bottom: 8px;
 }
 .sidebar-logo img { height: 30px; max-width: 110px; object-fit: contain; }
 
-.sidebar-section { padding: 2px 0; }
+.sidebar-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.sidebar-section:last-of-type {
+  border-bottom: none;
+}
 
 /* Group header */
 .sidebar-group-toggle {
@@ -2404,12 +2410,15 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 
 /* Dashboard System Insights card (live = green) */
 .system-insights {
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
   padding: 16px 18px;
   margin-bottom: 16px;
+}
+[data-theme="dark"] .system-insights {
+  border-color: rgba(255, 255, 255, 0.07);
 }
 .system-insights-head {
   display: flex;
@@ -2444,9 +2453,12 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   display: grid;
   gap: 2px;
   padding: 10px 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
   background: var(--bg-app);
+}
+[data-theme="dark"] .system-insights-metric {
+  border-color: rgba(255, 255, 255, 0.07);
 }
 .system-insights-metric strong { font-size: 18px; font-weight: 800; color: var(--text-1); letter-spacing: -0.02em; }
 .system-insights-metric span { font-size: 11px; font-weight: 600; color: var(--text-3); }
@@ -2535,12 +2547,15 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 
 /* System Insights bordered card with icons (matches reference design) */
 .system-insights-card {
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
   padding: 14px 16px;
   min-width: 320px;
+}
+[data-theme="dark"] .system-insights-card {
+  border-color: rgba(255, 255, 255, 0.07);
 }
 .system-insights-card-head {
   display: flex;
@@ -2560,9 +2575,12 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   align-items: center;
   gap: 9px;
   padding: 10px 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
   background: var(--bg-app);
+}
+[data-theme="dark"] .sic-metric {
+  border-color: rgba(255, 255, 255, 0.07);
 }
 .sic-metric svg { color: var(--text-3); flex-shrink: 0; }
 .sic-metric > div { display: flex; flex-direction: column; line-height: 1.15; }
