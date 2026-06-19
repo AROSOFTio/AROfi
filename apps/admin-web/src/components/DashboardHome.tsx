@@ -219,8 +219,8 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         <DashboardStatCompact
           title="Net Earnings"
           value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)}
-          mmUgx={billing?.summary.mobileMoneyGrossUgx}
-          voucherUgx={billing?.summary.voucherGrossUgx}
+          mmUgx={billing?.summary.mobileMoneyNetUgx}
+          voucherUgx={billing?.summary.voucherNetUgx}
         />
         <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} />
         <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
@@ -453,8 +453,16 @@ function DashboardStatCompact({
       <div className="tenant-stat-compact-value">{value}</div>
       {hasSplit && (
         <div className="tenant-stat-compact-split">
-          {mmUgx !== undefined && <span><span className="split-label">MM</span> {formatCurrency(mmUgx)}</span>}
-          {voucherUgx !== undefined && <span><span className="split-label">Vrts</span> {formatCurrency(voucherUgx)}</span>}
+          {mmUgx !== undefined && mmUgx > 0 && (
+            <span>
+              <span className="split-label">MM</span> {formatCurrency(mmUgx)}
+            </span>
+          )}
+          {voucherUgx !== undefined && voucherUgx > 0 && (
+            <span>
+              <span className="split-label">VRTS</span> {formatCurrency(voucherUgx)}
+            </span>
+          )}
         </div>
       )}
     </div>
