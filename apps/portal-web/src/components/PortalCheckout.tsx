@@ -929,6 +929,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     Support: {context?.tenant.supportPhone ?? context?.tenant.supportEmail}
                   </p>
                 )}
+                {(hotspotParams.clientIp || hotspotParams.macAddress) && (
+                  <p className="mt-2 text-xs font-mono text-slate-500">
+                    {hotspotParams.clientIp && `IP: ${hotspotParams.clientIp}`}
+                    {hotspotParams.clientIp && hotspotParams.macAddress && '  |  '}
+                    {hotspotParams.macAddress && `MAC: ${hotspotParams.macAddress.toUpperCase()}`}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1000,6 +1007,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               <h1 className={`text-sm font-semibold tracking-wider opacity-60 uppercase mt-1 ${portalStyle.title}`}>
                 {context?.tenant.name ?? 'AROFi Hotspot'}
               </h1>
+              {(hotspotParams.clientIp || hotspotParams.macAddress) && (
+                <div className={`mt-2 text-xs font-medium tracking-wide opacity-80 ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {hotspotParams.clientIp && `IP: ${hotspotParams.clientIp}`}
+                  {hotspotParams.clientIp && hotspotParams.macAddress && '  |  '}
+                  {hotspotParams.macAddress && `MAC: ${hotspotParams.macAddress.toUpperCase()}`}
+                </div>
+              )}
             </div>        
 
               <div className="mt-5 flex gap-2">

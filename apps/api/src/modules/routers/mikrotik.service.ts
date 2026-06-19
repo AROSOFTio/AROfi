@@ -786,6 +786,9 @@ export class MikrotikService {
       <img id="tenant-logo" src="" style="display:none;" />
       <h1 id="tenant-name">AROFi Hotspot</h1>
       <p id="tenant-tag">Instant high-speed internet access</p>
+      <div id="device-info" style="font-size: 11px; color: var(--text-muted); margin-top: 10px; opacity: 0.8; font-family: monospace;">
+        IP: $(ip) &nbsp;|&nbsp; MAC: $(mac)
+      </div>
     </div>
     
     <div id="catalog-loading" class="loading-overlay">
