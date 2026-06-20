@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+﻿import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
   RouterConnectionMode,
@@ -378,12 +378,13 @@ export class MikrotikService {
   // Moves a Wi-Fi interface onto the isolated arofi-hotspot bridge whether or
   // not it is currently a bridge port elsewhere (e.g. the operator's LAN).
   buildLoginHtml(registrationKey: string, portalBaseUrl?: string | null) {
+    const apiBaseUrl = this.escapeHtml(this.resolveApiBaseUrl())
     const escapedKey = this.escapeHtml(registrationKey)
-    const resolvedPortalUrl = this.escapeHtml(portalBaseUrl ?? this.resolvePortalBaseUrl())
 
-    // Lightweight redirect page — delegates ALL UX to the portal webapp.
-    // MikroTik substitutes $(mac), $(ip), $(link-login-only), $(link-orig),
-    // $(server-name) before sending this HTML to the browser.
+    // Self-contained white-themed static portal served directly from the router's
+    // hotspot directory. No redirect — works in Android/iOS captive portal browsers.
+    // MikroTik replaces $(mac), $(ip), $(link-login-only), $(link-orig), $(server-name)
+    // before sending this HTML to the device.
     return `<!doctype html>
 <html>
 <head>
@@ -391,14 +392,95 @@ export class MikrotikService {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AROFi Hotspot</title>
   <style>
-    body{margin:0;background:#f0fdf4;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;}
-    .ring{width:44px;height:44px;border:3px solid #d1fae5;border-top-color:#10b981;border-radius:50%;animation:spin .8s linear infinite;}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#f0fdf4;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+    .card{width:100%;max-width:420px;background:#fff;border:1px solid #d1fae5;border-radius:20px;padding:26px 22px;box-shadow:0 8px 32px rgba(16,185,129,.10)}
+    .logo{text-align:center;margin-bottom:18px}
+    .wifi-icon{color:#10b981;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-block}
+    @keyframes pulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:1;transform:scale(1.05)}}
+    .logo img{max-height:42px;margin-bottom:6px;border-radius:8px;display:none}
+    .logo h1{font-size:14px;font-weight:700;letter-spacing:.08em;color:#10b981;margin-top:4px;text-transform:uppercase}
+    .logo p{font-size:11px;color:#64748b;margin-top:2px}
+    .dev{font-size:11px;color:#94a3b8;font-family:monospace;margin-top:6px}
+    .spin-wrap{text-align:center;padding:28px 0}
+    .spinner{width:30px;height:30px;border:3px solid #d1fae5;border-top-color:#10b981;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
+    .spin-wrap p{color:#64748b;font-size:13px;margin-top:10px}
+    .tabs{display:flex;background:#f1f5f9;padding:3px;border-radius:10px;margin-bottom:16px;gap:3px}
+    .tab{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border-radius:8px;transition:all .18s}
+    .tab.on{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .pkgs{max-height:196px;overflow-y:auto;margin-bottom:16px}
+    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color .18s}
+    .pkg.sel{border-color:#10b981;background:#f0fdf4}
+    .pkg h3{font-size:14px;font-weight:700;color:#0f172a}
+    .pkg p{font-size:12px;color:#64748b;margin-top:1px}
+    .price{font-size:13px;font-weight:800;color:#10b981;white-space:nowrap;margin-left:10px}
+    lbl{display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+    .iw{position:relative;margin-bottom:13px}
+    input[type=text],input[type=tel]{width:100%;background:#f8fafc;border:1px solid #e2e8f0;padding:11px 13px;border-radius:10px;color:#0f172a;font-size:15px;outline:none;transition:border-color .18s}
+    input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+    .badge{position:absolute;right:9px;top:50%;transform:translateY(-50%);padding:3px 7px;border-radius:5px;font-size:10px;font-weight:800;display:none;pointer-events:none}
+    .btn{width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:13px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;box-shadow:0 3px 10px rgba(16,185,129,.22);transition:all .18s}
+    .btn:hover{opacity:.92;transform:translateY(-1px)}
+    .btn:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none;box-shadow:none}
+    .st{margin-top:13px;padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.4;display:none}
+    .st.err{background:#fff1f2;border:1px solid #fecdd3;color:#be123c;display:block}
+    .st.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;display:block}
+    .st.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;display:block}
+    .pane{display:none}.pane.on{display:block}
+    .footer{text-align:center;margin-top:18px;font-size:12px;color:#64748b;display:none}
+    .wa{display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff!important;text-decoration:none;font-weight:700;padding:8px 15px;border-radius:9px;margin-top:7px;font-size:12px;box-shadow:0 2px 8px rgba(37,211,102,.2)}
+    .pwr{margin-top:9px;font-size:10px;color:#94a3b8}
+    .pwr a{color:#10b981;font-weight:600;text-decoration:none}
   </style>
 </head>
 <body>
-  <div class="ring"></div>
-  <!-- MikroTik posts credentials here after RADIUS auth grants access -->
+  <div class="card">
+    <div class="logo">
+      <div class="wifi-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/>
+        </svg>
+      </div>
+      <img id="tlogo" src="" alt="logo">
+      <h1 id="tname">AROFi Hotspot</h1>
+      <p id="ttag">Instant high-speed internet access</p>
+      <div class="dev" id="dinfo"></div>
+    </div>
+    <div id="loading" class="spin-wrap"><div class="spinner"></div><p>Loading packages...</p></div>
+    <div id="content" style="display:none">
+      <div class="tabs">
+        <div class="tab on" onclick="sw('momo')">Buy Package</div>
+        <div class="tab" onclick="sw('voucher')">Redeem Voucher</div>
+      </div>
+      <div id="pane-momo" class="pane on">
+        <div class="pkgs" id="plist"></div>
+        <div class="iw">
+          <lbl>Mobile Money Number</lbl>
+          <input type="tel" id="phone" placeholder="e.g. 0771234567" oninput="dnet(this.value)" style="padding-right:110px">
+          <span id="badge" class="badge"></span>
+        </div>
+        <button class="btn" id="pbtn" onclick="pay()">Pay and Connect</button>
+      </div>
+      <div id="pane-voucher" class="pane">
+        <div class="iw">
+          <lbl>Voucher Code</lbl>
+          <input type="text" id="vcode" placeholder="Enter voucher code">
+        </div>
+        <button class="btn" id="vbtn" onclick="rdm()">Connect to Internet</button>
+      </div>
+      <div class="st" id="st"></div>
+    </div>
+  </div>
+  <div class="footer" id="footer">
+    <div>Need help? Contact support: <span id="sph"></span></div>
+    <a id="wa" href="#" target="_blank" class="wa" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Chat on WhatsApp
+    </a>
+    <div class="pwr">Powered by <a href="https://arosoftlabs.com" target="_blank">arosoftlabs.com</a></div>
+  </div>
   <form id="lf" method="POST" action="$(link-login-only)" style="display:none">
     <input type="hidden" id="lu" name="username">
     <input type="hidden" id="lp" name="password">
@@ -406,923 +488,112 @@ export class MikrotikService {
     <input type="hidden" name="popup" value="false">
   </form>
   <script>
-    (function(){
-      var p=new URLSearchParams(window.location.search);
-      var u=p.get('username'),pw=p.get('password');
-      if(u&&pw){
-        // Auto-connect: portal webapp navigated here with creds — submit to MikroTik
-        document.getElementById('lu').value=u;
-        document.getElementById('lp').value=pw;
-        document.getElementById('lf').submit();
-        return;
-      }
-      // Redirect to portal webapp, passing all MikroTik hotspot params
-      var base='${resolvedPortalUrl}';
-      var url=new URL(base.indexOf('://')!==-1?base:'https://'+base);
-      var mac='$(mac)',ip='$(ip)',lo='$(link-login-only)',orig='$(link-orig)',srv='$(server-name)';
-      // MikroTik replaces variables; if unreplaced they start with '$'
-      if(mac&&mac.charAt(0)!=='\$') url.searchParams.set('mac',mac);
-      if(ip&&ip.charAt(0)!=='\$') url.searchParams.set('ip',ip);
-      if(lo&&lo.charAt(0)!=='\$') url.searchParams.set('link-login',lo);
-      if(orig&&orig.charAt(0)!=='\$') url.searchParams.set('dst',orig);
-      if(srv&&srv.charAt(0)!=='\$') url.searchParams.set('server',srv);
-      url.searchParams.set('routerKey','${escapedKey}');
-      window.location.replace(url.toString());
-    })();
-  </script>
-</body>
-</html>`
-  }
-
-  private _legacyLoginHtmlBody(registrationKey: string, portalBaseUrl?: string | null) {
-    // Dead stub — the real redirect portal is buildLoginHtml() above.
-    const apiBaseUrl = ''
-    const escapedKey = ''
-
-    return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Connect to WiFi</title>
-  <style>
-    :root {
-      --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b, #0f172a, #020617);
-      --card-bg: rgba(30, 41, 59, 0.45);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent-color: #10b981;
-      --accent-gradient: linear-gradient(135deg, #10b981, #059669);
-      --mtn-yellow: #ffcc00;
-      --airtel-red: #ff0000;
-    }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      background: var(--bg-gradient);
-      color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      overflow-x: hidden;
-      position: relative;
-    }
-    .glow-1 {
-      position: absolute;
-      top: -100px;
-      left: -50px;
-      width: 300px;
-      height: 300px;
-      background: rgba(16, 185, 129, 0.15);
-      filter: blur(80px);
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 0;
-    }
-    .glow-2 {
-      position: absolute;
-      bottom: -80px;
-      right: -50px;
-      width: 250px;
-      height: 250px;
-      background: rgba(59, 130, 246, 0.12);
-      filter: blur(80px);
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 0;
-    }
-    .card {
-      width: 100%;
-      max-width: 440px;
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 24px;
-      padding: 32px 24px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      z-index: 10;
-      position: relative;
-    }
-    .wifi-pulse-container {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 12px;
-    }
-    .wifi-pulse-icon {
-      width: 42px;
-      height: 42px;
-      color: var(--accent-color);
-      animation: wifi-pulse 2.2s infinite ease-in-out;
-    }
-    @keyframes wifi-pulse {
-      0% {
-        transform: scale(0.92);
-        opacity: 0.45;
-        filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0));
-      }
-      50% {
-        transform: scale(1.06);
-        opacity: 1;
-        filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6));
-      }
-      100% {
-        transform: scale(0.92);
-        opacity: 0.45;
-        filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0));
-      }
-    }
-    .logo-container {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-    .logo-container img {
-      max-height: 48px;
-      margin-bottom: 8px;
-      border-radius: 8px;
-    }
-    .logo-container h1 {
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      opacity: 0.65;
-      margin-top: 4px;
-      background: linear-gradient(to right, #ffffff, #94a3b8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .logo-container p {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-      opacity: 0.8;
-    }
-    .tabs {
-      display: flex;
-      background: rgba(15, 23, 42, 0.6);
-      padding: 4px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.04);
-    }
-    .tab {
-      flex: 1;
-      text-align: center;
-      padding: 10px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      border-radius: 8px;
-      transition: all 0.2s ease;
-    }
-    .tab.active {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .packages-list {
-      max-height: 220px;
-      overflow-y: auto;
-      margin-bottom: 20px;
-      padding-right: 4px;
-    }
-    .packages-list::-webkit-scrollbar {
-      width: 4px;
-    }
-    .packages-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-    }
-    .package-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 16px;
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .package-card:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(16, 185, 129, 0.3);
-      transform: translateY(-1px);
-    }
-    .package-card.selected {
-      background: rgba(16, 185, 129, 0.08);
-      border-color: var(--accent-color);
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
-    }
-    .pkg-info h3 {
-      font-size: 15px;
-      font-weight: 700;
-    }
-    .pkg-info p {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-    .pkg-price {
-      font-size: 15px;
-      font-weight: 800;
-      color: var(--accent-color);
-    }
-    .networks {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .network {
-      flex: 1;
-      padding: 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      text-align: center;
-      font-weight: 700;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .network.mtn {
-      background: rgba(255, 204, 0, 0.03);
-    }
-    .network.mtn.selected {
-      border-color: var(--mtn-yellow);
-      background: rgba(255, 204, 0, 0.12);
-      color: var(--mtn-yellow);
-    }
-    .network.airtel {
-      background: rgba(255, 0, 0, 0.03);
-    }
-    .network.airtel.selected {
-      border-color: var(--airtel-red);
-      background: rgba(255, 0, 0, 0.12);
-      color: var(--airtel-red);
-    }
-    .network-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--text-muted);
-    }
-    .network.mtn.selected .network-dot {
-      background: var(--mtn-yellow);
-    }
-    .network.airtel.selected .network-dot {
-      background: var(--airtel-red);
-    }
-    .input-group {
-      margin-bottom: 16px;
-      position: relative;
-    }
-    .input-group label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .input-container-rel {
-      position: relative;
-      display: flex;
-      align-items: center;
-      width: 100%;
-    }
-    input {
-      width: 100%;
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 14px 16px;
-      border-radius: 12px;
-      color: #fff;
-      font-size: 15px;
-      outline: none;
-      transition: all 0.2s ease;
-    }
-    input:focus {
-      border-color: var(--accent-color);
-      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
-      background: rgba(15, 23, 42, 0.7);
-    }
-    .carrier-badge {
-      position: absolute;
-      right: 12px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      display: none;
-      pointer-events: none;
-      letter-spacing: 0.05em;
-    }
-    .btn {
-      width: 100%;
-      background: var(--accent-gradient);
-      color: #fff;
-      border: none;
-      padding: 14px;
-      font-size: 15px;
-      font-weight: 700;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-    }
-    .btn:hover {
-      opacity: 0.95;
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
-    }
-    .btn:active {
-      transform: translateY(0);
-    }
-    .btn:disabled {
-      background: rgba(255,255,255,0.08);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-    .status-box {
-      margin-top: 16px;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 14px;
-      line-height: 1.4;
-      display: none;
-    }
-    .status-box.error {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.2);
-      color: #fca5a5;
-      display: block;
-    }
-    .status-box.success {
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      color: #a7f3d0;
-      display: block;
-    }
-    .status-box.info {
-      background: rgba(59, 130, 246, 0.1);
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      color: #bfdbfe;
-      display: block;
-    }
-    .loading-spinner {
-      border: 2px solid rgba(255, 255, 255, 0.1);
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      border-left-color: #fff;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .loading-overlay {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 0;
-    }
-    .loading-overlay p {
-      color: var(--text-muted);
-      font-size: 14px;
-      margin-top: 12px;
-    }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
-    }
-    .support-footer {
-      text-align: center;
-      margin-top: 24px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .support-footer a {
-      color: var(--accent-color);
-      text-decoration: none;
-      font-weight: 600;
-    }
-    .whatsapp-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      background: #25D366;
-      color: #fff !important;
-      text-decoration: none;
-      font-weight: 700;
-      padding: 10px 18px;
-      border-radius: 10px;
-      margin-top: 8px;
-      font-size: 13px;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
-    }
-    .whatsapp-btn:hover {
-      background: #20ba5a;
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(37, 211, 102, 0.3);
-    }
-    .whatsapp-icon {
-      width: 18px;
-      height: 18px;
-      vertical-align: middle;
-    }
-  </style>
-</head>
-<body>
-  <div class="glow-1"></div>
-  <div class="glow-2"></div>
-  
-  <div class="card">
-    <div class="logo-container" id="logo-sec">
-      <div class="wifi-pulse-container">
-        <svg class="wifi-pulse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-          <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
-          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
-          <line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"></line>
-        </svg>
-      </div>
-      <img id="tenant-logo" src="" style="display:none;" />
-      <h1 id="tenant-name">AROFi Hotspot</h1>
-      <p id="tenant-tag">Instant high-speed internet access</p>
-      <div id="device-info" style="font-size: 11px; color: var(--text-muted); margin-top: 10px; opacity: 0.8; font-family: monospace;">
-        IP: $(ip) &nbsp;|&nbsp; MAC: $(mac)
-      </div>
-    </div>
-    
-    <div id="catalog-loading" class="loading-overlay">
-      <div class="loading-spinner" style="border-width: 3px; width: 32px; height: 32px; border-left-color: var(--accent-color);"></div>
-      <p>Loading package catalog...</p>
-    </div>
-    
-    <div id="catalog-content" style="display:none;">
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab('momo')">Buy Package</div>
-        <div class="tab" onclick="switchTab('voucher')">Redeem Voucher</div>
-      </div>
-      
-      <div id="tab-momo" class="tab-content active">
-        <div class="packages-list" id="packages-list-container"></div>
-        
-        <div class="networks" style="display:none;">
-          <div class="network mtn selected" onclick="selectNetwork('MTN')">
-            <span class="network-dot"></span>
-            MTN MoMo
-          </div>
-          <div class="network airtel" onclick="selectNetwork('AIRTEL')">
-            <span class="network-dot"></span>
-            Airtel Money
-          </div>
-        </div>
-        
-        <div class="input-group">
-          <label>Phone Number (MTN/Airtel)</label>
-          <div class="input-container-rel">
-            <input type="tel" id="momo-phone" placeholder="e.g. 0771234567" required style="padding-right: 110px;">
-            <span id="carrier-badge" class="carrier-badge"></span>
-          </div>
-        </div>
-        
-        <button class="btn" id="btn-pay" onclick="initiatePayment()">Pay and Connect</button>
-      </div>
-      
-      <div id="tab-voucher" class="tab-content">
-        <div class="input-group">
-          <label>Voucher Code</label>
-          <input type="text" id="voucher-code" placeholder="Enter voucher code" required>
-        </div>
-        
-        <button class="btn" id="btn-voucher" onclick="redeemVoucher()">Connect to Internet</button>
-      </div>
-      
-      <div class="status-box" id="status-message"></div>
-    </div>
-  </div>
-  
-  <div class="support-footer" id="support-footer-sec" style="display:none;">
-    <div style="margin-bottom: 8px;">Need help? Contact support: <span id="support-phone"></span></div>
-    <a id="whatsapp-btn" href="#" target="_blank" class="whatsapp-btn" style="display:none;">
-      <svg class="whatsapp-icon" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-      </svg>
-      Chat on WhatsApp
-    </a>
-    <div style="margin-top: 12px; font-size: 11px; opacity: 0.8;">
-      Powered by <a href="https://arosoftlabs.com" target="_blank" style="color: var(--accent-color); text-decoration: none; font-weight: 600;">arosoftlabs.com</a>
-    </div>
-  </div>
-
-  <form id="login-form" method="POST" action="$(link-login-only)" style="display:none;">
-    <input type="hidden" id="login-username" name="username">
-    <input type="hidden" id="login-password" name="password">
-    <input type="hidden" name="dst" value="$(link-orig)">
-    <input type="hidden" name="popup" value="false">
-  </form>
-
-  <script>
-    const apiBaseUrl = "${apiBaseUrl}";
-    const routerKey = "${escapedKey}";
-    const mac = "$(mac)" || "";
-    const ip = "$(ip)" || "";
-    const linkLoginOnly = "$(link-login-only)" || "";
-    const serverName = "$(server-name)" || "";
-    
-    let packagesList = [];
-    let selectedPackageId = null;
-    let selectedNetwork = 'MTN';
-    
-    window.onload = function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const u = urlParams.get("username");
-      const p = urlParams.get("password");
-      if (u && p) {
-        document.getElementById("login-username").value = u;
-        document.getElementById("login-password").value = p;
-        document.getElementById("login-form").submit();
-      } else {
-        loadPortalCatalog();
-      }
-
-      // Carrier auto-detection logic
-      const phoneInput = document.getElementById("momo-phone");
-      if (phoneInput) {
-        phoneInput.addEventListener("input", function(e) {
-          const val = e.target.value.trim();
-          let clean = val.replace(/\D/g, "");
-          let check = "";
-          if (clean.startsWith("256")) {
-            check = "0" + clean.slice(3, 5);
-          } else if (clean.startsWith("0")) {
-            check = "0" + clean.slice(1, 3);
-          } else if (clean.length === 9) {
-            check = "0" + clean.slice(0, 2);
-          } else {
-            check = "0" + clean.slice(0, 2);
-          }
-          
-          const mtnPrefixes = ["077", "078", "076", "079", "031", "039"];
-          const airtelPrefixes = ["070", "075", "074"];
-          const badge = document.getElementById("carrier-badge");
-          
-          if (mtnPrefixes.includes(check)) {
-            selectedNetwork = 'MTN';
-            phoneInput.style.borderColor = "var(--mtn-yellow)";
-            if (badge) {
-              badge.style.display = "inline-block";
-              badge.style.backgroundColor = "var(--mtn-yellow)";
-              badge.style.color = "#0b1f3a";
-              badge.innerText = "MTN MoMo";
-            }
-          } else if (airtelPrefixes.includes(check)) {
-            selectedNetwork = 'AIRTEL';
-            phoneInput.style.borderColor = "var(--airtel-red)";
-            if (badge) {
-              badge.style.display = "inline-block";
-              badge.style.backgroundColor = "var(--airtel-red)";
-              badge.style.color = "#ffffff";
-              badge.innerText = "Airtel Money";
-            }
-          } else {
-            selectedNetwork = 'MTN'; // Fallback
-            phoneInput.style.borderColor = "rgba(255, 255, 255, 0.1)";
-            if (badge) {
-              badge.style.display = "none";
-            }
-          }
-        });
-      }
+    var API="${apiBaseUrl}",RKEY="${escapedKey}";
+    var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
+    var pkgs=[],selId=null,selNet='MTN';
+    window.onload=function(){
+      var sp=new URLSearchParams(window.location.search);
+      var u=sp.get('username'),p=sp.get('password');
+      if(u&&p){document.getElementById('lu').value=u;document.getElementById('lp').value=p;document.getElementById('lf').submit();return;}
+      if(ip||mac)document.getElementById('dinfo').textContent=(ip?'IP: '+ip:'')+(ip&&mac?'  |  ':'')+(mac?'MAC: '+mac.toUpperCase():'');
+      load();
     };
-    
-    async function loadPortalCatalog() {
-      try {
-        const url = apiBaseUrl + "/api/portal/context?mac=" + encodeURIComponent(mac) + 
-                    "&ip=" + encodeURIComponent(ip) + 
-                    "&routerKey=" + encodeURIComponent(routerKey) + 
-                    "&server=" + encodeURIComponent(serverName) + 
-                    "&loginUrl=" + encodeURIComponent(linkLoginOnly);
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error("HTTP error " + response.status);
-        }
-        
-        const data = await response.json();
-        packagesList = data.packages || [];
-        
-        if (data.tenant) {
-          document.getElementById("tenant-name").innerText = data.tenant.name || "AROFi Hotspot";
-          if (data.tenant.logoUrl) {
-            const logo = document.getElementById("tenant-logo");
-            logo.src = data.tenant.logoUrl;
-            logo.style.display = "inline-block";
-          }
-          if (data.tenant.supportPhone) {
-            document.getElementById("support-phone").innerText = data.tenant.supportPhone;
-            document.getElementById("support-footer-sec").style.display = "block";
-            
-            // Format WhatsApp Support Link
-            let waPhone = data.tenant.supportPhone.replace(/\D/g, "");
-            if (waPhone.startsWith("0")) {
-              waPhone = "256" + waPhone.slice(1);
-            } else if (!waPhone.startsWith("256") && waPhone.length === 9) {
-              waPhone = "256" + waPhone;
-            }
-            const waBtn = document.getElementById("whatsapp-btn");
-            if (waBtn) {
-              waBtn.href = "https://wa.me/" + waPhone;
-              waBtn.style.display = "inline-flex";
-            }
+    async function load(){
+      try{
+        var r=await fetch(API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo));
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        var d=await r.json();
+        pkgs=d.packages||[];
+        if(d.tenant){
+          document.getElementById('tname').textContent=d.tenant.name||'AROFi Hotspot';
+          if(d.tenant.logoUrl){var img=document.getElementById('tlogo');img.src=d.tenant.logoUrl;img.style.display='inline-block';}
+          if(d.tenant.supportPhone){
+            document.getElementById('sph').textContent=d.tenant.supportPhone;
+            document.getElementById('footer').style.display='block';
+            var ph=d.tenant.supportPhone.replace(/\\D/g,'');
+            if(ph.startsWith('0'))ph='256'+ph.slice(1);else if(!ph.startsWith('256')&&ph.length===9)ph='256'+ph;
+            var wa=document.getElementById('wa');wa.href='https://wa.me/'+ph;wa.style.display='inline-flex';
           }
         }
-        
-        const container = document.getElementById("packages-list-container");
-        container.innerHTML = "";
-        
-        if (packagesList.length === 0) {
-          container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">No packages available.</div>';
-        } else {
-          packagesList.forEach((pkg, index) => {
-            const card = document.createElement("div");
-            card.className = "package-card" + (index === 0 ? " selected" : "");
-            card.id = "pkg-" + pkg.id;
-            card.onclick = () => selectPackage(pkg.id);
-            
-            let desc = pkg.description || "";
-            if (!desc) {
-              desc = formatDuration(pkg.durationMinutes) + (pkg.dataLimitMb ? " • " + formatMegabytes(pkg.dataLimitMb) : " • Unlimited Data");
-            }
-            
-            card.innerHTML = \`
-              <div class="pkg-info">
-                <h3>\${escapeHtml(pkg.name)}</h3>
-                <p>\&nbsp;\${escapeHtml(desc)}</p>
-              </div>
-              <div class="pkg-price">UGX \${formatPrice(pkg.amountUgx)}</div>
-            \`;
-            container.appendChild(card);
-          });
-          
-          selectedPackageId = packagesList[0].id;
-        }
-        
-        document.getElementById("catalog-loading").style.display = "none";
-        document.getElementById("catalog-content").style.display = "block";
-      } catch (error) {
-        console.error("Failed to load catalog", error);
-        document.getElementById("catalog-loading").style.display = "none";
-        document.getElementById("catalog-content").style.display = "block";
-        switchTab('voucher');
-        const momoTabBtn = document.querySelectorAll(".tab")[0];
-        if (momoTabBtn) momoTabBtn.style.display = "none";
-        showStatus("Offline mode. If you have a voucher, redeem it below.", "info");
+        var el=document.getElementById('plist');el.innerHTML='';
+        if(!pkgs.length){el.innerHTML='<p style="text-align:center;padding:14px;color:#94a3b8">No packages available.</p>';}
+        else{pkgs.forEach(function(p,i){
+          var d2=p.description||(fdur(p.durationMinutes)+(p.dataLimitMb?' · '+fmb(p.dataLimitMb):' · Unlimited data'));
+          var c=document.createElement('div');c.className='pkg'+(i===0?' sel':'');c.id='p-'+p.id;
+          c.onclick=function(){selP(p.id);};
+          c.innerHTML='<div><h3>'+esc(p.name)+'</h3><p>'+esc(d2)+'</p></div><div class="price">UGX '+fn(p.amountUgx)+'</div>';
+          el.appendChild(c);
+        });selId=pkgs[0].id;}
+        document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block';
+      }catch(e){
+        document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block';
+        sw('voucher');document.querySelectorAll('.tab')[0].style.display='none';
+        sst('Offline mode — enter your voucher code to connect.','info');
       }
     }
-    
-    function switchTab(tab) {
-      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-      
-      if (tab === 'momo') {
-        document.querySelectorAll(".tab")[0].classList.add("active");
-        document.getElementById("tab-momo").classList.add("active");
-      } else {
-        const voucherTabBtn = document.querySelectorAll(".tab")[1] || document.querySelectorAll(".tab")[0];
-        if (voucherTabBtn) voucherTabBtn.classList.add("active");
-        document.getElementById("tab-voucher").classList.add("active");
-      }
+    function sw(t){
+      document.querySelectorAll('.tab').forEach(function(x,i){x.classList.toggle('on',(t==='momo'&&i===0)||(t==='voucher'&&i===1));});
+      document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('on');});
+      document.getElementById('pane-'+t).classList.add('on');
     }
-    
-    function selectPackage(pkgId) {
-      selectedPackageId = pkgId;
-      document.querySelectorAll(".package-card").forEach(c => c.classList.remove("selected"));
-      const selected = document.getElementById("pkg-" + pkgId);
-      if (selected) selected.classList.add("selected");
+    function selP(id){selId=id;document.querySelectorAll('.pkg').forEach(function(c){c.classList.toggle('sel',c.id==='p-'+id);});}
+    function dnet(v){
+      var c=v.replace(/\\D/g,''),p2=c.startsWith('256')?c.slice(3,5):c.startsWith('0')?c.slice(1,3):c.slice(0,2);
+      var b=document.getElementById('badge'),mtn=['77','78','76','79','31','39'].includes(p2),airt=['70','75','74'].includes(p2);
+      selNet=airt?'AIRTEL':'MTN';
+      if(mtn||airt){b.style.display='inline-block';b.style.background=mtn?'#ffcc00':'#e60012';b.style.color=mtn?'#0b1f3a':'#fff';b.textContent=mtn?'MTN MoMo':'Airtel Money';}
+      else b.style.display='none';
     }
-    
-    function selectNetwork(net) {
-      selectedNetwork = net;
-      document.querySelectorAll(".network").forEach(n => n.classList.remove("selected"));
-      if (net === 'MTN') {
-        document.querySelector(".network.mtn").classList.add("selected");
-      } else {
-        document.querySelector(".network.airtel").classList.add("selected");
-      }
+    async function pay(){
+      if(!selId){sst('Select a package first.','err');return;}
+      var ph=document.getElementById('phone').value.trim();
+      if(!ph){sst('Enter your Mobile Money number.','err');return;}
+      var c=ph.replace(/\\D/g,'');
+      if(c.startsWith('0'))c='256'+c.slice(1);else if(!c.startsWith('256'))c='256'+c;
+      if(!/^256\\d{9}$/.test(c)){sst('Enter a valid Uganda number (e.g. 0771234567).','err');return;}
+      setbtn('pbtn',true,'Sending request...');sst('Initiating payment. Enter your Mobile Money PIN when prompted.','info');
+      try{
+        var r=await fetch(API+'/api/payments/portal/initiate',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({packageId:selId,phoneNumber:c,customerReference:c,network:selNet,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
+        var pmt=await r.json();
+        if(!r.ok)throw new Error(pmt.message||'Payment initiation failed.');
+        if(pmt.status==='FAILED')throw new Error(pmt.statusMessage||'Payment failed.');
+        var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
+        if(cu){window.location.href=cu;return;}
+        poll(pmt.id,pmt.statusToken);
+      }catch(e){sst(e.message||'Unable to start payment. Try again.','err');setbtn('pbtn',false,'Pay and Connect');}
     }
-    
-    function showStatus(msg, type) {
-      const box = document.getElementById("status-message");
-      box.className = "status-box " + type;
-      box.innerHTML = msg;
-      box.style.display = "block";
+    function poll(id,tok){
+      var n=0,iv=setInterval(async function(){
+        if(++n>120){clearInterval(iv);sst('Timed out. If payment was approved, reconnect to WiFi.','err');setbtn('pbtn',false,'Pay and Connect');return;}
+        try{
+          var r=await fetch(API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''),{method:'POST'});
+          if(!r.ok)return;
+          var p=await r.json();
+          if(p.activation){clearInterval(iv);sst('Payment approved! Connecting...','ok');conn(p.reconnect);}
+          else if(p.status==='FAILED'){clearInterval(iv);sst('Payment failed: '+(p.statusMessage||'Declined.'),'err');setbtn('pbtn',false,'Pay and Connect');}
+        }catch(e){}
+      },1500);
     }
-    
-    async function initiatePayment() {
-      const phoneInput = document.getElementById("momo-phone").value.trim();
-      if (!selectedPackageId) {
-        showStatus("Please select a package first.", "error");
-        return;
-      }
-      if (!phoneInput) {
-        showStatus("Please enter your phone number.", "error");
-        return;
-      }
-      
-      let cleanPhone = phoneInput.replace(/\\D/g, "");
-      if (cleanPhone.startsWith("0")) {
-        cleanPhone = "256" + cleanPhone.slice(1);
-      } else if (!cleanPhone.startsWith("256")) {
-        cleanPhone = "256" + cleanPhone;
-      }
-      
-      if (!/^256\\d{9}$/.test(cleanPhone)) {
-        showStatus("Enter a valid Uganda mobile number (e.g. 0771234567).", "error");
-        return;
-      }
-      
-      const payBtn = document.getElementById("btn-pay");
-      payBtn.disabled = true;
-      payBtn.innerHTML = '<div class="loading-spinner"></div>Sending request...';
-      showStatus("Initiating payment. Please enter your Mobile Money PIN on your phone.", "info");
-      
-      try {
-        const response = await fetch(apiBaseUrl + "/api/payments/portal/initiate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            packageId: selectedPackageId,
-            phoneNumber: cleanPhone,
-            customerReference: cleanPhone,
-            network: selectedNetwork,
-            macAddress: mac,
-            clientIp: ip,
-            routerKey: routerKey,
-            hotspotServerName: serverName,
-            loginUrl: linkLoginOnly
-          })
-        });
-        
-        const payment = await response.json();
-        if (!response.ok) {
-          throw new Error(payment.message || "Payment initiation failed.");
-        }
-        
-        if (payment.status === "FAILED") {
-          throw new Error(payment.statusMessage || "The payment request could not be started.");
-        }
-        
-        const checkoutUrl = payment.checkoutUrl || (payment.responsePayload && (payment.responsePayload.checkoutUrl || (payment.responsePayload.gateway && payment.responsePayload.gateway.checkoutUrl)));
-        if (checkoutUrl) {
-          showStatus("Redirecting to secure payment checkout...", "info");
-          window.location.href = checkoutUrl;
-          return;
-        }
-        
-        pollPaymentStatus(payment.id, payment.statusToken);
-      } catch (error) {
-        showStatus(error.message || "Unable to start the payment request. Please try again.", "error");
-        payBtn.disabled = false;
-        payBtn.innerText = "Pay and Connect";
-      }
+    async function rdm(){
+      var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\s+/g,'');
+      if(!code){sst('Enter your voucher code.','err');return;}
+      setbtn('vbtn',true,'Redeeming...');sst('Connecting to authentication server...','info');
+      try{
+        var r=await fetch(API+'/api/portal/redeem-voucher',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
+        var b=await r.json();
+        if(!r.ok)throw new Error(b.message||'Voucher redemption failed.');
+        sst('Voucher redeemed! Connecting you to the internet...','ok');conn(b.reconnect);
+      }catch(e){sst(e.message||'Voucher redemption failed. Please try again.','err');setbtn('vbtn',false,'Connect to Internet');}
     }
-    
-    function pollPaymentStatus(paymentId, token) {
-      const payBtn = document.getElementById("btn-pay");
-      let attempts = 0;
-      const maxAttempts = 120;
-      
-      const interval = setInterval(async () => {
-        attempts++;
-        if (attempts > maxAttempts) {
-          clearInterval(interval);
-          showStatus("Payment check timed out. If you approved the payment, reconnect to internet in a moment.", "error");
-          payBtn.disabled = false;
-          payBtn.innerText = "Pay and Connect";
-          return;
-        }
-        
-        try {
-          const url = apiBaseUrl + "/api/payments/" + paymentId + "/check-status" + (token ? "?token=" + encodeURIComponent(token) : "");
-          const response = await fetch(url, { method: "POST" });
-          if (!response.ok) return;
-          
-          const payment = await response.json();
-          if (payment.activation) {
-            clearInterval(interval);
-            showStatus("Payment approved! Connecting you to the internet...", "success");
-            connectHotspot(payment.reconnect);
-          } else if (payment.status === "FAILED") {
-            clearInterval(interval);
-            showStatus("Payment failed: " + (payment.statusMessage || "Declined or timed out."), "error");
-            payBtn.disabled = false;
-            payBtn.innerText = "Pay and Connect";
-          }
-        } catch (error) {
-          // keep polling
-        }
-      }, 1500);
-    }
-    
-    async function redeemVoucher() {
-      const codeInput = document.getElementById("voucher-code").value.trim();
-      if (!codeInput) {
-        showStatus("Please enter your voucher code.", "error");
-        return;
-      }
-      
-      const voucherBtn = document.getElementById("btn-voucher");
-      voucherBtn.disabled = true;
-      voucherBtn.innerHTML = '<div class="loading-spinner"></div>Redeeming...';
-      showStatus("Connecting to authentication server...", "info");
-      
-      try {
-        const response = await fetch(apiBaseUrl + "/api/portal/redeem-voucher", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: codeInput.toUpperCase().replace(/\\s+/g, ""),
-            macAddress: mac,
-            clientIp: ip,
-            routerKey: routerKey,
-            hotspotServerName: serverName,
-            loginUrl: linkLoginOnly
-          })
-        });
-        
-        const body = await response.json();
-        if (!response.ok) {
-          throw new Error(body.message || "Voucher redemption failed.");
-        }
-        
-        showStatus("Voucher redeemed! Connecting you to the internet...", "success");
-        connectHotspot(body.reconnect);
-      } catch (error) {
-        showStatus(error.message || "Voucher redemption failed. Please try again.", "error");
-        voucherBtn.disabled = false;
-        voucherBtn.innerText = "Connect to Internet";
-      }
-    }
-    
-    function connectHotspot(reconnect) {
-      if (!reconnect || !reconnect.username || !reconnect.password) {
-        showStatus("Connected! Reconnecting to the internet...", "success");
-        return;
-      }
-      
-      document.getElementById("login-username").value = reconnect.username;
-      document.getElementById("login-password").value = reconnect.password;
-      document.getElementById("login-form").submit();
-    }
-    
-    function formatDuration(mins) {
-      if (mins >= 1440 && mins % 1440 === 0) return (mins/1440) + " Day" + (mins/1440 > 1 ? "s" : "");
-      if (mins >= 60 && mins % 60 === 0) return (mins/60) + " Hour" + (mins/60 > 1 ? "s" : "");
-      return mins + " Min";
-    }
-    
-    function formatMegabytes(mb) {
-      if (mb >= 1024) return (mb / 1024).toFixed(1) + " GB";
-      return mb + " MB";
-    }
-    
-    function formatPrice(val) {
-      return new Intl.NumberFormat('en-UG').format(val);
-    }
-    
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
+    function conn(rc){if(!rc||!rc.username||!rc.password)return;document.getElementById('lu').value=rc.username;document.getElementById('lp').value=rc.password;document.getElementById('lf').submit();}
+    function setbtn(id,dis,txt){var b=document.getElementById(id);b.disabled=dis;b.innerHTML=dis?'<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:6px"></span>'+txt:txt;}
+    function sst(m,t){var s=document.getElementById('st');s.className='st '+t;s.textContent=m;}
+    function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
+    function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
+    function fn(v){return new Intl.NumberFormat('en-UG').format(v);}
+    function esc(s){return!s?'':s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   </script>
 </body>
 </html>`
