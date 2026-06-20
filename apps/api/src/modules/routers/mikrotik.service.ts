@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
   RouterConnectionMode,
@@ -183,7 +183,6 @@ export class MikrotikService {
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
       `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=5m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
-      `/ip hotspot user profile set [find default=yes] shared-users=1`,
     ]
 
     const walledGarden = [
@@ -248,14 +247,20 @@ export class MikrotikService {
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
       ``,
       `# Detect WAN interface dynamically so NAT works on any router model`,
-      `# foreach is safe on empty set; "interface" is the correct property in RouterOS 6 and 7`,
+      `# Compatible with RouterOS 6 and 7 (ROS6 uses gateway-interface, ROS7 uses interface)`,
       `:local wanIface ""`,
-      `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={ :set wanIface [/ip route get $r interface] }`,
+      `:do {`,
+      `  :foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
+      `    :do { :set wanIface [/ip route get $r interface] } on-error={`,
+      `      :do { :set wanIface [/ip route get $r gateway-interface] } on-error={}`,
+      `    }`,
+      `  }`,
+      `} on-error={}`,
       `/ip firewall nat remove [find comment="AROFi hotspot nat"]`,
       `:if ($wanIface != "") do={`,
       `  /ip firewall nat add chain=srcnat src-address=${subnet} out-interface=$wanIface action=masquerade comment="AROFi hotspot nat"`,
       `} else={`,
-      `  /ip firewall nat add chain=srcnat src-address=${subnet} action=masquerade comment="AROFi hotspot nat"`,
+      `  :put "WARNING: WAN interface not detected. Skipping NAT masquerade. Add manually after checking /ip route print."`,
       `}`,
       ``,
       `# Firewall: allow DNS and gateway access from hotspot clients (input chain, before any drop)`,
@@ -313,9 +318,7 @@ export class MikrotikService {
       5,
       Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '15', 10),
     )
-    // URLs contain no spaces, so they need no inner quoting inside the script
-    // source — this keeps the generated .rsc free of fragile nested escapes.
-    const source = `:do { /tool fetch url=${heartbeatUrl} check-certificate=no mode=https keep-result=no } on-error={ :do { /tool fetch url=${fallbackHeartbeatUrl} mode=http keep-result=no } on-error={} }`
+    const source = `:do { /tool fetch url=\\"${heartbeatUrl}\\" check-certificate=no mode=https keep-result=no } on-error={ :do { /tool fetch url=\\"${fallbackHeartbeatUrl}\\" mode=http keep-result=no } on-error={} }`
     return [
       `/system script remove [find name="arofi-heartbeat"]`,
       `/system script add name="arofi-heartbeat" source="${source}"`,
@@ -329,7 +332,13 @@ export class MikrotikService {
       `:delay 3s`,
       `:local nasIp ""`,
       `:local cbWanIface ""`,
-      `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={ :set cbWanIface [/ip route get $r interface] }`,
+      `:do {`,
+      `  :foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
+      `    :do { :set cbWanIface [/ip route get $r interface] } on-error={`,
+      `      :do { :set cbWanIface [/ip route get $r gateway-interface] } on-error={}`,
+      `    }`,
+      `  }`,
+      `} on-error={}`,
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
       `    :local rawAddr [/ip address get [find interface=$cbWanIface] address]`,

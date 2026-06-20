@@ -338,7 +338,7 @@ export default function RoutersManager() {
     const cmd = oneRunCommand()
     if (!cmd) return
     await navigator.clipboard.writeText(cmd)
-    setSuccess('One-run RouterOS command copied to clipboard.')
+    setSuccess('One-run command copied. Run it ONCE in WinBox terminal. Do not run it if you already imported the .rsc script.')
   }
 
   async function copyRouterAccessDetails() {
@@ -587,7 +587,6 @@ export default function RoutersManager() {
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy command</button>
-                <button type="button" className="btn btn-ghost" onClick={downloadScript}>Download .rsc</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleRotateSecret(selectedSetup.router.id)}>Rotate secret</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleHealthCheck(selectedSetup.router.id)} disabled={runningHealthCheckId === selectedSetup.router.id}>{runningHealthCheckId === selectedSetup.router.id ? 'Checking…' : 'Re-check status'}</button>
               </div>
@@ -596,10 +595,19 @@ export default function RoutersManager() {
               <pre className="mono" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#0b1220', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 12.5, lineHeight: 1.6, color: '#dbe7ff', margin: 0 }}>
                 {oneRunCommand()}
               </pre>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
-                <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.provisioningCallbackReceived ? 'Callback received' : 'Waiting for callback'}</span>
-                <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
+                  <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.provisioningCallbackReceived ? 'Callback received' : 'Waiting for callback'}</span>
+                  <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
+                </div>
+                <details style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-secondary)', userSelect: 'none' }}>Advanced: Inspect / download raw script</summary>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, border: '1px dashed var(--border)', padding: 10, borderRadius: 8, background: 'var(--bg-app)' }}>
+                    <p style={{ margin: 0, fontSize: 12 }}>The one-run command above automatically downloads and installs this script. Do not use both methods as it causes duplicate config errors.</p>
+                    <button type="button" className="btn btn-ghost" onClick={downloadScript} style={{ width: 'fit-content', padding: '4px 8px', fontSize: 12 }}>Download .rsc script</button>
+                  </div>
+                </details>
               </div>
             </div>
           </div>

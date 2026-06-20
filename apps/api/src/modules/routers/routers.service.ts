@@ -171,7 +171,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
-      select: { id: true, status: true, onboardingStatus: true, radiusNasIpAddress: true },
+      select: {
+        id: true,
+        status: true,
+        onboardingStatus: true,
+        radiusNasIpAddress: true,
+        tenantId: true,
+        name: true,
+        sharedSecretCiphertext: true,
+        radiusClient: { select: { id: true, shortName: true, secretCiphertext: true } },
+        nasClient: { select: { id: true, shortname: true } },
+      },
     })
 
     if (!router) {
@@ -179,6 +189,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const normalizedSourceIp = sourceIp.trim()
+    const learnedNewIp = normalizedSourceIp && !router.radiusNasIpAddress
     const pendingStatuses: RouterOnboardingStatus[] = [
       RouterOnboardingStatus.SCRIPT_GENERATED,
       RouterOnboardingStatus.WAITING_FOR_ROUTER,
@@ -198,6 +209,15 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           : {}),
       },
     })
+
+    if (learnedNewIp) {
+      await this.upsertNasClientForProvisionedRouter(
+        this.prisma,
+        router,
+        normalizedSourceIp,
+      )
+      this.reloadFreeradiusNasClients()
+    }
 
     return { ok: true }
   }
@@ -804,7 +824,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         adminUsername: router.username,
         adminPassword,
         hotspotServerName: router.hotspotServerName,
-        portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
+        portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts, radiusServer.host),
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
         mode: router.lastScriptMode,
         portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
@@ -859,7 +879,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       adminUsername: router.username,
       adminPassword,
       hotspotServerName: router.hotspotServerName,
-      portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
+      portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts, radiusServer.host),
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
       mode: router.lastScriptMode,
       portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
@@ -1463,11 +1483,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return randomBytes(18).toString('base64url')
   }
 
-  private resolvePortalHosts(configured: string[]) {
+  private resolvePortalHosts(configured: string[], radiusHost?: string) {
     const envHosts = [
       process.env.PORTAL_PUBLIC_HOST,
       process.env.API_PUBLIC_HOST,
+      'arofi.arosoftlabs.com',
       'arofi.arosoft.io',
+      radiusHost,
       'pay.pesapal.com',
       'www.pesapal.com',
       'cybqa.pesapal.com',
