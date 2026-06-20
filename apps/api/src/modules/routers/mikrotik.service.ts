@@ -173,7 +173,7 @@ export class MikrotikService {
       `:do { /tool mac-server mac-winbox set allowed-interface-list=all } on-error={}`,
       ``,
       `# 2. AROFi RADIUS server for HotSpot auth + accounting`,
-      `/radius remove [find where comment="AROFi ${this.escape(registrationKey)}"]`,
+      `/radius remove [/radius find comment="AROFi ${this.escape(registrationKey)}"]`,
       `/radius add service=hotspot address=${input.radiusHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=5s comment="AROFi ${this.escape(registrationKey)}"`,
       `:do { /radius incoming set accept=yes } on-error={}`,
     ]
@@ -182,7 +182,7 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=5m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
+      `/ip hotspot profile set [/ip hotspot profile find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=5m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
     ]
 
     const walledGarden = [
@@ -197,7 +197,7 @@ export class MikrotikService {
     const antiTether = [
       ``,
       `# TTL anti-tethering (always on — prevents hotspot-behind-hotspot NAT abuse)`,
-      `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
+      `/ip firewall mangle remove [/ip firewall mangle find comment="AROFi anti-tether"]`,
       `/ip firewall mangle add chain=prerouting action=change-ttl new-ttl=decrement:1 passthrough=yes in-interface=arofi-hotspot comment="AROFi anti-tether"`,
     ]
 
@@ -231,18 +231,18 @@ export class MikrotikService {
       ``,
       `# 3b. Dedicated, isolated HotSpot bridge — keeps your WAN + management intact`,
       `:if ([:len [/interface bridge find name="arofi-hotspot"]] = 0) do={ /interface bridge add name=arofi-hotspot comment="AROFi customer hotspot" }`,
-      `/ip address remove [find address="${gatewayIp}/24"]`,
+      `/ip address remove [/ip address find address="${gatewayIp}/24"]`,
       `/ip address add address=${gatewayIp}/24 interface=arofi-hotspot comment="AROFi hotspot gateway"`,
       ``,
       `# 3c. Put Wi-Fi (RouterOS v6 wireless and v7 wifi) on the hotspot bridge`,
       ...this.buildHotspotWirelessScript(ssid),
       ``,
       `# 3d. DHCP, DNS and NAT for hotspot clients (additive; your existing NAT is untouched)`,
-      `/ip pool remove [find name=arofi-pool]`,
+      `/ip pool remove [/ip pool find name=arofi-pool]`,
       `/ip pool add name=arofi-pool ranges=${poolRange}`,
-      `/ip dhcp-server network remove [find address="${subnet}"]`,
+      `/ip dhcp-server network remove [/ip dhcp-server network find address="${subnet}"]`,
       `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
-      `/ip dhcp-server remove [find name=arofi-dhcp]`,
+      `/ip dhcp-server remove [/ip dhcp-server find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
       ``,
@@ -256,7 +256,7 @@ export class MikrotikService {
       `    }`,
       `  }`,
       `} on-error={}`,
-      `/ip firewall nat remove [find comment="AROFi hotspot nat"]`,
+      `/ip firewall nat remove [/ip firewall nat find comment="AROFi hotspot nat"]`,
       `:if ($wanIface != "") do={`,
       `  /ip firewall nat add chain=srcnat src-address=${subnet} out-interface=$wanIface action=masquerade comment="AROFi hotspot nat"`,
       `} else={`,
@@ -264,21 +264,21 @@ export class MikrotikService {
       `}`,
       ``,
       `# Firewall: allow DNS and gateway access from hotspot clients (input chain, before any drop)`,
-      `/ip firewall filter remove [find comment="AROFi hotspot input"]`,
+      `/ip firewall filter remove [/ip firewall filter find comment="AROFi hotspot input"]`,
       `/ip firewall filter add chain=input action=accept src-address=${subnet} protocol=udp dst-port=53 comment="AROFi hotspot input"`,
       `/ip firewall filter add chain=input action=accept src-address=${subnet} protocol=tcp dst-port=53 comment="AROFi hotspot input"`,
       `/ip firewall filter add chain=input action=accept src-address=${subnet} dst-address=${gatewayIp} comment="AROFi hotspot input"`,
       `:foreach r in=[/ip firewall filter find comment="AROFi hotspot input"] do={ /ip firewall filter move $r destination=0 }`,
       ``,
       `# Firewall: allow hotspot clients forward (must be before any DROP rule)`,
-      `/ip firewall filter remove [find comment="AROFi hotspot forward"]`,
+      `/ip firewall filter remove [/ip firewall filter find comment="AROFi hotspot forward"]`,
       `/ip firewall filter add chain=forward action=accept src-address=${subnet} comment="AROFi hotspot forward"`,
       `/ip firewall filter add chain=forward action=accept dst-address=${subnet} connection-state=established,related comment="AROFi hotspot forward"`,
       `:foreach r in=[/ip firewall filter find comment="AROFi hotspot forward"] do={ /ip firewall filter move $r destination=0 }`,
       ``,
       `# 3e. Create the HotSpot server on the isolated bridge`,
-      `/ip hotspot profile set [find name="${profileName}"] hotspot-address=${gatewayIp}`,
-      `/ip hotspot remove [find interface=arofi-hotspot]`,
+      `/ip hotspot profile set [/ip hotspot profile find name="${profileName}"] hotspot-address=${gatewayIp}`,
+      `/ip hotspot remove [/ip hotspot find interface=arofi-hotspot]`,
       `/ip hotspot add name="${this.escape(hotspotName)}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
       ...walledGarden,
       ...antiTether,
@@ -305,7 +305,7 @@ export class MikrotikService {
     }
 
     return [
-      `/ip hotspot walled-garden remove [find comment="AROFi portal"]`,
+      `/ip hotspot walled-garden remove [/ip hotspot walled-garden find comment="AROFi portal"]`,
       ...normalizedHosts.map(
         (host) =>
           `/ip hotspot walled-garden add dst-host="${this.escape(host)}" action=allow comment="AROFi portal"`,
@@ -320,9 +320,9 @@ export class MikrotikService {
     )
     const source = `:do { /tool fetch url=\\"${heartbeatUrl}\\" check-certificate=no mode=https keep-result=no } on-error={ :do { /tool fetch url=\\"${fallbackHeartbeatUrl}\\" mode=http keep-result=no } on-error={} }`
     return [
-      `/system script remove [find name="arofi-heartbeat"]`,
+      `/system script remove [/system script find name="arofi-heartbeat"]`,
       `/system script add name="arofi-heartbeat" source="${source}"`,
-      `/system scheduler remove [find name="arofi-heartbeat"]`,
+      `/system scheduler remove [/system scheduler find name="arofi-heartbeat"]`,
       `/system scheduler add name="arofi-heartbeat" interval=${intervalSeconds}s on-event="arofi-heartbeat" comment="AROFi heartbeat"`,
     ]
   }
@@ -341,7 +341,7 @@ export class MikrotikService {
       `} on-error={}`,
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
-      `    :local rawAddr [/ip address get [find interface=$cbWanIface] address]`,
+      `    :local rawAddr [/ip address get [/ip address find interface=$cbWanIface] address]`,
       `    :set nasIp [:pick $rawAddr 0 [:find $rawAddr "/"]]`,
       `  }`,
       `} on-error={}`,
@@ -361,7 +361,7 @@ export class MikrotikService {
 
   private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string, profileName?: string) {
     const profileSet = profileName
-      ? [`/ip hotspot profile set [find name="${this.escape(profileName)}"] html-directory=hotspot`]
+      ? [`/ip hotspot profile set [/ip hotspot profile find name="${this.escape(profileName)}"] html-directory=hotspot`]
       : []
     return [
       `:do {`,
@@ -622,16 +622,16 @@ export class MikrotikService {
     const escapedSsid = this.escape(ssid.slice(0, 32) || 'AROFi Free WiFi')
 
     const bridgePort = (iface: string) =>
-      `:if ([:len [/interface bridge port find interface="${iface}"]]=0) do={/interface bridge port add bridge=arofi-hotspot interface=${iface}} else={/interface bridge port set [find interface="${iface}"] bridge=arofi-hotspot}`
+      `:if ([:len [/interface bridge port find interface="${iface}"]]=0) do={/interface bridge port add bridge=arofi-hotspot interface=${iface}} else={/interface bridge port set [/interface bridge port find interface="${iface}"] bridge=arofi-hotspot}`
 
     const v6Inner = (iface: string) =>
-      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
+      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [/interface wireless find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
 
     const v7Inner = (iface: string) =>
-      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""; ${bridgePort(iface)}}`
+      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [/interface wifi find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""; ${bridgePort(iface)}}`
 
     const securityProfile =
-      `:if ([:len [/interface wireless security-profiles find name="arofi-open"]]>0) do={/interface wireless security-profiles set [find name="arofi-open"] mode=none authentication-types=""} else={/interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""}`
+      `:if ([:len [/interface wireless security-profiles find name="arofi-open"]]>0) do={/interface wireless security-profiles set [/interface wireless security-profiles find name="arofi-open"] mode=none authentication-types=""} else={/interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""}`
 
     return [
       ...this.parseGuard('/interface wireless cap set enabled=no', 'AROFi: no wireless CAP menu - skipped.'),

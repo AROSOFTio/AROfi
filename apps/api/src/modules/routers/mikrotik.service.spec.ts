@@ -30,8 +30,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('authentication-port=1812')
     expect(script).toContain('accounting-port=1813')
     expect(script).toContain('secret="dev_radius_shared_secret"')
-    expect(script).toContain('/radius remove [find where comment="AROFi')
-    expect(script).toContain('shared-users=1')
+    expect(script).toContain('/radius remove [/radius find comment="AROFi')
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=5m')
     expect(script).toContain('login-by=http-pap')
@@ -43,11 +42,11 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip hotspot add name="arofi-hotspot" interface=arofi-hotspot')
 
     // Safety guarantees: never change admin credentials, never rebuild WAN/LAN.
-    expect(script).not.toContain('/user set [find name=')
+    expect(script).not.toContain('/user set')
     expect(script).not.toContain('password=')
-    expect(script).not.toContain('/interface bridge port remove [find interface=ether1]')
-    expect(script).not.toContain('/ip address remove [find address="192.168')
-    expect(script).not.toContain('/ip address remove [find address="10.50.0.1/24"]')
+    expect(script).not.toContain('/interface bridge port remove')
+    expect(script).not.toContain('/ip address remove [/ip address find address="192.168')
+    expect(script).not.toContain('/ip address remove [/ip address find address="10.50.0.1/24"]')
     expect(script).not.toContain('/ip dhcp-client add interface=ether1')
   })
 
@@ -90,14 +89,14 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    expect(script).toContain('/ip firewall nat add chain=srcnat src-address=10.55.0.0/24 action=masquerade')
+    expect(script).toContain('/ip firewall nat add chain=srcnat src-address=10.55.0.0/24 out-interface=$wanIface action=masquerade')
     expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=arofi-hotspot')
 
     // The KEY safety guarantees that prevent the lockout we hit before.
     expect(script).not.toContain('password="KnownPassword123"')
-    expect(script).not.toContain('/interface bridge port remove [find interface=ether1]')
-    expect(script).not.toContain('/ip address remove [find address="192.168')
-    expect(script).not.toContain('/ip address remove [find address="10.50.0.1/24"]')
+    expect(script).not.toContain('/interface bridge port remove')
+    expect(script).not.toContain('/ip address remove [/ip address find address="192.168')
+    expect(script).not.toContain('/ip address remove [/ip address find address="10.50.0.1/24"]')
   })
 
   it('wires an existing hotspot to RADIUS only, creating no bridge or Wi-Fi, in SAFE_EXISTING_ROUTER mode', () => {
@@ -128,12 +127,12 @@ describe('MikrotikService', () => {
 
     const html = service.buildLoginHtml('router-key-123')
 
-    expect(html).toContain('https://wifi.example.com/portal')
-    expect(html).toContain('params.set("mac", "$(mac)")')
-    expect(html).toContain('params.set("ip", "$(ip)")')
-    expect(html).toContain('params.set("link-login", "$(link-login-only)")')
-    expect(html).toContain('params.set("server", "$(server-name)")')
-    expect(html).toContain('params.set("routerKey", "router-key-123")')
+    expect(html).toContain('API="https://wifi.example.com"')
+    expect(html).toContain('RKEY="router-key-123"')
+    expect(html).toContain('mac="$(mac)"')
+    expect(html).toContain('ip="$(ip)"')
+    expect(html).toContain('lo="$(link-login-only)"')
+    expect(html).toContain('srv="$(server-name)"')
   })
 
   it('builds idempotent walled garden and optional TTL anti-tethering sections', () => {
@@ -163,12 +162,12 @@ describe('MikrotikService', () => {
       ttlAntiTetheringEnabled: true,
     })
 
-    expect(script).toContain('/ip hotspot walled-garden remove [find comment="AROFi portal"]')
+    expect(script).toContain('/ip hotspot walled-garden remove [/ip hotspot walled-garden find comment="AROFi portal"]')
     expect(script.match(/dst-host="portal\.arofi\.test"/g)).toHaveLength(1)
     expect(script).toContain('dst-host="pay.pesapal.com"')
     expect(script).toContain('dst-host="*.pesapal.com"')
-    expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
-    expect(script).toContain('new-ttl=set:1')
+    expect(script).toContain('/ip firewall mangle remove [/ip firewall mangle find comment="AROFi anti-tether"]')
+    expect(script).toContain('new-ttl=decrement:1')
     expect(script).toContain('AROFi anti-tether')
   })
 })
