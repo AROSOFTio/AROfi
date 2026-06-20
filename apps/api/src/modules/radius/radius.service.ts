@@ -123,10 +123,16 @@ export class RadiusService {
   }
 
   async recordAuthEvent(dto: RecordRadiusAuthEventDto) {
-    const router = await this.resolveRouter(dto.routerId, dto.nasIpAddress)
+    let router = await this.resolveRouter(dto.routerId, dto.nasIpAddress)
 
     if (router && router.tenantId !== dto.tenantId) {
       throw new BadRequestException('Router does not belong to the tenant')
+    }
+
+    // Auto-learn NAS IP from the first real RADIUS packet when no router matched
+    if (!router && dto.nasIpAddress && dto.tenantId) {
+      await this.autoLearnNasIp(dto.nasIpAddress, dto.tenantId)
+      router = await this.resolveRouter(undefined, dto.nasIpAddress)
     }
 
     if (dto.accepted) {
@@ -717,5 +723,30 @@ export class RadiusService {
 
   private toJsonValue(value: Record<string, unknown>) {
     return JSON.parse(JSON.stringify(value))
+  }
+
+  private async autoLearnNasIp(nasIpAddress: string, tenantId: string) {
+    const router = await this.prisma.router.findFirst({
+      where: { tenantId, radiusNasIpAddress: null },
+      orderBy: { lastSeenAt: 'desc' },
+    })
+    if (!router) return
+
+    await this.prisma.router.update({
+      where: { id: router.id },
+      data: { radiusNasIpAddress: nasIpAddress },
+    })
+
+    this.logger.log(`Auto-learned NAS IP ${nasIpAddress} for router ${router.id} (${router.name})`)
+
+    const { exec } = require('child_process')
+    const strategies = [
+      'echo "hup" | radmin -S /var/run/radiusd/radiusd.sock 2>/dev/null',
+      'docker kill --signal=HUP $(docker ps -qf label=com.docker.compose.service=freeradius) 2>/dev/null',
+      'docker kill --signal=HUP $(docker ps -qf name=freeradius) 2>/dev/null',
+      'kill -HUP $(cat /var/run/radiusd/radiusd.pid) 2>/dev/null',
+      'systemctl reload freeradius 2>/dev/null',
+    ]
+    exec(strategies.join(' || '), () => {})
   }
 }

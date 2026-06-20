@@ -171,7 +171,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
-      select: { id: true, status: true, radiusNasIpAddress: true },
+      select: { id: true, status: true, onboardingStatus: true, radiusNasIpAddress: true },
     })
 
     if (!router) {
@@ -179,11 +179,20 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const normalizedSourceIp = sourceIp.trim()
+    const pendingStatuses: RouterOnboardingStatus[] = [
+      RouterOnboardingStatus.SCRIPT_GENERATED,
+      RouterOnboardingStatus.WAITING_FOR_ROUTER,
+    ]
+    const shouldAdvanceOnboarding = pendingStatuses.includes(router.onboardingStatus as RouterOnboardingStatus)
+
     await this.prisma.router.update({
       where: { id: router.id },
       data: {
         lastSeenAt: new Date(),
-        ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.HEALTHY } : {}),
+        ...(shouldAdvanceOnboarding
+          ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
+          : {}),
+        ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.DEGRADED } : {}),
         ...(normalizedSourceIp && !router.radiusNasIpAddress
           ? { radiusNasIpAddress: normalizedSourceIp }
           : {}),
@@ -915,21 +924,22 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return this.getRouterSetup(router.id, tenantId)
   }
 
-  private reloadFreeradiusNasClients(): void {
+  reloadFreeradiusNasClients(): void {
     const { exec } = require('child_process')
-    exec(
-      'docker kill --signal=HUP $(docker ps -qf name=freeradius) 2>/dev/null || true',
-      (err: Error | null) => {
-        if (err) {
-          this.logger.warn(
-            'Could not send HUP to FreeRADIUS. New NAS client may ' +
-              'not be active until FreeRADIUS restarts. Error: ' + err.message,
-          )
-        } else {
-          this.logger.log('FreeRADIUS NAS client reload signal sent.')
-        }
-      },
-    )
+    const strategies = [
+      'echo "hup" | radmin -S /var/run/radiusd/radiusd.sock 2>/dev/null',
+      'docker kill --signal=HUP $(docker ps -qf label=com.docker.compose.service=freeradius) 2>/dev/null',
+      'docker kill --signal=HUP $(docker ps -qf name=freeradius) 2>/dev/null',
+      'kill -HUP $(cat /var/run/radiusd/radiusd.pid) 2>/dev/null',
+      'systemctl reload freeradius 2>/dev/null',
+    ]
+    exec(strategies.join(' || '), (err: Error | null) => {
+      if (err) {
+        this.logger.warn(`FreeRADIUS reload failed: ${err.message}`)
+      } else {
+        this.logger.log('FreeRADIUS NAS reload signal sent.')
+      }
+    })
   }
 
   private getPlatformRadiusSharedSecret() {

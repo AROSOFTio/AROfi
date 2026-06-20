@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { RouterItem, RouterOverviewResponse } from '@/lib/admin-types'
 import { clientFetchApi } from '@/lib/client-api'
+import { RouterOnboardingSteps } from '@/components/RouterOnboardingSteps'
 
 function formatRouterSignal(router?: RouterItem | null) {
   if (!router?.lastSignalSource || typeof router.secondsSinceLastSignal !== 'number') {
@@ -61,6 +62,11 @@ export default function LiveRouterStatusCard({ initialRouters }: { initialRouter
         </div>
         <a href="/routers" className="btn btn-ghost">{routers.length > 0 ? 'Open Routers' : 'Connect Router'}</a>
       </div>
+      {primaryRouter?.onboardingStatus && primaryRouter.onboardingStatus !== 'VERIFIED_ONLINE' && (
+        <div style={{ padding: '0 20px 16px' }}>
+          <RouterOnboardingSteps onboardingStatus={primaryRouter.onboardingStatus} />
+        </div>
+      )}
     </div>
   )
 }

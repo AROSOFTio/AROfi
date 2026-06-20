@@ -1,4 +1,4 @@
-import { Controller, Get, Header, NotFoundException, Param, Req } from '@nestjs/common';
+import { Controller, Get, Header, NotFoundException, Param, Query, Req } from '@nestjs/common';
 import { RoutersService } from './routers.service';
 
 @Controller('mikrotik')
@@ -26,8 +26,14 @@ export class MikrotikController {
   }
 
   @Get('provisioned/:key')
-  async markProvisioned(@Param('key') key: string, @Req() request: any) {
-    const sourceIp = this.resolveSourceIp(request);
+  async markProvisioned(
+    @Param('key') key: string,
+    @Req() request: any,
+    @Query('nasIp') selfReportedNasIp?: string,
+  ) {
+    const httpSourceIp = this.resolveSourceIp(request);
+    // Prefer the router's self-reported WAN IP — more accurate behind CGNAT
+    const sourceIp = selfReportedNasIp?.trim() || httpSourceIp;
     const result = await this.routersService.markRouterProvisionedByKey(key, sourceIp);
     if (!result) {
       throw new NotFoundException('Router registration key not found');

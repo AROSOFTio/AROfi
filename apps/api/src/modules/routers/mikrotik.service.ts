@@ -21,6 +21,7 @@ type ProvisioningInput = {
   hotspotServerName?: string | null
   portalHosts?: string[]
   ttlAntiTetheringEnabled?: boolean
+  deviceLimit?: number | null
   mode?: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT' | 'FRESH_FULL_CAPTIVE_WIFI'
   hotspotNetworkName?: string | null
   portalBaseUrl?: string | null
@@ -132,6 +133,7 @@ export class MikrotikService {
     const profileName = `arofi-${registrationKey.slice(0, 8)}`
     const ssid = (input.hotspotNetworkName || input.routerName || 'AROFi Free WiFi').slice(0, 32)
     const hotspotName = input.hotspotServerName || 'arofi-hotspot'
+    const addressesPerMac = Math.min(Math.max(input.deviceLimit ?? 1, 1), 5)
     // Isolated hotspot subnet. Chosen to avoid the common 192.168.88.x / 10.0.0.x
     // ranges so it does not clash with the operator's existing LAN/management.
     const gatewayIp = '10.55.0.1'
@@ -146,7 +148,7 @@ export class MikrotikService {
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
     const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
-    const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl)
+    const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl, profileName)
 
     // SAFE_EXISTING_ROUTER = the operator already has a working HotSpot; we only
     // wire it to AROFi RADIUS/portal. Any other mode builds a fresh customer
@@ -193,14 +195,12 @@ export class MikrotikService {
       ...loginHtmlInstallScript,
     ]
 
-    const antiTether = input.ttlAntiTetheringEnabled
-      ? [
-          ``,
-          `# Optional TTL anti-tethering`,
-          `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
-          `/ip firewall mangle add chain=forward action=change-ttl new-ttl=set:1 passthrough=yes comment="AROFi anti-tether"`,
-        ]
-      : []
+    const antiTether = [
+      ``,
+      `# TTL anti-tethering (always on — prevents hotspot-behind-hotspot NAT abuse)`,
+      `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
+      `/ip firewall mangle add chain=prerouting action=change-ttl new-ttl=decrement:1 passthrough=yes in-interface=arofi-hotspot comment="AROFi anti-tether"`,
+    ]
 
     const telemetry = [
       ``,
@@ -245,22 +245,35 @@ export class MikrotikService {
       `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
-      `/ip dns set allow-remote-requests=yes`,
-      `/ip dns set servers=1.1.1.1,8.8.8.8`,
+      `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
+      ``,
+      `# Detect WAN interface dynamically so NAT works on any router model`,
+      `:local wanIface ""`,
+      `:do { :set wanIface [/ip route get [find dst-address=0.0.0.0/0] gateway-interface] } on-error={}`,
       `/ip firewall nat remove [find comment="AROFi hotspot nat"]`,
-      `/ip firewall nat add chain=srcnat src-address=${subnet} action=masquerade comment="AROFi hotspot nat"`,
-      `# Allow authenticated hotspot clients to actually reach the internet. On`,
-      `# boards with a default drop-everything-else forward firewall, hotspot`,
-      `# traffic would otherwise be dropped and a logged-in customer sees`,
-      `# "address unreachable" instead of the web.`,
+      `:if ($wanIface != "") do={`,
+      `  /ip firewall nat add chain=srcnat src-address=${subnet} out-interface=$wanIface action=masquerade comment="AROFi hotspot nat"`,
+      `} else={`,
+      `  /ip firewall nat add chain=srcnat src-address=${subnet} action=masquerade comment="AROFi hotspot nat"`,
+      `}`,
+      ``,
+      `# Firewall: allow DNS and gateway access from hotspot clients (input chain, before any drop)`,
+      `/ip firewall filter remove [find comment="AROFi hotspot input"]`,
+      `/ip firewall filter add chain=input action=accept src-address=${subnet} protocol=udp dst-port=53 comment="AROFi hotspot input"`,
+      `/ip firewall filter add chain=input action=accept src-address=${subnet} protocol=tcp dst-port=53 comment="AROFi hotspot input"`,
+      `/ip firewall filter add chain=input action=accept src-address=${subnet} dst-address=${gatewayIp} comment="AROFi hotspot input"`,
+      `:foreach r in=[/ip firewall filter find comment="AROFi hotspot input"] do={ /ip firewall filter move $r destination=0 }`,
+      ``,
+      `# Firewall: allow hotspot clients forward (must be before any DROP rule)`,
       `/ip firewall filter remove [find comment="AROFi hotspot forward"]`,
-      `:do { /ip firewall filter add chain=forward action=accept src-address=${subnet} comment="AROFi hotspot forward" place-before=0 } on-error={ /ip firewall filter add chain=forward action=accept src-address=${subnet} comment="AROFi hotspot forward" }`,
-      `:do { /ip firewall filter add chain=forward action=accept dst-address=${subnet} connection-state=established,related comment="AROFi hotspot forward" place-before=0 } on-error={ /ip firewall filter add chain=forward action=accept dst-address=${subnet} connection-state=established,related comment="AROFi hotspot forward" }`,
+      `/ip firewall filter add chain=forward action=accept src-address=${subnet} comment="AROFi hotspot forward"`,
+      `/ip firewall filter add chain=forward action=accept dst-address=${subnet} connection-state=established,related comment="AROFi hotspot forward"`,
+      `:foreach r in=[/ip firewall filter find comment="AROFi hotspot forward"] do={ /ip firewall filter move $r destination=0 }`,
       ``,
       `# 3e. Create the HotSpot server on the isolated bridge`,
       `/ip hotspot profile set [find name="${profileName}"] hotspot-address=${gatewayIp}`,
       `/ip hotspot remove [find interface=arofi-hotspot]`,
-      `/ip hotspot add name="${this.escape(hotspotName)}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=2 disabled=no`,
+      `/ip hotspot add name="${this.escape(hotspotName)}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
       ...walledGarden,
       ...antiTether,
       ...telemetry,
@@ -313,13 +326,19 @@ export class MikrotikService {
   private buildProvisioningCallbackScript(callbackUrl: string, fallbackCallbackUrl: string) {
     return [
       `:delay 3s`,
+      `:local nasIp ""`,
       `:do {`,
-      `  /tool fetch url="${callbackUrl}" check-certificate=no mode=https keep-result=no`,
-      `  :put "AROFi provisioning callback sent."`,
+      `  :local wanIface [/ip route get [find dst-address=0.0.0.0/0] gateway-interface]`,
+      `  :local rawAddr [/ip address get [find interface=$wanIface] address]`,
+      `  :set nasIp [:pick $rawAddr 0 [:find $rawAddr "/"]]`,
+      `} on-error={}`,
+      `:do {`,
+      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" check-certificate=no mode=https keep-result=no`,
+      `  :put "AROFi provisioning callback sent (NAS IP: $nasIp)."`,
       `} on-error={`,
       `  :do {`,
-      `    /tool fetch url="${fallbackCallbackUrl}" mode=http keep-result=no`,
-      `    :put "AROFi provisioning callback sent by HTTP fallback."`,
+      `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" mode=http keep-result=no`,
+      `    :put "AROFi provisioning callback sent by HTTP fallback (NAS IP: $nasIp)."`,
       `  } on-error={`,
       `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
       `  }`,
@@ -327,19 +346,28 @@ export class MikrotikService {
     ]
   }
 
-  private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string) {
+  private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string, profileName?: string) {
+    const profileSet = profileName
+      ? [`/ip hotspot profile set [find name="${this.escape(profileName)}"] html-directory=hotspot`]
+      : []
     return [
       `:do {`,
       `  /tool fetch url="${loginHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/login.html"`,
-      `  :put "AROFi HotSpot login.html installed."`,
+      `  :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
+      `    :put "AROFi HotSpot login.html installed."`,
+      `  } else={`,
+      `    :error "login.html not found after fetch"`,
+      `  }`,
       `} on-error={`,
       `  :do {`,
       `    /tool fetch url="${fallbackLoginHtmlUrl}" mode=http dst-path="hotspot/login.html"`,
       `    :put "AROFi HotSpot login.html installed by HTTP fallback."`,
       `  } on-error={`,
-      `    :put "Warning: could not install AROFi hotspot/login.html. Customers will not auto-open the AROFi portal until this file is installed."`,
+      `    :put "WARNING: login.html install FAILED — portal will show MikroTik default UI."`,
+      `    :put "Fix: /tool fetch url=\\"${loginHtmlUrl}\\" dst-path=\\"hotspot/login.html\\""`,
       `  }`,
       `}`,
+      ...profileSet,
     ]
   }
 

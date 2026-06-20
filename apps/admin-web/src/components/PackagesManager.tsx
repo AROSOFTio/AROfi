@@ -232,8 +232,18 @@ export default function PackagesManager() {
                 <input className="form-input" type="number" min={1} value={formState.dataLimitMb} onChange={(event) => setFormState((previous) => ({ ...previous, dataLimitMb: event.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Device Limit (optional)</label>
-                <input className="form-input" type="number" min={1} value={formState.deviceLimit} onChange={(event) => setFormState((previous) => ({ ...previous, deviceLimit: event.target.value }))} />
+                <label className="form-label">Max devices per session</label>
+                <select
+                  className="form-input"
+                  value={formState.deviceLimit}
+                  onChange={(event) => setFormState((previous) => ({ ...previous, deviceLimit: event.target.value }))}
+                >
+                  <option value="1">1 device — no sharing (default)</option>
+                  <option value="2">2 devices — couple / family</option>
+                  <option value="3">3 devices</option>
+                  <option value="4">4 devices</option>
+                  <option value="5">5 devices — max allowed</option>
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Download Kbps (optional)</label>

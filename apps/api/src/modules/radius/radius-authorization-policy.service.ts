@@ -77,6 +77,36 @@ export class RadiusAuthorizationPolicyService {
       return { accepted: false, reason: 'Credential is already bound to another device', activation }
     }
 
+    const deviceLimit = activation.package?.deviceLimit ?? 1
+
+    if (deviceLimit > 1) {
+      // Multi-device package: count distinct active MACs
+      const activeMacRows = await tx.networkSession.findMany({
+        where: {
+          activationId: activation.id,
+          status: SessionStatus.ACTIVE,
+          NOT: { macAddress: null },
+        },
+        select: { macAddress: true },
+        distinct: ['macAddress'],
+      })
+      const activeMacs = new Set(
+        activeMacRows.map((r) => this.normalizeMac(r.macAddress)).filter(Boolean),
+      )
+      if (!activeMacs.has(observedMac) && activeMacs.size >= deviceLimit) {
+        await this.recordSuspicious(
+          tx, activation, input,
+          SuspiciousAccessAttemptType.SECOND_DEVICE,
+          `Device limit (${deviceLimit}) reached. Active MACs: ${activeMacs.size}`,
+        )
+        return {
+          accepted: false,
+          reason: `Maximum ${deviceLimit} device(s) already connected on this plan`,
+          activation,
+        }
+      }
+    }
+
     const activeSession = await tx.networkSession.findFirst({
       where: {
         activationId: activation.id,
