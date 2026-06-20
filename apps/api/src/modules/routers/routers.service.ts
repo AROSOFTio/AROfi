@@ -189,7 +189,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const normalizedSourceIp = sourceIp.trim()
-    const learnedNewIp = normalizedSourceIp && !router.radiusNasIpAddress
+    const learnedNewIp = normalizedSourceIp && router.radiusNasIpAddress !== normalizedSourceIp
     const pendingStatuses: RouterOnboardingStatus[] = [
       RouterOnboardingStatus.SCRIPT_GENERATED,
       RouterOnboardingStatus.WAITING_FOR_ROUTER,
@@ -204,7 +204,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
           : {}),
         ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.DEGRADED } : {}),
-        ...(normalizedSourceIp && !router.radiusNasIpAddress
+        ...(normalizedSourceIp && router.radiusNasIpAddress !== normalizedSourceIp
           ? { radiusNasIpAddress: normalizedSourceIp }
           : {}),
       },
