@@ -378,8 +378,66 @@ export class MikrotikService {
   // Moves a Wi-Fi interface onto the isolated arofi-hotspot bridge whether or
   // not it is currently a bridge port elsewhere (e.g. the operator's LAN).
   buildLoginHtml(registrationKey: string, portalBaseUrl?: string | null) {
-    const apiBaseUrl = this.escapeHtml(this.resolveApiBaseUrl())
     const escapedKey = this.escapeHtml(registrationKey)
+    const resolvedPortalUrl = this.escapeHtml(portalBaseUrl ?? this.resolvePortalBaseUrl())
+
+    // Lightweight redirect page — delegates ALL UX to the portal webapp.
+    // MikroTik substitutes $(mac), $(ip), $(link-login-only), $(link-orig),
+    // $(server-name) before sending this HTML to the browser.
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AROFi Hotspot</title>
+  <style>
+    body{margin:0;background:#f0fdf4;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;}
+    .ring{width:44px;height:44px;border:3px solid #d1fae5;border-top-color:#10b981;border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="ring"></div>
+  <!-- MikroTik posts credentials here after RADIUS auth grants access -->
+  <form id="lf" method="POST" action="$(link-login-only)" style="display:none">
+    <input type="hidden" id="lu" name="username">
+    <input type="hidden" id="lp" name="password">
+    <input type="hidden" name="dst" value="$(link-orig)">
+    <input type="hidden" name="popup" value="false">
+  </form>
+  <script>
+    (function(){
+      var p=new URLSearchParams(window.location.search);
+      var u=p.get('username'),pw=p.get('password');
+      if(u&&pw){
+        // Auto-connect: portal webapp navigated here with creds — submit to MikroTik
+        document.getElementById('lu').value=u;
+        document.getElementById('lp').value=pw;
+        document.getElementById('lf').submit();
+        return;
+      }
+      // Redirect to portal webapp, passing all MikroTik hotspot params
+      var base='${resolvedPortalUrl}';
+      var url=new URL(base.indexOf('://')!==-1?base:'https://'+base);
+      var mac='$(mac)',ip='$(ip)',lo='$(link-login-only)',orig='$(link-orig)',srv='$(server-name)';
+      // MikroTik replaces variables; if unreplaced they start with '$'
+      if(mac&&mac.charAt(0)!=='\$') url.searchParams.set('mac',mac);
+      if(ip&&ip.charAt(0)!=='\$') url.searchParams.set('ip',ip);
+      if(lo&&lo.charAt(0)!=='\$') url.searchParams.set('link-login',lo);
+      if(orig&&orig.charAt(0)!=='\$') url.searchParams.set('dst',orig);
+      if(srv&&srv.charAt(0)!=='\$') url.searchParams.set('server',srv);
+      url.searchParams.set('routerKey','${escapedKey}');
+      window.location.replace(url.toString());
+    })();
+  </script>
+</body>
+</html>`
+  }
+
+  private _legacyLoginHtmlBody(registrationKey: string, portalBaseUrl?: string | null) {
+    // Dead stub — the real redirect portal is buildLoginHtml() above.
+    const apiBaseUrl = ''
+    const escapedKey = ''
 
     return `<!doctype html>
 <html>
