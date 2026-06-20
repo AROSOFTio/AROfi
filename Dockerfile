@@ -22,12 +22,28 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy source code
 COPY . .
 
-# Generate Prisma Client and build all packages using Turbo.
-# Build one app at a time (--concurrency=1) and cap Node heap so the build
-# stays within the RAM of a small (4GB) server instead of OOM-killing other
-# containers (including Coolify's own services).
+# Generate Prisma Client
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
-RUN NODE_OPTIONS='--max-old-space-size=900' NEXT_CPU_LIMIT=1 npx turbo run build --concurrency=1
+
+# Build apps sequentially so heap is fully released between each build.
+# NODE_OPTIONS is exported so child workers (webpack, SWC) inherit the cap.
+# Suppress interactive telemetry prompts in CI.
+ENV TURBO_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build portal-web first (smaller app)
+RUN export NODE_OPTIONS='--max-old-space-size=700' && \
+    export NEXT_CPU_LIMIT=1 && \
+    npx turbo run build --filter=arofi-portal --concurrency=1
+
+# Build admin-web second (largest app — own dedicated step for memory isolation)
+RUN export NODE_OPTIONS='--max-old-space-size=700' && \
+    export NEXT_CPU_LIMIT=1 && \
+    npx turbo run build --filter=arofi-admin --concurrency=1
+
+# Build API last
+RUN export NODE_OPTIONS='--max-old-space-size=700' && \
+    npx turbo run build --filter=arofi-api --concurrency=1
 
 # Runtime stage
 FROM node:20-alpine AS runtime

@@ -2,9 +2,7 @@
 const nextConfig = {
     reactStrictMode: true,
     basePath: '/portal',
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
+    // TypeScript errors are caught in CI; skip slow type-check during Docker build.
     typescript: {
         ignoreBuildErrors: true,
     },
