@@ -45,6 +45,12 @@ RUN export NODE_OPTIONS='--max-old-space-size=700' && \
 RUN export NODE_OPTIONS='--max-old-space-size=700' && \
     npx turbo run build --filter=arofi-api --concurrency=1
 
+# Prune development dependencies to make production node_modules as small as possible
+RUN npm prune --omit=dev --legacy-peer-deps
+
+# Remove Next.js build caches and other non-production files to shrink the final layer
+RUN rm -rf apps/admin-web/.next/cache apps/portal-web/.next/cache .turbo .git .github docs
+
 # Runtime stage
 FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
