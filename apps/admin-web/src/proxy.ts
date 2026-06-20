@@ -6,7 +6,7 @@ function isPublicPath(pathname: string) {
   return pathname === '/' || pathname === '/login' || pathname === '/register' || pathname.startsWith('/_next') || pathname === '/favicon.ico'
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get(adminAuthCookieName)?.value
 
