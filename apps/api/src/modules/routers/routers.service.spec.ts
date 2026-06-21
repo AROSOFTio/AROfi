@@ -21,7 +21,7 @@ describe('RoutersService', () => {
       encrypt: jest.fn((value: string) => `encrypted:${value}`),
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never)
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, {} as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
     jest.spyOn(service, 'getRouterSetup').mockResolvedValue({ id: 'router-1' } as never)
 
@@ -110,7 +110,7 @@ describe('RoutersService', () => {
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
       maskCiphertext: jest.fn(() => '********'),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never)
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, {} as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
 
     return { service, prisma, tx, credentials }
@@ -322,5 +322,120 @@ describe('RoutersService', () => {
 
     await expect(service.markRouterProvisionedByKey('missing-key', '102.209.111.77')).resolves.toBeNull()
     expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  describe('runDeploymentTest', () => {
+    function buildHarness() {
+      const tx = {
+        packageActivation: {
+          create: jest.fn().mockResolvedValue({ id: 'activation-1' }),
+          delete: jest.fn().mockResolvedValue({}),
+        },
+      }
+      const prisma = {
+        router: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'router-1', tenantId: 'tenant-1', name: 'Shop Router' }),
+        },
+        package: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'package-1' }),
+        },
+        $transaction: jest.fn((callback: any) => callback(tx)),
+      }
+      const credentials = { encrypt: jest.fn(), decrypt: jest.fn(), mask: jest.fn() }
+      const mikrotik = {
+        getRadiusServerConfig: jest.fn().mockReturnValue({
+          host: 'radius.example.com',
+          authPort: 1812,
+          accountingPort: 1813,
+          sharedSecret: 'platform-secret',
+        }),
+      }
+      const radiusCredentials = {
+        provisionForActivation: jest.fn().mockResolvedValue({
+          username: 'arofi-voucher-test123',
+          password: 'generated-password',
+          status: 'ACTIVE',
+        }),
+        disableForActivation: jest.fn().mockResolvedValue({}),
+      }
+      const radiusProbe = { sendAccessRequest: jest.fn() }
+
+      const service = new RoutersService(
+        prisma as never,
+        mikrotik as never,
+        credentials as never,
+        radiusCredentials as never,
+        radiusProbe as never,
+      )
+
+      return { service, prisma, tx, radiusCredentials, radiusProbe }
+    }
+
+    it('reports overallOk=true and cleans up the synthetic credential on Access-Accept', async () => {
+      const { service, tx, radiusCredentials, radiusProbe } = buildHarness()
+      radiusProbe.sendAccessRequest.mockResolvedValue({ accepted: true, code: 2, latencyMs: 42 })
+
+      const result = await service.runDeploymentTest('router-1', 'tenant-1')
+
+      expect(result.overallOk).toBe(true)
+      expect(result.steps).toEqual([
+        expect.objectContaining({ name: 'voucher_provisioned', ok: true }),
+        expect.objectContaining({ name: 'radius_access_request', ok: true }),
+      ])
+      expect(radiusProbe.sendAccessRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          username: 'arofi-voucher-test123',
+          password: 'generated-password',
+          nasIp: '203.0.113.1',
+        }),
+      )
+      // Cleanup must always run so the synthetic test never leaves a real,
+      // billable-looking credential or activation behind.
+      expect(radiusCredentials.disableForActivation).toHaveBeenCalledWith(tx, 'activation-1', 'DISABLED')
+      expect(tx.packageActivation.delete).toHaveBeenCalledWith({ where: { id: 'activation-1' } })
+    })
+
+    it('reports overallOk=false on Access-Reject but still cleans up', async () => {
+      const { service, radiusCredentials, radiusProbe } = buildHarness()
+      radiusProbe.sendAccessRequest.mockResolvedValue({ accepted: false, code: 3, latencyMs: 30 })
+
+      const result = await service.runDeploymentTest('router-1', 'tenant-1')
+
+      expect(result.overallOk).toBe(false)
+      expect(result.steps[1]).toMatchObject({ name: 'radius_access_request', ok: false })
+      expect(radiusCredentials.disableForActivation).toHaveBeenCalled()
+    })
+
+    it('fails closed with a clear message and no RADIUS attempt when no active package exists', async () => {
+      const { service, prisma, radiusProbe } = buildHarness()
+      prisma.package.findFirst.mockResolvedValue(null)
+
+      const result = await service.runDeploymentTest('router-1', 'tenant-1')
+
+      expect(result.overallOk).toBe(false)
+      expect(result.steps).toEqual([
+        expect.objectContaining({ name: 'voucher_provisioned', ok: false }),
+      ])
+      expect(radiusProbe.sendAccessRequest).not.toHaveBeenCalled()
+    })
+
+    it('still cleans up when the RADIUS server is unreachable', async () => {
+      const { service, radiusCredentials, radiusProbe } = buildHarness()
+      radiusProbe.sendAccessRequest.mockRejectedValue(new Error('did not respond within 5000ms'))
+
+      const result = await service.runDeploymentTest('router-1', 'tenant-1')
+
+      expect(result.overallOk).toBe(false)
+      expect(result.steps[1]).toMatchObject({ name: 'radius_access_request', ok: false })
+      expect(result.steps[1].detail).toContain('did not respond within 5000ms')
+      expect(radiusCredentials.disableForActivation).toHaveBeenCalled()
+    })
+
+    it('throws NotFoundException for a router outside the caller tenant scope', async () => {
+      const { service, prisma } = buildHarness()
+      prisma.router.findUnique.mockResolvedValue({ id: 'router-1', tenantId: 'tenant-other', name: 'Other' })
+
+      await expect(service.runDeploymentTest('router-1', 'tenant-1')).rejects.toThrow('Router not found')
+    })
   })
 })

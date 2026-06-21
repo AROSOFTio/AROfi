@@ -78,5 +78,12 @@ export class RoutersController {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.routersService.rotateRadiusSecret(routerId, tenantId)
   }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post(':routerId/run-deployment-test')
+  runDeploymentTest(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.runDeploymentTest(routerId, tenantId)
+  }
 }
 

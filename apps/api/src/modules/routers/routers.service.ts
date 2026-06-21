@@ -9,7 +9,11 @@ import {
   OnModuleInit,
 } from '@nestjs/common'
 import {
+  PackageActivationSource,
+  PackageActivationStatus,
+  PackageStatus,
   Prisma,
+  RadiusCredentialStatus,
   RadiusEventType,
   RouterConnectionMode,
   RouterOnboardingStatus,
@@ -19,6 +23,8 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { RadiusCredentialService } from '../radius/radius-credential.service'
+import { RadiusProbeService } from '../radius/radius-probe.service'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { MikrotikService } from './mikrotik.service'
@@ -108,10 +114,19 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     },
   }
 
+  // A reserved RFC 5737 TEST-NET address, never assignable to a real router.
+  // Synthetic deployment tests tag their NAS-IP-Address with this so they can
+  // never be mistaken for (or accidentally attributed to) real router traffic
+  // in any nasIpAddress-keyed lookup elsewhere in the system.
+  private readonly syntheticTestNasIp = '203.0.113.1'
+  private readonly syntheticTestCustomerReference = 'AROFI_SYNTHETIC_TEST'
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mikrotikService: MikrotikService,
     private readonly routerCredentialsService: RouterCredentialsService,
+    private readonly radiusCredentialService: RadiusCredentialService,
+    private readonly radiusProbeService: RadiusProbeService,
   ) {}
 
   onModuleInit() {
@@ -1092,6 +1107,131 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       refreshedAt: new Date(),
       instruction:
         'To refresh on-device HotSpot/DHCP/NAT/file checks, rerun the MikroTik provisioning command so the router posts a new self-test report.',
+    }
+  }
+
+  // A real, protocol-level end-to-end test: provisions a genuine RADIUS
+  // credential (the same code path a real voucher redemption uses) and sends
+  // an actual Access-Request to the live FreeRADIUS server. An Access-Accept
+  // here proves "if this router reaches RADIUS with the right secret, a
+  // voucher would authenticate" — it does NOT prove the router-to-RADIUS
+  // network hop, the captive portal, or that a phone gets real internet.
+  // Those remain gated on real signals (radiusAuthSeen/accountingSeen)
+  // exactly as before; this is a fast pre-flight, not a replacement for them.
+  // The NAS-IP-Address is tagged with a reserved TEST-NET sentinel so this
+  // can never be mistaken for real router traffic by any nasIpAddress-keyed
+  // lookup elsewhere in the system (see syntheticTestNasIp above).
+  async runDeploymentTest(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+      select: { id: true, tenantId: true, name: true },
+    })
+
+    if (!router || (tenantId && router.tenantId !== tenantId)) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const steps: Array<{ name: string; ok: boolean; detail: string }> = []
+    const startedAt = Date.now()
+    let activationId: string | null = null
+
+    try {
+      const testPackage = await this.prisma.package.findFirst({
+        where: { tenantId: router.tenantId, status: PackageStatus.ACTIVE },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      if (!testPackage) {
+        steps.push({
+          name: 'voucher_provisioned',
+          ok: false,
+          detail: 'No active package is configured for this tenant — create one before running a deployment test.',
+        })
+        return this.buildDeploymentTestResult(router.id, steps, startedAt)
+      }
+
+      const now = new Date()
+      const credential = await this.prisma.$transaction(async (tx) => {
+        const activation = await tx.packageActivation.create({
+          data: {
+            tenantId: router.tenantId,
+            packageId: testPackage.id,
+            routerId: router.id,
+            source: PackageActivationSource.VOUCHER,
+            status: PackageActivationStatus.ACTIVE,
+            customerReference: this.syntheticTestCustomerReference,
+            durationMinutes: 10,
+            startedAt: now,
+            endsAt: new Date(now.getTime() + 10 * 60 * 1000),
+          },
+        })
+        activationId = activation.id
+
+        return this.radiusCredentialService.provisionForActivation(tx, {
+          tenantId: router.tenantId,
+          activationId: activation.id,
+          routerId: router.id,
+        })
+      })
+
+      steps.push({
+        name: 'voucher_provisioned',
+        ok: credential.status === RadiusCredentialStatus.ACTIVE,
+        detail: `Test credential ${credential.username} provisioned against the real radcheck table.`,
+      })
+
+      const radiusServer = this.mikrotikService.getRadiusServerConfig(this.getPlatformRadiusSharedSecret())
+
+      try {
+        const probe = await this.radiusProbeService.sendAccessRequest({
+          host: radiusServer.host,
+          port: radiusServer.authPort,
+          secret: radiusServer.sharedSecret,
+          nasIp: this.syntheticTestNasIp,
+          username: credential.username,
+          password: credential.password,
+          timeoutMs: 5000,
+        })
+
+        steps.push({
+          name: 'radius_access_request',
+          ok: probe.accepted,
+          detail: probe.accepted
+            ? `FreeRADIUS sent Access-Accept in ${probe.latencyMs}ms.`
+            : `FreeRADIUS rejected the test credential (code ${probe.code}). Check that the platform RADIUS shared secret matches what the router is configured with.`,
+        })
+      } catch (error) {
+        steps.push({
+          name: 'radius_access_request',
+          ok: false,
+          detail: `Could not reach RADIUS server ${radiusServer.host}:${radiusServer.authPort} — ${(error as Error).message}`,
+        })
+      }
+
+      return this.buildDeploymentTestResult(router.id, steps, startedAt)
+    } finally {
+      if (activationId) {
+        await this.prisma.$transaction(async (tx) => {
+          await this.radiusCredentialService.disableForActivation(tx, activationId!, RadiusCredentialStatus.DISABLED)
+          await tx.packageActivation.delete({ where: { id: activationId! } }).catch(() => undefined)
+        })
+      }
+    }
+  }
+
+  private buildDeploymentTestResult(
+    routerId: string,
+    steps: Array<{ name: string; ok: boolean; detail: string }>,
+    startedAt: number,
+  ) {
+    return {
+      routerId,
+      overallOk: steps.length > 0 && steps.every((step) => step.ok),
+      latencyMs: Date.now() - startedAt,
+      steps,
+      checkedAt: new Date(),
+      note:
+        'This is a synthetic, protocol-level pre-flight test. It does not replace a real phone redemption — the router only shows ONLINE once a real client has actually authenticated and used data.',
     }
   }
 
