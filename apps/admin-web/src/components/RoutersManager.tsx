@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AdminSessionResponse,
   HotspotOverviewResponse,
@@ -10,6 +10,7 @@ import {
   TenantOverviewResponse,
 } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
+import RouterDeploymentWizard from '@/components/RouterDeploymentWizard'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -99,6 +100,8 @@ function parseHosts(value: string) {
 
 export default function RoutersManager() {
   const searchParams = useSearchParams()
+  const navRouter = useRouter()
+  const [deploymentWizard, setDeploymentWizard] = useState<RouterSetupResponse | null>(null)
   const [overview, setOverview] = useState<RouterOverviewResponse | null>(null)
   const [hotspots, setHotspots] = useState<HotspotOverviewResponse | null>(null)
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
@@ -279,7 +282,6 @@ export default function RoutersManager() {
       })
       setRouterProcessText('Generating RouterOS setup details and refreshing inventory.')
       setSelectedSetup(setup)
-      setSuccess('Router registered successfully. Copy the one-run WinBox command below.')
       setRouterForm((previous) => ({
         ...initialRouterForm(),
         tenantId: previous.tenantId,
@@ -288,6 +290,9 @@ export default function RoutersManager() {
       }))
       await loadData(setup.router.id)
       setRouterModalOpen(false)
+      // Open the guided deployment wizard instead of leaving the operator on a
+      // generic dashboard wondering what to do next.
+      setDeploymentWizard(setup)
     } catch (requestError) {
       const failure = requestError instanceof Error ? requestError.message : 'Unable to register router'
       setError(failure)
@@ -376,6 +381,14 @@ export default function RoutersManager() {
 
   return (
     <>
+      {deploymentWizard && (
+        <RouterDeploymentWizard
+          setup={deploymentWizard}
+          onClose={() => setDeploymentWizard(null)}
+          onOpenDashboard={() => navRouter.push('/routers?view=overview')}
+          onCreateVoucher={() => navRouter.push('/vouchers')}
+        />
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Routers</h1>
@@ -586,7 +599,8 @@ export default function RoutersManager() {
                 <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Paste this one line into WinBox → New Terminal, then press Enter. It will not change your admin login or WAN.</span>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy command</button>
+                <button type="button" className="btn btn-primary" onClick={() => setDeploymentWizard(selectedSetup)}>Open deployment guide</button>
+                <button type="button" className="btn btn-ghost" onClick={() => void copyScript()}>Copy command</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleRotateSecret(selectedSetup.router.id)}>Rotate secret</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleHealthCheck(selectedSetup.router.id)} disabled={runningHealthCheckId === selectedSetup.router.id}>{runningHealthCheckId === selectedSetup.router.id ? 'Checking…' : 'Re-check status'}</button>
               </div>
