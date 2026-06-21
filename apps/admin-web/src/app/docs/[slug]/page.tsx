@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
+import { ArrowLeft, BookOpen, ChevronRight, Menu, Home, CheckCircle2 } from 'lucide-react'
 import DocsCommandBlock from '@/components/DocsCommandBlock'
 
 type DocPage = {
@@ -132,9 +134,138 @@ const docs: Record<string, DocPage> = {
       },
     ],
   },
+  'how-to-start-wifi-business-uganda': {
+    title: 'How to Start a WiFi Hotspot Business in Uganda (Complete 2026 Guide)',
+    intro: 'A step-by-step business and technical guide to launching a profitable wireless hotspot business in Kampala, Wakiso, and across Uganda using the AROFi billing platform.',
+    sections: [
+      {
+        heading: '1. Why Start a WiFi Hotspot Business in Uganda?',
+        body: [
+          'High mobile data costs and fast-growing smartphone adoption make local WiFi hotspots highly profitable. Students, traders, remote workers, and residents are constantly seeking fast, affordable, and unlimited internet connectivity.',
+          'Instead of paying expensive daily bundles, customers prefer buying high-speed local WiFi access. High-density areas such as university hostels (Makerere, MUBS, Kyambogo), local markets (Kitintale, Nakasero), public transit parks, trading centers, and rental apartments are goldmines for WiFi business setups.',
+          'With AROFi, you can set up a fully automated WiFi hotspot that accepts payments via MTN Mobile Money and Airtel Money, operates 24/7 without manual intervention, and issues printed vouchers for physical retail sales.'
+        ]
+      },
+      {
+        heading: '2. Required Hardware and Equipment',
+        body: [
+          'To start, you need the following standard networking equipment:',
+          '1. MikroTik Router: This acts as the gateway, captive portal, and DHCP server. For small venues, a hEX S (RB760iGS) or hAP ac² is perfect. For large hubs or busy markets, use a Cloud Core Router (CCR) or MikroTik CHR on a local server.',
+          '2. High-Performance Access Points (APs): Access points broadcast the WiFi signal. Ubiquiti UniFi (e.g., UniFi AC Mesh for outdoor, AC Lite for indoor) or TP-Link Omada (e.g., EAP225/EAP610) are highly recommended for handling high concurrent user loads.',
+          '3. Ethernet Cables: Category 6 (Cat6) outdoor-rated shielded cables to prevent interference and packet loss.',
+          '4. Uninterruptible Power Supply (UPS) / Backup Power: Load shedding can disrupt business. A mini-UPS (12V/24V) keeps your MikroTik and access points online during power cuts.'
+        ]
+      },
+      {
+        heading: '3. Securing Internet Bandwidth (ISPs)',
+        body: [
+          'You need a steady, high-speed unlimited internet supply. Avoid limited gigabyte bundles; you must secure an unlimited package.',
+          'Airtel Broadband or MTN Wanaanchi/Fiber offer competitive home and business internet packages in Kampala. Other providers like Liquid Intelligent Technologies, Roke Telecom, or local metro fiber resellers offer dedicated internet access (DIA) which provides symmetric upload/download speeds and higher SLA guarantees.',
+          'Connect the internet modem/router via ethernet cable to ether1 (WAN port) of your MikroTik router, and configure it to obtain an IP address automatically via DHCP client.'
+        ]
+      },
+      {
+        heading: '4. Registering and Onboarding on AROFi',
+        body: [
+          'AROFi is Uganda\'s leading multi-tenant SaaS platform that makes hotspot billing automatic. You don\'t need to install local billing servers or configure complex RADIUS databases manually.',
+          '1. Create a free account at arofi.arosoftlabs.com.',
+          '2. Add a new Hotspot Site and create a Router Group in your operator dashboard.',
+          '3. Register your MikroTik Router by filling in the router name and selecting your Hotspot configuration.',
+          '4. AROFi will generate a unique one-run RouterOS script. Copy the command, open WinBox, go to New Terminal, paste the command, and press Enter.',
+          'The script automatically configures RADIUS auth, Walled Gardens for mobile money, and redirects clients to your branded captive portal page.'
+        ]
+      },
+      {
+        heading: '5. Setting Up Packages and Vouchers',
+        body: [
+          'Configure attractive packages that fit the purchasing power of your target audience:',
+          '• Time-Based Bundles: E.g., 1 Hour Unlimited (UGX 500), 4 Hours (UGX 1,500), 24 Hours (UGX 3,000), or 7 Days (UGX 15,000).',
+          '• Data-Capped Bundles: E.g., 1GB valid for 24 hours (UGX 1,000) or 5GB valid for 7 days (UGX 5,000).',
+          '• Voucher Batches: Generate and print PDF voucher sheets from AROFi. You can distribute these vouchers to local shops, canteens, and agents near your hotspot site, giving them a 10% to 15% commission to drive local physical sales.'
+        ]
+      },
+      {
+        heading: '6. Live Operations and Cash Flow',
+        body: [
+          'When customers connect to your WiFi network (e.g., "Kitintale Free WiFi"), a captive portal window pops up automatically on their phone.',
+          'They choose their preferred package, enter their MTN or Airtel phone number, and click Pay. The system initiates an instant USSD/STK Push payment prompt on their phone.',
+          'Once they enter their Mobile Money PIN, AROFi receives the success callback, registers the transaction, updates your dashboard wallet, and RADIUS automatically logs the client onto the internet.',
+          'You can request a withdrawal at any time from your AROFi dashboard directly to your registered MTN or Airtel wallet. Disbursements are paid out instantly.'
+        ]
+      }
+    ]
+  },
+  'setup-mtn-airtel-wifi-billing': {
+    title: 'How to Setup MTN MoMo & Airtel Money WiFi Billing',
+    intro: 'Step-by-step guide to configuring automated Mobile Money collection and RADIUS validation for your MikroTik hotspot network in Uganda.',
+    sections: [
+      {
+        heading: '1. Overview of Mobile Money Integration',
+        body: [
+          'In Uganda, cash collection is inefficient and prone to theft. Automated mobile money collection enables clients to buy internet packages 24/7, with funds deposited directly into your AROFi virtual wallet.',
+          'The checkout flow is seamless: Client connects to WiFi → Portal loads available packages → Client inputs phone number → Mobile Money PIN prompt appears → Client pays → Internet is activated instantly.',
+          'No external web pages or complex checkout redirection are required; the payment prompt displays directly over the captive portal frame.'
+        ]
+      },
+      {
+        heading: '2. Configuring the Collection Adapter (SaaS or Custom)',
+        body: [
+          'AROFi supports two payment collection routes in Uganda:',
+          '1. Aggregator Route (Default & Easiest): Uses Pesapal to route collections. This is the fastest way to get started and requires no complex business registrations. Set MTN_COLLECTION_PROVIDER=AGGREGATOR and AIRTEL_COLLECTION_PROVIDER=AGGREGATOR in your environment, and input your Pesapal client key/secret.',
+          '2. Direct API Integration: If you have your own MTN MoMo API merchant account or Airtel Money Developer account, you can plug your direct credentials (API User, API Key, Client Secret) into AROFi to avoid aggregator fees.'
+        ]
+      },
+      {
+        heading: '3. Captive Portal Walled Garden Settings',
+        body: [
+          'Before a customer pays, they have no internet access. However, their phone must be allowed to communicate with MTN, Airtel, and AROFi servers to process the payment API calls.',
+          'This is done by adding the payment provider domains to the MikroTik Hotspot Walled Garden. The AROFi onboarding script adds these automatically, but you should verify them manually in WinBox under /ip hotspot walled-garden.',
+          'If you use Pesapal, make sure the following domains are allowed:'
+        ],
+        commandBlocks: [
+          {
+            title: 'Walled Garden verification commands',
+            commands: [
+              '/ip hotspot walled-garden add dst-host=*.pesapal.com action=allow comment="Pesapal Gateways"',
+              '/ip hotspot walled-garden add dst-host=pay.pesapal.com action=allow comment="Pesapal Checkout"',
+              '/ip hotspot walled-garden add dst-host=*.arosoftlabs.com action=allow comment="AROFi Backend"',
+              '/ip hotspot walled-garden add dst-host=*.momoapi.mtn.com action=allow comment="MTN API"',
+              '/ip hotspot walled-garden add dst-host=*.airtel.com action=allow comment="Airtel API"'
+            ]
+          }
+        ]
+      },
+      {
+        heading: '4. Setting Up MTU and Radius Timeout',
+        body: [
+          'Mobile Money prompt delays can sometimes cause the hotspot login page to time out. Ensure your MikroTik RADIUS client has an adequate timeout configuration.',
+          'We recommend setting the RADIUS timeout to 10 seconds (default is 300ms) to allow the customer sufficient time to input their mobile money PIN and confirm the transaction.'
+        ],
+        commandBlocks: [
+          {
+            title: 'Optimizing RADIUS Client Timeout in WinBox',
+            commands: [
+              '/radius set [find service=hotspot] timeout=10s',
+              '/ip dhcp-server set [find name=arofi-dhcp] lease-time=1h'
+            ]
+          }
+        ]
+      },
+      {
+        heading: '5. Setting Up Automated Vendor Withdrawals (Disbursements)',
+        body: [
+          'All collected revenue is accumulated in your AROFi wallet. To withdraw funds to your MTN or Airtel wallet:',
+          '1. Go to Wallet Settings in your AROFi admin panel.',
+          '2. Under Payout Accounts, add your MTN MoMo or Airtel registered phone number (must match the name on your national ID).',
+          '3. Click Withdraw, enter the amount, and confirm with your secure account PIN.',
+          'The system uses MTN/Airtel direct payout APIs to instantly disburse the cash to your phone.'
+        ]
+      }
+    ]
+  },
   payments: {
     title: 'Payments',
-    intro: 'AROfi keeps customer payment UX simple while routing to configured providers in the backend.',
+    intro: 'AROFi keeps customer payment UX simple while routing to configured providers in the backend.',
     sections: [
       {
         heading: 'Customer checkout',
@@ -366,8 +497,24 @@ const docs: Record<string, DocPage> = {
   },
 }
 
+// Generate static routes for compilation
 export function generateStaticParams() {
   return Object.keys(docs).map((slug) => ({ slug }))
+}
+
+// SEO Meta-tags generation per document page
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const doc = docs[slug]
+  if (!doc) return {}
+  
+  return {
+    title: `${doc.title} | AROFi WiFi Billing Uganda Docs`,
+    description: doc.intro.substring(0, 155),
+    alternates: {
+      canonical: `https://arofi.arosoftlabs.com/docs/${slug}`
+    }
+  }
 }
 
 export default async function DocsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -375,36 +522,120 @@ export default async function DocsPage({ params }: { params: Promise<{ slug: str
   const doc = docs[slug]
   if (!doc) notFound()
 
+  // Generate sidebar page list
+  const sidebarLinks = Object.entries(docs).map(([key, value]) => ({
+    slug: key,
+    title: value.title,
+  }))
+
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950">
-      <article className="mx-auto max-w-5xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-100">
-            Back Home
-          </Link>
-          <Link href="/docs" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800">
-            All Docs
-          </Link>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">AROfi Docs</p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight">{doc.title}</h1>
-          <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">{doc.intro}</p>
-        </div>
-        <div className="mt-8 space-y-6 text-base leading-7 text-slate-700">
-          {doc.sections.map((section) => (
-            <section key={section.heading} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-950">{section.heading}</h2>
-              <div className="mt-4 space-y-3">
-                {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-              </div>
-              {section.commandBlocks?.map((block) => (
-                <DocsCommandBlock key={block.title} title={block.title} commands={block.commands} />
+    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
+      {/* Background Dot grid effect */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f2937_1px,transparent_1px),linear-gradient(to_bottom,#1f2937_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
+
+      {/* Main Layout Grid */}
+      <div className="relative z-10 max-w-7xl mx-auto flex flex-col md:flex-row">
+        
+        {/* Left Sidebar Navigation */}
+        <aside className="w-full md:w-80 md:shrink-0 md:sticky md:top-0 md:h-screen overflow-y-auto border-b md:border-b-0 md:border-r border-slate-800 bg-slate-950/70 backdrop-blur-md p-6">
+          <div className="flex items-center gap-3 pb-6 border-b border-slate-800 mb-6">
+            <BookOpen className="w-6 h-6 text-blue-500" />
+            <div>
+              <Link href="/docs" className="hover:text-blue-400 transition">
+                <span className="text-sm font-bold uppercase tracking-wider text-slate-400">AROFi Docs</span>
+              </Link>
+              <h2 className="text-xs text-slate-500 mt-0.5">Knowledgebase &amp; SOPs</h2>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <Link 
+              href="/docs" 
+              className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-3 py-2 text-xs font-semibold hover:bg-slate-800 transition text-slate-300"
+            >
+              <Home className="w-3.5 h-3.5" />
+              All Documentation
+            </Link>
+          </div>
+
+          <nav className="space-y-1">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mb-2 px-3">Available Guides</p>
+            {sidebarLinks.map((link) => {
+              const isActive = link.slug === slug
+              return (
+                <Link 
+                  key={link.slug} 
+                  href={`/docs/${link.slug}`}
+                  className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-medium transition ${
+                    isActive 
+                      ? 'bg-blue-600/10 border border-blue-500/20 text-blue-400 font-semibold' 
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+                  }`}
+                >
+                  <span className="truncate max-w-[200px]">{link.title}</span>
+                  {isActive && <ChevronRight className="w-3 h-3 text-blue-400 shrink-0" />}
+                </Link>
+              )
+            })}
+          </nav>
+        </aside>
+
+        {/* Right Article Body */}
+        <section className="flex-1 p-6 md:p-12 overflow-x-hidden">
+          <article className="max-w-3xl mx-auto">
+            {/* Header Path */}
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-4 uppercase tracking-wider">
+              <span>Docs</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
+              <span className="text-blue-500">{doc.title}</span>
+            </div>
+
+            {/* Document Hero */}
+            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 md:p-8 mb-8 backdrop-blur-sm">
+              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+                {doc.title}
+              </h1>
+              <p className="mt-4 text-base md:text-lg text-slate-400 leading-relaxed">
+                {doc.intro}
+              </p>
+            </div>
+
+            {/* Document Sections */}
+            <div className="space-y-8">
+              {doc.sections.map((section, idx) => (
+                <section key={section.heading + idx} className="border-t border-slate-800/60 pt-8 first:border-0 first:pt-0">
+                  <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-blue-500 shrink-0" />
+                    {section.heading}
+                  </h2>
+                  <div className="mt-4 space-y-4 text-sm md:text-base text-slate-300 leading-relaxed">
+                    {section.body.map((paragraph, pIdx) => (
+                      <p key={pIdx}>{paragraph}</p>
+                    ))}
+                  </div>
+                  {section.commandBlocks?.map((block, bIdx) => (
+                    <div key={block.title + bIdx} className="mt-4 shadow-xl">
+                      <DocsCommandBlock title={block.title} commands={block.commands} />
+                    </div>
+                  ))}
+                </section>
               ))}
-            </section>
-          ))}
-        </div>
-      </article>
+            </div>
+
+            {/* Back Button */}
+            <div className="mt-12 pt-8 border-t border-slate-800 flex items-center justify-between">
+              <Link 
+                href="/docs" 
+                className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to All Docs
+              </Link>
+              <span className="text-xs text-slate-600">Updated: June 2026</span>
+            </div>
+          </article>
+        </section>
+      </div>
     </main>
   )
 }

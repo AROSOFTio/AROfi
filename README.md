@@ -7,6 +7,8 @@ AROFi is a multi-tenant hotspot billing platform with:
 - PostgreSQL, Redis, FreeRADIUS, and Nginx in Docker Compose
 - Mobile money payments: MTN MoMo and Airtel Money in Uganda
 
+- **Setup & Installation:** See [docs/SETUP_GUIDE.md](file:///d:/Projects/arofi/docs/SETUP_GUIDE.md) for a clean, step-by-step system setup guide.
+
 ## Production Deploy (Contabo / Ubuntu)
 
 Run from project root (example: `/www/wwwroot/arofi.arosoft.io`):
