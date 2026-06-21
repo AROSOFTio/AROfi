@@ -171,7 +171,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
-      include: this.routerInclude,
+      select: { id: true, status: true, onboardingStatus: true, radiusNasIpAddress: true },
     })
 
     if (!router) {
@@ -185,30 +185,19 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     ]
     const shouldAdvanceOnboarding = pendingStatuses.includes(router.onboardingStatus as RouterOnboardingStatus)
 
-    const ipChanged = Boolean(normalizedSourceIp && normalizedSourceIp !== router.radiusNasIpAddress)
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.router.update({
-        where: { id: router.id },
-        data: {
-          lastSeenAt: new Date(),
-          ...(shouldAdvanceOnboarding
-            ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
-            : {}),
-          ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.DEGRADED } : {}),
-          ...(normalizedSourceIp ? { radiusNasIpAddress: normalizedSourceIp } : {}),
-        },
-      })
-
-      if (normalizedSourceIp && ipChanged) {
-        await this.upsertRadiusClientForProvisionedRouter(tx, router, normalizedSourceIp)
-        await this.upsertNasClientForProvisionedRouter(tx, router, normalizedSourceIp)
-      }
+    await this.prisma.router.update({
+      where: { id: router.id },
+      data: {
+        lastSeenAt: new Date(),
+        ...(shouldAdvanceOnboarding
+          ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
+          : {}),
+        ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.DEGRADED } : {}),
+        ...(normalizedSourceIp && !router.radiusNasIpAddress
+          ? { radiusNasIpAddress: normalizedSourceIp }
+          : {}),
+      },
     })
-
-    if (ipChanged) {
-      this.reloadFreeradiusNasClients()
-    }
 
     return { ok: true }
   }
