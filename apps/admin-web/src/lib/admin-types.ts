@@ -789,9 +789,6 @@ export type RouterItem = {
   managementApiMessage?: string | null
   liveState?: 'LIVE' | 'STALE' | 'OFFLINE' | 'PENDING'
   isLiveNow?: boolean
-  healthScore?: number
-  productionReady?: boolean
-  dashboardState?: 'ONLINE' | 'WARNING' | 'OFFLINE'
   lastSignalAt?: string | null
   lastSignalSource?: string | null
   secondsSinceLastSignal?: number | null
@@ -923,33 +920,6 @@ export type RouterSetupResponse = {
     type: string
     enabled: boolean
   } | null
-}
-
-export type RouterDiagnosticsResponse = {
-  router: RouterItem
-  setupDiagnostics?: Array<{
-    code: string
-    label: string
-    ok: boolean
-    checkedAt?: string | null
-  }>
-  driftScore?: number | null
-  selfTest?: {
-    status?: string
-    checkedAt?: string | null
-    checks?: Array<{ code: string; label: string; ok: boolean; value?: string; checkedAt?: string | null }>
-    errors?: string[]
-    notes?: string[]
-  }
-}
-
-export type RouterDeploymentTestResult = {
-  routerId: string
-  overallOk: boolean
-  latencyMs: number
-  steps: Array<{ name: string; ok: boolean; detail: string }>
-  checkedAt: string
-  note: string
 }
 
 export type SessionItem = {

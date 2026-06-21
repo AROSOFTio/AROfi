@@ -9,11 +9,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common'
 import {
-  PackageActivationSource,
-  PackageActivationStatus,
-  PackageStatus,
   Prisma,
-  RadiusCredentialStatus,
   RadiusEventType,
   RouterConnectionMode,
   RouterOnboardingStatus,
@@ -23,23 +19,10 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
-import { RadiusCredentialService } from '../radius/radius-credential.service'
-import { RadiusProbeService } from '../radius/radius-probe.service'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCredentialsService } from './router-credentials.service'
-
-type MikrotikProvisioningReportInput = Record<string, string | string[] | undefined>
-
-type ProvisioningReport = {
-  status: 'ok' | 'failed' | 'unknown'
-  ok: boolean
-  checks: Record<string, string>
-  errors: string[]
-  notes: string[]
-  raw: MikrotikProvisioningReportInput
-}
 
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
@@ -114,19 +97,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     },
   }
 
-  // A reserved RFC 5737 TEST-NET address, never assignable to a real router.
-  // Synthetic deployment tests tag their NAS-IP-Address with this so they can
-  // never be mistaken for (or accidentally attributed to) real router traffic
-  // in any nasIpAddress-keyed lookup elsewhere in the system.
-  private readonly syntheticTestNasIp = '203.0.113.1'
-  private readonly syntheticTestCustomerReference = 'AROFI_SYNTHETIC_TEST'
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly mikrotikService: MikrotikService,
     private readonly routerCredentialsService: RouterCredentialsService,
-    private readonly radiusCredentialService: RadiusCredentialService,
-    private readonly radiusProbeService: RadiusProbeService,
   ) {}
 
   onModuleInit() {
@@ -197,17 +171,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
-      select: {
-        id: true,
-        status: true,
-        onboardingStatus: true,
-        radiusNasIpAddress: true,
-        tenantId: true,
-        name: true,
-        sharedSecretCiphertext: true,
-        radiusClient: { select: { id: true, shortName: true, secretCiphertext: true } },
-        nasClient: { select: { id: true, shortname: true } },
-      },
+      select: { id: true, status: true, onboardingStatus: true, radiusNasIpAddress: true },
     })
 
     if (!router) {
@@ -215,7 +179,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const normalizedSourceIp = sourceIp.trim()
-    const learnedNewIp = normalizedSourceIp && router.radiusNasIpAddress !== normalizedSourceIp
     const pendingStatuses: RouterOnboardingStatus[] = [
       RouterOnboardingStatus.SCRIPT_GENERATED,
       RouterOnboardingStatus.WAITING_FOR_ROUTER,
@@ -230,20 +193,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
           : {}),
         ...(router.status === RouterStatus.OFFLINE ? { status: RouterStatus.DEGRADED } : {}),
-        ...(normalizedSourceIp && router.radiusNasIpAddress !== normalizedSourceIp
+        ...(normalizedSourceIp && !router.radiusNasIpAddress
           ? { radiusNasIpAddress: normalizedSourceIp }
           : {}),
       },
     })
-
-    if (learnedNewIp) {
-      await this.upsertNasClientForProvisionedRouter(
-        this.prisma,
-        router,
-        normalizedSourceIp,
-      )
-      this.reloadFreeradiusNasClients()
-    }
 
     return { ok: true }
   }
@@ -684,133 +638,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return this.getRouterSetup(router.id, tenantId)
   }
 
-  async recordProvisioningSelfTestByKey(
-    key: string,
-    sourceIp: string,
-    reportInput: MikrotikProvisioningReportInput = {},
-  ) {
-    const router = await this.prisma.router.findUnique({
-      where: { registrationKey: key },
-      include: this.routerInclude,
-    })
-
-    if (!router) {
-      return null
-    }
-
-    const normalizedSourceIp = sourceIp.trim()
-    const report = this.buildProvisioningReport(reportInput)
-    const now = new Date()
-    const healthMessage = report.ok
-      ? 'MikroTik provisioning self-test passed on the router'
-      : `MikroTik provisioning self-test failed: ${report.errors.join(', ') || 'unknown error'}`
-
-    await this.prisma.$transaction(async (tx) => {
-      await this.recordProvisioningHealthCheck(tx, {
-        router,
-        report,
-        sourceIp: normalizedSourceIp,
-        kind: 'mikrotik-self-test',
-        checkedAt: now,
-        message: healthMessage,
-      })
-
-      await tx.router.update({
-        where: { id: router.id },
-        data: {
-          ...(normalizedSourceIp ? { radiusNasIpAddress: normalizedSourceIp } : {}),
-          onboardingStatus: report.ok
-            ? RouterOnboardingStatus.WAITING_FOR_RADIUS
-            : RouterOnboardingStatus.CONFIG_ERROR,
-          verificationStatus: report.ok ? 'OPERATOR_APPLIED' : 'FAILED',
-          status: report.ok ? RouterStatus.DEGRADED : RouterStatus.DEGRADED,
-          lastSeenAt: now,
-          lastHealthCheckAt: now,
-          healthMessage,
-        },
-      })
-    })
-
-    this.logger.log(
-      `MikroTik self-test ${report.status} for router ${router.id} from ${normalizedSourceIp || 'unknown IP'} checks=${JSON.stringify(report.checks)} errors=${report.errors.join(',') || 'none'}`,
-    )
-
-    return {
-      ok: report.ok,
-      routerId: router.id,
-      status: report.status,
-      checks: report.checks,
-      errors: report.errors,
-      notes: report.notes,
-    }
-  }
-
-  // The 60s on-router watchdog (arofi-watchdog) only calls home when it has
-  // actually repaired something — a healthy router stays silent. Every call
-  // here is itself proof of life, so it always bumps lastSeenAt even though
-  // the report only carries repairs/checks (no overall pass/fail status).
-  async recordWatchdogReportByKey(
-    key: string,
-    sourceIp: string,
-    reportInput: MikrotikProvisioningReportInput = {},
-  ) {
-    const router = await this.prisma.router.findUnique({
-      where: { registrationKey: key },
-      select: { id: true, tenantId: true, activeSessionCount: true },
-    })
-
-    if (!router) {
-      return null
-    }
-
-    const normalizedSourceIp = sourceIp.trim()
-    const repairs = this.parseReportList(this.queryValue(reportInput.repairs))
-    const checks = this.parseCheckSummary(this.queryValue(reportInput.checks))
-    const now = new Date()
-    const message =
-      repairs.length > 0
-        ? `Watchdog auto-repaired: ${repairs.join(', ')}`
-        : 'Watchdog ran with no repairs needed'
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.routerHealthCheck.create({
-        data: {
-          tenantId: router.tenantId,
-          routerId: router.id,
-          status: RouterStatus.DEGRADED,
-          message,
-          activeUsers: router.activeSessionCount ?? 0,
-          rawPayload: {
-            kind: 'mikrotik-watchdog',
-            sourceIp: normalizedSourceIp,
-            repairs,
-            checks,
-            receivedAt: now.toISOString(),
-          } as Prisma.InputJsonValue,
-        },
-      })
-
-      await tx.router.update({
-        where: { id: router.id },
-        data: {
-          lastSeenAt: now,
-          ...(normalizedSourceIp ? { radiusNasIpAddress: normalizedSourceIp } : {}),
-        },
-      })
-    })
-
-    if (repairs.length > 0) {
-      this.logger.warn(`AROFi watchdog repaired router ${router.id}: ${repairs.join(', ')}`)
-    }
-
-    return { ok: true, routerId: router.id, repairs, checks }
-  }
-
-  async markRouterProvisionedByKey(
-    key: string,
-    sourceIp: string,
-    reportInput: MikrotikProvisioningReportInput = {},
-  ) {
+  async markRouterProvisionedByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
       include: this.routerInclude,
@@ -825,12 +653,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const baseWarning = normalizedSourceIp
       ? ''
       : 'Provisioning callback received, but source IP could not be detected.'
-    const report = this.buildProvisioningReport(reportInput)
-    const hasProvisioningReport =
-      report.status !== 'unknown' ||
-      Object.keys(report.checks).length > 0 ||
-      report.errors.length > 0 ||
-      report.notes.length > 0
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -864,44 +686,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
               managementHost === router.host && shouldReplaceManagementHost
                 ? 'Management host kept as pending value because learned IP is already assigned in this tenant.'
                 : 'RADIUS NAS IP learned.',
-              hasProvisioningReport
-                ? report.ok
-                  ? 'Router self-test passed; waiting for first RADIUS packet.'
-                  : `Router self-test failed: ${report.errors.join(', ') || 'unknown error'}.`
-                : 'Router did not include a self-test report; waiting for heartbeat/RADIUS proof.',
+              'Restart FreeRADIUS if this is the first time this NAS IP was learned.',
             ].join(' ')
           : baseWarning
-
-        if (hasProvisioningReport) {
-          await this.recordProvisioningHealthCheck(tx, {
-            router,
-            report,
-            sourceIp: normalizedSourceIp,
-            kind: 'mikrotik-provisioned-callback',
-            checkedAt: now,
-            message: healthMessage,
-          })
-        }
 
         const updatedRouter = await tx.router.update({
           where: { id: router.id },
           data: {
             host: managementHost,
             radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
-            onboardingStatus: hasProvisioningReport
-              ? report.ok
-                ? RouterOnboardingStatus.WAITING_FOR_RADIUS
-                : RouterOnboardingStatus.CONFIG_ERROR
-              : RouterOnboardingStatus.WAITING_FOR_ROUTER,
-            verificationStatus: hasProvisioningReport
-              ? report.ok
-                ? 'OPERATOR_APPLIED'
-                : 'FAILED'
-              : 'OPERATOR_APPLIED',
-            status: report.ok || !hasProvisioningReport ? RouterStatus.DEGRADED : RouterStatus.DEGRADED,
+            onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
             lastProvisionedAt: now,
-            lastSeenAt: now,
-            lastHealthCheckAt: hasProvisioningReport ? now : router.lastHealthCheckAt,
             healthMessage,
           },
           select: { id: true, host: true, tenantId: true, name: true },
@@ -929,16 +724,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       this.reloadFreeradiusNasClients()
 
       return {
-        ok: !hasProvisioningReport || report.ok,
+        ok: true,
         callbackReceived: true,
-        provisioningVerified: hasProvisioningReport ? report.ok : false,
-        status: hasProvisioningReport ? report.status : 'unknown',
         routerId: result.routerId,
         learnedNasIpAddress: normalizedSourceIp || null,
         managementHost: result.managementHost,
-        ...(hasProvisioningReport
-          ? { checks: report.checks, errors: report.errors, notes: report.notes }
-          : {}),
         ...(result.warning ? { warning: result.warning } : {}),
       }
     } catch (error) {
@@ -952,12 +742,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           where: { id: router.id },
           data: {
             radiusNasIpAddress: normalizedSourceIp || router.radiusNasIpAddress,
-            onboardingStatus: hasProvisioningReport && !report.ok
-              ? RouterOnboardingStatus.CONFIG_ERROR
-              : RouterOnboardingStatus.WAITING_FOR_ROUTER,
-            verificationStatus: hasProvisioningReport && !report.ok ? 'FAILED' : 'OPERATOR_APPLIED',
+            onboardingStatus: RouterOnboardingStatus.WAITING_FOR_ROUTER,
             lastProvisionedAt: now,
-            lastSeenAt: now,
             healthMessage:
               'Provisioning callback received, but AROFi could not fully update router/NAS records. Check API logs for the database error.',
           },
@@ -971,16 +757,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }
 
       return {
-        ok: !hasProvisioningReport || report.ok,
+        ok: true,
         callbackReceived: true,
-        provisioningVerified: hasProvisioningReport ? report.ok : false,
-        status: hasProvisioningReport ? report.status : 'unknown',
         routerId: router.id,
         learnedNasIpAddress: normalizedSourceIp || null,
         managementHost: router.host,
-        ...(hasProvisioningReport
-          ? { checks: report.checks, errors: report.errors, notes: report.notes }
-          : {}),
         warning:
           'AROFi received the provisioning callback, but could not fully update router/NAS records. Check API logs for the database error.',
       }
@@ -1023,7 +804,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         adminUsername: router.username,
         adminPassword,
         hotspotServerName: router.hotspotServerName,
-        portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts, radiusServer.host),
+        portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
         mode: router.lastScriptMode,
         portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
@@ -1049,190 +830,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             enabled: router.nasClient.enabled,
           }
         : null,
-    }
-  }
-
-  async getRouterDiagnostics(routerId: string, tenantId?: string) {
-    const router = await this.prisma.router.findUnique({
-      where: { id: routerId },
-      include: this.routerInclude,
-    })
-
-    if (!router) {
-      throw new NotFoundException('Router not found')
-    }
-
-    if (tenantId && router.tenantId !== tenantId) {
-      throw new NotFoundException('Router not found')
-    }
-
-    const [setupDiagnostics, provisioningReports] = await Promise.all([
-      this.getSetupDiagnostics(router.id),
-      this.getProvisioningReports(router.id),
-    ])
-    const latestProvisioningReport = provisioningReports[0] ?? null
-
-    return {
-      router: this.mapRouter(router),
-      setupDiagnostics,
-      latestProvisioningReport,
-      provisioningReports,
-      driftScore: this.computeDriftScore(provisioningReports),
-      selfTest: {
-        validationMode: 'router-reported',
-        checkedAt: latestProvisioningReport?.checkedAt ?? null,
-        status: latestProvisioningReport?.reportStatus ?? 'missing',
-        checks: this.buildSelfTestDiagnostics(latestProvisioningReport),
-        errors: latestProvisioningReport?.errors ?? [],
-        notes: latestProvisioningReport?.notes ?? [],
-      },
-    }
-  }
-
-  async runRouterSelfTest(routerId: string, tenantId?: string) {
-    const diagnostics = await this.getRouterDiagnostics(routerId, tenantId)
-    const router = diagnostics.router
-    const managementProbe =
-      router.host && !this.isPendingSelfServiceHost(router.host)
-        ? await this.mikrotikService.probeConnection(router.host, router.apiPort)
-        : {
-            reachable: false,
-            status: RouterStatus.PENDING,
-            message:
-              'RouterOS management API is not reachable from AROFi. Local HotSpot checks come from the router-reported self-test callback.',
-          }
-
-    return {
-      ...diagnostics,
-      managementProbe,
-      refreshedAt: new Date(),
-      instruction:
-        'To refresh on-device HotSpot/DHCP/NAT/file checks, rerun the MikroTik provisioning command so the router posts a new self-test report.',
-    }
-  }
-
-  // A real, protocol-level end-to-end test: provisions a genuine RADIUS
-  // credential (the same code path a real voucher redemption uses) and sends
-  // an actual Access-Request to the live FreeRADIUS server. An Access-Accept
-  // here proves "if this router reaches RADIUS with the right secret, a
-  // voucher would authenticate" — it does NOT prove the router-to-RADIUS
-  // network hop, the captive portal, or that a phone gets real internet.
-  // Those remain gated on real signals (radiusAuthSeen/accountingSeen)
-  // exactly as before; this is a fast pre-flight, not a replacement for them.
-  // The NAS-IP-Address is tagged with a reserved TEST-NET sentinel so this
-  // can never be mistaken for real router traffic by any nasIpAddress-keyed
-  // lookup elsewhere in the system (see syntheticTestNasIp above).
-  async runDeploymentTest(routerId: string, tenantId?: string) {
-    const router = await this.prisma.router.findUnique({
-      where: { id: routerId },
-      select: { id: true, tenantId: true, name: true },
-    })
-
-    if (!router || (tenantId && router.tenantId !== tenantId)) {
-      throw new NotFoundException('Router not found')
-    }
-
-    const steps: Array<{ name: string; ok: boolean; detail: string }> = []
-    const startedAt = Date.now()
-    let activationId: string | null = null
-
-    try {
-      const testPackage = await this.prisma.package.findFirst({
-        where: { tenantId: router.tenantId, status: PackageStatus.ACTIVE },
-        orderBy: { createdAt: 'asc' },
-      })
-
-      if (!testPackage) {
-        steps.push({
-          name: 'voucher_provisioned',
-          ok: false,
-          detail: 'No active package is configured for this tenant — create one before running a deployment test.',
-        })
-        return this.buildDeploymentTestResult(router.id, steps, startedAt)
-      }
-
-      const now = new Date()
-      const credential = await this.prisma.$transaction(async (tx) => {
-        const activation = await tx.packageActivation.create({
-          data: {
-            tenantId: router.tenantId,
-            packageId: testPackage.id,
-            routerId: router.id,
-            source: PackageActivationSource.VOUCHER,
-            status: PackageActivationStatus.ACTIVE,
-            customerReference: this.syntheticTestCustomerReference,
-            durationMinutes: 10,
-            startedAt: now,
-            endsAt: new Date(now.getTime() + 10 * 60 * 1000),
-          },
-        })
-        activationId = activation.id
-
-        return this.radiusCredentialService.provisionForActivation(tx, {
-          tenantId: router.tenantId,
-          activationId: activation.id,
-          routerId: router.id,
-        })
-      })
-
-      steps.push({
-        name: 'voucher_provisioned',
-        ok: credential.status === RadiusCredentialStatus.ACTIVE,
-        detail: `Test credential ${credential.username} provisioned against the real radcheck table.`,
-      })
-
-      const radiusServer = this.mikrotikService.getRadiusServerConfig(this.getPlatformRadiusSharedSecret())
-
-      try {
-        const probe = await this.radiusProbeService.sendAccessRequest({
-          host: radiusServer.host,
-          port: radiusServer.authPort,
-          secret: radiusServer.sharedSecret,
-          nasIp: this.syntheticTestNasIp,
-          username: credential.username,
-          password: credential.password,
-          timeoutMs: 5000,
-        })
-
-        steps.push({
-          name: 'radius_access_request',
-          ok: probe.accepted,
-          detail: probe.accepted
-            ? `FreeRADIUS sent Access-Accept in ${probe.latencyMs}ms.`
-            : `FreeRADIUS rejected the test credential (code ${probe.code}). Check that the platform RADIUS shared secret matches what the router is configured with.`,
-        })
-      } catch (error) {
-        steps.push({
-          name: 'radius_access_request',
-          ok: false,
-          detail: `Could not reach RADIUS server ${radiusServer.host}:${radiusServer.authPort} — ${(error as Error).message}`,
-        })
-      }
-
-      return this.buildDeploymentTestResult(router.id, steps, startedAt)
-    } finally {
-      if (activationId) {
-        await this.prisma.$transaction(async (tx) => {
-          await this.radiusCredentialService.disableForActivation(tx, activationId!, RadiusCredentialStatus.DISABLED)
-          await tx.packageActivation.delete({ where: { id: activationId! } }).catch(() => undefined)
-        })
-      }
-    }
-  }
-
-  private buildDeploymentTestResult(
-    routerId: string,
-    steps: Array<{ name: string; ok: boolean; detail: string }>,
-    startedAt: number,
-  ) {
-    return {
-      routerId,
-      overallOk: steps.length > 0 && steps.every((step) => step.ok),
-      latencyMs: Date.now() - startedAt,
-      steps,
-      checkedAt: new Date(),
-      note:
-        'This is a synthetic, protocol-level pre-flight test. It does not replace a real phone redemption — the router only shows ONLINE once a real client has actually authenticated and used data.',
     }
   }
 
@@ -1262,7 +859,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       adminUsername: router.username,
       adminPassword,
       hotspotServerName: router.hotspotServerName,
-      portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts, radiusServer.host),
+      portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
       mode: router.lastScriptMode,
       portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
@@ -1343,213 +940,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('FreeRADIUS NAS reload signal sent.')
       }
     })
-  }
-
-  private async recordProvisioningHealthCheck(
-    tx: Prisma.TransactionClient,
-    input: {
-      router: { id: string; tenantId: string; activeSessionCount?: number | null }
-      report: ProvisioningReport
-      sourceIp: string
-      kind: 'mikrotik-self-test' | 'mikrotik-provisioned-callback'
-      checkedAt: Date
-      message: string
-    },
-  ) {
-    await tx.routerHealthCheck.create({
-      data: {
-        tenantId: input.router.tenantId,
-        routerId: input.router.id,
-        status: input.report.ok ? RouterStatus.DEGRADED : RouterStatus.DEGRADED,
-        message: input.message,
-        activeUsers: input.router.activeSessionCount ?? 0,
-        rawPayload: {
-          kind: input.kind,
-          sourceIp: input.sourceIp,
-          reportStatus: input.report.status,
-          checks: input.report.checks,
-          errors: input.report.errors,
-          notes: input.report.notes,
-          receivedAt: input.checkedAt.toISOString(),
-        } as Prisma.InputJsonValue,
-      },
-    })
-  }
-
-  private buildProvisioningReport(input: MikrotikProvisioningReportInput): ProvisioningReport {
-    const statusValue = this.queryValue(input.status)?.trim().toLowerCase()
-    const checks = this.parseCheckSummary(this.queryValue(input.checks))
-    const explicitErrors = this.parseReportList(this.queryValue(input.errors))
-    const notes = this.parseReportList(this.queryValue(input.notes))
-    const failedCheckErrors = Object.entries(checks)
-      .filter(([, value]) => value === 'fail' || value === 'failed' || value === 'error')
-      .map(([key]) => `${key}_failed`)
-    const errors = Array.from(new Set([...explicitErrors, ...failedCheckErrors]))
-
-    const status: ProvisioningReport['status'] =
-      statusValue === 'ok' || statusValue === 'passed' || statusValue === 'success'
-        ? 'ok'
-        : statusValue === 'failed' || statusValue === 'fail' || statusValue === 'error'
-          ? 'failed'
-          : errors.length > 0
-            ? 'failed'
-            : Object.keys(checks).length > 0
-              ? 'ok'
-              : 'unknown'
-
-    return {
-      status,
-      ok: status === 'ok',
-      checks,
-      errors,
-      notes,
-      raw: input,
-    }
-  }
-
-  private queryValue(value?: string | string[]) {
-    return Array.isArray(value) ? value[0] : value
-  }
-
-  private parseReportList(value?: string) {
-    return Array.from(
-      new Set(
-        (value ?? '')
-          .split(/[;,|]/)
-          .map((item) => item.trim())
-          .filter(Boolean),
-      ),
-    )
-  }
-
-  private parseCheckSummary(value?: string) {
-    const checks: Record<string, string> = {}
-    for (const token of this.parseReportList(value)) {
-      const [rawKey, rawValue] = token.split('=')
-      const key = rawKey?.trim()
-      if (!key) {
-        continue
-      }
-      checks[key] = (rawValue?.trim().toLowerCase() || 'ok').replace(/[^a-z0-9_-]/g, '')
-    }
-    return checks
-  }
-
-  private mapProvisioningReportHealthCheck(check: {
-    id: string
-    status: RouterStatus
-    message: string | null
-    rawPayload: Prisma.JsonValue | null
-    checkedAt: Date
-  }) {
-    const raw =
-      check.rawPayload && typeof check.rawPayload === 'object' && !Array.isArray(check.rawPayload)
-        ? (check.rawPayload as Record<string, unknown>)
-        : {}
-    const kind = typeof raw.kind === 'string' ? raw.kind : 'unknown'
-    const checks =
-      raw.checks && typeof raw.checks === 'object' && !Array.isArray(raw.checks)
-        ? (raw.checks as Record<string, string>)
-        : {}
-    const errors = Array.isArray(raw.errors) ? raw.errors.filter((item): item is string => typeof item === 'string') : []
-    const notes = Array.isArray(raw.notes) ? raw.notes.filter((item): item is string => typeof item === 'string') : []
-
-    return {
-      id: check.id,
-      kind,
-      status: check.status,
-      reportStatus: typeof raw.reportStatus === 'string' ? raw.reportStatus : 'unknown',
-      message: check.message,
-      checks,
-      errors,
-      notes,
-      sourceIp: typeof raw.sourceIp === 'string' ? raw.sourceIp : null,
-      checkedAt: check.checkedAt,
-    }
-  }
-
-  private async getProvisioningReports(routerId: string) {
-    const checks = await this.prisma.routerHealthCheck.findMany({
-      where: { routerId },
-      orderBy: { checkedAt: 'desc' },
-      take: 20,
-    })
-
-    return checks
-      .map((check) => this.mapProvisioningReportHealthCheck(check))
-      .filter((check) => check.kind === 'mikrotik-self-test' || check.kind === 'mikrotik-provisioned-callback')
-  }
-
-  private buildSelfTestDiagnostics(latestReport?: ReturnType<RoutersService['mapProvisioningReportHealthCheck']> | null) {
-    const checks = latestReport?.checks ?? {}
-    const isOk = (code: string, accepted: string[] = ['ok']) => accepted.includes(checks[code])
-    const checkedAt = latestReport?.checkedAt ?? null
-
-    return [
-      {
-        code: 'hotspot',
-        label: 'HotSpot server exists and is enabled',
-        ok: isOk('hotspot'),
-        value: checks.hotspot ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'bridge',
-        label: 'HotSpot bridge exists',
-        ok: isOk('bridge', ['ok', 'skip']),
-        value: checks.bridge ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'bridge_port',
-        label: 'Wireless or Ethernet interface is attached to the bridge',
-        ok: isOk('bridge_port', ['ok', 'skip']),
-        value: checks.bridge_port ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'dhcp',
-        label: 'DHCP server exists for hotspot clients',
-        ok: isOk('dhcp', ['ok', 'skip']),
-        value: checks.dhcp ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'nat',
-        label: 'NAT masquerade exists for hotspot clients',
-        ok: isOk('nat', ['ok', 'skip']),
-        value: checks.nat ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'radius',
-        label: 'RADIUS server is configured and reachable from the router',
-        ok: isOk('radius') && isOk('radius_config'),
-        value: checks.radius ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'scheduler',
-        label: 'Heartbeat scheduler exists',
-        ok: isOk('scheduler'),
-        value: checks.scheduler ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'wireless_interfaces',
-        label: 'Wireless interfaces detected or Ethernet fallback attached',
-        ok: isOk('wireless', ['ok', 'ethernet', 'existing']),
-        value: checks.wireless ?? 'missing',
-        checkedAt,
-      },
-      {
-        code: 'captive_portal_files',
-        label: 'Captive portal login.html is installed',
-        ok: isOk('files'),
-        value: checks.files ?? 'missing',
-        checkedAt,
-      },
-    ]
   }
 
   private getPlatformRadiusSharedSecret() {
@@ -1709,7 +1099,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
     const nasCandidates = router ? this.getRouterNasCandidates(router) : []
 
-    const [authEvent, accountingEvent, acceptedAuth, radAcct, provisioningReports] = await Promise.all([
+    const [authEvent, accountingEvent, acceptedAuth, radAcct] = await Promise.all([
       this.prisma.radiusEvent.findFirst({
         where: {
           routerId,
@@ -1734,21 +1124,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             orderBy: { radacctid: 'desc' },
           })
         : Promise.resolve(null),
-      this.getProvisioningReports(routerId),
     ])
-    const latestProvisioningReport = provisioningReports[0] ?? null
 
     return [
-      {
-        code: 'local_self_test',
-        label: latestProvisioningReport
-          ? latestProvisioningReport.reportStatus === 'ok'
-            ? 'Router local provisioning self-test passed'
-            : 'Router local provisioning self-test failed'
-          : 'Router local provisioning self-test has not reported yet',
-        ok: latestProvisioningReport?.reportStatus === 'ok',
-        checkedAt: latestProvisioningReport?.checkedAt ?? null,
-      },
       {
         code: 'provisioning_callback',
         label: router?.lastProvisionedAt
@@ -1907,7 +1285,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       latencyMs: number | null
       message: string | null
       checkedAt: Date
-      rawPayload?: Prisma.JsonValue | null
     }>
   }) {
     const activeSessions = router.sessions.length || router.activeSessionCount
@@ -1918,15 +1295,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         : live.liveState === 'STALE' && router.status === RouterStatus.OFFLINE
           ? RouterStatus.DEGRADED
           : router.status
-    const health = this.computeHealthScore(router)
-    // Failure #9/#10 enforced here: ONLINE is only ever true when the weighted
-    // score clears the bar AND real client signals exist — a router that only
-    // "ran the script" or only has a reachable management API stays WARNING.
-    const dashboardState: 'ONLINE' | 'WARNING' | 'OFFLINE' = health.productionReady
-      ? 'ONLINE'
-      : live.liveState === 'OFFLINE' || !health.criticalOk
-        ? 'OFFLINE'
-        : 'WARNING'
 
     return {
       id: router.id,
@@ -2005,89 +1373,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             checkedAt: router.healthChecks[0].checkedAt,
           }
         : null,
-      healthScore: health.score,
-      productionReady: health.productionReady,
-      dashboardState,
     }
-  }
-
-  // Weighted 0-100 score over the most recent self-test/watchdog report plus
-  // real client signals. Critical subsystems (NAT/DHCP/Hotspot/RADIUS, and
-  // above all real auth/accounting) are weighted far higher than cosmetic
-  // ones (walled garden, portal files) — see Phase 3 of the deployment
-  // redesign plan. Pure/synchronous so it's safe to call for every router in
-  // a fleet overview list without extra queries.
-  private computeHealthScore(router: {
-    healthChecks: Array<{ rawPayload?: Prisma.JsonValue | null }>
-    lastAuthSignalAt?: Date | null
-    lastAccountingSignalAt?: Date | null
-  }) {
-    const raw = router.healthChecks[0]?.rawPayload
-    const checks =
-      raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as Record<string, unknown>).checks === 'object'
-        ? ((raw as Record<string, unknown>).checks as Record<string, string>)
-        : {}
-    const isOk = (code: string, accepted: string[] = ['ok']) => accepted.includes(checks[code])
-
-    const radiusAuthSeen = Boolean(router.lastAuthSignalAt)
-    const accountingSeen = Boolean(router.lastAccountingSignalAt)
-
-    const natOk = isOk('nat', ['ok', 'skip'])
-    const dhcpOk = isOk('dhcp', ['ok', 'skip'])
-    const hotspotOk = isOk('hotspot')
-    const radiusOk = isOk('radius') && isOk('radius_config')
-
-    const weighted: Array<[boolean, number]> = [
-      [natOk, 15],
-      [dhcpOk, 10],
-      [hotspotOk, 15],
-      [radiusOk, 10],
-      [radiusAuthSeen, 20],
-      [accountingSeen, 20],
-      [isOk('bridge', ['ok', 'skip']), 3],
-      [isOk('bridge_port', ['ok', 'skip']), 2],
-      [isOk('files'), 2],
-      [isOk('scheduler'), 2],
-      [isOk('wireless', ['ok', 'ethernet', 'existing']), 1],
-    ]
-
-    const score = weighted.reduce((total, [ok, weight]) => total + (ok ? weight : 0), 0)
-    const criticalOk = natOk && dhcpOk && hotspotOk && radiusOk
-
-    return {
-      score,
-      criticalOk,
-      productionReady: score >= 95 && radiusAuthSeen && accountingSeen,
-    }
-  }
-
-  // Compares the latest self-test report against the oldest fully-passing
-  // report in the recent history window — no new schema/migration needed,
-  // this is derived entirely from existing RouterHealthCheck rows. Null when
-  // there isn't yet a passing baseline to compare against.
-  private computeDriftScore(
-    provisioningReports: Array<{ reportStatus: string; checks: Record<string, string> }>,
-  ) {
-    const latest = provisioningReports[0]
-    if (!latest) {
-      return null
-    }
-
-    const baseline = [...provisioningReports].reverse().find((report) => report.reportStatus === 'ok')
-    if (!baseline) {
-      return null
-    }
-
-    const baselineOkKeys = Object.entries(baseline.checks)
-      .filter(([, value]) => value === 'ok')
-      .map(([key]) => key)
-
-    if (baselineOkKeys.length === 0) {
-      return null
-    }
-
-    const stillOk = baselineOkKeys.filter((key) => latest.checks[key] === 'ok').length
-    return Math.round((stillOk / baselineOkKeys.length) * 100)
   }
 
   private resolveRouterLiveState(
@@ -2177,13 +1463,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return randomBytes(18).toString('base64url')
   }
 
-  private resolvePortalHosts(configured: string[], radiusHost?: string) {
+  private resolvePortalHosts(configured: string[]) {
     const envHosts = [
       process.env.PORTAL_PUBLIC_HOST,
       process.env.API_PUBLIC_HOST,
-      'arofi.arosoftlabs.com',
       'arofi.arosoft.io',
-      radiusHost,
       'pay.pesapal.com',
       'www.pesapal.com',
       'cybqa.pesapal.com',

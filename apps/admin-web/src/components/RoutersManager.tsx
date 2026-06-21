@@ -1,19 +1,15 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import {
   AdminSessionResponse,
   HotspotOverviewResponse,
-  RouterDiagnosticsResponse,
   RouterOverviewResponse,
   RouterSetupResponse,
   TenantOverviewResponse,
 } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
-import RouterDeploymentWizard from '@/components/RouterDeploymentWizard'
-import RouterHealthDashboard from '@/components/RouterHealthDashboard'
-import RouterTroubleshootingPanel from '@/components/RouterTroubleshootingPanel'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -48,7 +44,7 @@ type RouterFormState = {
   tags: string
 }
 
-type RouterView = 'overview' | 'setup' | 'dashboard' | 'troubleshoot' | 'inventory' | 'health'
+type RouterView = 'overview' | 'setup' | 'inventory' | 'health'
 
 const initialGroupForm: GroupFormState = {
   tenantId: '',
@@ -103,8 +99,6 @@ function parseHosts(value: string) {
 
 export default function RoutersManager() {
   const searchParams = useSearchParams()
-  const navRouter = useRouter()
-  const [deploymentWizard, setDeploymentWizard] = useState<RouterSetupResponse | null>(null)
   const [overview, setOverview] = useState<RouterOverviewResponse | null>(null)
   const [hotspots, setHotspots] = useState<HotspotOverviewResponse | null>(null)
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
@@ -112,7 +106,6 @@ export default function RoutersManager() {
   const [groupForm, setGroupForm] = useState<GroupFormState>(initialGroupForm)
   const [routerForm, setRouterForm] = useState<RouterFormState>(initialRouterForm)
   const [selectedSetup, setSelectedSetup] = useState<RouterSetupResponse | null>(null)
-  const [selectedDiagnostics, setSelectedDiagnostics] = useState<RouterDiagnosticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingSetup, setLoadingSetup] = useState(false)
   const [submittingGroup, setSubmittingGroup] = useState(false)
@@ -165,9 +158,8 @@ export default function RoutersManager() {
 
   useEffect(() => {
     const requestedView = searchParams.get('view')
-    const validViews: RouterView[] = ['overview', 'setup', 'dashboard', 'troubleshoot', 'inventory', 'health']
-    if (validViews.includes(requestedView as RouterView)) {
-      setActiveRouterView(requestedView as RouterView)
+    if (requestedView === 'overview' || requestedView === 'setup' || requestedView === 'inventory' || requestedView === 'health') {
+      setActiveRouterView(requestedView)
     }
   }, [searchParams])
 
@@ -216,12 +208,7 @@ export default function RoutersManager() {
     try {
       setLoadingSetup(true)
       setError(null)
-      const [setupData, diagnosticsData] = await Promise.all([
-        clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`),
-        clientFetchApi<RouterDiagnosticsResponse>(`/routers/${routerId}/diagnostics`).catch(() => null),
-      ])
-      setSelectedSetup(setupData)
-      setSelectedDiagnostics(diagnosticsData)
+      setSelectedSetup(await clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`))
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load router setup')
     } finally {
@@ -292,6 +279,7 @@ export default function RoutersManager() {
       })
       setRouterProcessText('Generating RouterOS setup details and refreshing inventory.')
       setSelectedSetup(setup)
+      setSuccess('Router registered successfully. Copy the one-run WinBox command below.')
       setRouterForm((previous) => ({
         ...initialRouterForm(),
         tenantId: previous.tenantId,
@@ -300,9 +288,6 @@ export default function RoutersManager() {
       }))
       await loadData(setup.router.id)
       setRouterModalOpen(false)
-      // Open the guided deployment wizard instead of leaving the operator on a
-      // generic dashboard wondering what to do next.
-      setDeploymentWizard(setup)
     } catch (requestError) {
       const failure = requestError instanceof Error ? requestError.message : 'Unable to register router'
       setError(failure)
@@ -353,7 +338,7 @@ export default function RoutersManager() {
     const cmd = oneRunCommand()
     if (!cmd) return
     await navigator.clipboard.writeText(cmd)
-    setSuccess('One-run command copied. Run it ONCE in WinBox terminal. Do not run it if you already imported the .rsc script.')
+    setSuccess('One-run RouterOS command copied to clipboard.')
   }
 
   async function copyRouterAccessDetails() {
@@ -391,14 +376,6 @@ export default function RoutersManager() {
 
   return (
     <>
-      {deploymentWizard && (
-        <RouterDeploymentWizard
-          setup={deploymentWizard}
-          onClose={() => setDeploymentWizard(null)}
-          onOpenDashboard={() => navRouter.push('/routers?view=overview')}
-          onCreateVoucher={() => navRouter.push('/vouchers')}
-        />
-      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Routers</h1>
@@ -440,8 +417,6 @@ export default function RoutersManager() {
         {[
           ['overview', 'Overview'],
           ['setup', 'Provisioning'],
-          ['dashboard', 'Dashboard'],
-          ['troubleshoot', 'Troubleshooting'],
           ['inventory', 'Inventory'],
           ['health', 'Health Checks'],
         ].map(([key, label]) => (
@@ -611,8 +586,8 @@ export default function RoutersManager() {
                 <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Paste this one line into WinBox → New Terminal, then press Enter. It will not change your admin login or WAN.</span>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-primary" onClick={() => setDeploymentWizard(selectedSetup)}>Open deployment guide</button>
-                <button type="button" className="btn btn-ghost" onClick={() => void copyScript()}>Copy command</button>
+                <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy command</button>
+                <button type="button" className="btn btn-ghost" onClick={downloadScript}>Download .rsc</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleRotateSecret(selectedSetup.router.id)}>Rotate secret</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleHealthCheck(selectedSetup.router.id)} disabled={runningHealthCheckId === selectedSetup.router.id}>{runningHealthCheckId === selectedSetup.router.id ? 'Checking…' : 'Re-check status'}</button>
               </div>
@@ -621,19 +596,10 @@ export default function RoutersManager() {
               <pre className="mono" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#0b1220', border: '1px solid var(--border)', borderRadius: 12, padding: 16, fontSize: 12.5, lineHeight: 1.6, color: '#dbe7ff', margin: 0 }}>
                 {oneRunCommand()}
               </pre>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
-                  <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.provisioningCallbackReceived ? 'Callback received' : 'Waiting for callback'}</span>
-                  <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
-                </div>
-                <details style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-secondary)', userSelect: 'none' }}>Advanced: Inspect / download raw script</summary>
-                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, border: '1px dashed var(--border)', padding: 10, borderRadius: 8, background: 'var(--bg-app)' }}>
-                    <p style={{ margin: 0, fontSize: 12 }}>The one-run command above automatically downloads and installs this script. Do not use both methods as it causes duplicate config errors.</p>
-                    <button type="button" className="btn btn-ghost" onClick={downloadScript} style={{ width: 'fit-content', padding: '4px 8px', fontSize: 12 }}>Download .rsc script</button>
-                  </div>
-                </details>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
+                <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.provisioningCallbackReceived ? 'Callback received' : 'Waiting for callback'}</span>
+                <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
               </div>
             </div>
           </div>
@@ -664,22 +630,6 @@ export default function RoutersManager() {
             </div>
           </div>
         </div>
-      ))}
-
-      {activeRouterView === 'dashboard' && (!selectedSetup ? (
-        <div className="card"><div className="empty-state"><p>Select a router from Inventory to view its dashboard.</p></div></div>
-      ) : (
-        <RouterHealthDashboard setup={selectedSetup} />
-      ))}
-
-      {activeRouterView === 'troubleshoot' && (!selectedSetup ? (
-        <div className="card"><div className="empty-state"><p>Select a router from Inventory to run diagnostics.</p></div></div>
-      ) : (
-        <RouterTroubleshootingPanel
-          setup={selectedSetup}
-          diagnostics={selectedDiagnostics}
-          onDiagnosticsRefreshed={setSelectedDiagnostics}
-        />
       ))}
 
       {(activeRouterView === 'inventory' || activeRouterView === 'health') && <RouterInventoryTable

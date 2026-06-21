@@ -52,7 +52,7 @@ RUN npm prune --omit=dev --legacy-peer-deps
 RUN rm -rf apps/admin-web/.next/cache apps/portal-web/.next/cache .turbo .git .github docs
 
 # Runtime stage
-FROM node:20-alpine
+FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
 
@@ -63,6 +63,12 @@ COPY --from=builder /usr/src/app ./
 RUN cp config/nginx.coolify.conf /etc/nginx/nginx.conf \
     && mkdir -p /run/nginx \
     && chmod +x scripts/start-all.sh
+
+RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
+# chown only the runtime artifacts needed, not the whole tree
+RUN chown -R arofi:nodejs /usr/src/app/apps/api/dist \
+    && chown -R arofi:nodejs /usr/src/app/apps/admin-web/.next \
+    && chown -R arofi:nodejs /usr/src/app/apps/portal-web/.next || true
 
 EXPOSE 3000
 # Default service to run. "all" = nginx + api + admin-web + portal-web in one

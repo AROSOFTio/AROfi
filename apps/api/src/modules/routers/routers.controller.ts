@@ -51,20 +51,6 @@ export class RoutersController {
     return this.routersService.getRouterSetup(routerId, tenantId)
   }
 
-  @RequirePermissions(PERMISSIONS.routersRead)
-  @Get(':routerId/diagnostics')
-  getRouterDiagnostics(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
-    const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.routersService.getRouterDiagnostics(routerId, tenantId)
-  }
-
-  @RequirePermissions(PERMISSIONS.routersManage)
-  @Post(':routerId/self-test')
-  runRouterSelfTest(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
-    const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.routersService.runRouterSelfTest(routerId, tenantId)
-  }
-
   @RequirePermissions(PERMISSIONS.routersManage)
   @Post(':routerId/health-check')
   runHealthCheck(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
@@ -77,13 +63,6 @@ export class RoutersController {
   rotateRadiusSecret(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.routersService.rotateRadiusSecret(routerId, tenantId)
-  }
-
-  @RequirePermissions(PERMISSIONS.routersManage)
-  @Post(':routerId/run-deployment-test')
-  runDeploymentTest(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
-    const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.routersService.runDeploymentTest(routerId, tenantId)
   }
 }
 
