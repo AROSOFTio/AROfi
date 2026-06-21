@@ -29,7 +29,7 @@ type ProvisioningInput = {
 
 @Injectable()
 export class MikrotikService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   async probeConnection(host: string, port: number, timeoutMs = 4000) {
     return new Promise<{
@@ -182,8 +182,8 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=5m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
-      `/ip hotspot user profile set [find default=yes] shared-users=1`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
+      `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30s`,
     ]
 
     const walledGarden = [
@@ -197,13 +197,17 @@ export class MikrotikService {
 
     const antiTether = [
       ``,
-      `# TTL anti-tethering (always on — prevents hotspot-behind-hotspot NAT abuse)`,
+      `# TTL anti-tethering — decrement TTL on every packet entering the hotspot bridge.`,
+      `# Direct device: TTL starts at 64 → arrives at internet as 63 (normal, allowed).`,
+      `# Tethered laptop via phone hotspot: laptop TTL=128 → phone NAT strips 1 → 127`,
+      `#   → router prerouting strips 1 more → 126. Internet sees 126 instead of 127/128.`,
+      `# This is enough to trigger carrier/server-side tethering detection.`,
+      `# DO NOT add postrouting set:1 out-interface — that kills reply packets to the phone.`,
       `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
       `:foreach h in=[/ip hotspot find] do={`,
       `  :local hotInterface [/ip hotspot get $h interface]`,
       `  :if ($hotInterface != "") do={`,
       `    :do { /ip firewall mangle add chain=prerouting action=change-ttl new-ttl=decrement:1 passthrough=yes in-interface=$hotInterface comment="AROFi anti-tether" } on-error={}`,
-      `    :do { /ip firewall mangle add chain=postrouting action=change-ttl new-ttl=set:1 passthrough=no out-interface=$hotInterface comment="AROFi anti-tether" } on-error={}`,
       `  }`,
       `}`,
     ]
@@ -519,6 +523,11 @@ export class MikrotikService {
         var r=await fetch(API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo));
         if(!r.ok)throw new Error('HTTP '+r.status);
         var d=await r.json();
+        // INSTANT RECONNECT: if this device already has an active activation, submit immediately.
+        // No UI is shown — the user never sees the portal on reconnect.
+        if(d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect){
+          conn(d.returningDevice.reconnect);return;
+        }
         pkgs=d.packages||[];
         if(d.tenant){
           document.getElementById('tname').textContent=d.tenant.name||'AROFi Hotspot';

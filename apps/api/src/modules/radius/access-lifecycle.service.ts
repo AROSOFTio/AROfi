@@ -22,7 +22,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly radiusCredentialService: RadiusCredentialService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     if (process.env.RADIUS_DISCONNECT_ENABLED === 'true') {
@@ -31,8 +31,8 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       } catch {
         this.logger.error(
           'CRITICAL: RADIUS_DISCONNECT_ENABLED=true but radclient ' +
-            'binary is not found in PATH. Active session disconnect will ' +
-            'silently fail. Add freeradius-utils to the API Dockerfile.',
+          'binary is not found in PATH. Active session disconnect will ' +
+          'silently fail. Add freeradius-utils to the API Dockerfile.',
         )
       }
     }
@@ -87,16 +87,16 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   private async syncRadiusSqlSignals() {
     const recentSince = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const acctRows = await this.prisma.radAcct.findMany({
-        where: {
-          OR: [
-            { acctstarttime: { gte: recentSince } },
-            { acctupdatetime: { gte: recentSince } },
-            { acctstoptime: { gte: recentSince } },
-          ],
-        },
-        orderBy: { radacctid: 'desc' },
-        take: 200,
-      })
+      where: {
+        OR: [
+          { acctstarttime: { gte: recentSince } },
+          { acctupdatetime: { gte: recentSince } },
+          { acctstoptime: { gte: recentSince } },
+        ],
+      },
+      orderBy: { radacctid: 'desc' },
+      take: 200,
+    })
 
     const now = new Date()
     const clients = await this.prisma.radiusClient.findMany({ include: { router: true } })
@@ -282,18 +282,30 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
 
     for (const attempt of attempts) {
       try {
-        const secret = process.env.RADIUS_DISCONNECT_SECRET ?? process.env.RADIUS_SHARED_SECRET
-        let host = process.env.RADIUS_DISCONNECT_HOST
+        const secret = process.env.RADIUS_DISCONNECT_SECRET?.trim() || process.env.RADIUS_SHARED_SECRET
+        // RADIUS_DISCONNECT_HOST must be BLANK in .env so we resolve per-router.
+        // CoA Disconnect-Request must go to the MikroTik router on port 3799,
+        // NOT to the FreeRADIUS container. MikroTik uses the same shared secret for CoA.
+        let host = process.env.RADIUS_DISCONNECT_HOST?.trim() || ''
         if (!host && attempt.routerId) {
           const router = await this.prisma.router.findUnique({
             where: { id: attempt.routerId },
           })
           if (router) {
-            host = router.radiusNasIpAddress ?? router.host
+            host = router.radiusNasIpAddress ?? router.host ?? ''
           }
         }
         if (!host) {
-          host = process.env.RADIUS_PUBLIC_HOST ?? '127.0.0.1'
+          this.logger.warn(`CoA disconnect skipped for attempt ${attempt.id}: router NAS IP unknown. Re-run the provisioning script so the router reports its WAN IP.`)
+          await this.prisma.disconnectionAttempt.update({
+            where: { id: attempt.id },
+            data: {
+              status: DisconnectionStatus.FAILED,
+              completedAt: new Date(),
+              message: 'CoA target unresolvable — router.radiusNasIpAddress is null. Re-provision the router.',
+            },
+          })
+          continue
         }
         const port = process.env.RADIUS_DISCONNECT_PORT ?? '3799'
         if (!secret) {
