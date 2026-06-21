@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import type { RouterSetupResponse } from '@/lib/admin-types'
+import type { RouterDeploymentTestResult, RouterDiagnosticsResponse, RouterSetupResponse } from '@/lib/admin-types'
+import { buildVerification, type VerificationItem } from '@/lib/router-verification'
 
 // ---------------------------------------------------------------------------
 // AROFi guided router deployment wizard.
@@ -20,32 +21,6 @@ type Props = {
   onClose: () => void
   onOpenDashboard?: () => void
   onCreateVoucher?: () => void
-}
-
-// The diagnostics endpoint payload we actually consume. Kept local + loose so
-// the wizard does not depend on backend-internal shapes beyond these fields.
-type SelfTestCheck = Record<string, string>
-type DiagnosticsResponse = {
-  router: RouterSetupResponse['router']
-  setupDiagnostics?: Array<{ code: string; label: string; ok: boolean; checkedAt?: string | null }>
-  selfTest?: {
-    status?: string
-    checkedAt?: string | null
-    checks?: Array<{ code: string; label: string; ok: boolean; value?: string; checkedAt?: string | null }>
-    errors?: string[]
-    notes?: string[]
-  }
-}
-
-type CheckState = 'pass' | 'fail' | 'pending'
-
-type VerificationItem = {
-  key: string
-  label: string
-  state: CheckState
-  critical: boolean
-  problem: string
-  fix: string
 }
 
 const WIZARD_STEPS = [
@@ -66,10 +41,12 @@ export default function RouterDeploymentWizard({ setup, onClose, onOpenDashboard
   const [loginConfirmed, setLoginConfirmed] = useState(false)
   const [pasteConfirmed, setPasteConfirmed] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
-  const [diagnostics, setDiagnostics] = useState<DiagnosticsResponse | null>(null)
+  const [diagnostics, setDiagnostics] = useState<RouterDiagnosticsResponse | null>(null)
   const [latestSetup, setLatestSetup] = useState<RouterSetupResponse>(setup)
   const [verifying, setVerifying] = useState(false)
   const [retryingKey, setRetryingKey] = useState<string | null>(null)
+  const [deploymentTestResult, setDeploymentTestResult] = useState<RouterDeploymentTestResult | null>(null)
+  const [runningDeploymentTest, setRunningDeploymentTest] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const router = latestSetup.router
@@ -80,7 +57,7 @@ export default function RouterDeploymentWizard({ setup, onClose, onOpenDashboard
     try {
       const [setupData, diag] = await Promise.all([
         clientFetchApi<RouterSetupResponse>(`/routers/${router.id}/setup`),
-        clientFetchApi<DiagnosticsResponse>(`/routers/${router.id}/diagnostics`),
+        clientFetchApi<RouterDiagnosticsResponse>(`/routers/${router.id}/diagnostics`),
       ])
       setLatestSetup(setupData)
       setDiagnostics(diag)
@@ -187,6 +164,29 @@ export default function RouterDeploymentWizard({ setup, onClose, onOpenDashboard
     setVerifying(false)
   }
 
+  // Synthetic, protocol-level pre-flight test (see routers.service.ts
+  // runDeploymentTest). Does not replace the real phone redemption that
+  // drives voucher_auth/client_internet above — it just catches a
+  // misconfigured RADIUS secret or unreachable server before that phone test.
+  async function handleRunDeploymentTest() {
+    setRunningDeploymentTest(true)
+    try {
+      const result = await clientPostApi<RouterDeploymentTestResult>(`/routers/${router.id}/run-deployment-test`, {})
+      setDeploymentTestResult(result)
+    } catch (error) {
+      setDeploymentTestResult({
+        routerId: router.id,
+        overallOk: false,
+        latencyMs: 0,
+        checkedAt: new Date().toISOString(),
+        note: 'Synthetic pre-flight test only — does not replace a real phone redemption.',
+        steps: [{ name: 'request_failed', ok: false, detail: error instanceof Error ? error.message : 'Request failed' }],
+      })
+    } finally {
+      setRunningDeploymentTest(false)
+    }
+  }
+
   // --- Render -------------------------------------------------------------
   return (
     <div className="adw-overlay" role="dialog" aria-modal="true">
@@ -240,6 +240,9 @@ export default function RouterDeploymentWizard({ setup, onClose, onOpenDashboard
                   onRetry={(key) => void handleRetry(key)}
                   onVerifyNow={() => void handleVerifyNow()}
                   router={router}
+                  onRunDeploymentTest={() => void handleRunDeploymentTest()}
+                  runningDeploymentTest={runningDeploymentTest}
+                  deploymentTestResult={deploymentTestResult}
                 />
               )}
               {step === 6 && <GoLiveStep />}
@@ -575,6 +578,9 @@ function VerifyStep({
   onRetry,
   onVerifyNow,
   router,
+  onRunDeploymentTest,
+  runningDeploymentTest,
+  deploymentTestResult,
 }: {
   verification: VerificationItem[]
   criticalPassed: boolean
@@ -584,6 +590,9 @@ function VerifyStep({
   onRetry: (key: string) => void
   onVerifyNow: () => void
   router: RouterSetupResponse['router']
+  onRunDeploymentTest: () => void
+  runningDeploymentTest: boolean
+  deploymentTestResult: RouterDeploymentTestResult | null
 }) {
   return (
     <div className="adw-step">
@@ -603,6 +612,21 @@ function VerifyStep({
           {verifying ? 'Checking…' : 'Re-check now'}
         </button>
       </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '0 0 14px' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+          Health score: <strong>{router.healthScore ?? 0}%</strong> · Status: <strong>{router.dashboardState ?? 'OFFLINE'}</strong>
+        </span>
+        <button type="button" className="btn btn-ghost" onClick={onRunDeploymentTest} disabled={runningDeploymentTest}>
+          {runningDeploymentTest ? 'Running test…' : 'Run automated test now'}
+        </button>
+      </div>
+      {deploymentTestResult && (
+        <p className="adw-verify-foot" style={{ marginTop: -6 }}>
+          Automated test: <strong>{deploymentTestResult.overallOk ? 'PASS' : 'FAIL'}</strong> —{' '}
+          {deploymentTestResult.steps.map((s) => s.detail).join(' ')}
+        </p>
+      )}
 
       <div className="adw-checklist">
         {verification.map((item) => (
@@ -727,133 +751,6 @@ function DeploymentSuccess({
       </div>
     </div>
   )
-}
-
-// ===========================================================================
-//  Verification mapping — every tick maps to a REAL observed signal.
-// ===========================================================================
-function buildVerification(setup: RouterSetupResponse, diag: DiagnosticsResponse | null): VerificationItem[] {
-  const r = setup.router
-  const selfChecks: SelfTestCheck = {}
-  for (const c of diag?.selfTest?.checks ?? []) {
-    selfChecks[c.code] = c.ok ? 'pass' : (c.value ?? 'fail')
-  }
-  // setupDiagnostics codes: local_self_test, provisioning_callback, management_api
-  const setupDiag = new Map((diag?.setupDiagnostics ?? setup.setupDiagnostics ?? []).map((d) => [d.code, d.ok]))
-  const selfTestPassed = diag?.selfTest?.status === 'ok'
-  const callback = Boolean(r.provisioningCallbackReceived) || setupDiag.get('provisioning_callback') === true
-
-  // A self-test report only exists if the router reached AROFi over the internet
-  // (the on-box script aborts before reporting if it has no WAN), so a present
-  // report is itself proof of router internet + DNS.
-  const reported = Boolean(diag?.selfTest?.checkedAt) || callback
-
-  const ok = (b: boolean): CheckState => (b ? 'pass' : reported ? 'fail' : 'pending')
-  const checkOk = (code: string): CheckState => {
-    const v = selfChecks[code]
-    if (v === 'pass' || v === 'ok' || v === 'skip' || v === 'ethernet' || v === 'existing') return 'pass'
-    if (v === undefined) return reported ? 'fail' : 'pending'
-    return 'fail'
-  }
-
-  return [
-    {
-      key: 'router_online',
-      label: 'Router Online',
-      state: ok(callback || r.liveState === 'LIVE' || Boolean(r.isLiveNow)),
-      critical: true,
-      problem: 'The router has not contacted AROFi yet.',
-      fix: 'Confirm the script finished running in WinBox and the router has internet (WAN).',
-    },
-    {
-      key: 'heartbeat',
-      label: 'Heartbeat Active',
-      state: ok(checkOk('scheduler') === 'pass' || r.liveState === 'LIVE' || r.liveState === 'STALE'),
-      critical: false,
-      problem: 'No heartbeat scheduler signal received.',
-      fix: 'Re-run the script; it installs the arofi-heartbeat scheduler that beats every 60s.',
-    },
-    {
-      key: 'internet',
-      label: 'Internet Reachable',
-      state: ok(reported),
-      critical: true,
-      problem: 'The router could not reach the internet during self-test.',
-      fix: 'Check the WAN cable/PPPoE/LTE and that /ping 8.8.8.8 works on the router.',
-    },
-    {
-      key: 'dns',
-      label: 'DNS Working',
-      state: ok(reported && checkOk('files') !== 'fail'),
-      critical: true,
-      problem: 'DNS resolution failed on the router.',
-      fix: 'Set /ip dns servers to 1.1.1.1,8.8.8.8 and allow-remote-requests=yes, then retry.',
-    },
-    {
-      key: 'hotspot',
-      label: 'Hotspot Running',
-      state: checkOk('hotspot'),
-      critical: true,
-      problem: 'The hotspot server is missing or disabled.',
-      fix: 'Re-run the script to recreate the arofi-hotspot server on the isolated bridge.',
-    },
-    {
-      key: 'radius',
-      label: 'RADIUS Connected',
-      state: checkOk('radius'),
-      critical: true,
-      problem: 'The router cannot reach the AROFi RADIUS server.',
-      fix: 'Ensure UDP 1812/1813 to the RADIUS host is open from the router; re-run the script.',
-    },
-    {
-      key: 'voucher_auth',
-      label: 'Voucher Authentication',
-      state: ok(Boolean(r.radiusAuthSeen)),
-      critical: true,
-      problem: 'No successful RADIUS Access-Accept has been seen yet.',
-      fix: 'Redeem a test voucher on a connected phone to generate a real authentication.',
-    },
-    {
-      key: 'portal',
-      label: 'Portal Reachable',
-      state: checkOk('files'),
-      critical: false,
-      problem: 'The captive portal login page is not installed.',
-      fix: 'Re-run the script so it fetches hotspot/login.html onto the router.',
-    },
-    {
-      key: 'walled_garden',
-      label: 'Walled Garden Configured',
-      state: ok(selfTestPassed || callback),
-      critical: false,
-      problem: 'Walled garden entries for the portal/payment hosts are missing.',
-      fix: 'Re-run the script; it adds the AROFi portal walled-garden allow rules.',
-    },
-    {
-      key: 'nat',
-      label: 'NAT Configured',
-      state: checkOk('nat'),
-      critical: true,
-      problem: 'No NAT masquerade for hotspot clients was found.',
-      fix: 'The script adds NAT automatically once a WAN interface is detected; check WAN and retry.',
-    },
-    {
-      key: 'dhcp',
-      label: 'DHCP Running',
-      state: checkOk('dhcp'),
-      critical: true,
-      problem: 'The DHCP server for hotspot clients is missing.',
-      fix: 'Re-run the script to recreate the arofi-dhcp server and pool.',
-    },
-    {
-      key: 'client_internet',
-      label: 'Client Internet After Auth',
-      state: ok(Boolean(r.accountingSeen)),
-      critical: true,
-      problem: 'No real client has been accounted online yet.',
-      fix: 'Connect a phone, redeem a voucher, and confirm it browses — accounting will confirm here.',
-    },
-  ]
 }
 
 // ===========================================================================

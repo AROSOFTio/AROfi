@@ -5,12 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AdminSessionResponse,
   HotspotOverviewResponse,
+  RouterDiagnosticsResponse,
   RouterOverviewResponse,
   RouterSetupResponse,
   TenantOverviewResponse,
 } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import RouterDeploymentWizard from '@/components/RouterDeploymentWizard'
+import RouterHealthDashboard from '@/components/RouterHealthDashboard'
+import RouterTroubleshootingPanel from '@/components/RouterTroubleshootingPanel'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -45,7 +48,7 @@ type RouterFormState = {
   tags: string
 }
 
-type RouterView = 'overview' | 'setup' | 'inventory' | 'health'
+type RouterView = 'overview' | 'setup' | 'dashboard' | 'troubleshoot' | 'inventory' | 'health'
 
 const initialGroupForm: GroupFormState = {
   tenantId: '',
@@ -109,6 +112,7 @@ export default function RoutersManager() {
   const [groupForm, setGroupForm] = useState<GroupFormState>(initialGroupForm)
   const [routerForm, setRouterForm] = useState<RouterFormState>(initialRouterForm)
   const [selectedSetup, setSelectedSetup] = useState<RouterSetupResponse | null>(null)
+  const [selectedDiagnostics, setSelectedDiagnostics] = useState<RouterDiagnosticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingSetup, setLoadingSetup] = useState(false)
   const [submittingGroup, setSubmittingGroup] = useState(false)
@@ -161,8 +165,9 @@ export default function RoutersManager() {
 
   useEffect(() => {
     const requestedView = searchParams.get('view')
-    if (requestedView === 'overview' || requestedView === 'setup' || requestedView === 'inventory' || requestedView === 'health') {
-      setActiveRouterView(requestedView)
+    const validViews: RouterView[] = ['overview', 'setup', 'dashboard', 'troubleshoot', 'inventory', 'health']
+    if (validViews.includes(requestedView as RouterView)) {
+      setActiveRouterView(requestedView as RouterView)
     }
   }, [searchParams])
 
@@ -211,7 +216,12 @@ export default function RoutersManager() {
     try {
       setLoadingSetup(true)
       setError(null)
-      setSelectedSetup(await clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`))
+      const [setupData, diagnosticsData] = await Promise.all([
+        clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`),
+        clientFetchApi<RouterDiagnosticsResponse>(`/routers/${routerId}/diagnostics`).catch(() => null),
+      ])
+      setSelectedSetup(setupData)
+      setSelectedDiagnostics(diagnosticsData)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load router setup')
     } finally {
@@ -430,6 +440,8 @@ export default function RoutersManager() {
         {[
           ['overview', 'Overview'],
           ['setup', 'Provisioning'],
+          ['dashboard', 'Dashboard'],
+          ['troubleshoot', 'Troubleshooting'],
           ['inventory', 'Inventory'],
           ['health', 'Health Checks'],
         ].map(([key, label]) => (
@@ -652,6 +664,22 @@ export default function RoutersManager() {
             </div>
           </div>
         </div>
+      ))}
+
+      {activeRouterView === 'dashboard' && (!selectedSetup ? (
+        <div className="card"><div className="empty-state"><p>Select a router from Inventory to view its dashboard.</p></div></div>
+      ) : (
+        <RouterHealthDashboard setup={selectedSetup} />
+      ))}
+
+      {activeRouterView === 'troubleshoot' && (!selectedSetup ? (
+        <div className="card"><div className="empty-state"><p>Select a router from Inventory to run diagnostics.</p></div></div>
+      ) : (
+        <RouterTroubleshootingPanel
+          setup={selectedSetup}
+          diagnostics={selectedDiagnostics}
+          onDiagnosticsRefreshed={setSelectedDiagnostics}
+        />
       ))}
 
       {(activeRouterView === 'inventory' || activeRouterView === 'health') && <RouterInventoryTable
