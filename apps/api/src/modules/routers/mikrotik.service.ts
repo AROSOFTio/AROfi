@@ -153,6 +153,8 @@ export class MikrotikService {
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const selfTestUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/self-test/${this.escape(registrationKey)}`
     const fallbackSelfTestUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/self-test/${this.escape(registrationKey)}`
+    const watchdogUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/watchdog/${this.escape(registrationKey)}`
+    const fallbackWatchdogUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/watchdog/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript({
       callbackUrl,
       fallbackCallbackUrl,
@@ -166,6 +168,23 @@ export class MikrotikService {
     })
     const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
     const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl, profileName)
+    // Self-healing watchdog only applies to the bridge/DHCP/NAT/hotspot AROFi
+    // creates itself — SAFE_EXISTING_ROUTER mode reuses the operator's own
+    // HotSpot, so there is nothing of ours to watch/repair there.
+    const watchdogScript = radiusOnly
+      ? []
+      : this.buildWatchdogScheduler({
+          watchdogUrl,
+          fallbackWatchdogUrl,
+          hotspotName,
+          profileName,
+          addressesPerMac,
+          radiusHost: input.radiusHost,
+          radiusAuthPort: input.radiusAuthPort,
+          radiusAccountingPort: input.radiusAccountingPort,
+          sharedSecret: input.sharedSecret,
+          registrationKey,
+        })
 
     // Shared front matter: enable management access only. We deliberately do NOT
     // change the admin username/password and do NOT touch WAN or addresses.
@@ -234,6 +253,9 @@ export class MikrotikService {
       `# 5. AROFi heartbeat (fast live/offline status, works behind NAT)`,
       ...heartbeatScript,
       ``,
+      `# 5b. AROFi self-healing watchdog (re-checks + repairs every 60s)`,
+      ...watchdogScript,
+      ``,
       `# 6. Tell AROFi the script imported so it can learn the router NAS IP`,
       ...callbackScript,
     ]
@@ -292,69 +314,13 @@ export class MikrotikService {
       `} on-error={ :put "Error: failed to add DHCP server" }`,
       `:do { /ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8 } on-error={}`,
       ``,
-      `# Detect WAN interface dynamically so NAT works on any router model`,
-      `# Works on RouterOS 6 (parses gateway-status) and RouterOS 7 (direct interface route property),`,
-      `# with fallback checks for active DHCP, PPPoE, or LTE clients.`,
+      `# Detect WAN interface dynamically so NAT works on any router model.`,
+      `# Covers DHCP/static/PPPoE/LTE WAN and bridge/VLAN WAN — whatever interface`,
+      `# actually carries the default route is picked up generically below.`,
       `:local wanIface ""`,
-      `:do {`,
-      `  :foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
-      `    :local gwStatus ""`,
-      `    :do { :set gwStatus [:tostr [/ip route get $r gateway-status]] } on-error={}`,
-      `    :if ($gwStatus != "") do={`,
-      `      :local viaIndex [:find $gwStatus "via "]`,
-      `      :if ($viaIndex >= 0) do={`,
-      `        :local tmpIface [:pick $gwStatus ($viaIndex + 4) [:len $gwStatus]]`,
-      `        :local spaceIndex [:find $tmpIface " "]`,
-      `        :if ($spaceIndex >= 0) do={`,
-      `          :set wanIface [:pick $tmpIface 0 $spaceIndex]`,
-      `        } else={`,
-      `          :set wanIface $tmpIface`,
-      `        }`,
-      `      }`,
-      `    }`,
-      `    :if ($wanIface = "") do={`,
-      `      :do { :set wanIface [/ip route get $r interface] } on-error={`,
-      `        :do { :set wanIface [/ip route get $r gateway-interface] } on-error={}`,
-      `      }`,
-      `    }`,
-      `  }`,
-      `} on-error={}`,
-      `:if ($wanIface = "") do={`,
-      `  :do {`,
-      `    :local boundDhcp [/ip dhcp-client find status=bound]`,
-      `    :if ([:len $boundDhcp] > 0) do={`,
-      `      :set wanIface [/ip dhcp-client get [:pick $boundDhcp 0] interface]`,
-      `    }`,
-      `  } on-error={}`,
-      `}`,
-      `:if ($wanIface = "") do={`,
-      `  :do {`,
-      `    :local activePppoe [/interface pppoe-client find running=yes]`,
-      `    :if ([:len $activePppoe] > 0) do={`,
-      `      :set wanIface [/interface pppoe-client get [:pick $activePppoe 0] name]`,
-      `    }`,
-      `  } on-error={}`,
-      `}`,
-      `:if ($wanIface = "") do={`,
-      `  :do {`,
-      `    :local activeLte [/interface lte find running=yes]`,
-      `    :if ([:len $activeLte] > 0) do={`,
-      `      :set wanIface [/interface lte get [:pick $activeLte 0] name]`,
-      `    }`,
-      `  } on-error={}`,
-      `}`,
-      `:if ($wanIface != "") do={`,
-      `  :local cleanIface ""`,
-      `  :local hasComma false`,
-      `  :for i from=0 to=([:len $wanIface] - 1) do={`,
-      `    :local char [:pick $wanIface $i ($i + 1)]`,
-      `    :if ($char = ",") do={ :set hasComma true }`,
-      `    :if ($char != " " && $char != "," && $hasComma = false) do={`,
-      `      :set cleanIface ($cleanIface . $char)`,
-      `    }`,
-      `  }`,
-      `  :set wanIface $cleanIface`,
-      `}`,
+      ...this.buildWanDetection('wanIface'),
+      ``,
+      ...this.buildWanLanSeparationRepair(),
       ``,
       `# If the router has no usable wireless radio, attach a non-WAN Ethernet port`,
       `# so an external AP or wired test client can still use the HotSpot bridge.`,
@@ -434,6 +400,131 @@ export class MikrotikService {
     ]
   }
 
+  // Shared WAN-interface detection, parameterized by local variable name so it
+  // can be reused for the main provisioning run, the lightweight callback NAS-IP
+  // lookup, and a NAT self-test retry — without three copies to keep in sync.
+  // Whatever interface actually carries the active default route is picked up
+  // here regardless of its type (Ethernet/DHCP/PPPoE/LTE/bridge/VLAN), since
+  // RouterOS resolves `.interface`/`.gateway-status` to the real egress
+  // interface name no matter what kind of interface it is.
+  private buildWanDetection(varName: string) {
+    const v = `$${varName}`
+    return [
+      `:do {`,
+      `  :foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
+      `    :local gwStatus ""`,
+      `    :do { :set gwStatus [:tostr [/ip route get $r gateway-status]] } on-error={}`,
+      `    :if ($gwStatus != "") do={`,
+      `      :local viaIndex [:find $gwStatus "via "]`,
+      `      :if ($viaIndex >= 0) do={`,
+      `        :local tmpIface [:pick $gwStatus ($viaIndex + 4) [:len $gwStatus]]`,
+      `        :local spaceIndex [:find $tmpIface " "]`,
+      `        :if ($spaceIndex >= 0) do={`,
+      `          :set ${varName} [:pick $tmpIface 0 $spaceIndex]`,
+      `        } else={`,
+      `          :set ${varName} $tmpIface`,
+      `        }`,
+      `      }`,
+      `    }`,
+      `    :if (${v} = "") do={`,
+      `      :do { :set ${varName} [/ip route get $r interface] } on-error={`,
+      `        :do { :set ${varName} [/ip route get $r gateway-interface] } on-error={}`,
+      `      }`,
+      `    }`,
+      `  }`,
+      `} on-error={}`,
+      `:if (${v} = "") do={`,
+      `  :do {`,
+      `    :local boundDhcp [/ip dhcp-client find status=bound]`,
+      `    :if ([:len $boundDhcp] > 0) do={`,
+      `      :set ${varName} [/ip dhcp-client get [:pick $boundDhcp 0] interface]`,
+      `    }`,
+      `  } on-error={}`,
+      `}`,
+      `:if (${v} = "") do={`,
+      `  :do {`,
+      `    :local activePppoe [/interface pppoe-client find running=yes]`,
+      `    :if ([:len $activePppoe] > 0) do={`,
+      `      :set ${varName} [/interface pppoe-client get [:pick $activePppoe 0] name]`,
+      `    }`,
+      `  } on-error={}`,
+      `}`,
+      `:if (${v} = "") do={`,
+      `  :do {`,
+      `    :local activeLte [/interface lte find running=yes]`,
+      `    :if ([:len $activeLte] > 0) do={`,
+      `      :set ${varName} [/interface lte get [:pick $activeLte 0] name]`,
+      `    }`,
+      `  } on-error={}`,
+      `}`,
+      `:if (${v} != "") do={`,
+      `  :local cleanIface ""`,
+      `  :local hasComma false`,
+      `  :for i from=0 to=([:len ${v}] - 1) do={`,
+      `    :local char [:pick ${v} $i ($i + 1)]`,
+      `    :if ($char = ",") do={ :set hasComma true }`,
+      `    :if ($char != " " && $char != "," && $hasComma = false) do={`,
+      `      :set cleanIface ($cleanIface . $char)`,
+      `    }`,
+      `  }`,
+      `  :set ${varName} $cleanIface`,
+      `}`,
+    ]
+  }
+
+  // Failure mode #2 (WAN bridged together with LAN/hotspot ports) and #8 (a
+  // stray DHCP client on the wrong interface) both break traffic separation in
+  // ways that are easy for an operator to miss in Winbox. Repair both
+  // automatically right after WAN is identified, and abort loudly if removing
+  // a bad bridge port costs us the default route.
+  private buildWanLanSeparationRepair() {
+    return [
+      `# Zero-trust check: WAN must not be a port on a LAN/hotspot bridge —`,
+      `# this ambiguates the traffic path and breaks NAT/hotspot reliability.`,
+      `:if ($wanIface != "") do={`,
+      `  :do {`,
+      `    :foreach wp in=[/interface bridge port find interface=$wanIface] do={`,
+      `      :local wpBridge [/interface bridge port get $wp bridge]`,
+      `      :local wpBridgeName ""`,
+      `      :do { :set wpBridgeName [/interface bridge get $wpBridge name] } on-error={}`,
+      `      :if ($wpBridgeName != "arofi-hotspot") do={`,
+      `        /interface bridge port remove $wp`,
+      `        :global arofiProvisionNotes`,
+      `        :set arofiProvisionNotes ($arofiProvisionNotes . "wan_removed_from_bridge,")`,
+      `        :put ("AROFi: removed WAN interface " . $wanIface . " from bridge " . $wpBridgeName . " to restore WAN/LAN separation.")`,
+      `      }`,
+      `    }`,
+      `  } on-error={`,
+      `    :global arofiProvisionErrors`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "wan_bridge_repair_failed,")`,
+      `  }`,
+      `  :local routeStillOk 0`,
+      `  :do { :set routeStillOk [:len [/ip route find dst-address=0.0.0.0/0 active=yes]] } on-error={}`,
+      `  :if ($routeStillOk = 0) do={`,
+      `    :global arofiProvisionErrors`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "wan_route_lost_after_bridge_repair,")`,
+      `    :put "Error: default route disappeared after removing WAN from a bridge. Manual check required — connect via WinBox MAC-address login if needed."`,
+      `  }`,
+      `}`,
+      ``,
+      `# Zero-trust check: a stray DHCP client on the wrong interface can steal`,
+      `# the default route or create routing ambiguity (observed failure mode).`,
+      `:if ($wanIface != "") do={`,
+      `  :do {`,
+      `    :foreach dc in=[/ip dhcp-client find] do={`,
+      `      :local dcIface [/ip dhcp-client get $dc interface]`,
+      `      :if ($dcIface != $wanIface) do={`,
+      `        /ip dhcp-client remove $dc`,
+      `        :global arofiProvisionNotes`,
+      `        :set arofiProvisionNotes ($arofiProvisionNotes . "stray_dhcp_client_removed,")`,
+      `        :put ("AROFi: removed stray DHCP client on " . $dcIface . " (WAN is " . $wanIface . ").")`,
+      `      }`,
+      `    }`,
+      `  } on-error={}`,
+      `}`,
+    ]
+  }
+
   private buildWalledGarden(hosts: string[]) {
     const normalizedHosts = Array.from(new Set(hosts.filter(Boolean)))
     if (normalizedHosts.length === 0) {
@@ -463,6 +554,91 @@ export class MikrotikService {
     ]
   }
 
+  // Self-healing watchdog: runs every 60s, independently of the provisioning
+  // run, and re-checks the same idempotent resources the main script creates.
+  // It only calls home when it actually repaired something, so a healthy
+  // router stays silent. Built as a normal array of script lines (readable,
+  // same convention as the rest of this file) then quote-escaped once — same
+  // technique as `parseGuard` — for embedding inside the `source="..."` of the
+  // /system script it installs.
+  private buildWatchdogScheduler(input: {
+    watchdogUrl: string
+    fallbackWatchdogUrl: string
+    hotspotName: string
+    profileName: string
+    addressesPerMac: number
+    radiusHost: string
+    radiusAuthPort: number
+    radiusAccountingPort: number
+    sharedSecret: string
+    registrationKey: string
+  }) {
+    const hotspotName = this.escape(input.hotspotName)
+    const profileName = this.escape(input.profileName)
+    const registrationKey = this.escape(input.registrationKey)
+    const sharedSecret = this.escape(input.sharedSecret)
+
+    const bodyLines = [
+      `:local wdRepairs ""`,
+      `:local wdChecks ""`,
+      `:local wdWanIface ""`,
+      ...this.buildWanDetection('wdWanIface'),
+      `:if ([:len [/interface bridge find name="arofi-hotspot"]] = 0) do={`,
+      `  :do { /interface bridge add name=arofi-hotspot comment="AROFi customer hotspot" } on-error={}`,
+      `  :set wdRepairs ($wdRepairs . "bridge,")`,
+      `} else={ :set wdChecks ($wdChecks . "bridge=ok,") }`,
+      `:if ([:len [/ip dhcp-server find name=arofi-dhcp]] = 0) do={`,
+      `  :do {`,
+      `    :if ([:len [/ip pool find name=arofi-pool]] = 0) do={ /ip pool add name=arofi-pool ranges=10.55.0.10-10.55.0.254 }`,
+      `    :if ([:len [/ip dhcp-server network find address="10.55.0.0/24"]] = 0) do={ /ip dhcp-server network add address=10.55.0.0/24 gateway=10.55.0.1 dns-server=10.55.0.1,1.1.1.1,8.8.8.8 }`,
+      `    :local wdBridgeId [/interface find name="arofi-hotspot"]`,
+      `    :if ([:len $wdBridgeId] > 0) do={ /ip dhcp-server add name=arofi-dhcp interface=$wdBridgeId address-pool=arofi-pool lease-time=1h disabled=no } else={ /ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no }`,
+      `  } on-error={}`,
+      `  :set wdRepairs ($wdRepairs . "dhcp,")`,
+      `} else={ :set wdChecks ($wdChecks . "dhcp=ok,") }`,
+      `:if ([:len [/ip firewall nat find comment="AROFi hotspot nat"]] = 0) do={`,
+      `  :if ($wdWanIface != "") do={`,
+      `    :do {`,
+      `      :local wdWanIfaceId [/interface find name=$wdWanIface]`,
+      `      :if ([:len $wdWanIfaceId] > 0) do={ /ip firewall nat add chain=srcnat src-address=10.55.0.0/24 out-interface=$wdWanIfaceId action=masquerade comment="AROFi hotspot nat" } else={ /ip firewall nat add chain=srcnat src-address=10.55.0.0/24 out-interface=$wdWanIface action=masquerade comment="AROFi hotspot nat" }`,
+      `    } on-error={}`,
+      `    :set wdRepairs ($wdRepairs . "nat,")`,
+      `  }`,
+      `} else={ :set wdChecks ($wdChecks . "nat=ok,") }`,
+      `:if ([:len [/ip hotspot find name="${hotspotName}"]] = 0) do={`,
+      `  :do {`,
+      `    :local wdBridgeId2 [/interface find name="arofi-hotspot"]`,
+      `    :if ([:len $wdBridgeId2] > 0) do={ /ip hotspot add name="${hotspotName}" interface=$wdBridgeId2 address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${input.addressesPerMac} disabled=no } else={ /ip hotspot add name="${hotspotName}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${input.addressesPerMac} disabled=no }`,
+      `  } on-error={}`,
+      `  :set wdRepairs ($wdRepairs . "hotspot,")`,
+      `} else={ :set wdChecks ($wdChecks . "hotspot=ok,") }`,
+      `:if ([:len [/radius find comment="AROFi ${registrationKey}"]] = 0) do={`,
+      `  :do { /radius add service=hotspot address=${input.radiusHost} secret="${sharedSecret}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=5s comment="AROFi ${registrationKey}" } on-error={}`,
+      `  :set wdRepairs ($wdRepairs . "radius_config,")`,
+      `} else={ :set wdChecks ($wdChecks . "radius_config=ok,") }`,
+      `:if ([:len [/system script find name="arofi-heartbeat"]] = 0 || [:len [/system scheduler find name="arofi-heartbeat"]] = 0) do={`,
+      `  :set wdRepairs ($wdRepairs . "heartbeat_scheduler_missing,")`,
+      `} else={ :set wdChecks ($wdChecks . "scheduler=ok,") }`,
+      `:if ($wdRepairs != "") do={`,
+      `  :put ("AROFi watchdog: repaired " . $wdRepairs)`,
+      `  :do {`,
+      `    /tool fetch url="${input.watchdogUrl}?repairs=$wdRepairs&checks=$wdChecks" check-certificate=no mode=https keep-result=no`,
+      `  } on-error={`,
+      `    :do { /tool fetch url="${input.fallbackWatchdogUrl}?repairs=$wdRepairs&checks=$wdChecks" mode=http keep-result=no } on-error={}`,
+      `  }`,
+      `}`,
+    ]
+
+    const source = bodyLines.join('\n').replace(/"/g, '\\"')
+
+    return [
+      `:do { /system script remove [/system script find name="arofi-watchdog"] } on-error={}`,
+      `:do { /system script add name="arofi-watchdog" source="${source}" } on-error={ :global arofiProvisionErrors; :set arofiProvisionErrors ($arofiProvisionErrors . "watchdog_script,"); :put "Error: failed to create AROFi watchdog script" }`,
+      `:do { /system scheduler remove [/system scheduler find name="arofi-watchdog"] } on-error={}`,
+      `:do { /system scheduler add name="arofi-watchdog" interval=60s on-event="arofi-watchdog" comment="AROFi self-healing watchdog" } on-error={ :global arofiProvisionErrors; :set arofiProvisionErrors ($arofiProvisionErrors . "watchdog_scheduler,"); :put "Error: failed to create AROFi watchdog scheduler" }`,
+    ]
+  }
+
   private buildProvisioningCallbackScript(input: {
     callbackUrl: string
     fallbackCallbackUrl: string
@@ -478,65 +654,7 @@ export class MikrotikService {
       `:delay 3s`,
       `:local nasIp ""`,
       `:local cbWanIface ""`,
-      `:do {`,
-      `  :foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
-      `    :local gwStatus ""`,
-      `    :do { :set gwStatus [:tostr [/ip route get $r gateway-status]] } on-error={}`,
-      `    :if ($gwStatus != "") do={`,
-      `      :local viaIndex [:find $gwStatus "via "]`,
-      `      :if ($viaIndex >= 0) do={`,
-      `        :local tmpIface [:pick $gwStatus ($viaIndex + 4) [:len $gwStatus]]`,
-      `        :local spaceIndex [:find $tmpIface " "]`,
-      `        :if ($spaceIndex >= 0) do={`,
-      `          :set cbWanIface [:pick $tmpIface 0 $spaceIndex]`,
-      `        } else={`,
-      `          :set cbWanIface $tmpIface`,
-      `        }`,
-      `      }`,
-      `    }`,
-      `    :if ($cbWanIface = "") do={`,
-      `      :do { :set cbWanIface [/ip route get $r interface] } on-error={`,
-      `        :do { :set cbWanIface [/ip route get $r gateway-interface] } on-error={}`,
-      `      }`,
-      `    }`,
-      `  }`,
-      `} on-error={}`,
-      `:if ($cbWanIface = "") do={`,
-      `  :do {`,
-      `    :local boundDhcp [/ip dhcp-client find status=bound]`,
-      `    :if ([:len $boundDhcp] > 0) do={`,
-      `      :set cbWanIface [/ip dhcp-client get [:pick $boundDhcp 0] interface]`,
-      `    }`,
-      `  } on-error={}`,
-      `}`,
-      `:if ($cbWanIface = "") do={`,
-      `  :do {`,
-      `    :local activePppoe [/interface pppoe-client find running=yes]`,
-      `    :if ([:len $activePppoe] > 0) do={`,
-      `      :set cbWanIface [/interface pppoe-client get [:pick $activePppoe 0] name]`,
-      `    }`,
-      `  } on-error={}`,
-      `}`,
-      `:if ($cbWanIface = "") do={`,
-      `  :do {`,
-      `    :local activeLte [/interface lte find running=yes]`,
-      `    :if ([:len $activeLte] > 0) do={`,
-      `      :set cbWanIface [/interface lte get [:pick $activeLte 0] name]`,
-      `    }`,
-      `  } on-error={}`,
-      `}`,
-      `:if ($cbWanIface != "") do={`,
-      `  :local cleanCbIface ""`,
-      `  :local cbHasComma false`,
-      `  :for i from=0 to=([:len $cbWanIface] - 1) do={`,
-      `    :local char [:pick $cbWanIface $i ($i + 1)]`,
-      `    :if ($char = ",") do={ :set cbHasComma true }`,
-      `    :if ($char != " " && $char != "," && $cbHasComma = false) do={`,
-      `      :set cleanCbIface ($cleanCbIface . $char)`,
-      `    }`,
-      `  }`,
-      `  :set cbWanIface $cleanCbIface`,
-      `}`,
+      ...this.buildWanDetection('cbWanIface'),
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
       `    :local cbWanIfaceId [/interface find name=$cbWanIface]`,
@@ -639,7 +757,22 @@ export class MikrotikService {
         `:if ([:len $arofiBridgeId] > 0) do={ :set arofiBridgePorts [:len [/interface bridge port find bridge=$arofiBridgeId]] }`,
         `:if ($arofiBridgePorts > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "bridge_port=ok,") } else={ ${fail('bridge_port', 'no_hotspot_interface', false)} }`,
         `:if ([:len [/ip dhcp-server find name=arofi-dhcp]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "dhcp=ok,") } else={ ${fail('dhcp', 'dhcp_missing', true)} }`,
-        `:if ([:len [/ip firewall nat find comment="AROFi hotspot nat"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "nat=ok,") } else={ :if ($wanIface = "") do={ :set arofiCheckSummary ($arofiCheckSummary . "nat=skip,") } else={ ${fail('nat', 'nat_missing', false)} } }`,
+        // Failure #1: NAT must be validated, never silently skipped. Retry once
+        // (recreate the masquerade rule) before reporting fail — covers the case
+        // where the initial WAN detection ran before a DHCP lease was ready.
+        `:local arofiNatOk ([:len [/ip firewall nat find comment="AROFi hotspot nat"]] > 0)`,
+        `:if ($arofiNatOk = false && $wanIface != "") do={`,
+        `  :do {`,
+        `    :local wanIfaceId [/interface find name=$wanIface]`,
+        `    :if ([:len $wanIfaceId] > 0) do={`,
+        `      /ip firewall nat add chain=srcnat src-address=10.55.0.0/24 out-interface=$wanIfaceId action=masquerade comment="AROFi hotspot nat"`,
+        `    } else={`,
+        `      /ip firewall nat add chain=srcnat src-address=10.55.0.0/24 out-interface=$wanIface action=masquerade comment="AROFi hotspot nat"`,
+        `    }`,
+        `  } on-error={}`,
+        `  :set arofiNatOk ([:len [/ip firewall nat find comment="AROFi hotspot nat"]] > 0)`,
+        `}`,
+        `:if ($arofiNatOk = true) do={ :set arofiCheckSummary ($arofiCheckSummary . "nat=ok,") } else={ ${fail('nat', 'nat_missing', false)} }`,
         `:if ([:len [/ip hotspot find name="${hotspotName}"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "hotspot=ok,") } else={ ${fail('hotspot', 'hotspot_missing', true)} }`,
         `:if ($arofiWirelessAttached > 0) do={`,
         `  :set arofiCheckSummary ($arofiCheckSummary . "wireless=ok,")`,

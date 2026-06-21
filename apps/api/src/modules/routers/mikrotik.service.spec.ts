@@ -178,4 +178,70 @@ describe('MikrotikService', () => {
     expect(script).toContain('new-ttl=decrement:1')
     expect(script).toContain('AROFi anti-tether')
   })
+
+  function countOccurrences(text: string, char: string) {
+    return text.split(char).length - 1
+  }
+
+  function expectBalanced(script: string) {
+    // Every quoted/brace pair in a RouterOS script must balance, or the
+    // import aborts mid-script. This cheap smoke test has already caught real
+    // bugs (e.g. a stray ternary, or an under/over-escaped nested source
+    // string for a generated scheduler script).
+    const unescapedQuotes = countOccurrences(script.replace(/\\"/g, ''), '"')
+    expect(unescapedQuotes % 2).toBe(0)
+    expect(countOccurrences(script, '{')).toBe(countOccurrences(script, '}'))
+    expect(countOccurrences(script, '[')).toBe(countOccurrences(script, ']'))
+  }
+
+  it('hardens WAN/LAN separation and self-heals via a 60s watchdog (FRESH_FULL_HOTSPOT)', () => {
+    const service = new MikrotikService(new ConfigService({}))
+
+    const script = service.buildProvisioningScript({
+      routerName: 'Watchdog Router',
+      identity: 'watchdog-router',
+      registrationKey: 'watchdog-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'watchdog-secret',
+      hotspotServerName: 'arofi-hotspot',
+      portalHosts: ['arofi.arosoft.io'],
+      deviceLimit: 1,
+      mode: 'FRESH_FULL_HOTSPOT',
+      hotspotNetworkName: 'Watchdog WiFi',
+    })
+
+    expectBalanced(script)
+    expect(script).toContain('arofi-watchdog')
+    expect(script).toContain('/api/mikrotik/watchdog/watchdog-token')
+    expect(script).toContain('wan_removed_from_bridge')
+    expect(script).toContain('stray_dhcp_client_removed')
+    // Failure #1: NAT must never be silently reported as "skip" in fresh-hotspot mode.
+    expect(script).not.toMatch(/nat=skip/)
+    expect(script).toContain('arofiNatOk')
+  })
+
+  it('omits the watchdog for SAFE_EXISTING_ROUTER (nothing of ours to self-heal)', () => {
+    const service = new MikrotikService(new ConfigService({}))
+
+    const script = service.buildProvisioningScript({
+      routerName: 'Existing Router 2',
+      identity: 'existing-router-2',
+      registrationKey: 'existing-token-2',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'existing-secret-2',
+      mode: 'SAFE_EXISTING_ROUTER',
+    })
+
+    expectBalanced(script)
+    expect(script).not.toContain('arofi-watchdog')
+    expect(script).toContain('bridge=skip,bridge_port=skip,dhcp=skip,nat=skip')
+  })
 })

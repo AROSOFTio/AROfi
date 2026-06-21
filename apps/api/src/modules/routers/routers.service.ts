@@ -730,6 +730,67 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // The 60s on-router watchdog (arofi-watchdog) only calls home when it has
+  // actually repaired something — a healthy router stays silent. Every call
+  // here is itself proof of life, so it always bumps lastSeenAt even though
+  // the report only carries repairs/checks (no overall pass/fail status).
+  async recordWatchdogReportByKey(
+    key: string,
+    sourceIp: string,
+    reportInput: MikrotikProvisioningReportInput = {},
+  ) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+      select: { id: true, tenantId: true, activeSessionCount: true },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    const normalizedSourceIp = sourceIp.trim()
+    const repairs = this.parseReportList(this.queryValue(reportInput.repairs))
+    const checks = this.parseCheckSummary(this.queryValue(reportInput.checks))
+    const now = new Date()
+    const message =
+      repairs.length > 0
+        ? `Watchdog auto-repaired: ${repairs.join(', ')}`
+        : 'Watchdog ran with no repairs needed'
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.routerHealthCheck.create({
+        data: {
+          tenantId: router.tenantId,
+          routerId: router.id,
+          status: RouterStatus.DEGRADED,
+          message,
+          activeUsers: router.activeSessionCount ?? 0,
+          rawPayload: {
+            kind: 'mikrotik-watchdog',
+            sourceIp: normalizedSourceIp,
+            repairs,
+            checks,
+            receivedAt: now.toISOString(),
+          } as Prisma.InputJsonValue,
+        },
+      })
+
+      await tx.router.update({
+        where: { id: router.id },
+        data: {
+          lastSeenAt: now,
+          ...(normalizedSourceIp ? { radiusNasIpAddress: normalizedSourceIp } : {}),
+        },
+      })
+    })
+
+    if (repairs.length > 0) {
+      this.logger.warn(`AROFi watchdog repaired router ${router.id}: ${repairs.join(', ')}`)
+    }
+
+    return { ok: true, routerId: router.id, repairs, checks }
+  }
+
   async markRouterProvisionedByKey(
     key: string,
     sourceIp: string,

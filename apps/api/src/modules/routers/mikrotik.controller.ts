@@ -69,6 +69,20 @@ export class MikrotikController {
     return result
   }
 
+  @Get('watchdog/:key')
+  async watchdog(
+    @Param('key') key: string,
+    @Req() request: any,
+    @Query() query: MikrotikReportQuery,
+  ) {
+    const sourceIp = this.resolveSourceIp(request)
+    const result = await this.routersService.recordWatchdogReportByKey(key, sourceIp, query)
+    if (!result) {
+      throw new NotFoundException('Router registration key not found')
+    }
+    return result
+  }
+
   private resolveSourceIp(request: any) {
     const forwardedFor = request.headers?.['x-forwarded-for']
     const firstForwardedIp = Array.isArray(forwardedFor)
