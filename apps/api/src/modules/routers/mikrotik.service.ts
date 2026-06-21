@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
   RouterConnectionMode,
@@ -249,8 +249,7 @@ export class MikrotikService {
       ``,
       `# Detect WAN interface dynamically so NAT works on any router model`,
       `# Try multiple methods: default route → PPPoE → LTE → any non-hotspot interface with IP`,
-      `:local wanIface ""`,
-      `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={ :set wanIface [/ip route get $r interface] }`,
+      ...this.buildWanDetectionScript('wanIface'),
       `:if ($wanIface = "") do={`,
       `  :foreach ppp in=[/interface find type=pppoe] do={ :set wanIface [/interface get $ppp name] }`,
       `}`,
@@ -340,8 +339,7 @@ export class MikrotikService {
     return [
       `:delay 3s`,
       `:local nasIp ""`,
-      `:local cbWanIface ""`,
-      `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={ :set cbWanIface [/ip route get $r interface] }`,
+      ...this.buildWanDetectionScript('cbWanIface'),
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
       `    :local rawAddr [/ip address get [find interface=$cbWanIface] address]`,
@@ -696,5 +694,26 @@ export class MikrotikService {
       'arofi.arosoft.io'
 
     return `http://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}:4012`
+  }
+
+  private buildWanDetectionScript(varName: string) {
+    return [
+      `:local ${varName} ""`,
+      `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
+      `  :global arofiTmpRouteId $r`,
+      `  :global arofiTmpIface ""`,
+      `  :do {`,
+      `    :local parser [:parse ":global arofiTmpRouteId; :global arofiTmpIface [/ip route get \\$arofiTmpRouteId interface]"]`,
+      `    $parser`,
+      `  } on-error={}`,
+      `  :if ($arofiTmpIface = "") do={`,
+      `    :do {`,
+      `      :local parser [:parse ":global arofiTmpRouteId; :global arofiTmpIface; :local gw [/ip route get \\$arofiTmpRouteId gateway-status]; :local via [:find \\$gw \\\"via \\\" -1]; :if (\\$via >= 0) do={ :set arofiTmpIface [:pick \\$gw (\\$via + 4) [:len \\$gw]] }"]`,
+      `      $parser`,
+      `    } on-error={}`,
+      `  }`,
+      `  :if ($arofiTmpIface != "") do={ :set ${varName} $arofiTmpIface }`,
+      `}`,
+    ]
   }
 }
