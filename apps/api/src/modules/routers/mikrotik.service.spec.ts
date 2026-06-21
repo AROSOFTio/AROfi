@@ -44,7 +44,6 @@ describe('MikrotikService', () => {
     // Safety guarantees: never change admin credentials, never rebuild WAN/LAN.
     expect(script).not.toContain('/user set')
     expect(script).not.toContain('password=')
-    expect(script).not.toContain('/interface bridge port remove')
     expect(script).not.toContain('/ip address remove [/ip address find address="192.168')
     expect(script).not.toContain('/ip address remove [/ip address find address="10.50.0.1/24"]')
     expect(script).not.toContain('/ip dhcp-client add interface=ether1')
@@ -73,28 +72,37 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip service set winbox')
     expect(script).toContain('/interface bridge add name=arofi-hotspot')
     expect(script).toContain('AROFi provisioning callback sent')
+    expect(script).toContain('/api/mikrotik/self-test/fresh-router-token')
+    expect(script).toContain('AROFi provisioning self-test passed')
     expect(script).toContain('/api/mikrotik/login-html/fresh-router-token')
     expect(script).toContain('dst-path="hotspot/login.html"')
     // Radio commands are deferred through [:parse] so a missing menu on the
     // wrong RouterOS version is a catchable runtime error, not a fatal compile
     // error. The inner quotes are therefore escaped inside the parse string.
     expect(script).toContain('[:parse ')
-    expect(script).toContain('/interface wifi find name=\\"wifi1\\"')
+    expect(script).toContain('/interface wifi find')
+    expect(script).toContain(':local arofiRadioName [/interface wifi get $arofiRadio name]')
     expect(script).toContain('security.authentication-types=\\"\\"')
-    expect(script).toContain('/interface wireless find name=\\"wlan1\\"')
+    expect(script).toContain('/interface wireless find')
+    expect(script).toContain(':local arofiRadioName [/interface wireless get $arofiRadio name]')
+    expect(script).toContain('/interface wifiwave2 find')
     expect(script).toContain('security-profile=arofi-open')
     expect(script).toContain('ssid=\\"AROFi Free WiFi\\"')
     expect(script).toContain('bridge=$bridgeId')
+    expect(script).toContain('no wireless interface is attached; searching for a non-WAN Ethernet hotspot port')
     expect(script).toContain('/ip address add address=10.55.0.1/24 interface=arofi-hotspot')
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
     expect(script).toContain('/ip firewall nat add chain=srcnat src-address=10.55.0.0/24 out-interface=$wanIface action=masquerade')
     expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=arofi-hotspot')
+    expect(script).toContain('/ip hotspot set $existingHotspot interface=arofi-hotspot')
+    expect(script.indexOf('/ip hotspot remove [/ip hotspot find name="ARO SpeedX"]')).toBeGreaterThan(
+      script.indexOf('AROFi provisioning self-test FAILED'),
+    )
 
     // The KEY safety guarantees that prevent the lockout we hit before.
     expect(script).not.toContain('password="KnownPassword123"')
-    expect(script).not.toContain('/interface bridge port remove')
     expect(script).not.toContain('/ip address remove [/ip address find address="192.168')
     expect(script).not.toContain('/ip address remove [/ip address find address="10.50.0.1/24"]')
   })

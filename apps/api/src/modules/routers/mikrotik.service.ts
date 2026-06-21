@@ -139,6 +139,11 @@ export class MikrotikService {
     const gatewayIp = '10.55.0.1'
     const subnet = '10.55.0.0/24'
     const poolRange = '10.55.0.10-10.55.0.254'
+    // SAFE_EXISTING_ROUTER = the operator already has a working HotSpot; we only
+    // wire it to AROFi RADIUS/portal. Any other mode builds a fresh customer
+    // HotSpot, but ADDITIVELY on an isolated bridge so it never disturbs the
+    // operator's WAN, management IP, or admin login.
+    const radiusOnly = input.mode === 'SAFE_EXISTING_ROUTER'
 
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
@@ -146,15 +151,21 @@ export class MikrotikService {
     const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const heartbeatUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
-    const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
+    const selfTestUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/self-test/${this.escape(registrationKey)}`
+    const fallbackSelfTestUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/self-test/${this.escape(registrationKey)}`
+    const callbackScript = this.buildProvisioningCallbackScript({
+      callbackUrl,
+      fallbackCallbackUrl,
+      selfTestUrl,
+      fallbackSelfTestUrl,
+      hotspotName,
+      profileName,
+      registrationKey,
+      radiusHost: input.radiusHost,
+      radiusOnly,
+    })
     const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
     const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl, profileName)
-
-    // SAFE_EXISTING_ROUTER = the operator already has a working HotSpot; we only
-    // wire it to AROFi RADIUS/portal. Any other mode builds a fresh customer
-    // HotSpot, but ADDITIVELY on an isolated bridge so it never disturbs the
-    // operator's WAN, management IP, or admin login.
-    const radiusOnly = input.mode === 'SAFE_EXISTING_ROUTER'
 
     // Shared front matter: enable management access only. We deliberately do NOT
     // change the admin username/password and do NOT touch WAN or addresses.
@@ -165,6 +176,19 @@ export class MikrotikService {
       `# Registration key: ${this.escape(registrationKey)}`,
       `# This script never changes your admin login and never reconfigures your`,
       `# WAN or management IP. You can keep using WinBox exactly as before.`,
+      ``,
+      `:global arofiProvisionErrors ""`,
+      `:global arofiProvisionNotes ""`,
+      `:global arofiCheckSummary ""`,
+      `:global arofiSelfTestStatus "pending"`,
+      `:global arofiRollbackNeeded false`,
+      `:global arofiCreatedHotspot false`,
+      `:global arofiCreatedBridge false`,
+      `:global arofiWirelessInterfaces 0`,
+      `:global arofiWirelessAttached 0`,
+      `:global arofiEthernetAttached 0`,
+      `:global arofiBridgePorts 0`,
+      `:put "AROFi: provisioning started."`,
       ``,
       `# 1. Make sure management stays reachable (no credential changes)`,
       `:do { /ip service set ${apiService} port=${input.apiPort} disabled=no } on-error={}`,
@@ -227,7 +251,7 @@ export class MikrotikService {
         ...walledGarden,
         ...antiTether,
         ...telemetry,
-        `:put "AROFi RADIUS + portal wired to your existing HotSpot."`,
+        `:if ($arofiSelfTestStatus = "ok") do={ :put "AROFi RADIUS + portal wired to your existing HotSpot." } else={ :put "AROFi existing HotSpot provisioning failed local self-test." }`,
       ].join('\n')
     }
 
@@ -237,7 +261,7 @@ export class MikrotikService {
       ``,
       `# 3b. Dedicated, isolated HotSpot bridge — keeps your WAN + management intact`,
       `:do {`,
-      `  :if ([:len [/interface bridge find name="arofi-hotspot"]] = 0) do={ /interface bridge add name=arofi-hotspot comment="AROFi customer hotspot" }`,
+      `  :if ([:len [/interface bridge find name="arofi-hotspot"]] = 0) do={ /interface bridge add name=arofi-hotspot comment="AROFi customer hotspot"; :global arofiCreatedBridge; :set arofiCreatedBridge true }`,
       `} on-error={ :put "Error: failed to create bridge arofi-hotspot" }`,
       `:do { /ip address remove [/ip address find address="${gatewayIp}/24"] } on-error={}`,
       `:do {`,
@@ -331,6 +355,10 @@ export class MikrotikService {
       `  }`,
       `  :set wanIface $cleanIface`,
       `}`,
+      ``,
+      `# If the router has no usable wireless radio, attach a non-WAN Ethernet port`,
+      `# so an external AP or wired test client can still use the HotSpot bridge.`,
+      ...this.buildEthernetHotspotFallbackScript(),
       `:do {`,
       `  /ip firewall nat remove [/ip firewall nat find comment="AROFi hotspot nat"]`,
       `  :if ($wanIface != "") do={`,
@@ -366,19 +394,32 @@ export class MikrotikService {
       `:do {`,
       `  /ip hotspot profile set [/ip hotspot profile find name="${profileName}"] hotspot-address=${gatewayIp}`,
       `} on-error={ :put "Error: failed to set hotspot profile address" }`,
-      `:do { /ip hotspot remove [/ip hotspot find name="${this.escape(hotspotName)}"] } on-error={}`,
       `:do {`,
       `  :local bridgeId [/interface find name="arofi-hotspot"]`,
       `  :if ([:len $bridgeId] > 0) do={`,
-      `    /ip hotspot add name="${this.escape(hotspotName)}" interface=$bridgeId address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
+      `    :local existingHotspot [/ip hotspot find name="${this.escape(hotspotName)}"]`,
+      `    :if ([:len $existingHotspot] > 0) do={`,
+      `      /ip hotspot set $existingHotspot interface=$bridgeId address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
+      `    } else={`,
+      `      /ip hotspot add name="${this.escape(hotspotName)}" interface=$bridgeId address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
+      `      :global arofiCreatedHotspot`,
+      `      :set arofiCreatedHotspot true`,
+      `    }`,
       `  } else={`,
-      `    /ip hotspot add name="${this.escape(hotspotName)}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
+      `    :local existingHotspot [/ip hotspot find name="${this.escape(hotspotName)}"]`,
+      `    :if ([:len $existingHotspot] > 0) do={`,
+      `      /ip hotspot set $existingHotspot interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
+      `    } else={`,
+      `      /ip hotspot add name="${this.escape(hotspotName)}" interface=arofi-hotspot address-pool=arofi-pool profile="${profileName}" addresses-per-mac=${addressesPerMac} disabled=no`,
+      `      :global arofiCreatedHotspot`,
+      `      :set arofiCreatedHotspot true`,
+      `    }`,
       `  }`,
-      `} on-error={ :put "Error: failed to create HotSpot server" }`,
+      `} on-error={ :global arofiProvisionErrors; :global arofiRollbackNeeded; :set arofiProvisionErrors ($arofiProvisionErrors . "hotspot_create,"); :set arofiRollbackNeeded true; :put "Error: failed to create HotSpot server" }`,
       ...walledGarden,
       ...antiTether,
       ...telemetry,
-      `:put "AROFi customer HotSpot is live. Broadcasting SSID: ${this.escape(ssid)}"`,
+      `:if ($arofiSelfTestStatus = "ok") do={ :put "AROFi customer HotSpot is live. Broadcasting SSID: ${this.escape(ssid)}" } else={ :put "AROFi customer HotSpot was not marked live because local self-test failed." }`,
     ].join('\n')
   }
 
@@ -386,9 +427,9 @@ export class MikrotikService {
     return [
       `Make sure ${routerName} already has working internet (WAN) and that you can reach WinBox. This script does NOT set up your WAN or change your admin login.`,
       'Run the one-run command (or import the .rsc) from WinBox Terminal. Your management session stays connected the whole time.',
-      'Confirm the script prints "AROFi customer HotSpot is live" and "AROFi provisioning callback sent". A callback failure means the router has no HTTPS/DNS path to AROFi.',
+      'Confirm the script prints "AROFi provisioning self-test passed" before the callback message. A failed self-test means AROFi did not mark onboarding successful.',
       'On a phone, look for the new OPEN Wi-Fi network (your site/SSID name) and connect. The AROFi portal should pop up automatically.',
-      'If no SSID appears, the board has no /interface wireless (v6) or /interface wifi (v7) radio - use an external AP on the arofi-hotspot bridge instead.',
+      'If no SSID appears on a non-wireless router, connect an external AP or test client to the Ethernet port the self-test selected for the arofi-hotspot bridge.',
       'Run one real voucher/payment test so MikroTik sends Access-Request + Accounting-Start to RADIUS and the router turns live here.',
     ]
   }
@@ -415,14 +456,24 @@ export class MikrotikService {
     )
     const source = `:do { /tool fetch url=\\"${heartbeatUrl}\\" check-certificate=no mode=https keep-result=no } on-error={ :do { /tool fetch url=\\"${fallbackHeartbeatUrl}\\" mode=http keep-result=no } on-error={} }`
     return [
-      `/system script remove [/system script find name="arofi-heartbeat"]`,
-      `/system script add name="arofi-heartbeat" source="${source}"`,
-      `/system scheduler remove [/system scheduler find name="arofi-heartbeat"]`,
-      `/system scheduler add name="arofi-heartbeat" interval=${intervalSeconds}s on-event="arofi-heartbeat" comment="AROFi heartbeat"`,
+      `:do { /system script remove [/system script find name="arofi-heartbeat"] } on-error={}`,
+      `:do { /system script add name="arofi-heartbeat" source="${source}" } on-error={ :global arofiProvisionErrors; :set arofiProvisionErrors ($arofiProvisionErrors . "scheduler_script,"); :put "Error: failed to create AROFi heartbeat script" }`,
+      `:do { /system scheduler remove [/system scheduler find name="arofi-heartbeat"] } on-error={}`,
+      `:do { /system scheduler add name="arofi-heartbeat" interval=${intervalSeconds}s on-event="arofi-heartbeat" comment="AROFi heartbeat" } on-error={ :global arofiProvisionErrors; :set arofiProvisionErrors ($arofiProvisionErrors . "scheduler_create,"); :put "Error: failed to create AROFi heartbeat scheduler" }`,
     ]
   }
 
-  private buildProvisioningCallbackScript(callbackUrl: string, fallbackCallbackUrl: string) {
+  private buildProvisioningCallbackScript(input: {
+    callbackUrl: string
+    fallbackCallbackUrl: string
+    selfTestUrl: string
+    fallbackSelfTestUrl: string
+    hotspotName: string
+    profileName: string
+    registrationKey: string
+    radiusHost: string
+    radiusOnly: boolean
+  }) {
     return [
       `:delay 3s`,
       `:local nasIp ""`,
@@ -502,23 +553,150 @@ export class MikrotikService {
       `    }`,
       `  }`,
       `} on-error={}`,
+      ...this.buildProvisioningSelfTestScript(input),
+      `:local arofiStatus $arofiSelfTestStatus`,
+      `:local arofiErrors $arofiProvisionErrors`,
+      `:local arofiNotes $arofiProvisionNotes`,
+      `:local arofiChecks $arofiCheckSummary`,
       `:do {`,
-      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" check-certificate=no mode=https keep-result=no`,
-      `  :put "AROFi provisioning callback sent (NAS IP: $nasIp)."`,
+      `  /tool fetch url="${input.selfTestUrl}?nasIp=$nasIp&status=$arofiStatus&checks=$arofiChecks&errors=$arofiErrors&notes=$arofiNotes" check-certificate=no mode=https keep-result=no`,
+      `  :put "AROFi self-test report sent."`,
       `} on-error={`,
       `  :do {`,
-      `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" mode=http keep-result=no`,
-      `    :put "AROFi provisioning callback sent by HTTP fallback (NAS IP: $nasIp)."`,
+      `    /tool fetch url="${input.fallbackSelfTestUrl}?nasIp=$nasIp&status=$arofiStatus&checks=$arofiChecks&errors=$arofiErrors&notes=$arofiNotes" mode=http keep-result=no`,
+      `    :put "AROFi self-test report sent by HTTP fallback."`,
+      `  } on-error={`,
+      `    :put "Warning: AROFi self-test report failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
+      `  }`,
+      `}`,
+      `:do {`,
+      `  /tool fetch url="${input.callbackUrl}?nasIp=$nasIp&status=$arofiStatus&checks=$arofiChecks&errors=$arofiErrors&notes=$arofiNotes" check-certificate=no mode=https keep-result=no`,
+      `  :if ($arofiStatus = "ok") do={`,
+      `    :put "AROFi provisioning callback sent (NAS IP: $nasIp)."` ,
+      `  } else={`,
+      `    :put "AROFi provisioning failure report sent (NAS IP: $nasIp)."` ,
+      `  }`,
+      `} on-error={`,
+      `  :do {`,
+      `    /tool fetch url="${input.fallbackCallbackUrl}?nasIp=$nasIp&status=$arofiStatus&checks=$arofiChecks&errors=$arofiErrors&notes=$arofiNotes" mode=http keep-result=no`,
+      `    :if ($arofiStatus = "ok") do={`,
+      `      :put "AROFi provisioning callback sent by HTTP fallback (NAS IP: $nasIp)."` ,
+      `    } else={`,
+      `      :put "AROFi provisioning failure report sent by HTTP fallback (NAS IP: $nasIp)."` ,
+      `    }`,
       `  } on-error={`,
       `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
       `  }`,
       `}`,
+      `:if ($arofiStatus = "ok") do={`,
+      `  :put "AROFi provisioning verified locally. Waiting for first customer RADIUS login."`,
+      `} else={`,
+      `  :put "AROFi provisioning did not pass local self-test. Errors: $arofiErrors"`,
+      `}`,
+    ]
+  }
+
+  private buildProvisioningSelfTestScript(input: {
+    hotspotName: string
+    profileName: string
+    registrationKey: string
+    radiusHost: string
+    radiusOnly: boolean
+  }) {
+    const hotspotName = this.escape(input.hotspotName)
+    const profileName = this.escape(input.profileName)
+    const registrationKey = this.escape(input.registrationKey)
+    const radiusHost = this.escape(input.radiusHost)
+
+    const fail = (check: string, code: string, rollback = false) =>
+      `:set arofiCheckSummary ($arofiCheckSummary . "${check}=fail,"); :set arofiProvisionErrors ($arofiProvisionErrors . "${code},")${rollback ? '; :set arofiRollbackNeeded true' : ''}`
+
+    const lines = [
+      ``,
+      `# 6. Local self-test before reporting provisioning success`,
+      `:global arofiProvisionErrors`,
+      `:global arofiProvisionNotes`,
+      `:global arofiCheckSummary`,
+      `:global arofiSelfTestStatus`,
+      `:global arofiRollbackNeeded`,
+      `:global arofiWirelessInterfaces`,
+      `:global arofiWirelessAttached`,
+      `:global arofiEthernetAttached`,
+      `:global arofiBridgePorts`,
+      `:set arofiCheckSummary ""`,
+      `:put "AROFi: running provisioning self-test."`,
+    ]
+
+    if (input.radiusOnly) {
+      lines.push(
+        `:if ([:len [/ip hotspot find]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "hotspot=ok,") } else={ ${fail('hotspot', 'existing_hotspot_missing')} }`,
+        `:set arofiCheckSummary ($arofiCheckSummary . "bridge=skip,bridge_port=skip,dhcp=skip,nat=skip,wireless=existing,")`,
+      )
+    } else {
+      lines.push(
+        `:local arofiBridgeId [/interface bridge find name="arofi-hotspot"]`,
+        `:if ([:len $arofiBridgeId] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "bridge=ok,") } else={ ${fail('bridge', 'bridge_missing', true)} }`,
+        `:if ([:len $arofiBridgeId] > 0) do={ :set arofiBridgePorts [:len [/interface bridge port find bridge=$arofiBridgeId]] }`,
+        `:if ($arofiBridgePorts > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "bridge_port=ok,") } else={ ${fail('bridge_port', 'no_hotspot_interface', true)} }`,
+        `:if ([:len [/ip dhcp-server find name=arofi-dhcp]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "dhcp=ok,") } else={ ${fail('dhcp', 'dhcp_missing', true)} }`,
+        `:if ([:len [/ip firewall nat find comment="AROFi hotspot nat"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "nat=ok,") } else={ ${fail('nat', 'nat_missing', true)} }`,
+        `:if ([:len [/ip hotspot find name="${hotspotName}"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "hotspot=ok,") } else={ ${fail('hotspot', 'hotspot_missing', true)} }`,
+        `:if ($arofiWirelessAttached > 0) do={`,
+        `  :set arofiCheckSummary ($arofiCheckSummary . "wireless=ok,")`,
+        `} else={`,
+        `  :if ($arofiEthernetAttached > 0) do={`,
+        `    :set arofiCheckSummary ($arofiCheckSummary . "wireless=ethernet,")`,
+        `    :set arofiProvisionNotes ($arofiProvisionNotes . "ethernet_fallback,")`,
+        `  } else={`,
+        `    ${fail('wireless', 'no_wireless_or_ethernet_attached', true)}`,
+        `  }`,
+        `}`,
+      )
+    }
+
+    lines.push(
+      `:if ([:len [/radius find comment="AROFi ${registrationKey}"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "radius_config=ok,") } else={ ${fail('radius_config', 'radius_config_missing')} }`,
+      `:local arofiRadiusReplies 0`,
+      `:do { :set arofiRadiusReplies [/ping address=${radiusHost} count=2] } on-error={}`,
+      `:if ($arofiRadiusReplies > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "radius=ok,") } else={ ${fail('radius', 'radius_unreachable')} }`,
+      `:if ([:len [/system script find name="arofi-heartbeat"]] > 0 && [:len [/system scheduler find name="arofi-heartbeat"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "scheduler=ok,") } else={ ${fail('scheduler', 'scheduler_missing')} }`,
+      `:if ([:len [/file find name="hotspot/login.html"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "files=ok,") } else={ ${fail('files', 'login_html_missing')} }`,
+      `:if ([:len [/ip hotspot profile find name="${profileName}"]] > 0) do={ :set arofiCheckSummary ($arofiCheckSummary . "profile=ok,") } else={ ${fail('profile', 'profile_missing')} }`,
+      `:if ($arofiProvisionErrors = "") do={ :set arofiSelfTestStatus "ok" } else={ :set arofiSelfTestStatus "failed" }`,
+      `:if ($arofiSelfTestStatus = "failed") do={`,
+      `  :put "AROFi provisioning self-test FAILED: $arofiProvisionErrors"`,
+      `  :if ($arofiRollbackNeeded = true) do={`,
+      ...this.buildHotspotRollbackScript(hotspotName).map((line) => `    ${line}`),
+      `  }`,
+      `} else={`,
+      `  :put "AROFi provisioning self-test passed."`,
+      `}`,
+    )
+
+    return lines
+  }
+
+  private buildHotspotRollbackScript(hotspotName: string) {
+    return [
+      `:put "AROFi: rolling back generated HotSpot resources."`,
+      `:global arofiCreatedHotspot`,
+      `:if ($arofiCreatedHotspot = true) do={ :do { /ip hotspot remove [/ip hotspot find name="${hotspotName}"] } on-error={} }`,
+      `:do { /ip dhcp-server remove [/ip dhcp-server find name=arofi-dhcp] } on-error={}`,
+      `:do { /ip pool remove [/ip pool find name=arofi-pool] } on-error={}`,
+      `:do { /ip address remove [/ip address find comment="AROFi hotspot gateway"] } on-error={}`,
+      `:do { /ip firewall nat remove [/ip firewall nat find comment="AROFi hotspot nat"] } on-error={}`,
+      `:do { /ip firewall filter remove [/ip firewall filter find comment="AROFi hotspot input"] } on-error={}`,
+      `:do { /ip firewall filter remove [/ip firewall filter find comment="AROFi hotspot forward"] } on-error={}`,
+      `:do { /ip firewall mangle remove [/ip firewall mangle find comment="AROFi anti-tether"] } on-error={}`,
+      `:global arofiCreatedBridge`,
+      `:if ($arofiCreatedBridge = true) do={ :do { :local rb [/interface bridge find name="arofi-hotspot"]; :if ([:len $rb] > 0) do={ /interface bridge port remove [/interface bridge port find bridge=$rb] } } on-error={} }`,
+      `:if ($arofiCreatedBridge = true) do={ :do { /interface bridge remove [/interface bridge find name="arofi-hotspot"] } on-error={} }`,
     ]
   }
 
   private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string, profileName?: string) {
     const profileSet = profileName
-      ? [`/ip hotspot profile set [/ip hotspot profile find name="${this.escape(profileName)}"] html-directory=hotspot`]
+      ? [`:do { /ip hotspot profile set [/ip hotspot profile find name="${this.escape(profileName)}"] html-directory=hotspot } on-error={ :global arofiProvisionErrors; :set arofiProvisionErrors ($arofiProvisionErrors . "profile_html_directory,"); :put "WARNING: failed to bind hotspot profile to html-directory=hotspot" }`]
       : []
     return [
       `:do {`,
@@ -531,8 +709,14 @@ export class MikrotikService {
       `} on-error={`,
       `  :do {`,
       `    /tool fetch url="${fallbackLoginHtmlUrl}" mode=http dst-path="hotspot/login.html"`,
-      `    :put "AROFi HotSpot login.html installed by HTTP fallback."`,
+      `    :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
+      `      :put "AROFi HotSpot login.html installed by HTTP fallback."`,
+      `    } else={`,
+      `      :error "login.html not found after HTTP fallback fetch"`,
+      `    }`,
       `  } on-error={`,
+      `    :global arofiProvisionErrors`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "login_html_fetch,")`,
       `    :put "WARNING: login.html install FAILED — portal will show MikroTik default UI."`,
       `    :put "Fix: /tool fetch url=\\"${loginHtmlUrl}\\" dst-path=\\"hotspot/login.html\\""`,
       `  }`,
@@ -779,8 +963,9 @@ export class MikrotikService {
   }
 
   // Brings up an OPEN customer SSID on whatever radios the board has and binds
-  // them to the isolated arofi-hotspot bridge. Supports RouterOS v6 wireless
-  // (wlan1/wlan2) and v7 wifi (wifi1/wifi2).
+  // them to the isolated arofi-hotspot bridge. The interface names are detected
+  // dynamically because RouterOS models/packages use wlan*, wifi*, radio*, and
+  // other names under the wireless/wifi menus.
   //
   // CRITICAL: RouterOS v6 has no /interface wifi menu and v7-wifiwave2 boards
   // have no /interface wireless menu. A bare statement that references a missing
@@ -791,14 +976,72 @@ export class MikrotikService {
   private buildHotspotWirelessScript(ssid: string) {
     const escapedSsid = this.escape(ssid.slice(0, 32) || 'AROFi Free WiFi')
 
-    const bridgePort = (iface: string) =>
-      `:local ifaceId [/interface find name="${iface}"]; :local bridgeId [/interface find name="arofi-hotspot"]; :if ([:len $ifaceId] > 0 && [:len $bridgeId] > 0) do={ :if ([:len [/interface bridge port find interface=$ifaceId]]=0) do={/interface bridge port add bridge=$bridgeId interface=$ifaceId} else={/interface bridge port set [/interface bridge port find interface=$ifaceId] bridge=$bridgeId} }`
+    const bridgePort = [
+      `:local ifaceId [/interface find name=$arofiRadioName]`,
+      `:local bridgeId [/interface bridge find name="arofi-hotspot"]`,
+      `:if ([:len $ifaceId] > 0 && [:len $bridgeId] > 0) do={`,
+      `  :local bridgePortId [/interface bridge port find interface=$ifaceId]`,
+      `  :if ([:len $bridgePortId] = 0) do={`,
+      `    /interface bridge port add bridge=$bridgeId interface=$ifaceId`,
+      `  } else={`,
+      `    /interface bridge port set $bridgePortId bridge=$bridgeId`,
+      `  }`,
+      `  :global arofiWirelessAttached`,
+      `  :set arofiWirelessAttached ($arofiWirelessAttached + 1)`,
+      `  :put ("AROFi: attached wireless interface " . $arofiRadioName . " to hotspot bridge.")`,
+      `} else={`,
+      `  :global arofiProvisionErrors`,
+      `  :set arofiProvisionErrors ($arofiProvisionErrors . "wireless_bridge_attach,")`,
+      `}`,
+    ].join(' ')
 
-    const v6Inner = (iface: string) =>
-      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [/interface wireless find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
+    const v6Inner = [
+      `:foreach arofiRadio in=[/interface wireless find] do={`,
+      `  :global arofiWirelessInterfaces`,
+      `  :set arofiWirelessInterfaces ($arofiWirelessInterfaces + 1)`,
+      `  :local arofiRadioName [/interface wireless get $arofiRadio name]`,
+      `  :do {`,
+      `    /interface wireless set $arofiRadio disabled=no mode=ap-bridge ssid="${escapedSsid}" security-profile=arofi-open`,
+      `    ${bridgePort}`,
+      `  } on-error={`,
+      `    :global arofiProvisionErrors`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "wireless_set_failed,")`,
+      `    :put ("AROFi: failed to configure wireless interface " . $arofiRadioName)`,
+      `  }`,
+      `}`,
+    ].join(' ')
 
-    const v7Inner = (iface: string) =>
-      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [/interface wifi find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""; ${bridgePort(iface)}}`
+    const v7Inner = [
+      `:foreach arofiRadio in=[/interface wifi find] do={`,
+      `  :global arofiWirelessInterfaces`,
+      `  :set arofiWirelessInterfaces ($arofiWirelessInterfaces + 1)`,
+      `  :local arofiRadioName [/interface wifi get $arofiRadio name]`,
+      `  :do {`,
+      `    /interface wifi set $arofiRadio disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""`,
+      `    ${bridgePort}`,
+      `  } on-error={`,
+      `    :global arofiProvisionErrors`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "wifi_set_failed,")`,
+      `    :put ("AROFi: failed to configure wifi interface " . $arofiRadioName)`,
+      `  }`,
+      `}`,
+    ].join(' ')
+
+    const wifiWave2Inner = [
+      `:foreach arofiRadio in=[/interface wifiwave2 find] do={`,
+      `  :global arofiWirelessInterfaces`,
+      `  :set arofiWirelessInterfaces ($arofiWirelessInterfaces + 1)`,
+      `  :local arofiRadioName [/interface wifiwave2 get $arofiRadio name]`,
+      `  :do {`,
+      `    /interface wifiwave2 set $arofiRadio disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""`,
+      `    ${bridgePort}`,
+      `  } on-error={`,
+      `    :global arofiProvisionErrors`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "wifiwave2_set_failed,")`,
+      `    :put ("AROFi: failed to configure wifiwave2 interface " . $arofiRadioName)`,
+      `  }`,
+      `}`,
+    ].join(' ')
 
     const securityProfile =
       `:if ([:len [/interface wireless security-profiles find name="arofi-open"]]>0) do={/interface wireless security-profiles set [/interface wireless security-profiles find name="arofi-open"] mode=none authentication-types=""} else={/interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""}`
@@ -806,10 +1049,65 @@ export class MikrotikService {
     return [
       ...this.parseGuard('/interface wireless cap set enabled=no', 'AROFi: no wireless CAP menu - skipped.'),
       ...this.parseGuard(securityProfile, 'AROFi: wireless security-profiles not available - skipped.'),
-      ...this.parseGuard(v6Inner('wlan1'), 'AROFi: wlan1 (RouterOS 6 wireless) not available - skipped.'),
-      ...this.parseGuard(v6Inner('wlan2'), 'AROFi: wlan2 not available - skipped.'),
-      ...this.parseGuard(v7Inner('wifi1'), 'AROFi: wifi1 (RouterOS 7 wifi) not available - skipped.'),
-      ...this.parseGuard(v7Inner('wifi2'), 'AROFi: wifi2 not available - skipped.'),
+      ...this.parseGuard(v6Inner, 'AROFi: RouterOS wireless menu not available - skipped.'),
+      ...this.parseGuard(v7Inner, 'AROFi: RouterOS wifi menu not available - skipped.'),
+      ...this.parseGuard(wifiWave2Inner, 'AROFi: RouterOS wifiwave2 menu not available - skipped.'),
+      `:if ($arofiWirelessInterfaces = 0) do={ :put "AROFi: no wireless interfaces detected; Ethernet fallback will be attempted." }`,
+    ]
+  }
+
+  private buildEthernetHotspotFallbackScript() {
+    return [
+      `:if ($arofiWirelessAttached = 0) do={`,
+      `  :put "AROFi: no wireless interface is attached; searching for a non-WAN Ethernet hotspot port."`,
+      `  :local selectedEther ""`,
+      `  :do {`,
+      `    :foreach e in=[/interface ethernet find] do={`,
+      `      :local eName [/interface ethernet get $e name]`,
+      `      :local eDisabled false`,
+      `      :do { :set eDisabled [/interface ethernet get $e disabled] } on-error={}`,
+      `      :if ($selectedEther = "" && $eDisabled = false && $eName != $wanIface && $eName != "ether1") do={`,
+      `        :local eIfaceId [/interface find name=$eName]`,
+      `        :if ([:len [/interface bridge port find interface=$eIfaceId]] = 0) do={ :set selectedEther $eName }`,
+      `      }`,
+      `    }`,
+      `    :if ($selectedEther = "") do={`,
+      `      :foreach e in=[/interface ethernet find] do={`,
+      `        :local eName [/interface ethernet get $e name]`,
+      `        :local eDisabled false`,
+      `        :do { :set eDisabled [/interface ethernet get $e disabled] } on-error={}`,
+      `        :if ($selectedEther = "" && $eDisabled = false && $eName != $wanIface && $eName != "ether1") do={ :set selectedEther $eName }`,
+      `      }`,
+      `    }`,
+      `    :if ($selectedEther != "") do={`,
+      `      :local eIfaceId [/interface find name=$selectedEther]`,
+      `      :local bridgeId [/interface bridge find name="arofi-hotspot"]`,
+      `      :if ([:len $eIfaceId] > 0 && [:len $bridgeId] > 0) do={`,
+      `        :local bridgePortId [/interface bridge port find interface=$eIfaceId]`,
+      `        :if ([:len $bridgePortId] = 0) do={`,
+      `          /interface bridge port add bridge=$bridgeId interface=$eIfaceId`,
+      `        } else={`,
+      `          /interface bridge port set $bridgePortId bridge=$bridgeId`,
+      `        }`,
+      `        :global arofiEthernetAttached`,
+      `        :set arofiEthernetAttached 1`,
+      `        :put ("AROFi: attached Ethernet hotspot interface " . $selectedEther . ".")`,
+      `      }`,
+      `    } else={`,
+      `      :global arofiProvisionErrors`,
+      `      :global arofiRollbackNeeded`,
+      `      :set arofiProvisionErrors ($arofiProvisionErrors . "no_ethernet_fallback,")`,
+      `      :set arofiRollbackNeeded true`,
+      `      :put "AROFi: no safe Ethernet hotspot interface found. Connect an AP to a non-WAN port or set up a hotspot bridge port manually."`,
+      `    }`,
+      `  } on-error={`,
+      `    :global arofiProvisionErrors`,
+      `    :global arofiRollbackNeeded`,
+      `    :set arofiProvisionErrors ($arofiProvisionErrors . "ethernet_fallback_failed,")`,
+      `    :set arofiRollbackNeeded true`,
+      `    :put "AROFi: Ethernet hotspot fallback failed."`,
+      `  }`,
+      `}`,
     ]
   }
 

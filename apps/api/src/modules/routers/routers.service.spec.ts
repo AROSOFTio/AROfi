@@ -80,6 +80,9 @@ describe('RoutersService', () => {
           name: router.name,
         }),
       },
+      routerHealthCheck: {
+        create: jest.fn().mockResolvedValue({}),
+      },
       radiusClient: {
         update: jest.fn().mockResolvedValue({}),
         upsert: jest.fn().mockResolvedValue({}),
@@ -95,6 +98,9 @@ describe('RoutersService', () => {
       router: {
         findUnique: jest.fn().mockResolvedValue(router),
         update: jest.fn().mockResolvedValue(router),
+      },
+      routerHealthCheck: {
+        create: jest.fn().mockResolvedValue({}),
       },
       $transaction: jest.fn((callback) => callback(tx)),
     }
@@ -205,6 +211,89 @@ describe('RoutersService', () => {
           shortname: 'shop-router',
           secret: 'change_me_radius_secret',
           enabled: true,
+        }),
+      }),
+    )
+  })
+
+  it('marks provisioning callback as config error when router self-test reports failure', async () => {
+    const { service, tx } = buildCallbackHarness()
+
+    const result = await service.markRouterProvisionedByKey('registration-key', '102.209.111.77', {
+      status: 'failed',
+      checks: 'hotspot=fail,bridge=ok,dhcp=ok,nat=ok,radius=fail,scheduler=ok,wireless=fail,files=ok',
+      errors: 'hotspot_missing,radius_unreachable,no_wireless_or_ethernet_attached',
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      callbackReceived: true,
+      provisioningVerified: false,
+      status: 'failed',
+      errors: expect.arrayContaining([
+        'hotspot_missing',
+        'radius_unreachable',
+        'no_wireless_or_ethernet_attached',
+      ]),
+    })
+    expect(tx.router.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          onboardingStatus: 'CONFIG_ERROR',
+          verificationStatus: 'FAILED',
+          healthMessage: expect.stringContaining('Router self-test failed'),
+        }),
+      }),
+    )
+    expect(tx.routerHealthCheck.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rawPayload: expect.objectContaining({
+            kind: 'mikrotik-provisioned-callback',
+            reportStatus: 'failed',
+            checks: expect.objectContaining({
+              hotspot: 'fail',
+              radius: 'fail',
+              wireless: 'fail',
+            }),
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('records standalone MikroTik self-test reports', async () => {
+    const { service, prisma, tx } = buildCallbackHarness()
+
+    const result = await service.recordProvisioningSelfTestByKey('registration-key', '102.209.111.77', {
+      status: 'ok',
+      checks: 'hotspot=ok,bridge=ok,dhcp=ok,nat=ok,radius=ok,radius_config=ok,scheduler=ok,wireless=ethernet,files=ok',
+      notes: 'ethernet_fallback',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      routerId: 'router-1',
+      status: 'ok',
+      notes: ['ethernet_fallback'],
+    })
+    expect(prisma.$transaction).toHaveBeenCalled()
+    expect(tx.router.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          onboardingStatus: 'WAITING_FOR_RADIUS',
+          verificationStatus: 'OPERATOR_APPLIED',
+          lastSeenAt: expect.any(Date),
+        }),
+      }),
+    )
+    expect(tx.routerHealthCheck.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rawPayload: expect.objectContaining({
+            kind: 'mikrotik-self-test',
+            reportStatus: 'ok',
+          }),
         }),
       }),
     )
