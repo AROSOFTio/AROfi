@@ -41,6 +41,11 @@ x-app-env: &app-env
   ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-5000}
   RADIUS_SERVER_HOST: ${RADIUS_SERVER_HOST:-127.0.0.1}
   RADIUS_PUBLIC_HOST: ${RADIUS_PUBLIC_HOST:-95.111.234.34}
+  # Explicit HTTP fallback for MikroTik script/provisioned/heartbeat callbacks.
+  # Set this in Coolify to http://95.111.234.34:4012 — must be a direct IP:port
+  # since MikroTik fetches it over plain HTTP during initial setup (no DNS yet).
+  # If not set, falls back to API_PUBLIC_HOST:4012.
+  MIKROTIK_CALLBACK_HTTP_URL: ${MIKROTIK_CALLBACK_HTTP_URL:-http://95.111.234.34:4012}
   RADIUS_AUTH_PORT: ${RADIUS_AUTH_PORT:-1812}
   RADIUS_ACCOUNTING_PORT: ${RADIUS_ACCOUNTING_PORT:-1813}
   RADIUS_DISCONNECT_ENABLED: ${RADIUS_DISCONNECT_ENABLED:-false}

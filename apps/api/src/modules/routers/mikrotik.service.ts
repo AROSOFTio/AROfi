@@ -851,17 +851,28 @@ export class MikrotikService {
   }
 
   private resolveHttpCallbackBaseUrl() {
+    // MIKROTIK_CALLBACK_HTTP_URL: explicit override — set this in Coolify to the
+    // server's direct IP:port, e.g. http://95.111.234.34:4012
     const configured = this.configService.get<string>('MIKROTIK_CALLBACK_HTTP_URL')
     if (configured) {
       return configured.replace(/\/$/, '')
     }
 
+    // IMPORTANT: Do NOT use RADIUS_PUBLIC_HOST here — that is the FreeRADIUS
+    // server IP for UDP auth/accounting, NOT the HTTP API endpoint. Using it
+    // here caused the one-line command fallback to embed the old RADIUS IP.
+    // Use API_PUBLIC_HOST (the domain) or the hardcoded server IP.
     const host =
-      this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
-      'arofi.arosoft.io'
+      '95.111.234.34'
 
-    return `http://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}:4012`
+    // Strip any protocol prefix if accidentally included, then build HTTP URL
+    const cleanHost = host.replace(/^https?:\/\//, '').replace(/\/$/, '')
+
+    // If host is a domain name (contains a dot but no colon = not IP:port),
+    // use it directly on port 4012. This lets the domain serve as both HTTPS
+    // (primary) and HTTP fallback on 4012.
+    return `http://${cleanHost}:4012`
   }
 }
