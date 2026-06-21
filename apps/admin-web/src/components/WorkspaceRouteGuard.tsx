@@ -9,6 +9,7 @@ const tenantOnlyPaths = new Set([
   '/agents',
   '/billing',
   '/customers',
+  '/earnings',
   '/float',
   '/hotspots',
   '/packages',

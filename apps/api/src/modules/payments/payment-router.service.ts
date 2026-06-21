@@ -8,6 +8,7 @@ import { MtnMomoDisbursementService } from './mtn-momo-disbursement.service'
 import { PaymentCollectionProvider, PaymentDisbursementProvider } from './payment-provider.interface'
 import { PesapalCollectionService } from './pesapal-collection.service'
 import { YoUgandaCollectionService } from './yo-uganda-collection.service'
+import { YoUgandaDisbursementService } from './yo-uganda-disbursement.service'
 
 @Injectable()
 export class PaymentRouterService {
@@ -17,6 +18,7 @@ export class PaymentRouterService {
     private readonly airtelCollection: AirtelMoneyCollectionService,
     private readonly pesapalCollection: PesapalCollectionService,
     private readonly yoCollection: YoUgandaCollectionService,
+    private readonly yoDisbursement: YoUgandaDisbursementService,
     private readonly mtnDisbursement: MtnMomoDisbursementService,
     private readonly airtelDisbursement: AirtelMoneyDisbursementService,
   ) {}
@@ -45,12 +47,7 @@ export class PaymentRouterService {
   }
 
   resolveDisbursement(network: PaymentNetwork): PaymentDisbursementProvider {
-    const configured = this.providerFor(network, 'DISBURSEMENT')
-    if (configured === PaymentProvider.MTN_MOMO_DIRECT) return this.mtnDisbursement
-    if (configured === PaymentProvider.AIRTEL_MONEY_DIRECT) {
-      throw new BadRequestException('Airtel direct payouts are not configured. Use MTN payouts or enable an approved payout provider.')
-    }
-    throw new BadRequestException(`Disbursement provider is not configured for ${network}`)
+    return this.yoDisbursement
   }
 
   providerFor(network: PaymentNetwork, direction: 'COLLECTION' | 'DISBURSEMENT') {

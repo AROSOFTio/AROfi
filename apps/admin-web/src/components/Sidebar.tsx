@@ -56,6 +56,7 @@ const navItems: NavGroup[] = [
     label: 'Earnings',
     icon: <FloatIcon />,
     items: [
+      { href: '/earnings', label: 'Wallet', required: ['billing.read'], tenantOnly: true },
       { href: '/float', label: 'Settlement Balance', required: ['agents.read'], tenantOnly: true },
       { href: '/disbursements', label: 'Withdrawals', required: ['disbursements.read'], tenantOnly: true },
     ]
