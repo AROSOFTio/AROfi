@@ -283,7 +283,18 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     for (const attempt of attempts) {
       try {
         const secret = process.env.RADIUS_DISCONNECT_SECRET ?? process.env.RADIUS_SHARED_SECRET
-        const host = process.env.RADIUS_DISCONNECT_HOST ?? process.env.RADIUS_PUBLIC_HOST ?? '127.0.0.1'
+        let host = process.env.RADIUS_DISCONNECT_HOST
+        if (!host && attempt.routerId) {
+          const router = await this.prisma.router.findUnique({
+            where: { id: attempt.routerId },
+          })
+          if (router) {
+            host = router.radiusNasIpAddress ?? router.host
+          }
+        }
+        if (!host) {
+          host = process.env.RADIUS_PUBLIC_HOST ?? '127.0.0.1'
+        }
         const port = process.env.RADIUS_DISCONNECT_PORT ?? '3799'
         if (!secret) {
           throw new Error('RADIUS disconnect secret is not configured')

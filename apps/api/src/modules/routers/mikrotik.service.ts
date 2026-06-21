@@ -199,7 +199,13 @@ export class MikrotikService {
       ``,
       `# TTL anti-tethering (always on — prevents hotspot-behind-hotspot NAT abuse)`,
       `/ip firewall mangle remove [find comment="AROFi anti-tether"]`,
-      `/ip firewall mangle add chain=prerouting action=change-ttl new-ttl=decrement:1 passthrough=yes in-interface=arofi-hotspot comment="AROFi anti-tether"`,
+      `:foreach h in=[/ip hotspot find] do={`,
+      `  :local hotInterface [/ip hotspot get $h interface]`,
+      `  :if ($hotInterface != "") do={`,
+      `    :do { /ip firewall mangle add chain=prerouting action=change-ttl new-ttl=decrement:1 passthrough=yes in-interface=$hotInterface comment="AROFi anti-tether" } on-error={}`,
+      `    :do { /ip firewall mangle add chain=postrouting action=change-ttl new-ttl=set:1 passthrough=no out-interface=$hotInterface comment="AROFi anti-tether" } on-error={}`,
+      `  }`,
+      `}`,
     ]
 
     const telemetry = [
