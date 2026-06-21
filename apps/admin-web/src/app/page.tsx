@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Activity, BadgeDollarSign, Radio, Router, Ticket, Users, Wifi } from 'lucide-react'
 import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
@@ -74,6 +75,7 @@ export default function RootPage() {
           <span className="home-brand-text" aria-hidden="true">AROFi</span>
         </div>
         <div className="home-actions">
+          <Link href="/docs" className="btn btn-ghost">Docs</Link>
           <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
           <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started Free</button>
         </div>
@@ -86,6 +88,7 @@ export default function RootPage() {
           <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, no IT team, free to start.</p>
           <div className="home-cta">
             <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Start for Free</button>
+            <Link href="/docs" className="btn btn-ghost">Documentation</Link>
             <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
           </div>
           <div className="home-trust">
