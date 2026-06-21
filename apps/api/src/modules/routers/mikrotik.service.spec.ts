@@ -90,7 +90,11 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    expect(script).toContain('/ip firewall nat add chain=srcnat src-address=10.55.0.0/24 action=masquerade')
+    // WAN detection must try multiple methods and error if not found (no silent broken NAT)
+    expect(script).toContain(':foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes]')
+    expect(script).toContain(':foreach ppp in=[/interface find type=pppoe]')
+    expect(script).toContain(':foreach lte in=[/interface lte find]')
+    expect(script).toContain('AROFi: WAN interface not detected')
     expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=arofi-hotspot')
 
     // The KEY safety guarantees that prevent the lockout we hit before.
