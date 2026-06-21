@@ -238,4 +238,42 @@ describe('RoutersService', () => {
     await expect(service.markRouterProvisionedByKey('missing-key', '102.209.111.77')).resolves.toBeNull()
     expect(prisma.$transaction).not.toHaveBeenCalled()
   })
+
+  describe('recordRouterHeartbeatByKey', () => {
+    it('records heartbeat without updating database clients when IP has not changed', async () => {
+      const router = buildCallbackRouter({ radiusNasIpAddress: '102.209.111.77' })
+      const { service, tx } = buildCallbackHarness(router)
+
+      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.77')
+
+      expect(result).toEqual({ ok: true })
+      expect(tx.router.update).toHaveBeenCalled()
+      expect(tx.radiusClient.update).not.toHaveBeenCalled()
+      expect(tx.nasClient.update).not.toHaveBeenCalled()
+      expect(service.reloadFreeradiusNasClients).not.toHaveBeenCalled()
+    })
+
+    it('records heartbeat, updates database clients, and reloads FreeRADIUS when IP changes', async () => {
+      const router = buildCallbackRouter({ radiusNasIpAddress: '102.209.111.77' })
+      const { service, tx } = buildCallbackHarness(router)
+
+      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.88')
+
+      expect(result).toEqual({ ok: true })
+      expect(tx.router.update).toHaveBeenCalled()
+      expect(tx.radiusClient.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'radius-client-1' },
+          data: expect.objectContaining({ ipAddress: '102.209.111.88' }),
+        }),
+      )
+      expect(tx.nasClient.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 10 },
+          data: expect.objectContaining({ nasname: '102.209.111.88' }),
+        }),
+      )
+      expect(service.reloadFreeradiusNasClients).toHaveBeenCalled()
+    })
+  })
 })
