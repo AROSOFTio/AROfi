@@ -132,12 +132,12 @@ describe('MikrotikService', () => {
 
     const html = service.buildLoginHtml('router-key-123')
 
-    expect(html).toContain('https://wifi.example.com/portal')
-    expect(html).toContain('params.set("mac", "$(mac)")')
-    expect(html).toContain('params.set("ip", "$(ip)")')
-    expect(html).toContain('params.set("link-login", "$(link-login-only)")')
-    expect(html).toContain('params.set("server", "$(server-name)")')
-    expect(html).toContain('params.set("routerKey", "router-key-123")')
+    expect(html).toContain('var API="https://wifi.example.com"')
+    expect(html).toContain('RKEY="router-key-123"')
+    expect(html).toContain('mac="$(mac)"')
+    expect(html).toContain('ip="$(ip)"')
+    expect(html).toContain('lo="$(link-login-only)"')
+    expect(html).toContain('srv="$(server-name)"')
   })
 
   it('builds idempotent walled garden and optional TTL anti-tethering sections', () => {
@@ -172,7 +172,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('dst-host="pay.pesapal.com"')
     expect(script).toContain('dst-host="*.pesapal.com"')
     expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
-    expect(script).toContain('new-ttl=set:1')
+    expect(script).toContain('new-ttl=decrement:1')
     expect(script).toContain('AROFi anti-tether')
   })
 })

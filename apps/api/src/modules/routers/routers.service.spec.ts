@@ -2,6 +2,10 @@ import { RouterConnectionMode, RouterScriptMode } from '@prisma/client'
 import { RoutersService } from './routers.service'
 
 describe('RoutersService', () => {
+  beforeAll(() => {
+    process.env.RADIUS_SHARED_SECRET = 'bootstrap-only-use-router-specific-secrets'
+  })
+
   it('creates a matching dynamic NAS client when a router is onboarded', async () => {
     const prisma = {
       tenant: {
