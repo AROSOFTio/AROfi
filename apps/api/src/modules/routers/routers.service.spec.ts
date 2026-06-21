@@ -438,4 +438,84 @@ describe('RoutersService', () => {
       await expect(service.runDeploymentTest('router-1', 'tenant-1')).rejects.toThrow('Router not found')
     })
   })
+
+  describe('computeHealthScore', () => {
+    const service = new RoutersService({} as never, {} as never, {} as never, {} as never, {} as never)
+    const compute = (router: Record<string, unknown>) => (service as any).computeHealthScore(router)
+
+    function withChecks(checks: Record<string, string>, overrides: Record<string, unknown> = {}) {
+      return {
+        healthChecks: [{ rawPayload: { checks } }],
+        lastAuthSignalAt: null,
+        lastAccountingSignalAt: null,
+        ...overrides,
+      }
+    }
+
+    it('scores 0 and is not production-ready with no report at all', () => {
+      const result = compute({ healthChecks: [], lastAuthSignalAt: null, lastAccountingSignalAt: null })
+      expect(result.score).toBe(0)
+      expect(result.criticalOk).toBe(false)
+      expect(result.productionReady).toBe(false)
+    })
+
+    it('caps below productionReady when scripts pass but no real client has ever authenticated', () => {
+      const allOk = {
+        nat: 'ok', dhcp: 'ok', hotspot: 'ok', radius: 'ok', radius_config: 'ok',
+        bridge: 'ok', bridge_port: 'ok', files: 'ok', scheduler: 'ok', wireless: 'ok',
+      }
+      const result = compute(withChecks(allOk))
+      // Script-only checks max out at 60/100 — Failure #9: script success != deployment success.
+      expect(result.score).toBe(60)
+      expect(result.criticalOk).toBe(true)
+      expect(result.productionReady).toBe(false)
+    })
+
+    it('is productionReady only once critical checks AND real auth AND real accounting all hold', () => {
+      const allOk = {
+        nat: 'ok', dhcp: 'ok', hotspot: 'ok', radius: 'ok', radius_config: 'ok',
+        bridge: 'ok', bridge_port: 'ok', files: 'ok', scheduler: 'ok', wireless: 'ok',
+      }
+      const result = compute(
+        withChecks(allOk, { lastAuthSignalAt: new Date(), lastAccountingSignalAt: new Date() }),
+      )
+      expect(result.score).toBe(100)
+      expect(result.productionReady).toBe(true)
+    })
+
+    it('marks criticalOk=false when NAT is missing even if other checks pass (Failure #1)', () => {
+      const result = compute(withChecks({ nat: 'fail', dhcp: 'ok', hotspot: 'ok', radius: 'ok', radius_config: 'ok' }))
+      expect(result.criticalOk).toBe(false)
+    })
+  })
+
+  describe('computeDriftScore', () => {
+    const service = new RoutersService({} as never, {} as never, {} as never, {} as never, {} as never)
+    const compute = (reports: Array<{ reportStatus: string; checks: Record<string, string> }>) =>
+      (service as any).computeDriftScore(reports)
+
+    it('returns null when there is no report yet', () => {
+      expect(compute([])).toBeNull()
+    })
+
+    it('returns null when nothing has ever fully passed', () => {
+      expect(compute([{ reportStatus: 'failed', checks: { nat: 'fail' } }])).toBeNull()
+    })
+
+    it('returns 100 when nothing has drifted since the last passing baseline', () => {
+      const reports = [
+        { reportStatus: 'ok', checks: { nat: 'ok', dhcp: 'ok', hotspot: 'ok' } }, // latest (index 0)
+        { reportStatus: 'ok', checks: { nat: 'ok', dhcp: 'ok', hotspot: 'ok' } }, // baseline (oldest)
+      ]
+      expect(compute(reports)).toBe(100)
+    })
+
+    it('drops proportionally when a previously-passing check regresses', () => {
+      const reports = [
+        { reportStatus: 'failed', checks: { nat: 'fail', dhcp: 'ok', hotspot: 'ok' } }, // latest
+        { reportStatus: 'ok', checks: { nat: 'ok', dhcp: 'ok', hotspot: 'ok' } }, // baseline
+      ]
+      expect(compute(reports)).toBe(67) // 2 of 3 baseline-ok checks still ok
+    })
+  })
 })

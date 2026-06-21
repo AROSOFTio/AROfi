@@ -1077,6 +1077,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       setupDiagnostics,
       latestProvisioningReport,
       provisioningReports,
+      driftScore: this.computeDriftScore(provisioningReports),
       selfTest: {
         validationMode: 'router-reported',
         checkedAt: latestProvisioningReport?.checkedAt ?? null,
@@ -1906,6 +1907,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       latencyMs: number | null
       message: string | null
       checkedAt: Date
+      rawPayload?: Prisma.JsonValue | null
     }>
   }) {
     const activeSessions = router.sessions.length || router.activeSessionCount
@@ -1916,6 +1918,15 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         : live.liveState === 'STALE' && router.status === RouterStatus.OFFLINE
           ? RouterStatus.DEGRADED
           : router.status
+    const health = this.computeHealthScore(router)
+    // Failure #9/#10 enforced here: ONLINE is only ever true when the weighted
+    // score clears the bar AND real client signals exist — a router that only
+    // "ran the script" or only has a reachable management API stays WARNING.
+    const dashboardState: 'ONLINE' | 'WARNING' | 'OFFLINE' = health.productionReady
+      ? 'ONLINE'
+      : live.liveState === 'OFFLINE' || !health.criticalOk
+        ? 'OFFLINE'
+        : 'WARNING'
 
     return {
       id: router.id,
@@ -1994,7 +2005,89 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             checkedAt: router.healthChecks[0].checkedAt,
           }
         : null,
+      healthScore: health.score,
+      productionReady: health.productionReady,
+      dashboardState,
     }
+  }
+
+  // Weighted 0-100 score over the most recent self-test/watchdog report plus
+  // real client signals. Critical subsystems (NAT/DHCP/Hotspot/RADIUS, and
+  // above all real auth/accounting) are weighted far higher than cosmetic
+  // ones (walled garden, portal files) — see Phase 3 of the deployment
+  // redesign plan. Pure/synchronous so it's safe to call for every router in
+  // a fleet overview list without extra queries.
+  private computeHealthScore(router: {
+    healthChecks: Array<{ rawPayload?: Prisma.JsonValue | null }>
+    lastAuthSignalAt?: Date | null
+    lastAccountingSignalAt?: Date | null
+  }) {
+    const raw = router.healthChecks[0]?.rawPayload
+    const checks =
+      raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as Record<string, unknown>).checks === 'object'
+        ? ((raw as Record<string, unknown>).checks as Record<string, string>)
+        : {}
+    const isOk = (code: string, accepted: string[] = ['ok']) => accepted.includes(checks[code])
+
+    const radiusAuthSeen = Boolean(router.lastAuthSignalAt)
+    const accountingSeen = Boolean(router.lastAccountingSignalAt)
+
+    const natOk = isOk('nat', ['ok', 'skip'])
+    const dhcpOk = isOk('dhcp', ['ok', 'skip'])
+    const hotspotOk = isOk('hotspot')
+    const radiusOk = isOk('radius') && isOk('radius_config')
+
+    const weighted: Array<[boolean, number]> = [
+      [natOk, 15],
+      [dhcpOk, 10],
+      [hotspotOk, 15],
+      [radiusOk, 10],
+      [radiusAuthSeen, 20],
+      [accountingSeen, 20],
+      [isOk('bridge', ['ok', 'skip']), 3],
+      [isOk('bridge_port', ['ok', 'skip']), 2],
+      [isOk('files'), 2],
+      [isOk('scheduler'), 2],
+      [isOk('wireless', ['ok', 'ethernet', 'existing']), 1],
+    ]
+
+    const score = weighted.reduce((total, [ok, weight]) => total + (ok ? weight : 0), 0)
+    const criticalOk = natOk && dhcpOk && hotspotOk && radiusOk
+
+    return {
+      score,
+      criticalOk,
+      productionReady: score >= 95 && radiusAuthSeen && accountingSeen,
+    }
+  }
+
+  // Compares the latest self-test report against the oldest fully-passing
+  // report in the recent history window — no new schema/migration needed,
+  // this is derived entirely from existing RouterHealthCheck rows. Null when
+  // there isn't yet a passing baseline to compare against.
+  private computeDriftScore(
+    provisioningReports: Array<{ reportStatus: string; checks: Record<string, string> }>,
+  ) {
+    const latest = provisioningReports[0]
+    if (!latest) {
+      return null
+    }
+
+    const baseline = [...provisioningReports].reverse().find((report) => report.reportStatus === 'ok')
+    if (!baseline) {
+      return null
+    }
+
+    const baselineOkKeys = Object.entries(baseline.checks)
+      .filter(([, value]) => value === 'ok')
+      .map(([key]) => key)
+
+    if (baselineOkKeys.length === 0) {
+      return null
+    }
+
+    const stillOk = baselineOkKeys.filter((key) => latest.checks[key] === 'ok').length
+    return Math.round((stillOk / baselineOkKeys.length) * 100)
   }
 
   private resolveRouterLiveState(
