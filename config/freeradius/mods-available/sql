@@ -11,6 +11,19 @@ sql {
 	client_table = "nas"
 	read_groups = no
 	delete_stale_sessions = yes
+
+	# Table names
+	authcheck_table = "radcheck"
+	authreply_table = "radreply"
+	groupcheck_table = "radgroupcheck"
+	groupreply_table = "radgroupreply"
+	usergroup_table = "radusergroup"
+	acct_table1 = "radacct"
+	acct_table2 = "radacct"
+	postauth_table = "radpostauth"
+
+	safe_characters = "@abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_: /"
+
 	pool {
 		start = 5
 		min = 3
@@ -20,5 +33,48 @@ sql {
 		lifetime = 0
 		idle_timeout = 60
 	}
+
+	accounting {
+		reference = "%{tolower:%{Acct-Status-Type}}"
+		type {
+			accounting-on {
+				query = "${..query}"
+			}
+			accounting-off {
+				query = "${..query}"
+			}
+			start {
+				query = "${..query}"
+			}
+			interim-update {
+				query = "${..query}"
+			}
+			stop {
+				query = "${..query}"
+			}
+		}
+	}
+
+	post-auth {
+		reference = "."
+		type {
+			post-auth {
+				query = "${..query}"
+			}
+		}
+	}
+
+	session {
+		reference = "session"
+		type {
+			start {
+				query = "${..query}"
+			}
+			stop {
+				query = "${..query}"
+			}
+		}
+	}
+
 	$INCLUDE ${modconfdir}/sql/main/${dialect}/queries.conf
 }
