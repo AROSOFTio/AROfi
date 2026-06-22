@@ -50,5 +50,9 @@ server default {
 
 	post-auth {
 		sql
+		Post-Auth-Type Reject {
+			sql
+		}
 	}
 }
+

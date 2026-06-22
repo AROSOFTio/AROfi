@@ -24,5 +24,8 @@ server inner-tunnel {
 
 	post-auth {
 		sql
+		Post-Auth-Type Reject {
+			sql
+		}
 	}
 }
