@@ -95,22 +95,105 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         ],
       },
       orderBy: { radacctid: 'desc' },
-      take: 200,
+      take: 500,
     })
 
     const now = new Date()
-    const clients = await this.prisma.radiusClient.findMany({ include: { router: true } })
-    const clientByIp = new Map(clients.map((client) => [client.ipAddress, client]))
+
+    // Build NAS IP → router lookup using BOTH radiusClient.ipAddress (the registered
+    // placeholder) AND router.radiusNasIpAddress (the real WAN IP learned from the
+    // provisioning callback). Either may match depending on router setup state.
+    const routers = await this.prisma.router.findMany({
+      include: { radiusClient: true },
+    })
+    const routerByNasIp = new Map<string, typeof routers[0]>()
+    for (const router of routers) {
+      if (router.radiusClient?.ipAddress) routerByNasIp.set(router.radiusClient.ipAddress, router)
+      if (router.radiusNasIpAddress) routerByNasIp.set(router.radiusNasIpAddress, router)
+    }
+
+    // Pre-fetch all activations that have a radiusUsername matching any username
+    // in the current radAcct batch. This avoids N+1 queries inside the loop.
+    const usernames = [...new Set(acctRows.map((r) => r.username).filter(Boolean))] as string[]
+    const activations = usernames.length
+      ? await this.prisma.packageActivation.findMany({
+          where: { radiusUsername: { in: usernames } },
+          include: { voucherRedemption: true },
+        })
+      : []
+    const activationByUsername = new Map(activations.map((a) => [a.radiusUsername, a]))
 
     for (const row of acctRows) {
       const nasIp = row.nasipaddress?.toString()
-      const client = nasIp ? clientByIp.get(nasIp) : undefined
-      if (!client) {
-        continue
+      const router = nasIp ? routerByNasIp.get(nasIp) : undefined
+
+      // Cannot attribute this accounting row to any known router — skip.
+      if (!router) continue
+
+      const tenantId = router.tenantId
+      const radiusSessionId = row.acctsessionid
+      if (!radiusSessionId) continue
+
+      const username = row.username ?? ''
+      const macAddress = row.callingstationid
+        ? row.callingstationid.trim().toUpperCase().replace(/-/g, ':')
+        : null
+      const ipAddress = row.framedipaddress?.toString() ?? null
+      const inputOctets = row.acctinputoctets ?? BigInt(0)
+      const outputOctets = row.acctoutputoctets ?? BigInt(0)
+      const sessionTimeSeconds = row.acctsessiontime ?? 0
+      const isStopped = row.acctstoptime != null
+      const sessionStatus = isStopped ? SessionStatus.CLOSED : SessionStatus.ACTIVE
+      const startedAt = row.acctstarttime ?? now
+      const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
+      const activation = username ? activationByUsername.get(username) : undefined
+
+      try {
+        await this.prisma.networkSession.upsert({
+          where: { tenantId_radiusSessionId: { tenantId, radiusSessionId } },
+          update: {
+            status: sessionStatus,
+            inputOctets,
+            outputOctets,
+            sessionTimeSeconds,
+            lastAccountingAt,
+            ...(macAddress ? { macAddress } : {}),
+            ...(ipAddress ? { ipAddress } : {}),
+            nasIpAddress: nasIp ?? undefined,
+            endedAt: isStopped ? (row.acctstoptime ?? now) : null,
+            ...(activation ? { activationId: activation.id } : {}),
+            ...(activation?.voucherRedemptionId ? { voucherRedemptionId: activation.voucherRedemptionId } : {}),
+            routerId: router.id,
+          },
+          create: {
+            tenantId,
+            routerId: router.id,
+            radiusSessionId,
+            status: sessionStatus,
+            username,
+            macAddress,
+            ipAddress,
+            nasIpAddress: nasIp ?? null,
+            inputOctets,
+            outputOctets,
+            sessionTimeSeconds,
+            startedAt,
+            lastAccountingAt,
+            endedAt: isStopped ? (row.acctstoptime ?? now) : null,
+            activationId: activation?.id ?? null,
+            voucherRedemptionId: activation?.voucherRedemptionId ?? null,
+          },
+        })
+      } catch (err) {
+        // Non-fatal: one bad row must not block all others. Log and continue.
+        this.logger.warn(
+          `syncRadiusSqlSignals: failed to upsert session ${radiusSessionId}: ${err instanceof Error ? err.message : err}`,
+        )
       }
 
+      // Update router health from this accounting signal.
       await this.prisma.router.update({
-        where: { id: client.routerId },
+        where: { id: router.id },
         data: {
           status: RouterStatus.HEALTHY,
           onboardingStatus: RouterOnboardingStatus.VERIFIED_ONLINE,
@@ -123,6 +206,25 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       })
     }
 
+    // After upserting all sessions, re-aggregate usedBytes on every touched
+    // activation so enforceDataQuotas() has accurate byte counts.
+    const touchedActivationIds = [...new Set(
+      acctRows
+        .map((r) => r.username ? activationByUsername.get(r.username)?.id : undefined)
+        .filter((id): id is string => Boolean(id)),
+    )]
+    for (const activationId of touchedActivationIds) {
+      const agg = await this.prisma.networkSession.aggregate({
+        where: { activationId },
+        _sum: { inputOctets: true, outputOctets: true },
+      })
+      const usedBytes =
+        (agg._sum.inputOctets ?? BigInt(0)) + (agg._sum.outputOctets ?? BigInt(0))
+      await this.prisma.packageActivation.update({
+        where: { id: activationId },
+        data: { usedBytes },
+      })
+    }
   }
 
   private async expireActivations() {

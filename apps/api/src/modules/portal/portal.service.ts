@@ -507,6 +507,30 @@ export class PortalService {
       message: 'Returning device has active access',
     })
 
+    // Refresh Session-Timeout in radreply to the ACTUAL remaining seconds.
+    // The original radreply was written at activation time with a fixed value.
+    // If MikroTik re-authenticates on reconnect, it reads Session-Timeout again —
+    // so we must update it to reflect real remaining time, not the original duration.
+    const radiusUsername =
+      activation.radiusCredential?.username ?? activation.radiusUsername
+    if (radiusUsername) {
+      const remainingSeconds = Math.max(
+        1,
+        Math.floor((activation.endsAt.getTime() - Date.now()) / 1000),
+      )
+      try {
+        await this.prisma.radReply.updateMany({
+          where: { username: radiusUsername, attribute: 'Session-Timeout' },
+          data: { value: remainingSeconds.toString() },
+        })
+      } catch (err) {
+        // Non-fatal — stale Session-Timeout is better than a broken reconnect.
+        this.logger.warn(
+          `detectReturningDevice: failed to refresh Session-Timeout for ${radiusUsername}: ${err instanceof Error ? err.message : err}`,
+        )
+      }
+    }
+
     return {
       existingActiveAccess: true,
       message: 'Welcome back. Your package is still active.',

@@ -514,7 +514,7 @@ export class MikrotikService {
     window.onload=function(){
       var sp=new URLSearchParams(window.location.search);
       var u=sp.get('username'),p=sp.get('password');
-      if(u&&p){document.getElementById('lu').value=u;document.getElementById('lp').value=p;document.getElementById('lf').submit();return;}
+      if(u&&p){var dst2=sp.get('dst')||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p)+'&dst='+encodeURIComponent(dst2);return;}
       if(ip||mac)document.getElementById('dinfo').textContent=(ip?'IP: '+ip:'')+(ip&&mac?'  |  ':'')+(mac?'MAC: '+mac.toUpperCase():'');
       load();
     };
@@ -612,7 +612,7 @@ export class MikrotikService {
         sst('Voucher redeemed! Connecting you to the internet...','ok');conn(b.reconnect);
       }catch(e){sst(e.message||'Voucher redemption failed. Please try again.','err');setbtn('vbtn',false,'Connect to Internet');}
     }
-    function conn(rc){if(!rc||!rc.username||!rc.password)return;document.getElementById('lu').value=rc.username;document.getElementById('lp').value=rc.password;document.getElementById('lf').submit();}
+    function conn(rc){if(!rc||!rc.username||!rc.password)return;var dst=document.querySelector('#lf input[name=dst]').value||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password)+'&dst='+encodeURIComponent(dst);}
     function setbtn(id,dis,txt){var b=document.getElementById(id);b.disabled=dis;b.innerHTML=dis?'<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:6px"></span>'+txt:txt;}
     function sst(m,t){var s=document.getElementById('st');s.className='st '+t;s.textContent=m;}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
