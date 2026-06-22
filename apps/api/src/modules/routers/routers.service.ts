@@ -1099,6 +1099,32 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
     const nasCandidates = router ? this.getRouterNasCandidates(router) : []
 
+    // Resolve radAcct using BOTH NAS IP candidates AND any known radiusUsername
+    // linked to this router. Needed because routers behind NAT report a different
+    // IP in radacct.nasipaddress than what was registered as the NAS placeholder.
+    const resolveRadAcct = async () => {
+      if (nasCandidates.length) {
+        const byNas = await this.prisma.radAcct.findFirst({
+          where: { nasipaddress: { in: nasCandidates } },
+          orderBy: { radacctid: 'desc' },
+        })
+        if (byNas) return byNas
+      }
+      // Fallback: find the most recent activation on this router and look up by username
+      const activation = await this.prisma.packageActivation.findFirst({
+        where: { routerId },
+        select: { radiusUsername: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      if (activation?.radiusUsername) {
+        return this.prisma.radAcct.findFirst({
+          where: { username: activation.radiusUsername },
+          orderBy: { radacctid: 'desc' },
+        })
+      }
+      return null
+    }
+
     const [authEvent, accountingEvent, acceptedAuth, radAcct] = await Promise.all([
       this.prisma.radiusEvent.findFirst({
         where: {
@@ -1118,13 +1144,20 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         where: { routerId, eventType: RadiusEventType.ACCESS_ACCEPT },
         orderBy: { createdAt: 'desc' },
       }),
-      nasCandidates.length
-        ? this.prisma.radAcct.findFirst({
-            where: { nasipaddress: { in: nasCandidates } },
-            orderBy: { radacctid: 'desc' },
-          })
-        : Promise.resolve(null),
+      resolveRadAcct(),
     ])
+
+    // Management API: passes if TCP health check succeeded (direct IP) OR
+    // if the router sent a heartbeat within the last 5 minutes (behind NAT).
+    // Most routers in Uganda are behind CGNAT — heartbeat is the only signal.
+    const tcpReachable =
+      Boolean(router?.healthChecks[0]) &&
+      (router?.healthChecks[0]?.status === RouterStatus.HEALTHY ||
+        router?.healthChecks[0]?.status === RouterStatus.DEGRADED)
+    const heartbeatAgeMs = router?.lastSeenAt
+      ? Date.now() - new Date(router.lastSeenAt).getTime()
+      : Infinity
+    const heartbeatRecent = heartbeatAgeMs < 5 * 60 * 1000 // within 5 minutes
 
     return [
       {
@@ -1137,17 +1170,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
       {
         code: 'management_api',
-        label:
-          router?.healthChecks[0] &&
-          (router.healthChecks[0].status === RouterStatus.HEALTHY ||
-            router.healthChecks[0].status === RouterStatus.DEGRADED)
-            ? 'RouterOS management API reachable'
+        label: tcpReachable
+          ? 'RouterOS management API reachable'
+          : heartbeatRecent
+            ? 'Router heartbeat active (behind NAT — management API not directly reachable)'
             : 'Management API not reachable - hotspot/RADIUS may still be working',
-        ok:
-          Boolean(router?.healthChecks[0]) &&
-          (router?.healthChecks[0]?.status === RouterStatus.HEALTHY ||
-            router?.healthChecks[0]?.status === RouterStatus.DEGRADED),
-        checkedAt: router?.healthChecks[0]?.checkedAt ?? null,
+        ok: tcpReachable || heartbeatRecent,
+        checkedAt: router?.healthChecks[0]?.checkedAt ?? router?.lastSeenAt ?? null,
       },
       {
         code: 'radius_contact',
@@ -1162,7 +1191,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             ? 'Accounting traffic detected'
             : 'Accounting traffic has not been seen yet',
         ok: Boolean(accountingEvent || radAcct),
-        checkedAt: accountingEvent?.createdAt ?? radAcct?.acctupdatetime ?? radAcct?.acctstarttime ?? router?.lastAccountingSignalAt ?? null,
+        checkedAt:
+          accountingEvent?.createdAt ??
+          radAcct?.acctupdatetime ??
+          radAcct?.acctstarttime ??
+          router?.lastAccountingSignalAt ??
+          null,
       },
       {
         code: 'portal_walled_garden',

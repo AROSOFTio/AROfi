@@ -5,6 +5,7 @@ import {
   PackageActivationStatus,
   PaymentStatus,
   RadiusCredentialStatus,
+  RadiusEventType,
   RouterOnboardingStatus,
   RouterStatus,
   SessionStatus,
@@ -86,6 +87,9 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
 
   private async syncRadiusSqlSignals() {
     const recentSince = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const now = new Date()
+
+    // ── 1. Load radAcct rows (FreeRADIUS accounting, written directly to SQL) ──
     const acctRows = await this.prisma.radAcct.findMany({
       where: {
         OR: [
@@ -98,11 +102,9 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       take: 500,
     })
 
-    const now = new Date()
-
-    // Build NAS IP → router lookup using BOTH radiusClient.ipAddress (the registered
-    // placeholder) AND router.radiusNasIpAddress (the real WAN IP learned from the
-    // provisioning callback). Either may match depending on router setup state.
+    // ── 2. Build NAS IP → router map using BOTH registered IP AND real WAN IP ──
+    // radiusClient.ipAddress = registered placeholder
+    // router.radiusNasIpAddress = real WAN IP learned from provisioning callback
     const routers = await this.prisma.router.findMany({
       include: { radiusClient: true },
     })
@@ -112,22 +114,49 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       if (router.radiusNasIpAddress) routerByNasIp.set(router.radiusNasIpAddress, router)
     }
 
-    // Pre-fetch all activations that have a radiusUsername matching any username
-    // in the current radAcct batch. This avoids N+1 queries inside the loop.
-    const usernames = [...new Set(acctRows.map((r) => r.username).filter(Boolean))] as string[]
-    const activations = usernames.length
+    // ── 3. Pre-fetch activations by radiusUsername for session linking ──
+    const acctUsernames = [...new Set(acctRows.map((r) => r.username).filter(Boolean))] as string[]
+    const activationsByUsername = acctUsernames.length
       ? await this.prisma.packageActivation.findMany({
-          where: { radiusUsername: { in: usernames } },
+          where: { radiusUsername: { in: acctUsernames } },
           include: { voucherRedemption: true },
         })
       : []
-    const activationByUsername = new Map(activations.map((a) => [a.radiusUsername, a]))
+    const activationByUsername = new Map(activationsByUsername.map((a) => [a.radiusUsername, a]))
 
+    // ── 4. Process each radAcct row: upsert networkSession + radiusEvent ──
     for (const row of acctRows) {
       const nasIp = row.nasipaddress?.toString()
-      const router = nasIp ? routerByNasIp.get(nasIp) : undefined
+      let router = nasIp ? routerByNasIp.get(nasIp) : undefined
 
-      // Cannot attribute this accounting row to any known router — skip.
+      // FALLBACK: NAS IP didn't match any known router.
+      // This happens when the router is behind CGNAT (private WAN IP ≠ public callback IP),
+      // or the hotspot bridge IP (10.55.0.1) is used as NAS-IP-Address instead of WAN IP.
+      // Resolve via username → RadiusCredential → routerId as a guaranteed fallback.
+      if (!router && row.username) {
+        const cred = await this.prisma.radiusCredential.findFirst({
+          where: { username: row.username },
+          select: { routerId: true },
+        })
+        if (cred?.routerId) {
+          router = routers.find((r) => r.id === cred.routerId)
+          // Auto-learn the real NAS IP from this accounting packet so future
+          // lookups hit the fast NAS IP map path instead of this fallback.
+          if (router && nasIp && !router.radiusNasIpAddress) {
+            try {
+              await this.prisma.router.update({
+                where: { id: router.id },
+                data: { radiusNasIpAddress: nasIp },
+              })
+              router = { ...router, radiusNasIpAddress: nasIp }
+              routerByNasIp.set(nasIp, router)
+            } catch {
+              // Non-fatal
+            }
+          }
+        }
+      }
+
       if (!router) continue
 
       const tenantId = router.tenantId
@@ -148,6 +177,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
       const activation = username ? activationByUsername.get(username) : undefined
 
+      // 4a. Upsert networkSession — this powers activeUsers count and CoA disconnect
       try {
         await this.prisma.networkSession.upsert({
           where: { tenantId_radiusSessionId: { tenantId, radiusSessionId } },
@@ -185,13 +215,45 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           },
         })
       } catch (err) {
-        // Non-fatal: one bad row must not block all others. Log and continue.
         this.logger.warn(
-          `syncRadiusSqlSignals: failed to upsert session ${radiusSessionId}: ${err instanceof Error ? err.message : err}`,
+          `syncRadiusSqlSignals: session upsert failed for ${radiusSessionId}: ${err instanceof Error ? err.message : err}`,
         )
       }
 
-      // Update router health from this accounting signal.
+      // 4b. Synthesise a radiusEvent for this accounting row (powers live checks)
+      // Use acctuniqueid as idempotency key stored in message field.
+      const acctEventType = isStopped
+        ? RadiusEventType.ACCOUNTING_STOP
+        : row.acctupdatetime
+          ? RadiusEventType.ACCOUNTING_INTERIM
+          : RadiusEventType.ACCOUNTING_START
+      const acctMarker = `syn-acct:${row.acctuniqueid}`
+      const existingAcctEvent = await this.prisma.radiusEvent.findFirst({
+        where: { tenantId, message: acctMarker },
+        select: { id: true },
+      })
+      if (!existingAcctEvent) {
+        try {
+          await this.prisma.radiusEvent.create({
+            data: {
+              tenantId,
+              routerId: router.id,
+              eventType: acctEventType,
+              username: username || null,
+              macAddress,
+              ipAddress,
+              nasIpAddress: nasIp ?? null,
+              message: acctMarker,
+            },
+          })
+        } catch (err) {
+          this.logger.warn(
+            `syncRadiusSqlSignals: acct radiusEvent create failed for ${row.acctuniqueid}: ${err instanceof Error ? err.message : err}`,
+          )
+        }
+      }
+
+      // 4c. Update router health and NAS IP from this accounting signal
       await this.prisma.router.update({
         where: { id: router.id },
         data: {
@@ -202,18 +264,20 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           lastRadiusSignalAt: now,
           lastAccountingSignalAt: row.acctupdatetime ?? row.acctstarttime ?? row.acctstoptime ?? now,
           verifiedAt: now,
+          // Learn real NAS IP from the packet if not already set
+          ...(nasIp && !router.radiusNasIpAddress ? { radiusNasIpAddress: nasIp } : {}),
         },
       })
     }
 
-    // After upserting all sessions, re-aggregate usedBytes on every touched
-    // activation so enforceDataQuotas() has accurate byte counts.
-    const touchedActivationIds = [...new Set(
+    // ── 5. Re-aggregate usedBytes on all activations touched this cycle ──
+    // enforceDataQuotas() reads this — must stay in sync with real byte counts.
+    const touchedIds = [...new Set(
       acctRows
         .map((r) => r.username ? activationByUsername.get(r.username)?.id : undefined)
         .filter((id): id is string => Boolean(id)),
     )]
-    for (const activationId of touchedActivationIds) {
+    for (const activationId of touchedIds) {
       const agg = await this.prisma.networkSession.aggregate({
         where: { activationId },
         _sum: { inputOctets: true, outputOctets: true },
@@ -224,6 +288,76 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         where: { id: activationId },
         data: { usedBytes },
       })
+    }
+
+    // ── 6. Synthesise radiusEvent records from radPostAuth ──
+    // FreeRADIUS post-auth { sql } writes every auth attempt to radpostauth.
+    // reply = 'Access-Accept' or 'Access-Reject'. This powers the
+    // "Router has not contacted RADIUS yet" and "No successful test authentication"
+    // live checks without needing rlm_rest.
+    const recentPostAuth = await this.prisma.radPostAuth.findMany({
+      where: { authdate: { gte: recentSince } },
+      orderBy: { id: 'desc' },
+      take: 500,
+    })
+
+    // Pre-fetch credentials to map username → tenantId + routerId
+    const postAuthUsernames = [...new Set(recentPostAuth.map((r) => r.username).filter(Boolean))]
+    const credentials = postAuthUsernames.length
+      ? await this.prisma.radiusCredential.findMany({
+          where: { username: { in: postAuthUsernames } },
+          select: {
+            username: true,
+            tenantId: true,
+            routerId: true,
+          },
+        })
+      : []
+    const credByUsername = new Map(credentials.map((c) => [c.username, c]))
+
+    for (const row of recentPostAuth) {
+      if (!row.username) continue
+
+      const cred = credByUsername.get(row.username)
+      if (!cred?.tenantId) continue // Cannot attribute to a tenant — skip
+
+      const isAccept = (row.reply ?? '').toLowerCase().includes('accept')
+      const eventType = isAccept ? RadiusEventType.ACCESS_ACCEPT : RadiusEventType.ACCESS_REJECT
+
+      // Idempotency: one radiusEvent per radPostAuth row, keyed by row id
+      const authMarker = `syn-auth:${row.id}`
+      const existingAuthEvent = await this.prisma.radiusEvent.findFirst({
+        where: { tenantId: cred.tenantId, message: authMarker },
+        select: { id: true },
+      })
+      if (existingAuthEvent) continue
+
+      try {
+        await this.prisma.radiusEvent.create({
+          data: {
+            tenantId: cred.tenantId,
+            routerId: cred.routerId ?? null,
+            eventType,
+            username: row.username,
+            authMethod: 'PAP',
+            responseCode: isAccept ? '2' : '3',
+            message: authMarker,
+            createdAt: row.authdate,
+          },
+        })
+      } catch (err) {
+        this.logger.warn(
+          `syncRadiusSqlSignals: auth radiusEvent create failed for radpostauth.id=${row.id}: ${err instanceof Error ? err.message : err}`,
+        )
+      }
+
+      // If accepted, also update router lastRadiusSignalAt
+      if (isAccept && cred.routerId) {
+        await this.prisma.router.updateMany({
+          where: { id: cred.routerId },
+          data: { lastRadiusSignalAt: row.authdate },
+        })
+      }
     }
   }
 
