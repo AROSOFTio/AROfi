@@ -25,6 +25,7 @@ type ProvisioningInput = {
   mode?: 'SAFE_EXISTING_ROUTER' | 'FRESH_FULL_HOTSPOT' | 'FRESH_FULL_CAPTIVE_WIFI'
   hotspotNetworkName?: string | null
   portalBaseUrl?: string | null
+  dnsName?: string | null
 }
 
 @Injectable()
@@ -182,7 +183,7 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
       `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30s`,
     ]
 
@@ -256,6 +257,10 @@ export class MikrotikService {
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
+      ...(input.dnsName ? [
+        `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
+      ] : []),
       ``,
       `# Detect WAN interface dynamically so NAT works on any router model`,
       `# Try multiple methods: default route → PPPoE → LTE → any non-hotspot interface with IP`,

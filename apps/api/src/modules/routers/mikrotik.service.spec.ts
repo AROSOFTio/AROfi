@@ -33,7 +33,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('/radius remove [find where comment="AROFi')
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
-    expect(script).toContain('radius-interim-update=5m')
+    expect(script).toContain('radius-interim-update=1m')
     expect(script).toContain('login-by=http-pap')
     expect(script).toContain('mode=http keep-result=no')
     expect(script).toContain('/api/mikrotik/provisioned/')
@@ -174,5 +174,26 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
     expect(script).toContain('new-ttl=decrement:1')
     expect(script).toContain('AROFi anti-tether')
+  })
+
+  it('configures dns-name and static DNS entry when dnsName parameter is provided', () => {
+    const service = new MikrotikService(new ConfigService({}))
+
+    const script = service.buildProvisioningScript({
+      routerName: 'DNS Test Router',
+      identity: 'dns-test-router',
+      registrationKey: 'dns-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'dns-secret',
+      dnsName: 'tenantname.wifi',
+    })
+
+    expect(script).toContain('dns-name="tenantname.wifi"')
+    expect(script).toContain('/ip dns static remove [find name="tenantname.wifi"]')
+    expect(script).toContain('/ip dns static add name="tenantname.wifi" address=10.55.0.1')
   })
 })

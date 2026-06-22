@@ -803,6 +803,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         mode: router.lastScriptMode,
         portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
         hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,
+        dnsName: `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`,
       }),
       setupDiagnostics: await this.getSetupDiagnostics(router.id),
       radiusClient: router.radiusClient
@@ -830,6 +831,15 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async getProvisioningScriptByKey(key: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            domain: true,
+          },
+        },
+      },
     })
 
     if (!router) {
@@ -858,6 +868,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       mode: router.lastScriptMode,
       portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
       hotspotNetworkName: router.siteLabel ?? router.name,
+      dnsName: router.tenant
+        ? `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
+        : null,
     })
   }
 
