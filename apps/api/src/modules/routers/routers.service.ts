@@ -265,23 +265,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }),
     ])
 
-    const routerNasCandidates = Array.from(
-      new Set(routers.flatMap((router) => this.getRouterNasCandidates(router)).filter(Boolean)),
-    )
-    const recentAccountingRows = routerNasCandidates.length
-      ? await this.prisma.radAcct.findMany({
-          where: {
-            nasipaddress: { in: routerNasCandidates },
-            OR: [
-              { acctupdatetime: { gte: startOfDay } },
-              { acctstarttime: { gte: startOfDay } },
-              { acctstoptime: { gte: startOfDay } },
-            ],
-          },
-          orderBy: { radacctid: 'desc' },
-          take: 500,
-        })
-      : []
+    const recentAccountingRows = await this.prisma.radAcct.findMany({
+      where: {
+        OR: [
+          { acctupdatetime: { gte: startOfDay } },
+          { acctstarttime: { gte: startOfDay } },
+          { acctstoptime: { gte: startOfDay } },
+        ],
+      },
+      orderBy: { radacctid: 'desc' },
+      take: 500,
+    })
     const activeAccountingByNas = new Map<string, number>()
     for (const row of recentAccountingRows) {
       if (!row.nasipaddress || row.acctstoptime) {
