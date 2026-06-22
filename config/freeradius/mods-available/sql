@@ -37,48 +37,5 @@ sql {
 		idle_timeout = 60
 	}
 
-	# Include queries first so the variables are available for references
 	$INCLUDE ${modconfdir}/sql/main/${dialect}/queries.conf
-
-	accounting {
-		reference = "%{tolower:type.%{Acct-Status-Type}.query}"
-		type {
-			accounting-on {
-				query = "${....accounting_onoff_query}"
-			}
-			accounting-off {
-				query = "${....accounting_onoff_query}"
-			}
-			start {
-				query = "${....accounting_start_query}"
-			}
-			interim-update {
-				query = "${....accounting_update_query}"
-			}
-			stop {
-				query = "${....accounting_stop_query}"
-			}
-		}
-	}
-
-	post-auth {
-		reference = "%{tolower:type.%{reply:Packet-Type}.query}"
-		type {
-			post-auth {
-				query = "${....postauth_query}"
-			}
-		}
-	}
-
-	session {
-		reference = "type.%{tolower:%{Acct-Status-Type}}.query"
-		type {
-			start {
-				query = "${....session_start_query}"
-			}
-			stop {
-				query = "${....session_stop_query}"
-			}
-		}
-	}
 }
