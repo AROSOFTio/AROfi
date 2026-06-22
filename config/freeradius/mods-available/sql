@@ -22,6 +22,9 @@ sql {
 	acct_table2 = "radacct"
 	postauth_table = "radpostauth"
 
+	# Group attribute
+	group_attribute = "SQL-Group"
+
 	safe_characters = "@abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_: /"
 
 	pool {
@@ -35,43 +38,43 @@ sql {
 	}
 
 	accounting {
-		reference = "%{tolower:%{Acct-Status-Type}}"
+		reference = "%{tolower:type.%{Acct-Status-Type}.query}"
 		type {
 			accounting-on {
-				query = "${..query}"
+				query = "${....accounting_onoff_query}"
 			}
 			accounting-off {
-				query = "${..query}"
+				query = "${....accounting_onoff_query}"
 			}
 			start {
-				query = "${..query}"
+				query = "${....accounting_start_query}"
 			}
 			interim-update {
-				query = "${..query}"
+				query = "${....accounting_update_query}"
 			}
 			stop {
-				query = "${..query}"
+				query = "${....accounting_stop_query}"
 			}
 		}
 	}
 
 	post-auth {
-		reference = "."
+		reference = "%{tolower:type.%{reply:Packet-Type}.query}"
 		type {
 			post-auth {
-				query = "${..query}"
+				query = "${....postauth_query}"
 			}
 		}
 	}
 
 	session {
-		reference = "session"
+		reference = "type.%{tolower:%{Acct-Status-Type}}.query"
 		type {
 			start {
-				query = "${..query}"
+				query = "${....session_start_query}"
 			}
 			stop {
-				query = "${..query}"
+				query = "${....session_stop_query}"
 			}
 		}
 	}
