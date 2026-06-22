@@ -86,7 +86,9 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
       const statusMessage = this.getXmlValue(responseXml, 'status_message') || 'Payment request initiated.'
 
       if (status.toUpperCase() !== 'OK') {
-        const errorMessage = this.getXmlValue(responseXml, 'error_message') || statusMessage
+        const faultString = this.getXmlValue(responseXml, 'faultString')
+        const errorMessage = this.getXmlValue(responseXml, 'error_message') || this.getXmlValue(responseXml, 'status_message') || faultString || 'Unknown error'
+        this.logger.error(`Yo Uganda API Error. Raw XML: ${responseXml}`)
         throw new ServiceUnavailableException(`Yo Uganda API error: ${errorMessage}`)
       }
 
@@ -159,7 +161,10 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
       const payerName = this.getXmlValue(responseXml, 'payer_names') || this.getXmlValue(responseXml, 'payer_name')
 
       if (status.toUpperCase() !== 'OK') {
-        throw new ServiceUnavailableException(`Yo Uganda status check API error: ${statusMessage}`)
+        const faultString = this.getXmlValue(responseXml, 'faultString')
+        const errorMessage = this.getXmlValue(responseXml, 'error_message') || this.getXmlValue(responseXml, 'status_message') || faultString || 'Unknown error'
+        this.logger.error(`Yo Uganda status check API Error. Raw XML: ${responseXml}`)
+        throw new ServiceUnavailableException(`Yo Uganda status check API error: ${errorMessage}`)
       }
 
       return {
@@ -230,8 +235,14 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
   }
 
   private getXmlValue(xml: string, name: string): string {
+    // Try standard XML-RPC struct format first
     const regex = new RegExp(`<member>\\s*<name>${name}</name>\\s*<value>\\s*<[^>]+>([^<]+)</[^>]+>\\s*</value>\\s*</member>`, 'i')
     const match = xml.match(regex)
-    return match ? match[1].trim() : ''
+    if (match) return match[1].trim()
+
+    // Try direct XML tags (e.g., <StatusMessage>...)
+    const fallbackRegex = new RegExp(`<${name}>([^<]+)</${name}>`, 'i')
+    const fallbackMatch = xml.match(fallbackRegex)
+    return fallbackMatch ? fallbackMatch[1].trim() : ''
   }
 }
