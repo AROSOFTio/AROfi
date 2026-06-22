@@ -92,6 +92,7 @@ docker run -d --name arofi-freeradius --restart unless-stopped \
   -e POSTGRES_PASSWORD="$PGPASS" \
   -e POSTGRES_DB="$PGDB" \
   -e RADIUS_SHARED_SECRET="$SECRET" \
+  -e AROFI_RADIUS_DEBUG="${AROFI_RADIUS_DEBUG:-0}" \
   --entrypoint /bin/sh \
   "$IMAGE" /arofi-freeradius/entrypoint.sh
 
