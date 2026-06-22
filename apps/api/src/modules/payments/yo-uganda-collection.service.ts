@@ -209,7 +209,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
   }
 
   private baseUrl() {
-    return this.configService.get<string>('YO_UGANDA_BASE_URL') ?? 'https://payments.yo.co.ug/api/'
+    return this.configService.get<string>('YO_UGANDA_BASE_URL') ?? 'https://paymentsapi1.yo.co.ug/ybs/task.php'
   }
 
   private required(key: string) {
