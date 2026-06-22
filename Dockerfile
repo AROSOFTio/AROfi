@@ -31,19 +31,21 @@ RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV NEXT_TELEMETRY_DISABLED=1
 
+ENV GENERATE_SOURCEMAP=false
+
 # Build portal-web first (smaller app)
-RUN export NODE_OPTIONS='--max-old-space-size=700' && \
+RUN export NODE_OPTIONS='--max-old-space-size=512' && \
     export NEXT_CPU_LIMIT=1 && \
-    npx turbo run build --filter=arofi-portal --concurrency=1
+    npm run build --workspace=arofi-portal
 
 # Build admin-web second (largest app — own dedicated step for memory isolation)
-RUN export NODE_OPTIONS='--max-old-space-size=700' && \
+RUN export NODE_OPTIONS='--max-old-space-size=600' && \
     export NEXT_CPU_LIMIT=1 && \
-    npx turbo run build --filter=arofi-admin --concurrency=1
+    npm run build --workspace=arofi-admin
 
 # Build API last
-RUN export NODE_OPTIONS='--max-old-space-size=700' && \
-    npx turbo run build --filter=arofi-api --concurrency=1
+RUN export NODE_OPTIONS='--max-old-space-size=600' && \
+    npm run build --workspace=arofi-api
 
 # Prune development dependencies to make production node_modules as small as possible
 RUN npm prune --omit=dev --legacy-peer-deps
