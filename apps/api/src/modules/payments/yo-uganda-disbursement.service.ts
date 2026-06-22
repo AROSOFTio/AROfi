@@ -28,48 +28,24 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
     const cleanPhone = input.phoneNumber.replace(/^\+/, '')
 
     const xmlPayload = `<?xml version="1.0" encoding="UTF-8"?>
-<methodCall>
-  <methodName>ac_withdraw_non_blocking</methodName>
-  <params>
-    <param>
-      <value>
-        <struct>
-          <member>
-            <name>username</name>
-            <value><string>${this.escapeXml(username)}</string></value>
-          </member>
-          <member>
-            <name>password</name>
-            <value><string>${this.escapeXml(password)}</string></value>
-          </member>
-          <member>
-            <name>amount</name>
-            <value><double>${input.amountUgx}</double></value>
-          </member>
-          <member>
-            <name>phone</name>
-            <value><string>${this.escapeXml(cleanPhone)}</string></value>
-          </member>
-          <member>
-            <name>narrative</name>
-            <value><string>${this.escapeXml(input.narrative || 'AROFi Payout')}</string></value>
-          </member>
-          <member>
-            <name>reference</name>
-            <value><string>${this.escapeXml(input.externalReference)}</string></value>
-          </member>
-        </struct>
-      </value>
-    </param>
-  </params>
-</methodCall>`
+<AutoCreate>
+  <Request>
+    <APIUsername>${this.escapeXml(username)}</APIUsername>
+    <APIPassword>${this.escapeXml(password)}</APIPassword>
+    <Method>acwithdrawfunds</Method>
+    <NonBlocking>TRUE</NonBlocking>
+    <Account>${this.escapeXml(cleanPhone)}</Account>
+    <Amount>${input.amountUgx}</Amount>
+    <Narrative>${this.escapeXml(input.narrative || 'AROFi Payout')}</Narrative>
+    <ExternalReference>${this.escapeXml(input.externalReference)}</ExternalReference>
+  </Request>
+</AutoCreate>`
 
     try {
       const response = await fetch(baseUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml',
-          'XML-RPC': 'true',
         },
         body: xmlPayload,
       })
@@ -113,36 +89,20 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
     const baseUrl = this.baseUrl()
 
     const xmlPayload = `<?xml version="1.0" encoding="UTF-8"?>
-<methodCall>
-  <methodName>ac_transaction_status</methodName>
-  <params>
-    <param>
-      <value>
-        <struct>
-          <member>
-            <name>username</name>
-            <value><string>${this.escapeXml(username)}</string></value>
-          </member>
-          <member>
-            <name>password</name>
-            <value><string>${this.escapeXml(password)}</string></value>
-          </member>
-          <member>
-            <name>transaction_reference</name>
-            <value><string>${this.escapeXml(referenceId)}</string></value>
-          </member>
-        </struct>
-      </value>
-    </param>
-  </params>
-</methodCall>`
+<AutoCreate>
+  <Request>
+    <APIUsername>${this.escapeXml(username)}</APIUsername>
+    <APIPassword>${this.escapeXml(password)}</APIPassword>
+    <Method>actransactioncheckstatus</Method>
+    <TransactionReference>${this.escapeXml(referenceId)}</TransactionReference>
+  </Request>
+</AutoCreate>`
 
     try {
       const response = await fetch(baseUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml',
-          'XML-RPC': 'true',
         },
         body: xmlPayload,
       })
