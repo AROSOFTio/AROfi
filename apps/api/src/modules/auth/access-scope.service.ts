@@ -14,7 +14,7 @@ export class AccessScopeService {
     }
 
     if (this.isSuperAdmin(user)) {
-      return requestedTenantId ?? undefined
+      return requestedTenantId ?? user.tenantId ?? undefined
     }
 
     if (!user.tenantId) {
