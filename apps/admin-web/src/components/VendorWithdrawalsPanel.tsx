@@ -192,7 +192,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   }
 
   const pendingChange = profile.changeRequests.find((item) => ['PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_APPROVAL'].includes(item.status))
-  const canWithdraw = profile.profile.secretConfigured && Boolean(primaryNumber) && !pendingChange && availableUgx > 0
+  const canWithdraw = profile.profile.secretConfigured && Boolean(primaryNumber) && !pendingChange
   const latestWithdrawal = profile.recentWithdrawals[0]
   const latestChange = profile.changeRequests[0]
 
@@ -265,9 +265,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                     ? 'Secret key not set. Configure it below to enable withdrawals.'
                     : !primaryNumber
                       ? 'No primary verified payout number. Register one below.'
-                      : pendingChange
-                        ? 'Payout number change is pending approval.'
-                        : 'Insufficient withdrawable balance.'}
+                      : 'Payout number change is pending approval.'}
                 </span>
               </div>
             )}

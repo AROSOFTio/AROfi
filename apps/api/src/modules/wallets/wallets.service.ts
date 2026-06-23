@@ -212,10 +212,10 @@ export class WalletsService {
       0,
     )
 
-    const earnedBalanceUgx = wallet?.earnedBalanceUgx ?? 0
+    const earnedBalanceUgx = wallet?.balanceUgx ?? 0
     const balanceUgx = wallet?.balanceUgx ?? 0
-    const availableUgx = earnedBalanceUgx - alreadyWithdrawnUgx - pendingWithdrawalsUgx
-    const withdrawableBalanceUgx = Math.max(0, Math.min(balanceUgx, availableUgx))
+    const availableUgx = balanceUgx
+    const withdrawableBalanceUgx = Math.max(0, balanceUgx)
 
     return {
       profile: {
@@ -524,11 +524,10 @@ export class WalletsService {
         0,
       )
 
-      const availableUgx = wallet.earnedBalanceUgx - alreadyWithdrawnUgx - pendingWithdrawalsUgx
-      const withdrawableBalanceUgx = Math.max(0, Math.min(wallet.balanceUgx, availableUgx))
+      const withdrawableBalanceUgx = Math.max(0, wallet.balanceUgx)
 
       if (withdrawableBalanceUgx < totalDebitUgx) {
-        throw new BadRequestException(`Insufficient withdrawable balance. Your withdrawable balance is UGX ${withdrawableBalanceUgx.toLocaleString('en-US')} (based on cash earnings only).`)
+        throw new BadRequestException(`Insufficient balance. Your wallet balance is UGX ${withdrawableBalanceUgx.toLocaleString('en-US')}.`)
       }
 
       const debited = await tx.wallet.updateMany({
@@ -1030,7 +1029,36 @@ export class WalletsService {
   private async findTenantWallet(tenantId: string) {
     if (tenantId === 'platform') {
       await this.ensurePlatformTenantExists()
-      const platformSettings = await this.getPlatformSettings()
+      
+      const platformFeesSum = await this.prisma.billingTransaction.aggregate({
+        where: {
+          status: BillingTransactionStatus.COMPLETED,
+          feeAmountUgx: { gt: 0 }
+        },
+        _sum: {
+          feeAmountUgx: true
+        }
+      })
+      const totalFeesCollected = platformFeesSum._sum.feeAmountUgx ?? 0
+
+      const platformWithdrawalsSum = await this.prisma.disbursement.aggregate({
+        where: {
+          tenantId: 'platform',
+          status: DisbursementStatus.COMPLETED
+        },
+        _sum: {
+          amountUgx: true
+        }
+      })
+      const totalPlatformWithdrawn = platformWithdrawalsSum._sum.amountUgx ?? 0
+
+      const dynamicPlatformBalance = Math.max(0, totalFeesCollected - totalPlatformWithdrawn)
+
+      await this.prisma.platformSetting.update({
+        where: { id: PLATFORM_SETTINGS_ID },
+        data: { platformWalletBalanceUgx: dynamicPlatformBalance }
+      })
+
       let wallet = await this.prisma.wallet.findFirst({
         where: {
           tenantId: 'platform',
@@ -1045,17 +1073,17 @@ export class WalletsService {
             ownerType: WalletOwnerType.TENANT,
             ownerReference: 'platform',
             currency: 'UGX',
-            balanceUgx: platformSettings.platformWalletBalanceUgx,
-            earnedBalanceUgx: platformSettings.platformWalletBalanceUgx,
+            balanceUgx: dynamicPlatformBalance,
+            earnedBalanceUgx: dynamicPlatformBalance,
           },
         })
       } else {
-        if (wallet.balanceUgx !== platformSettings.platformWalletBalanceUgx) {
+        if (wallet.balanceUgx !== dynamicPlatformBalance) {
           wallet = await this.prisma.wallet.update({
             where: { id: wallet.id },
             data: {
-              balanceUgx: platformSettings.platformWalletBalanceUgx,
-              earnedBalanceUgx: platformSettings.platformWalletBalanceUgx,
+              balanceUgx: dynamicPlatformBalance,
+              earnedBalanceUgx: dynamicPlatformBalance,
             },
           })
         }
@@ -1063,13 +1091,76 @@ export class WalletsService {
       return wallet
     }
 
-    return this.prisma.wallet.findFirst({
+    let wallet = await this.prisma.wallet.findFirst({
       where: {
         tenantId,
         ownerType: WalletOwnerType.TENANT,
         ownerReference: tenantId,
       },
     })
+
+    if (wallet) {
+      const mmGrossSum = await this.prisma.billingTransaction.aggregate({
+        where: {
+          tenantId,
+          type: BillingTransactionType.MOBILE_MONEY_SALE,
+          status: BillingTransactionStatus.COMPLETED
+        },
+        _sum: {
+          netAmountUgx: true
+        }
+      })
+      const totalMMSalesNet = mmGrossSum._sum.netAmountUgx ?? 0
+
+      const topupsSum = await this.prisma.billingTransaction.aggregate({
+        where: {
+          tenantId,
+          type: BillingTransactionType.TENANT_WALLET_TOPUP,
+          status: BillingTransactionStatus.COMPLETED
+        },
+        _sum: {
+          grossAmountUgx: true
+        }
+      })
+      const totalTopups = topupsSum._sum.grossAmountUgx ?? 0
+
+      const voucherFeesSum = await this.prisma.billingTransaction.aggregate({
+        where: {
+          tenantId,
+          type: BillingTransactionType.VOUCHER_SALE,
+          status: BillingTransactionStatus.COMPLETED
+        },
+        _sum: {
+          feeAmountUgx: true
+        }
+      })
+      const totalVoucherFees = voucherFeesSum._sum.feeAmountUgx ?? 0
+
+      const withdrawalsSum = await this.prisma.disbursement.aggregate({
+        where: {
+          tenantId,
+          status: DisbursementStatus.COMPLETED
+        },
+        _sum: {
+          amountUgx: true
+        }
+      })
+      const totalWithdrawn = withdrawalsSum._sum.amountUgx ?? 0
+
+      const computedBalance = totalMMSalesNet + totalTopups - totalVoucherFees - totalWithdrawn
+
+      if (wallet.balanceUgx !== computedBalance) {
+        wallet = await this.prisma.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            balanceUgx: computedBalance,
+            earnedBalanceUgx: computedBalance
+          }
+        })
+      }
+    }
+
+    return wallet
   }
   private async submitReservedWithdrawal(disbursementId: string) {
     const disbursement = await this.prisma.disbursement.findUnique({
