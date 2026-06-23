@@ -39,6 +39,21 @@ export class PhoneNumberService {
     return normalized
   }
 
+  resolveNetwork(phoneNumber: string): PaymentNetwork {
+    try {
+      const normalized = this.normalize(phoneNumber)
+      const localPrefix = `0${normalized.slice(3, 5)}`
+
+      const airtelAllowed = this.getAllowedPrefixes(PaymentNetwork.AIRTEL)
+      if (airtelAllowed.includes(localPrefix)) {
+        return PaymentNetwork.AIRTEL
+      }
+    } catch {
+      // Fallback below
+    }
+    return PaymentNetwork.MTN
+  }
+
   getAllowedPrefixes(network: PaymentNetwork) {
     const key = network === PaymentNetwork.AIRTEL ? 'AIRTEL_ALLOWED_PREFIXES' : 'MTN_ALLOWED_PREFIXES'
     const fallback = network === PaymentNetwork.AIRTEL ? '070,075,074' : '077,078,076,079,031,039'
