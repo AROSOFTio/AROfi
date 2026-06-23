@@ -532,7 +532,6 @@ export class PortalService {
     }
 
     await this.markReconnectionAttempt({
-    await this.markReconnectionAttempt({
       tenantId: activation.tenantId,
       activationId: activation.id,
       routerId: hotspot?.routerId,
