@@ -599,13 +599,29 @@ export class MikrotikService {
       load();
     };
 
+    function ajax(method, url, data, cb){
+      var x=new XMLHttpRequest();
+      x.open(method, url, true);
+      if(data) x.setRequestHeader('Content-Type','application/json');
+      x.onload=function(){
+        try{
+          var j=JSON.parse(x.responseText);
+          if(x.status>=200&&x.status<300) cb(null,j);
+          else cb(new Error(j.message||'HTTP '+x.status));
+        }catch(e){cb(new Error('Parse err'));}
+      };
+      x.onerror=function(){cb(new Error('Network err'));};
+      x.send(data?JSON.stringify(data):null);
+    }
+
     function load(){
-      fetch(API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo))
-      .then(function(r){
-        if(!r.ok)throw new Error('HTTP '+r.status);
-        return r.json();
-      })
-      .then(function(d){
+      ajax('GET', API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo), null, function(err, d){
+        if(err){
+          document.getElementById('tname').textContent='AROFi Hotspot';
+          document.getElementById('loading').style.display='none';
+          document.getElementById('content').style.display='block';
+          return;
+        }
         if(d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect){
           conn(d.returningDevice.reconnect);return;
         }
@@ -626,11 +642,6 @@ export class MikrotikService {
             el.appendChild(c);
           });
         }
-        document.getElementById('loading').style.display='none';
-        document.getElementById('content').style.display='block';
-      })
-      .catch(function(e){
-        document.getElementById('tname').textContent='AROFi Hotspot';
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
       });
@@ -655,22 +666,12 @@ export class MikrotikService {
       var b=document.getElementById('lbtn');
       b.disabled=true;b.textContent='...';
       
-      fetch(API+'/api/portal/redeem-voucher',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})
-      })
-      .then(function(r){
-        return r.json().then(function(res){
-          if(!r.ok)throw new Error(res.message||'Failed');
-          return res;
-        });
-      })
-      .then(function(res){
-        conn(res.reconnect);
-      })
-      .catch(function(e){
-        alert(e.message);b.disabled=false;b.textContent='Login';
+      ajax('POST', API+'/api/portal/redeem-voucher', {code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
+        if(err){
+          alert(err.message||'Failed');b.disabled=false;b.textContent='Login';
+        } else {
+          conn(res.reconnect);
+        }
       });
     }
 
@@ -686,39 +687,25 @@ export class MikrotikService {
       var pfx=c.substring(3,5);
       var net=(pfx==='70'||pfx==='75'||pfx==='74')?'AIRTEL':'MTN';
       
-      fetch(API+'/api/payments/portal/initiate',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})
-      })
-      .then(function(r){
-        return r.json().then(function(pmt){
-          if(!r.ok)throw new Error(pmt.message||'Failed');
-          if(pmt.status==='FAILED')throw new Error(pmt.statusMessage||'Failed');
-          return pmt;
-        });
-      })
-      .then(function(pmt){
+      ajax('POST', API+'/api/payments/portal/initiate', {packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, pmt){
+        if(err){ sst('bst',err.message||'Failed','err');b.disabled=false;return; }
+        if(pmt.status==='FAILED'){ sst('bst',pmt.statusMessage||'Failed','err');b.disabled=false;return; }
+        
         var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
         if(cu){window.location.href=cu;return;}
         sst('bst','Enter your Mobile Money PIN. Waiting for approval...','info');
         poll(pmt.id,pmt.statusToken);
-      })
-      .catch(function(e){
-        sst('bst',e.message,'err');b.disabled=false;
       });
     }
 
     function poll(id,tok){
       var n=0,iv=setInterval(function(){
         if(++n>120){clearInterval(iv);sst('bst','Timed out.','err');document.getElementById('bbtn').disabled=false;return;}
-        fetch(API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''),{method:'POST'})
-        .then(function(r){if(!r.ok)throw new Error(); return r.json();})
-        .then(function(p){
+        ajax('POST', API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
+          if(err) return;
           if(p.activation){clearInterval(iv);sst('bst','Approved! Connecting...','ok');conn(p.reconnect);}
           else if(p.status==='FAILED'){clearInterval(iv);sst('bst',p.statusMessage||'Declined.','err');document.getElementById('bbtn').disabled=false;}
-        })
-        .catch(function(){});
+        });
       },1500);
     }
 
@@ -727,23 +714,10 @@ export class MikrotikService {
       if(!txn){sst('rst','Enter your transaction ID.','err');return;}
       var b=document.getElementById('rbtn');b.disabled=true;
       sst('rst','Searching...','info');
-      fetch(API+'/api/portal/recover-voucher',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})
-      })
-      .then(function(r){
-        return r.json().then(function(res){
-          if(!r.ok)throw new Error(res.message||'Not found');
-          return res;
-        });
-      })
-      .then(function(res){
-        sst('rst','Found! Connecting...','ok');
-        conn(res.reconnect);
-      })
-      .catch(function(e){
-        sst('rst',e.message,'err');b.disabled=false;
+      
+      ajax('POST', API+'/api/portal/recover-voucher', {transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
+        if(err){ sst('rst',err.message||'Not found','err');b.disabled=false; }
+        else { sst('rst','Found! Connecting...','ok');conn(res.reconnect); }
       });
     }
 
