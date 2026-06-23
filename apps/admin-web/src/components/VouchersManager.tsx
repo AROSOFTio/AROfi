@@ -169,7 +169,7 @@ function getVoucherPortalHost() {
 
 function getVoucherQrPortalUrl(code: string, dnsName?: string) {
   if (dnsName) {
-    return `http://${dnsName}/login?username=${encodeURIComponent(code)}&password=${encodeURIComponent(code)}`
+    return `http://${dnsName}/login?voucher=${encodeURIComponent(code)}`
   }
   // Fallback
   const base =

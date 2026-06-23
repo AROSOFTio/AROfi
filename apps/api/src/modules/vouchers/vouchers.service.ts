@@ -1301,7 +1301,7 @@ export class VouchersService {
 
   private buildVoucherPortalUrl(voucherCode: string, dnsName?: string) {
     if (dnsName) {
-      return `http://${dnsName}/login?username=${encodeURIComponent(voucherCode)}&password=${encodeURIComponent(voucherCode)}`
+      return `http://${dnsName}/login?voucher=${encodeURIComponent(voucherCode)}`
     }
     const baseUrl = this.getVoucherQrBaseUrl()
     const separator = baseUrl.includes('?') ? '&' : '?'

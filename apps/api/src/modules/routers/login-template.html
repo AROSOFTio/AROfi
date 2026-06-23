@@ -170,8 +170,11 @@
     
     window.onload=function(){
       var sp=new URLSearchParams(window.location.search);
-      var u=sp.get('username'),p=sp.get('password');
-      if(u&&p){var dst2=sp.get('dst')||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p)+'&dst='+encodeURIComponent(dst2);return;}
+      var v=sp.get('voucher');
+      if(v){
+        document.getElementById('vcode').value=v;
+        setTimeout(login, 200);
+      }
       if(ip)document.getElementById('tip').textContent='IP: '+ip;
       if(mac)document.getElementById('tmac').textContent='MAC: '+mac.toUpperCase();
       load();
