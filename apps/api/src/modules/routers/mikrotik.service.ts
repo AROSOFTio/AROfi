@@ -424,15 +424,15 @@ export class MikrotikService {
     body{background:#eff6ff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
     .card{width:100%;max-width:420px;background:#fff;border:1px solid #bfdbfe;border-radius:12px;padding:24px 20px;box-shadow:0 8px 32px rgba(37,99,235,.10);position:relative}
     .logo{text-align:center;margin-bottom:16px}
-    .wifi-icon{color:#22c55e;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-block}
+    .wifi-icon{color:#2563EB;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-block}
     @keyframes pulse{0%,100%{opacity:.6;transform:scale(.95)}50%{opacity:1;transform:scale(1.05)}}
-    .logo h1{font-size:22px;font-weight:800;letter-spacing:.02em;color:#22c55e;margin-top:0;text-transform:uppercase}
+    .logo h1{font-size:22px;font-weight:800;letter-spacing:.02em;color:#2563EB;margin-top:0;text-transform:uppercase}
     
     .login-row{display:flex;gap:10px;margin-bottom:16px}
     .login-row input{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:12px 14px;border-radius:8px;color:#0f172a;font-size:14px;outline:none;transition:all .2s}
-    .login-row input:focus{border-color:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.15)}
-    .login-row button{background:#22c55e;color:#fff;border:none;padding:0 20px;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .2s}
-    .login-row button:hover{background:#16a34a}
+    .login-row input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .login-row button{background:#2563EB;color:#fff;border:none;padding:0 20px;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .2s}
+    .login-row button:hover{background:#1D4ED8}
     .login-row button:disabled{background:#94a3b8;cursor:not-allowed}
 
     .find-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:#eff6ff;color:#2563EB;border:none;padding:10px;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .2s;margin-bottom:16px}
@@ -446,9 +446,9 @@ export class MikrotikService {
     .pkg-info h3{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:2px}
     .pkg-info p{font-size:12px;color:#64748b}
     .pkg-action{display:flex;align-items:center;gap:12px}
-    .price{font-size:14px;font-weight:800;color:#22c55e;white-space:nowrap}
-    .buy-btn{background:#22c55e;color:#fff;border:none;padding:8px 16px;font-size:13px;font-weight:700;border-radius:6px;cursor:pointer;transition:all .2s}
-    .buy-btn:hover{background:#16a34a}
+    .price{font-size:14px;font-weight:800;color:#2563EB;white-space:nowrap}
+    .buy-btn{background:#2563EB;color:#fff;border:none;padding:8px 16px;font-size:13px;font-weight:700;border-radius:6px;cursor:pointer;transition:all .2s}
+    .buy-btn:hover{background:#1D4ED8}
 
     .accept{text-align:center;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:16px}
     .accept p{font-size:12px;color:#0f172a;font-weight:600;margin-bottom:8px}
@@ -471,9 +471,9 @@ export class MikrotikService {
     .modal-body{padding:16px}
     .modal-body p{font-size:13px;color:#64748b;margin-bottom:12px}
     .modal-body input{width:100%;background:#fff;border:1px solid #cbd5e1;padding:12px 14px;border-radius:8px;color:#0f172a;font-size:14px;outline:none;margin-bottom:12px}
-    .modal-body input:focus{border-color:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.15)}
-    .mbtn{width:100%;background:#22c55e;color:#fff;border:none;padding:12px;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px}
-    .mbtn:hover{background:#16a34a}
+    .modal-body input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .mbtn{width:100%;background:#2563EB;color:#fff;border:none;padding:12px;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px}
+    .mbtn:hover{background:#1D4ED8}
     .mbtn:disabled{background:#94a3b8;cursor:not-allowed}
 
     .st{margin-top:12px;padding:10px;border-radius:8px;font-size:13px;display:none}
@@ -482,7 +482,7 @@ export class MikrotikService {
     .st.info{background:#eff6ff;border:1px solid #bfdbfe;color:#3b82f6;display:block}
     
     #loading{text-align:center;padding:30px 0}
-    .spinner{width:30px;height:30px;border:3px solid #e2e8f0;border-top-color:#22c55e;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+    .spinner{width:30px;height:30px;border:3px solid #e2e8f0;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
@@ -526,13 +526,13 @@ export class MikrotikService {
 
   <div class="footer" id="footer" style="display:none">
     Need help? Contact support:<br>
-    <span id="sph" style="font-weight:700;color:#22c55e"></span>
+    <span id="sph" style="font-weight:700;color:#2563EB"></span>
   </div>
 
   <div class="tech">
     <span id="tip">IP: </span> | <span id="tmac">MAC: </span>
     <br><br>
-    Powered By <span style="color:#22c55e;font-weight:600">XenFi</span><br>
+    Powered By <span style="color:#2563EB;font-weight:600">XenFi</span><br>
     Terms and Conditions Apply
   </div>
 
