@@ -17,6 +17,7 @@ type DashboardShellProps = {
 export default function DashboardShell({ children, initials, session, workspaceTitle }: DashboardShellProps) {
   const pathname = usePathname()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     setMenuOpen(false)
