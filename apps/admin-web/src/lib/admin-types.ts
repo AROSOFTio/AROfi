@@ -305,6 +305,11 @@ export type VouchersOverviewResponse = {
     } | null
     customerReference?: string | null
     createdAt: string
+    networkSessions?: Array<{
+      id: string
+      status: string
+      ipAddress?: string | null
+    }>
   }>
 }
 

@@ -88,6 +88,12 @@ export class RadiusCredentialService {
             op: ':=',
             value: password,
           },
+          {
+            username,
+            attribute: 'Expiration',
+            op: ':=',
+            value: this.formatRadiusExpiration(activation.endsAt),
+          },
         ],
       })
 
@@ -160,5 +166,16 @@ export class RadiusCredentialService {
     }
 
     return compact.match(/.{1,2}/g)?.join(':')
+  }
+
+  private formatRadiusExpiration(date: Date): string {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const day = String(date.getUTCDate()).padStart(2, '0')
+    const month = months[date.getUTCMonth()]
+    const year = date.getUTCFullYear()
+    const hours = String(date.getUTCHours()).padStart(2, '0')
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0')
+    return `${day} ${month} ${year} ${hours}:${minutes}:${seconds} UTC`
   }
 }

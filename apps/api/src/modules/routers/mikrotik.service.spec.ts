@@ -172,7 +172,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('dst-host="pay.pesapal.com"')
     expect(script).toContain('dst-host="*.pesapal.com"')
     expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
-    expect(script).toContain('new-ttl=decrement:1')
+    expect(script).toContain('new-ttl=set:1')
     expect(script).toContain('AROFi anti-tether')
   })
 

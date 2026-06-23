@@ -185,6 +185,15 @@ export class VouchersService {
               name: true,
             },
           },
+          networkSessions: {
+            where: { status: 'ACTIVE' },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              ipAddress: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 200,

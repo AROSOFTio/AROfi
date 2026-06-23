@@ -740,13 +740,14 @@ export default function VouchersManager() {
                 <th>Package</th>
                 <th>Hotspot</th>
                 <th>Customer</th>
+                <th>Status</th>
                 <th>Redeemed</th>
               </tr>
             </thead>
             <tbody>
               {recentRedemptions.length === 0 && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="empty-state">
                       <p>No voucher redemptions recorded yet.</p>
                     </div>
@@ -759,6 +760,13 @@ export default function VouchersManager() {
                   <td>{redemption.package.name}</td>
                   <td>{redemption.hotspot?.name ?? 'Portal'}</td>
                   <td>{redemption.customerReference ?? 'Anonymous'}</td>
+                  <td>
+                    {redemption.networkSessions && redemption.networkSessions.length > 0 ? (
+                      <span className="badge badge-success">Online</span>
+                    ) : (
+                      <span className="badge badge-ghost">Offline</span>
+                    )}
+                  </td>
                   <td style={{ fontSize: 12 }}>{formatDate(redemption.createdAt)}</td>
                 </tr>
               ))}

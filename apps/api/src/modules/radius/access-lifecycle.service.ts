@@ -123,11 +123,18 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     const acctUsernames = [...new Set(acctRows.map((r) => r.username).filter(Boolean))] as string[]
     const activationsByUsername = acctUsernames.length
       ? await this.prisma.packageActivation.findMany({
-          where: { radiusUsername: { in: acctUsernames } },
+          where: {
+            radiusUsername: {
+              in: acctUsernames,
+              mode: 'insensitive',
+            },
+          },
           include: { voucherRedemption: true },
         })
       : []
-    const activationByUsername = new Map(activationsByUsername.map((a) => [a.radiusUsername, a]))
+    const activationByUsername = new Map(
+      activationsByUsername.map((a) => [a.radiusUsername.toLowerCase(), a])
+    )
 
     // ── 4. Process each radAcct row: upsert networkSession + radiusEvent ──
     for (const row of acctRows) {
@@ -180,7 +187,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       const sessionStatus = isStopped ? SessionStatus.CLOSED : SessionStatus.ACTIVE
       const startedAt = row.acctstarttime ?? now
       const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
-      const activation = username ? activationByUsername.get(username) : undefined
+      const activation = username ? activationByUsername.get(username.toLowerCase()) : undefined
 
       // 4a. Upsert networkSession — this powers activeUsers count and CoA disconnect
       try {
