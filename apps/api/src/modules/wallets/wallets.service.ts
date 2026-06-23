@@ -182,7 +182,8 @@ export class WalletsService {
           status: {
             in: [
               DisbursementStatus.PENDING,
-              DisbursementStatus.APPROVED,
+              DisbursementStatus.PENDING_APPROVAL,
+              DisbursementStatus.PENDING_NUMBER_APPROVAL,
               DisbursementStatus.PROCESSING,
               DisbursementStatus.FLAGGED_FOR_REVIEW,
             ],
@@ -482,7 +483,8 @@ export class WalletsService {
           status: {
             in: [
               DisbursementStatus.PENDING,
-              DisbursementStatus.APPROVED,
+              DisbursementStatus.PENDING_APPROVAL,
+              DisbursementStatus.PENDING_NUMBER_APPROVAL,
               DisbursementStatus.PROCESSING,
               DisbursementStatus.FLAGGED_FOR_REVIEW,
             ],
@@ -1373,13 +1375,15 @@ export class WalletsService {
       },
     })
 
-    const provider = this.paymentRouterService.resolveCollection(PaymentNetwork.MTN)
+    const network = this.phoneNumberService.resolveNetwork(dto.phoneNumber)
+    const provider = this.paymentRouterService.resolveCollection(network)
 
     try {
       const response = await provider.collectPayment({
         amountUgx: dto.amountUgx,
         currency: 'UGX',
         phoneNumber: dto.phoneNumber,
+        network,
         externalReference: reference,
         narrative: 'AROFi Wallet Topup',
       })
@@ -1387,7 +1391,9 @@ export class WalletsService {
       await this.prisma.billingTransaction.update({
         where: { id: billingTransaction.id },
         data: {
-          providerReference: response.transactionReference || undefined,
+          metadata: {
+            providerReference: response.transactionReference || undefined,
+          },
         },
       })
 
@@ -1421,8 +1427,10 @@ export class WalletsService {
       return txRecord
     }
 
-    const provider = this.paymentRouterService.resolveCollection(PaymentNetwork.MTN)
-    const providerReference = txRecord.providerReference || txRecord.externalReference
+    const network = this.phoneNumberService.resolveNetwork(txRecord.customerReference || '')
+    const provider = this.paymentRouterService.resolveCollection(network)
+    const metadata = (txRecord.metadata || {}) as Record<string, any>
+    const providerReference = metadata.providerReference || txRecord.externalReference
     try {
       const gatewayResponse = await provider.getPaymentStatus(providerReference)
       const providerStatus = (gatewayResponse.transactionStatus ?? '').toUpperCase()
@@ -1439,7 +1447,9 @@ export class WalletsService {
             where: { id: txRecord.id },
             data: {
               status: BillingTransactionStatus.COMPLETED,
-              providerReference: gatewayResponse.transactionReference || providerReference,
+              metadata: {
+                providerReference: gatewayResponse.transactionReference || providerReference,
+              },
             },
           })
 

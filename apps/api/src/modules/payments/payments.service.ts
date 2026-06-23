@@ -553,7 +553,9 @@ export class PaymentsService {
                 where: { id: txRecord.id },
                 data: {
                   status: BillingTransactionStatus.COMPLETED,
-                  providerReference: extracted.providerReference || gatewayResponse.transactionReference || '',
+                  metadata: {
+                    providerReference: extracted.providerReference || gatewayResponse.transactionReference || '',
+                  },
                 },
               })
 
