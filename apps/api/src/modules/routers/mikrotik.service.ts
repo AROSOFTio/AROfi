@@ -185,6 +185,8 @@ export class MikrotikService {
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
       `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
       `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30s`,
+      `# Enforce shared-users=1 and keepalive-timeout=30s on all user profiles to prevent concurrent session sharing`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=30s }`,
     ]
 
     const walledGarden = [

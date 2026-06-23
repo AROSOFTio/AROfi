@@ -109,8 +109,9 @@ export class PaymentsController {
   handleYoUgandaDisbursementWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleYoDisbursementWebhook(payload, headers)
+    return this.paymentsService.handleYoDisbursementWebhook({ ...payload, secret }, headers)
   }
 
   @Get('webhooks/yo-uganda/disbursement')

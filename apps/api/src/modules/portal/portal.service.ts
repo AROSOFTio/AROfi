@@ -496,7 +496,42 @@ export class PortalService {
       }
     }
 
+    // Verify router is online and active
+    if (activation.routerId) {
+      const router = await this.prisma.router.findUnique({
+        where: { id: activation.routerId },
+        select: { status: true, lastSeenAt: true },
+      })
+      if (router && (router.status === 'OFFLINE' || !router.lastSeenAt || router.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000)) {
+        return {
+          existingActiveAccess: false,
+          reason: 'Router is offline. Bypassing automatic reconnection.',
+        }
+      }
+    }
+
     await this.clearStaleSessionIfNeeded(activation.id)
+
+    // Verify that any active network session is fresh (seen within the last 3 minutes)
+    const activeSession = await this.prisma.networkSession.findFirst({
+      where: {
+        activationId: activation.id,
+        status: 'ACTIVE',
+      },
+      select: { lastAccountingAt: true, startedAt: true },
+    })
+    if (activeSession) {
+      const lastSeen = activeSession.lastAccountingAt ?? activeSession.startedAt
+      const ageMs = Date.now() - lastSeen.getTime()
+      if (ageMs > 3 * 60 * 1000) {
+        return {
+          existingActiveAccess: false,
+          reason: 'Active session is stale (no accounting updates in last 3 minutes). Bypassing auto-login.',
+        }
+      }
+    }
+
+    await this.markReconnectionAttempt({
     await this.markReconnectionAttempt({
       tenantId: activation.tenantId,
       activationId: activation.id,

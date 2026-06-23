@@ -1145,6 +1145,17 @@ export class PaymentsService {
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
   ) {
+    const configuredSecret = process.env.YO_UGANDA_WEBHOOK_SECRET || this.configService.get<string>('YO_UGANDA_WEBHOOK_SECRET')
+    if (configuredSecret) {
+      const incomingSecret = payload.secret || headers['x-yo-webhook-secret'] || headers['X-Yo-Webhook-Secret']
+      if (incomingSecret !== configuredSecret) {
+        this.logger.warn('Yo Uganda disbursement webhook authorization failed: invalid secret')
+        throw new ForbiddenException('Invalid webhook authorization secret')
+      }
+    } else {
+      this.logger.warn('WARNING: YO_UGANDA_WEBHOOK_SECRET is not configured. Webhook endpoints are open to spoofing!')
+    }
+
     const externalRef = this.readPayloadValue(payload, [
       'ExternalReference', 'external_ref', 'reference', 'PrivateTransactionReference',
     ])?.toString()
