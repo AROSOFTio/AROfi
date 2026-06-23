@@ -532,7 +532,7 @@ export class MikrotikService {
   <div class="tech">
     <span id="tip">IP: </span> | <span id="tmac">MAC: </span>
     <br><br>
-    Powered By <span style="color:#2563EB;font-weight:600">XenFi</span><br>
+    Powered By <span style="color:#2563EB;font-weight:600">AROFi</span><br>
     Terms and Conditions Apply
   </div>
 
