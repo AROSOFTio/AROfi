@@ -128,7 +128,9 @@ export class VouchersService {
       this.prisma.billingTransaction.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
-          type: BillingTransactionType.VOUCHER_SALE,
+          type: {
+            in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.VOUCHER_REDEMPTION],
+          },
           status: BillingTransactionStatus.COMPLETED,
         },
         include: {
@@ -761,6 +763,8 @@ export class VouchersService {
         },
       })
 
+      const wasSold = voucher.status === VoucherStatus.SOLD
+
       const breakdown = await this.feeEngineService.calculateBreakdown(
         BillingChannel.VOUCHER,
         voucher.faceValueUgx,
@@ -768,13 +772,17 @@ export class VouchersService {
         tx,
       )
 
+      const grossAmountUgx = wasSold ? 0 : breakdown.grossAmountUgx
+      const feeAmountUgx = wasSold ? 0 : breakdown.feeAmountUgx
+      const netAmountUgx = wasSold ? 0 : breakdown.netAmountUgx
+
       await tx.billingTransaction.upsert({
         where: { externalReference: redemptionReference },
         update: {
           customerReference: voucher.code,
-          grossAmountUgx: breakdown.grossAmountUgx,
-          feeAmountUgx: breakdown.feeAmountUgx,
-          netAmountUgx: breakdown.netAmountUgx,
+          grossAmountUgx,
+          feeAmountUgx,
+          netAmountUgx,
           metadata: {
             hotspotId: dto.hotspotId,
             sessionReference: dto.sessionReference,
@@ -787,9 +795,9 @@ export class VouchersService {
           channel: BillingChannel.VOUCHER,
           type: BillingTransactionType.VOUCHER_REDEMPTION,
           status: BillingTransactionStatus.COMPLETED,
-          grossAmountUgx: breakdown.grossAmountUgx,
-          feeAmountUgx: breakdown.feeAmountUgx,
-          netAmountUgx: breakdown.netAmountUgx,
+          grossAmountUgx,
+          feeAmountUgx,
+          netAmountUgx,
           customerReference: voucher.code,
           externalReference: redemptionReference,
           metadata: {
@@ -799,35 +807,37 @@ export class VouchersService {
         },
       })
 
-      const wallet = await tx.wallet.findFirst({
-        where: {
-          tenantId: voucher.tenantId,
-          ownerType: WalletOwnerType.TENANT,
-          ownerReference: voucher.tenantId,
-        },
-      })
-      if (wallet) {
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: {
-            balanceUgx: {
-              decrement: breakdown.feeAmountUgx,
-            },
-            earnedBalanceUgx: {
-              decrement: breakdown.feeAmountUgx,
-            },
+      if (!wasSold) {
+        const wallet = await tx.wallet.findFirst({
+          where: {
+            tenantId: voucher.tenantId,
+            ownerType: WalletOwnerType.TENANT,
+            ownerReference: voucher.tenantId,
           },
         })
-
-        if (breakdown.feeAmountUgx > 0) {
-          await tx.platformSetting.update({
-            where: { id: 'global' },
+        if (wallet) {
+          await tx.wallet.update({
+            where: { id: wallet.id },
             data: {
-              platformWalletBalanceUgx: {
-                increment: breakdown.feeAmountUgx,
+              balanceUgx: {
+                decrement: feeAmountUgx,
+              },
+              earnedBalanceUgx: {
+                decrement: feeAmountUgx,
               },
             },
           })
+
+          if (feeAmountUgx > 0) {
+            await tx.platformSetting.update({
+              where: { id: 'global' },
+              data: {
+                platformWalletBalanceUgx: {
+                  increment: feeAmountUgx,
+                },
+              },
+            })
+          }
         }
       }
 

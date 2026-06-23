@@ -1127,7 +1127,9 @@ export class WalletsService {
       const voucherFeesSum = await this.prisma.billingTransaction.aggregate({
         where: {
           tenantId,
-          type: BillingTransactionType.VOUCHER_SALE,
+          type: {
+            in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.VOUCHER_REDEMPTION]
+          },
           status: BillingTransactionStatus.COMPLETED
         },
         _sum: {
