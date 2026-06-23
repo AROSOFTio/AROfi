@@ -121,6 +121,9 @@ export class WalletsService {
   }
 
   async getPayoutProfile(tenantId: string) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+    }
     const platformSettings = await this.getPlatformSettings()
     const [profile, numbers, changeRequests, wallet, recentWithdrawals, mmGross, agentCommissionTotal, completedWithdrawals, pendingWithdrawals] = await Promise.all([
       this.prisma.tenantPayoutProfile.findUnique({
@@ -255,6 +258,9 @@ export class WalletsService {
   }
 
   async setPayoutSecret(tenantId: string, dto: SetPayoutSecretDto, userId: string) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+    }
     const existing = await this.prisma.tenantPayoutProfile.findUnique({ where: { tenantId } })
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { password: true, email: true } })
     const passwordOk = dto.currentPassword && user ? await bcrypt.compare(dto.currentPassword, user.password) : false
@@ -284,6 +290,9 @@ export class WalletsService {
   }
 
   async registerPayoutNumber(tenantId: string, dto: RegisterPayoutNumberDto) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+    }
     this.assertSupportedNetwork(dto.network)
     const normalizedPhone = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, dto.network)
 
@@ -329,6 +338,9 @@ export class WalletsService {
   }
 
   async requestPayoutNumberChange(tenantId: string, dto: RequestPayoutNumberChangeDto, userId: string) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+    }
     this.assertSupportedNetwork(dto.network)
     const normalizedPhone = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, dto.network)
 
@@ -370,6 +382,9 @@ export class WalletsService {
   }
 
   async requestWithdrawal(tenantId: string, dto: RequestWithdrawalDto, userId: string) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+    }
     if (!dto.confirmPhoneInPossession) {
       throw new BadRequestException('Confirm that you have the registered payout phone with you before requesting withdrawal')
     }
@@ -523,6 +538,17 @@ export class WalletsService {
 
       if (debited.count !== 1) {
         throw new BadRequestException('Wallet does not have enough available balance for this withdrawal and charges')
+      }
+
+      if (tenantId === 'platform') {
+        await tx.platformSetting.update({
+          where: { id: PLATFORM_SETTINGS_ID },
+          data: {
+            platformWalletBalanceUgx: {
+              decrement: totalDebitUgx,
+            },
+          },
+        })
       }
 
       const ledgerTransaction = await tx.ledgerTransaction.create({
@@ -989,7 +1015,54 @@ export class WalletsService {
     return updated
   }
 
+  private async ensurePlatformTenantExists() {
+    await this.prisma.tenant.upsert({
+      where: { id: 'platform' },
+      update: {},
+      create: {
+        id: 'platform',
+        name: 'AROFi Platform',
+        domain: 'platform.internal',
+      },
+    })
+  }
+
   private async findTenantWallet(tenantId: string) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+      const platformSettings = await this.getPlatformSettings()
+      let wallet = await this.prisma.wallet.findFirst({
+        where: {
+          tenantId: 'platform',
+          ownerType: WalletOwnerType.TENANT,
+          ownerReference: 'platform',
+        },
+      })
+      if (!wallet) {
+        wallet = await this.prisma.wallet.create({
+          data: {
+            tenantId: 'platform',
+            ownerType: WalletOwnerType.TENANT,
+            ownerReference: 'platform',
+            currency: 'UGX',
+            balanceUgx: platformSettings.platformWalletBalanceUgx,
+            earnedBalanceUgx: platformSettings.platformWalletBalanceUgx,
+          },
+        })
+      } else {
+        if (wallet.balanceUgx !== platformSettings.platformWalletBalanceUgx) {
+          wallet = await this.prisma.wallet.update({
+            where: { id: wallet.id },
+            data: {
+              balanceUgx: platformSettings.platformWalletBalanceUgx,
+              earnedBalanceUgx: platformSettings.platformWalletBalanceUgx,
+            },
+          })
+        }
+      }
+      return wallet
+    }
+
     return this.prisma.wallet.findFirst({
       where: {
         tenantId,
@@ -998,7 +1071,6 @@ export class WalletsService {
       },
     })
   }
-
   private async submitReservedWithdrawal(disbursementId: string) {
     const disbursement = await this.prisma.disbursement.findUnique({
       where: { id: disbursementId },
@@ -1241,6 +1313,17 @@ export class WalletsService {
         where: { id: input.walletId },
         data: { balanceUgx: { increment: input.totalDebitUgx } },
       })
+
+      if (input.tenantId === 'platform') {
+        await tx.platformSetting.update({
+          where: { id: PLATFORM_SETTINGS_ID },
+          data: {
+            platformWalletBalanceUgx: {
+              increment: input.totalDebitUgx,
+            },
+          },
+        })
+      }
 
       await tx.ledgerTransaction.create({
         data: {

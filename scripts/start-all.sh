@@ -18,6 +18,9 @@ if [ -n "$DATABASE_URL" ]; then
     # wide enough even if a migration could not be applied cleanly.
     npx prisma db execute --url "$DATABASE_URL" --stdin <<'SQL' || echo "[start-all] safety-net SQL skipped"
 ALTER TABLE "nas" ALTER COLUMN "secret" TYPE VARCHAR(128);
+ALTER TABLE "PlatformSetting" ADD COLUMN IF NOT EXISTS "platformWalletBalanceUgx" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "earnedBalanceUgx" INTEGER NOT NULL DEFAULT 0;
+ALTER TYPE "BillingTransactionType" ADD VALUE IF NOT EXISTS 'TENANT_WALLET_TOPUP';
 SQL
   fi
 fi

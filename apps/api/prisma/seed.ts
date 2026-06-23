@@ -462,6 +462,16 @@ async function main() {
     },
   })
 
+  await prisma.tenant.upsert({
+    where: { id: 'platform' },
+    update: {},
+    create: {
+      id: 'platform',
+      name: 'AROFi Platform',
+      domain: 'platform.internal',
+    },
+  })
+
   // Super admin (overridable via env). The password is supplied PRE-HASHED
   // (a bcrypt hash), so it is stored as-is and must NOT be hashed again.
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL ?? 'bangella23@gmail.com'

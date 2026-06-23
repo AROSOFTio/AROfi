@@ -474,7 +474,7 @@ export class BillingService {
         dataUsedMb: Math.round(((inputBytes + outputBytes) / (1024 * 1024)) * 100) / 100,
       },
       wallets,
-      recentTransactions: transactions.slice(0, 10),
+      recentTransactions: completedSales.slice(0, 10),
       recentLedgerEntries: ledgerEntries,
       chart: this.groupSalesByDay(completedSales),
       filters: this.presentFilters(filters),

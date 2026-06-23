@@ -813,6 +813,9 @@ export class VouchersService {
             balanceUgx: {
               decrement: breakdown.feeAmountUgx,
             },
+            earnedBalanceUgx: {
+              decrement: breakdown.feeAmountUgx,
+            },
           },
         })
 

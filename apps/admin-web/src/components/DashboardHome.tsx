@@ -32,17 +32,24 @@ export default async function DashboardHome({ searchParams }: { searchParams?: D
 }
 
 async function PlatformDashboard() {
-  const [tenants, routers, system, payments] = await Promise.all([
+  const [tenants, routers, system, payments, payoutProfile] = await Promise.all([
     fetchApi<TenantOverviewResponse>('/tenants'),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<SystemOverviewResponse>('/system/overview'),
     fetchApi<PaymentOverviewResponse>('/payments/overview'),
+    fetchApi<any>('/wallets/payouts/profile/me'),
   ])
 
   const supportTickets = system?.support.items ?? []
   const recentRouterChecks = routers?.recentHealthChecks ?? []
   const tenantItems = tenants?.items ?? []
   const routersNeedingHelp = (routers?.summary.offlineRouters ?? 0) + (routers?.summary.degradedRouters ?? 0) + (routers?.summary.pendingRouters ?? 0)
+
+  // Platform Wallet calculations
+  const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []
+  const primaryNumber = verifiedNumbers.find((item: any) => item.isPrimary) ?? verifiedNumbers[0] ?? null
+  const availableUgx = payoutProfile?.wallet?.balanceUgx ?? 0
+  const minimumPayoutUgx = payoutProfile?.rules?.minimumPayoutUgx ?? 0
 
   return (
     <>
@@ -54,6 +61,147 @@ async function PlatformDashboard() {
         <div style={{ display: 'flex', gap: 10 }}>
           <a href="/support" className="btn btn-ghost">Support Queue</a>
           <a href="/tenants" className="btn btn-primary">Add Vendor</a>
+        </div>
+      </div>
+
+      {/* Premium Platform Wallet Panel */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 20, marginBottom: 24 }}>
+        {/* Visual Credit Card Style Wallet Card */}
+        <div style={{
+          background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+          borderRadius: 14,
+          padding: '24px 26px',
+          color: '#ffffff',
+          position: 'relative',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: 228,
+          boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.35), 0 8px 10px -6px rgba(16, 185, 129, 0.35)',
+        }}>
+          {/* Card background shape accents */}
+          <div style={{
+            position: 'absolute',
+            top: -24,
+            right: -24,
+            width: 148,
+            height: 148,
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.08)',
+            pointerEvents: 'none'
+          }} />
+          <div style={{
+            position: 'absolute',
+            bottom: -44,
+            left: -24,
+            width: 168,
+            height: 168,
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.04)',
+            pointerEvents: 'none'
+          }} />
+
+          {/* Top Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Wallet size={18} />
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', opacity: 0.9 }}>PLATFORM WALLET</span>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.75)', mixBlendMode: 'overlay' }} />
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.45)', marginLeft: -9, mixBlendMode: 'overlay' }} />
+            </div>
+          </div>
+
+          {/* Balance */}
+          <div style={{ zIndex: 2, marginTop: 10 }}>
+            <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 500 }}>Platform Revenue Balance</div>
+            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, letterSpacing: '-0.02em' }}>
+              {formatCurrency(availableUgx)}
+            </div>
+          </div>
+
+          {/* Footer Details */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 2, marginTop: 10 }}>
+            <div>
+              <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Owner</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>Dev Admin</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payout Network</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+                {primaryNumber ? `${primaryNumber.network} Line` : 'None Configured'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Disbursement settings & actions */}
+        <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Platform Withdrawal Settings</span>
+              <a href="/earnings" style={{ color: 'var(--green)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>Manage</a>
+            </div>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
+                <span style={{ color: 'var(--text-2)' }}>Primary payout number</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-1)', fontFamily: 'monospace' }}>
+                  {primaryNumber ? `${primaryNumber.network} - ${primaryNumber.normalizedPhone}` : <span style={{ color: '#ef4444' }}>Not set</span>}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
+                <span style={{ color: 'var(--text-2)' }}>Secret key verification</span>
+                <span>
+                  {payoutProfile?.profile?.secretConfigured ? (
+                    <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                      <CheckCircle2 size={14} /> Set
+                    </span>
+                  ) : (
+                    <span style={{ color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                      <AlertCircle size={14} /> Setup needed
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-2)' }}>Minimum withdrawable</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>
+                  {minimumPayoutUgx > 0 ? formatCurrency(minimumPayoutUgx) : 'None'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <a href="/earnings" className="btn btn-primary btn-block" style={{ marginTop: 14, display: 'inline-flex', gap: 6 }}>
+            Withdraw Platform Fees <ArrowUpRight size={16} />
+          </a>
+        </div>
+
+        {/* Withdrawal History */}
+        <div className="card" style={{ padding: 22, margin: 0, display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Platform Withdrawals</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto', maxHeight: 150 }}>
+            {(!payoutProfile?.recentWithdrawals || payoutProfile.recentWithdrawals.length === 0) ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13, padding: '20px 0', gap: 6 }}>
+                <CreditCard size={24} style={{ opacity: 0.4 }} />
+                <span>No payout history found</span>
+              </div>
+            ) : (
+              payoutProfile.recentWithdrawals.map((item: any) => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, paddingBottom: 8, borderBottom: '1px solid var(--border-soft)' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(item.amountUgx)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(item.createdAt)}</div>
+                  </div>
+                  <span className={getStatusBadgeClass(item.status)} style={{ fontSize: 11 }}>
+                    {item.status.toLowerCase()}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 

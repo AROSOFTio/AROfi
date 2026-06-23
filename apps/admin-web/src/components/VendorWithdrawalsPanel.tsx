@@ -257,6 +257,20 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                 </div>
               )}
             </div>
+            {!canWithdraw && (
+              <div style={{ marginTop: 10, marginBottom: 10, fontSize: 12, color: '#ef4444', display: 'flex', gap: 6, alignItems: 'center', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 12px', borderRadius: 6 }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                <span>
+                  {!profile.profile.secretConfigured
+                    ? 'Secret key not set. Configure it below to enable withdrawals.'
+                    : !primaryNumber
+                      ? 'No primary verified payout number. Register one below.'
+                      : pendingChange
+                        ? 'Payout number change is pending approval.'
+                        : 'Insufficient withdrawable balance.'}
+                </span>
+              </div>
+            )}
             <button type="button" className="btn btn-primary" onClick={() => setAction('withdraw')} disabled={!canWithdraw}>
               Withdraw
             </button>

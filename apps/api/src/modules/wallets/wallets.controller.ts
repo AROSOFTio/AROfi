@@ -31,21 +31,24 @@ export class WalletsController {
   @RequirePermissions(PERMISSIONS.billingRead)
   @Get('payouts/profile/me')
   getPayoutProfile(@CurrentUser() user: AuthenticatedAdminUser) {
-    const tenantId = this.accessScope.requireTenantScope(user)
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
     return this.walletsService.getPayoutProfile(tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
   @Post('payouts/secret')
   setPayoutSecret(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: SetPayoutSecretDto) {
-    const tenantId = this.accessScope.requireTenantScope(user)
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
     return this.walletsService.setPayoutSecret(tenantId, dto, user.id)
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
   @Post('payouts/numbers')
   registerPayoutNumber(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RegisterPayoutNumberDto) {
-    const tenantId = this.accessScope.requireTenantScope(user)
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
     return this.walletsService.registerPayoutNumber(tenantId, dto)
   }
 
@@ -55,14 +58,16 @@ export class WalletsController {
     @CurrentUser() user: AuthenticatedAdminUser,
     @Body() dto: RequestPayoutNumberChangeDto,
   ) {
-    const tenantId = this.accessScope.requireTenantScope(user)
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
     return this.walletsService.requestPayoutNumberChange(tenantId, dto, user.id)
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
   @Post('withdrawals')
   requestWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RequestWithdrawalDto) {
-    const tenantId = this.accessScope.requireTenantScope(user)
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
     return this.walletsService.requestWithdrawal(tenantId, dto, user.id)
   }
 

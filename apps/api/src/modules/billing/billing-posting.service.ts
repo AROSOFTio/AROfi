@@ -55,39 +55,60 @@ export class BillingPostingService {
       input.tx,
     )
 
+    const isVoucher = input.channel === BillingChannel.VOUCHER
+    const walletDeltaUgx = isVoucher ? -breakdown.feeAmountUgx : breakdown.netAmountUgx
+
     return {
       ledgerType: LedgerTransactionType.SALE,
       description: input.description,
       channel: input.channel,
-      walletDeltaUgx: breakdown.netAmountUgx,
+      walletDeltaUgx,
       feeBasisPoints: breakdown.feeBasisPoints,
       feeSource: breakdown.feeSource,
       ...breakdown,
-      entries: [
-        {
-          tenantId: input.tenantId,
-          walletId: input.walletId,
-          accountCode: LEDGER_ACCOUNTS.salesClearing,
-          direction: LedgerDirection.DEBIT,
-          amountUgx: breakdown.grossAmountUgx,
-          memo: 'Gross sale value',
-        },
-        {
-          tenantId: input.tenantId,
-          accountCode: LEDGER_ACCOUNTS.platformRevenue,
-          direction: LedgerDirection.CREDIT,
-          amountUgx: breakdown.feeAmountUgx,
-          memo: 'Platform fee recognised',
-        },
-        {
-          tenantId: input.tenantId,
-          walletId: input.walletId,
-          accountCode: LEDGER_ACCOUNTS.tenantWallet,
-          direction: LedgerDirection.CREDIT,
-          amountUgx: breakdown.netAmountUgx,
-          memo: 'Vendor net proceeds',
-        },
-      ],
+      entries: isVoucher
+        ? [
+            {
+              tenantId: input.tenantId,
+              walletId: input.walletId,
+              accountCode: LEDGER_ACCOUNTS.tenantWallet,
+              direction: LedgerDirection.DEBIT,
+              amountUgx: breakdown.feeAmountUgx,
+              memo: 'Platform fee debited from vendor wallet',
+            },
+            {
+              tenantId: input.tenantId,
+              accountCode: LEDGER_ACCOUNTS.platformRevenue,
+              direction: LedgerDirection.CREDIT,
+              amountUgx: breakdown.feeAmountUgx,
+              memo: 'Platform fee recognised',
+            },
+          ]
+        : [
+            {
+              tenantId: input.tenantId,
+              walletId: input.walletId,
+              accountCode: LEDGER_ACCOUNTS.salesClearing,
+              direction: LedgerDirection.DEBIT,
+              amountUgx: breakdown.grossAmountUgx,
+              memo: 'Gross sale value',
+            },
+            {
+              tenantId: input.tenantId,
+              accountCode: LEDGER_ACCOUNTS.platformRevenue,
+              direction: LedgerDirection.CREDIT,
+              amountUgx: breakdown.feeAmountUgx,
+              memo: 'Platform fee recognised',
+            },
+            {
+              tenantId: input.tenantId,
+              walletId: input.walletId,
+              accountCode: LEDGER_ACCOUNTS.tenantWallet,
+              direction: LedgerDirection.CREDIT,
+              amountUgx: breakdown.netAmountUgx,
+              memo: 'Vendor net proceeds',
+            },
+          ],
     }
   }
 
