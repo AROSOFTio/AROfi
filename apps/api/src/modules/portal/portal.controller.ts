@@ -59,6 +59,22 @@ export class PortalController {
     return this.portalService.reconnect(dto)
   }
 
+  @Post('recover-voucher')
+  recoverVoucher(
+    @Body()
+    dto: {
+      transactionId: string
+      routerKey?: string
+      macAddress?: string
+      ipAddress?: string
+      routerId?: string
+      hotspotServerName?: string
+      loginUrl?: string
+    },
+  ) {
+    return this.portalService.recoverVoucher(dto)
+  }
+
   @Post('support-tickets')
   createSupportTicket(
     @Body()

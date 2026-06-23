@@ -167,9 +167,11 @@ function getVoucherPortalHost() {
   }
 }
 
-function getVoucherQrPortalUrl(code: string) {
-  // Always use the configured env var. Never fall back to window.location.origin
-  // because the admin is on a different path/domain than the portal.
+function getVoucherQrPortalUrl(code: string, dnsName?: string) {
+  if (dnsName) {
+    return `http://${dnsName}/login?username=${encodeURIComponent(code)}&password=${encodeURIComponent(code)}`
+  }
+  // Fallback
   const base =
     process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
     'https://arofi.arosoftlabs.com/portal'
@@ -894,7 +896,8 @@ function VoucherSampleCard({
 
   useEffect(() => {
     let active = true
-    const portalUrl = getVoucherQrPortalUrl(code)
+    const dnsName = tenantName ? `${tenantName.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi` : undefined
+    const portalUrl = getVoucherQrPortalUrl(code, dnsName)
 
     void QRCode.toDataURL(portalUrl, {
       errorCorrectionLevel: 'M',

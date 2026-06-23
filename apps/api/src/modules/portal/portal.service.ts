@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
@@ -332,6 +333,108 @@ export class PortalService {
     }
   }
 
+  async recoverVoucher(input: {
+    transactionId: string
+    routerKey?: string
+    macAddress?: string
+    ipAddress?: string
+    routerId?: string
+    hotspotServerName?: string
+    loginUrl?: string
+  }) {
+    const transactionId = input.transactionId.trim()
+    if (!transactionId) {
+      throw new BadRequestException('Transaction ID is required')
+    }
+
+    const resolvedHotspot = await this.resolveHotspotContext({
+      macAddress: input.macAddress,
+      ipAddress: input.ipAddress,
+      routerId: input.routerId,
+      routerKey: input.routerKey,
+      hotspotServerName: input.hotspotServerName,
+      loginUrl: input.loginUrl,
+    })
+
+    const normalizedPhone = this.tryNormalizePhoneNumber(transactionId)
+
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        tenantId: (resolvedHotspot as any).tenantId,
+        status: PaymentStatus.COMPLETED,
+        OR: [
+          { providerReference: transactionId },
+          { externalReference: transactionId },
+          ...(normalizedPhone ? [{ normalizedPhone }] : []),
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    let activationId: string | undefined
+
+    if (payment) {
+      const activation = await this.prisma.packageActivation.findUnique({
+        where: { paymentId: payment.id },
+      })
+      if (activation) {
+        activationId = activation.id
+      }
+    }
+
+    if (!activationId) {
+      const redemption = await this.prisma.voucherRedemption.findFirst({
+        where: {
+          tenantId: (resolvedHotspot as any).tenantId,
+          customerReference: transactionId,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      if (redemption) {
+        const activation = await this.prisma.packageActivation.findUnique({
+          where: { voucherRedemptionId: redemption.id },
+        })
+        if (activation) {
+          activationId = activation.id
+        }
+      }
+    }
+
+    if (!activationId) {
+      throw new NotFoundException('Could not find a valid voucher for this transaction ID')
+    }
+
+    const activation = await this.prisma.packageActivation.findUnique({
+      where: { id: activationId },
+    })
+
+    if (!activation || activation.status !== 'ACTIVE') {
+      throw new BadRequestException('The found voucher has already expired or is inactive')
+    }
+
+    // Since they are explicitly recovering from the portal, they might be on a new device.
+    // If we bind MAC, we should update it if the limit allows. But the easiest is just issuing
+    // the payload. If radius rejects it due to MAC limits, that's fine.
+    await this.clearStaleSessionIfNeeded(activation.id)
+    const payload = this.issueReconnectLoginPayload(activation, input.loginUrl)
+
+    await this.markReconnectionAttempt({
+      tenantId: activation.tenantId,
+      activationId: activation.id,
+      routerId: resolvedHotspot.routerId,
+      macAddress: input.macAddress,
+      ipAddress: input.ipAddress,
+      status: ReconnectionStatus.LOGIN_PAYLOAD_ISSUED,
+      message: 'Voucher recovered by transaction ID or phone number',
+      payload,
+    })
+
+    return {
+      message: 'Voucher recovered successfully',
+      reconnect: payload,
+    }
+  }
+
   private async getSessionFromAccessToken(accessToken: string) {
     const payload = this.verifyAccessToken(accessToken)
     return this.buildCustomerSession(payload.tenantId, payload.phoneNumber, new Date(payload.expiresAt))
@@ -589,6 +692,7 @@ export class PortalService {
       where: { registrationKey: hotspot.routerKey },
       select: {
         id: true,
+        tenantId: true,
         hotspotServerName: true,
         tenant: {
           select: {
@@ -607,6 +711,7 @@ export class PortalService {
       routerId: hotspot.routerId || router.id,
       hotspotServerName: hotspot.hotspotServerName || router.hotspotServerName || undefined,
       tenantDomain: router.tenant.domain ?? undefined,
+      tenantId: router.tenantId,
     }
   }
 

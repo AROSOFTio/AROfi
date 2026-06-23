@@ -412,7 +412,8 @@ export class MikrotikService {
     // hotspot directory. No redirect — works in Android/iOS captive portal browsers.
     // MikroTik replaces $(mac), $(ip), $(link-login-only), $(link-orig), $(server-name)
     // before sending this HTML to the device.
-    return `<!doctype html>
+    return `
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -420,216 +421,302 @@ export class MikrotikService {
   <title>AROFi Hotspot</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#f0fdf4;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
-    .card{width:100%;max-width:420px;background:#fff;border:1px solid #d1fae5;border-radius:20px;padding:26px 22px;box-shadow:0 8px 32px rgba(16,185,129,.10)}
-    .logo{text-align:center;margin-bottom:18px}
-    .wifi-icon{color:#10b981;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-block}
-    @keyframes pulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:1;transform:scale(1.05)}}
-    .logo img{max-height:42px;margin-bottom:6px;border-radius:8px;display:none}
-    .logo h1{font-size:14px;font-weight:700;letter-spacing:.08em;color:#10b981;margin-top:4px;text-transform:uppercase}
-    .logo p{font-size:11px;color:#64748b;margin-top:2px}
-    .dev{font-size:11px;color:#94a3b8;font-family:monospace;margin-top:6px}
-    .spin-wrap{text-align:center;padding:28px 0}
-    .spinner{width:30px;height:30px;border:3px solid #d1fae5;border-top-color:#10b981;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+    body{background:#eff6ff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+    .card{width:100%;max-width:420px;background:#fff;border:1px solid #bfdbfe;border-radius:12px;padding:24px 20px;box-shadow:0 8px 32px rgba(37,99,235,.10);position:relative}
+    .logo{text-align:center;margin-bottom:16px}
+    .wifi-icon{color:#2563EB;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-block}
+    @keyframes pulse{0%,100%{opacity:.6;transform:scale(.95)}50%{opacity:1;transform:scale(1.05)}}
+    .logo h1{font-size:22px;font-weight:800;letter-spacing:.02em;color:#2563EB;margin-top:0;text-transform:uppercase}
+    
+    .login-row{display:flex;gap:10px;margin-bottom:16px}
+    .login-row input{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:12px 14px;border-radius:8px;color:#0f172a;font-size:14px;outline:none;transition:all .2s}
+    .login-row input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .login-row button{background:#2563EB;color:#fff;border:none;padding:0 20px;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .2s}
+    .login-row button:hover{background:#1D4ED8}
+    .login-row button:disabled{background:#94a3b8;cursor:not-allowed}
+
+    .find-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:#eff6ff;color:#2563EB;border:none;padding:10px;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .2s;margin-bottom:16px}
+    .find-btn:hover{background:#dbeafe}
+
+    .pkg-title{text-align:center;font-size:13px;color:#64748b;margin-bottom:12px}
+
+    .pkgs{max-height:280px;overflow-y:auto;margin-bottom:16px}
+    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;transition:all .2s}
+    .pkg:hover{border-color:#cbd5e1;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .pkg-info h3{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:2px}
+    .pkg-info p{font-size:12px;color:#64748b}
+    .pkg-action{display:flex;align-items:center;gap:12px}
+    .price{font-size:14px;font-weight:800;color:#2563EB;white-space:nowrap}
+    .buy-btn{background:#10b981;color:#fff;border:none;padding:8px 16px;font-size:13px;font-weight:700;border-radius:6px;cursor:pointer;transition:all .2s}
+    .buy-btn:hover{background:#059669}
+
+    .accept{text-align:center;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:16px}
+    .accept p{font-size:12px;color:#0f172a;font-weight:600;margin-bottom:8px}
+    .accept-logos{display:flex;justify-content:center;gap:12px;align-items:center}
+    .accept-logos span{font-size:12px;font-weight:700;color:#e60012;background:#fff;border:1px solid #fecaca;padding:2px 6px;border-radius:4px}
+    .accept-logos span.momo{color:#0b1f3a;background:#fef08a;border-color:#fde047}
+
+    .footer{text-align:center;margin-top:16px;font-size:12px;color:#64748b}
+    .footer a{color:#10b981;text-decoration:none}
+    .tech{font-size:10px;color:#94a3b8;margin-top:16px}
+    .tech span{display:inline-block;margin:0 4px}
+
+    /* Modals */
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+    .modal-overlay.on{display:flex}
+    .modal{background:#fff;width:100%;max-width:360px;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+    .modal-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid #f1f5f9}
+    .modal-hdr h2{font-size:16px;font-weight:700}
+    .modal-hdr button{background:none;border:none;font-size:20px;color:#94a3b8;cursor:pointer}
+    .modal-body{padding:16px}
+    .modal-body p{font-size:13px;color:#64748b;margin-bottom:12px}
+    .modal-body input{width:100%;background:#fff;border:1px solid #cbd5e1;padding:12px 14px;border-radius:8px;color:#0f172a;font-size:14px;outline:none;margin-bottom:12px}
+    .modal-body input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .mbtn{width:100%;background:#10b981;color:#fff;border:none;padding:12px;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px}
+    .mbtn:hover{background:#059669}
+    .mbtn:disabled{background:#94a3b8;cursor:not-allowed}
+
+    .st{margin-top:12px;padding:10px;border-radius:8px;font-size:13px;display:none}
+    .st.err{background:#fef2f2;border:1px solid #fecaca;color:#ef4444;display:block}
+    .st.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#22c55e;display:block}
+    .st.info{background:#eff6ff;border:1px solid #bfdbfe;color:#3b82f6;display:block}
+    
+    #loading{text-align:center;padding:30px 0}
+    .spinner{width:30px;height:30px;border:3px solid #e2e8f0;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .spin-wrap p{color:#64748b;font-size:13px;margin-top:10px}
-    .tabs{display:flex;background:#f1f5f9;padding:3px;border-radius:10px;margin-bottom:16px;gap:3px}
-    .tab{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border-radius:8px;transition:all .18s}
-    .tab.on{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-    .pkgs{max-height:196px;overflow-y:auto;margin-bottom:16px}
-    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color .18s}
-    .pkg.sel{border-color:#10b981;background:#f0fdf4}
-    .pkg h3{font-size:14px;font-weight:700;color:#0f172a}
-    .pkg p{font-size:12px;color:#64748b;margin-top:1px}
-    .price{font-size:13px;font-weight:800;color:#10b981;white-space:nowrap;margin-left:10px}
-    lbl{display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
-    .iw{position:relative;margin-bottom:13px}
-    input[type=text],input[type=tel]{width:100%;background:#f8fafc;border:1px solid #e2e8f0;padding:11px 13px;border-radius:10px;color:#0f172a;font-size:15px;outline:none;transition:border-color .18s}
-    input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
-    .badge{position:absolute;right:9px;top:50%;transform:translateY(-50%);padding:3px 7px;border-radius:5px;font-size:10px;font-weight:800;display:none;pointer-events:none}
-    .btn{width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:13px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;box-shadow:0 3px 10px rgba(16,185,129,.22);transition:all .18s}
-    .btn:hover{opacity:.92;transform:translateY(-1px)}
-    .btn:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none;box-shadow:none}
-    .st{margin-top:13px;padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.4;display:none}
-    .st.err{background:#fff1f2;border:1px solid #fecdd3;color:#be123c;display:block}
-    .st.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;display:block}
-    .st.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;display:block}
-    .pane{display:none}.pane.on{display:block}
-    .footer{text-align:center;margin-top:18px;font-size:12px;color:#64748b;display:none}
-    .wa{display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff!important;text-decoration:none;font-weight:700;padding:8px 15px;border-radius:9px;margin-top:7px;font-size:12px;box-shadow:0 2px 8px rgba(37,211,102,.2)}
-    .pwr{margin-top:9px;font-size:10px;color:#94a3b8}
-    .pwr a{color:#10b981;font-weight:600;text-decoration:none}
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">
       <div class="wifi-icon">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/>
         </svg>
       </div>
-      <img id="tlogo" src="" alt="logo">
-      <h1 id="tname">AROFi Hotspot</h1>
-      <p id="ttag">Instant high-speed internet access</p>
-      <div class="dev" id="dinfo"></div>
+      <h1 id="tname">Loading...</h1>
     </div>
-    <div id="loading" class="spin-wrap"><div class="spinner"></div><p>Loading packages...</p></div>
+
+    <div id="loading"><div class="spinner"></div><p style="margin-top:10px;color:#64748b;font-size:13px">Preparing hotspot...</p></div>
+
     <div id="content" style="display:none">
-      <div class="tabs">
-        <div class="tab on" onclick="sw('momo')">Buy Package</div>
-        <div class="tab" onclick="sw('voucher')">Redeem Voucher</div>
+      <div class="login-row">
+        <input type="text" id="vcode" placeholder="Enter your voucher code">
+        <button id="lbtn" onclick="login()">Login</button>
       </div>
-      <div id="pane-momo" class="pane on">
-        <div class="pkgs" id="plist"></div>
-        <div class="iw">
-          <lbl>Mobile Money Number</lbl>
-          <input type="tel" id="phone" placeholder="e.g. 0771234567" oninput="dnet(this.value)" style="padding-right:110px">
-          <span id="badge" class="badge"></span>
+
+      <button class="find-btn" onclick="openModal('recModal')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        Already bought? Find My Voucher
+      </button>
+
+      <div class="pkg-title">Select a package and pay with Mobile Money</div>
+      <div class="pkgs" id="plist"></div>
+
+      <div class="accept">
+        <p>We accept:</p>
+        <div class="accept-logos">
+          <span>airtel money</span>
+          <span class="momo">MoMo MTN</span>
         </div>
-        <button class="btn" id="pbtn" onclick="pay()">Pay and Connect</button>
       </div>
-      <div id="pane-voucher" class="pane">
-        <div class="iw">
-          <lbl>Voucher Code</lbl>
-          <input type="text" id="vcode" placeholder="Enter voucher code">
-        </div>
-        <button class="btn" id="vbtn" onclick="rdm()">Connect to Internet</button>
-      </div>
-      <div class="st" id="st"></div>
     </div>
   </div>
-  <div class="footer" id="footer">
-    <div>Need help? Contact support: <span id="sph"></span></div>
-    <a id="wa" href="#" target="_blank" class="wa" style="display:none">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-      Chat on WhatsApp
-    </a>
-    <div class="pwr">Powered by <a href="https://arosoftlabs.com" target="_blank">arosoftlabs.com</a></div>
+
+  <div class="footer" id="footer" style="display:none">
+    Need help? Contact support:<br>
+    <span id="sph" style="font-weight:700;color:#2563EB"></span>
   </div>
+
+  <div class="tech">
+    <span id="tip">IP: </span> | <span id="tmac">MAC: </span>
+    <br><br>
+    Powered By <span style="color:#2563EB;font-weight:600">XenFi</span><br>
+    Terms and Conditions Apply
+  </div>
+
+  <!-- Buy Modal -->
+  <div class="modal-overlay" id="buyModal">
+    <div class="modal">
+      <div class="modal-hdr">
+        <h2>Pay with Mobile Money</h2>
+        <button onclick="closeModal('buyModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="bdesc">Enter your number to buy this package.</p>
+        <input type="tel" id="bphone" placeholder="e.g. 0771234567">
+        <button class="mbtn" id="bbtn" onclick="pay()">Pay Now</button>
+        <div id="bst" class="st"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recover Modal -->
+  <div class="modal-overlay" id="recModal">
+    <div class="modal">
+      <div class="modal-hdr">
+        <h2>Find My Voucher</h2>
+        <button onclick="closeModal('recModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Enter your transaction ID or mobile number to recover your connection.</p>
+        <input type="text" id="rtxn" placeholder="Enter transaction ID or number">
+        <button class="mbtn" id="rbtn" onclick="rec()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          Search Voucher
+        </button>
+        <div id="rst" class="st"></div>
+      </div>
+    </div>
+  </div>
+
   <form id="lf" method="POST" action="$(link-login-only)" style="display:none">
     <input type="hidden" id="lu" name="username">
     <input type="hidden" id="lp" name="password">
     <input type="hidden" name="dst" value="$(link-orig)">
     <input type="hidden" name="popup" value="false">
   </form>
+
   <script>
     var API="${apiBaseUrl}",RKEY="${escapedKey}";
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
-    var pkgs=[],selId=null,selNet='MTN';
+    var pkgs=[],selId=null;
+    
     window.onload=function(){
       var sp=new URLSearchParams(window.location.search);
       var u=sp.get('username'),p=sp.get('password');
       if(u&&p){var dst2=sp.get('dst')||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(u)+'&password='+encodeURIComponent(p)+'&dst='+encodeURIComponent(dst2);return;}
-      if(ip||mac)document.getElementById('dinfo').textContent=(ip?'IP: '+ip:'')+(ip&&mac?'  |  ':'')+(mac?'MAC: '+mac.toUpperCase():'');
+      if(ip)document.getElementById('tip').textContent='IP: '+ip;
+      if(mac)document.getElementById('tmac').textContent='MAC: '+mac.toUpperCase();
       load();
     };
+
     async function load(){
       try{
         var r=await fetch(API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo));
         if(!r.ok)throw new Error('HTTP '+r.status);
         var d=await r.json();
-        // INSTANT RECONNECT: if this device already has an active activation, submit immediately.
-        // No UI is shown — the user never sees the portal on reconnect.
+        
         if(d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect){
           conn(d.returningDevice.reconnect);return;
         }
+        
         pkgs=d.packages||[];
-        if(d.tenant){
-          document.getElementById('tname').textContent=d.tenant.name||'AROFi Hotspot';
-          if(d.tenant.logoUrl){var img=document.getElementById('tlogo');img.src=d.tenant.logoUrl;img.style.display='inline-block';}
-          if(d.tenant.supportPhone){
-            document.getElementById('sph').textContent=d.tenant.supportPhone;
-            document.getElementById('footer').style.display='block';
-            var ph=d.tenant.supportPhone.replace(/\\D/g,'');
-            if(ph.startsWith('0'))ph='256'+ph.slice(1);else if(!ph.startsWith('256')&&ph.length===9)ph='256'+ph;
-            var wa=document.getElementById('wa');wa.href='https://wa.me/'+ph;wa.style.display='inline-flex';
-          }
+        document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';
+        if(d.tenant&&d.tenant.supportPhone){
+          document.getElementById('sph').textContent=d.tenant.supportPhone;
+          document.getElementById('footer').style.display='block';
         }
+
         var el=document.getElementById('plist');el.innerHTML='';
-        if(!pkgs.length){el.innerHTML='<p style="text-align:center;padding:14px;color:#94a3b8">No packages available.</p>';}
-        else{pkgs.forEach(function(p,i){
-          var d2=p.description||(fdur(p.durationMinutes)+(p.dataLimitMb?' · '+fmb(p.dataLimitMb):' · Unlimited data'));
-          var c=document.createElement('div');c.className='pkg'+(i===0?' sel':'');c.id='p-'+p.id;
-          c.onclick=function(){selP(p.id);};
-          c.innerHTML='<div><h3>'+esc(p.name)+'</h3><p>'+esc(d2)+'</p></div><div class="price">UGX '+fn(p.amountUgx)+'</div>';
-          el.appendChild(c);
-        });selId=pkgs[0].id;}
-        document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block';
+        if(pkgs.length){
+          pkgs.forEach(function(p){
+            var d2=p.description||(fdur(p.durationMinutes)+(p.dataLimitMb?' · '+fmb(p.dataLimitMb):' · Unlimited data'));
+            var c=document.createElement('div');c.className='pkg';
+            c.innerHTML='<div class="pkg-info"><h3>'+esc(p.name)+'</h3><p>'+esc(d2)+'</p></div><div class="pkg-action"><div class="price">UGX '+fn(p.amountUgx)+'</div><button class="buy-btn" onclick="openBuy(\\\\''+p.id+'\\\\')">BUY</button></div>';
+            el.appendChild(c);
+          });
+        }
+        document.getElementById('loading').style.display='none';
+        document.getElementById('content').style.display='block';
       }catch(e){
-        document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block';
-        sw('voucher');document.querySelectorAll('.tab')[0].style.display='none';
-        sst('Offline mode (' + (e.message || e || 'Network Error') + ') — enter your voucher code to connect.','info');
+        document.getElementById('tname').textContent='AROFi Hotspot';
+        document.getElementById('loading').style.display='none';
+        document.getElementById('content').style.display='block';
       }
     }
-    function sw(t){
-      document.querySelectorAll('.tab').forEach(function(x,i){x.classList.toggle('on',(t==='momo'&&i===0)||(t==='voucher'&&i===1));});
-      document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('on');});
-      document.getElementById('pane-'+t).classList.add('on');
+
+    function openModal(id){document.getElementById(id).classList.add('on');}
+    function closeModal(id){
+      document.getElementById(id).classList.remove('on');
+      sst('bst','','');sst('rst','','');
     }
-    function selP(id){selId=id;document.querySelectorAll('.pkg').forEach(function(c){c.classList.toggle('sel',c.id==='p-'+id);});}
-    function dnet(v){
-      var c=v.replace(/\\D/g,''),p2=c.startsWith('256')?c.slice(3,5):c.startsWith('0')?c.slice(1,3):c.slice(0,2);
-      var b=document.getElementById('badge'),mtn=['77','78','76','79','31','39'].includes(p2),airt=['70','75','74'].includes(p2);
-      selNet=airt?'AIRTEL':'MTN';
-      if(mtn||airt){b.style.display='inline-block';b.style.background=mtn?'#ffcc00':'#e60012';b.style.color=mtn?'#0b1f3a':'#fff';b.textContent=mtn?'MTN MoMo':'Airtel Money';}
-      else b.style.display='none';
+
+    function openBuy(id){
+      selId=id;
+      var p=pkgs.find(function(x){return x.id===id;});
+      if(p)document.getElementById('bdesc').textContent='Buy '+p.name+' for UGX '+fn(p.amountUgx)+'.';
+      openModal('buyModal');
     }
-    async function pay(){
-      if(!selId){sst('Select a package first.','err');return;}
-      var ph=document.getElementById('phone').value.trim();
-      if(!ph){sst('Enter your Mobile Money number.','err');return;}
-      var c=ph.replace(/\\D/g,'');
-      if(c.startsWith('0'))c='256'+c.slice(1);else if(!c.startsWith('256'))c='256'+c;
-      if(!/^256\\d{9}$/.test(c)){sst('Enter a valid Uganda number (e.g. 0771234567).','err');return;}
-      setbtn('pbtn',true,'Sending request...');sst('Initiating payment. Enter your Mobile Money PIN when prompted.','info');
+
+    async function login(){
+      var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\\\s+/g,'');
+      if(!code){alert('Enter your voucher code.');return;}
+      var b=document.getElementById('lbtn');
+      b.disabled=true;b.textContent='...';
       try{
+        var r=await fetch(API+'/api/portal/redeem-voucher',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
+        var res=await r.json();
+        if(!r.ok)throw new Error(res.message||'Failed');
+        conn(res.reconnect);
+      }catch(e){alert(e.message);b.disabled=false;b.textContent='Login';}
+    }
+
+    async function pay(){
+      var ph=document.getElementById('bphone').value.trim();
+      var c=ph.replace(/\\\\D/g,'');
+      if(c.startsWith('0'))c='256'+c.slice(1);else if(!c.startsWith('256'))c='256'+c;
+      if(!/^256\\\\d{9}$/.test(c)){sst('bst','Enter a valid number.','err');return;}
+      
+      sst('bst','Initiating payment...','info');
+      var b=document.getElementById('bbtn');b.disabled=true;
+      try{
+        var net=(['70','75','74'].includes(c.slice(3,5)))?'AIRTEL':'MTN';
         var r=await fetch(API+'/api/payments/portal/initiate',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({packageId:selId,phoneNumber:c,customerReference:c,network:selNet,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
+          body:JSON.stringify({packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
         var pmt=await r.json();
-        if(!r.ok)throw new Error(pmt.message||'Payment initiation failed.');
-        if(pmt.status==='FAILED')throw new Error(pmt.statusMessage||'Payment failed.');
+        if(!r.ok)throw new Error(pmt.message||'Failed');
+        if(pmt.status==='FAILED')throw new Error(pmt.statusMessage||'Failed');
         var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
         if(cu){window.location.href=cu;return;}
+        sst('bst','Enter your Mobile Money PIN. Waiting for approval...','info');
         poll(pmt.id,pmt.statusToken);
-      }catch(e){sst(e.message||'Unable to start payment. Try again.','err');setbtn('pbtn',false,'Pay and Connect');}
+      }catch(e){sst('bst',e.message,'err');b.disabled=false;}
     }
+
     function poll(id,tok){
       var n=0,iv=setInterval(async function(){
-        if(++n>120){clearInterval(iv);sst('Timed out. If payment was approved, reconnect to WiFi.','err');setbtn('pbtn',false,'Pay and Connect');return;}
+        if(++n>120){clearInterval(iv);sst('bst','Timed out.','err');document.getElementById('bbtn').disabled=false;return;}
         try{
           var r=await fetch(API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''),{method:'POST'});
           if(!r.ok)return;
           var p=await r.json();
-          if(p.activation){clearInterval(iv);sst('Payment approved! Connecting...','ok');conn(p.reconnect);}
-          else if(p.status==='FAILED'){clearInterval(iv);sst('Payment failed: '+(p.statusMessage||'Declined.'),'err');setbtn('pbtn',false,'Pay and Connect');}
+          if(p.activation){clearInterval(iv);sst('bst','Approved! Connecting...','ok');conn(p.reconnect);}
+          else if(p.status==='FAILED'){clearInterval(iv);sst('bst',p.statusMessage||'Declined.','err');document.getElementById('bbtn').disabled=false;}
         }catch(e){}
       },1500);
     }
-    async function rdm(){
-      var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\s+/g,'');
-      if(!code){sst('Enter your voucher code.','err');return;}
-      setbtn('vbtn',true,'Redeeming...');sst('Connecting to authentication server...','info');
+
+    async function rec(){
+      var txn=document.getElementById('rtxn').value.trim();
+      if(!txn){sst('rst','Enter your transaction ID.','err');return;}
+      var b=document.getElementById('rbtn');b.disabled=true;
+      sst('rst','Searching...','info');
       try{
-        var r=await fetch(API+'/api/portal/redeem-voucher',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
-        var b=await r.json();
-        if(!r.ok)throw new Error(b.message||'Voucher redemption failed.');
-        sst('Voucher redeemed! Connecting you to the internet...','ok');conn(b.reconnect);
-      }catch(e){sst(e.message||'Voucher redemption failed. Please try again.','err');setbtn('vbtn',false,'Connect to Internet');}
+        var r=await fetch(API+'/api/portal/recover-voucher',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
+        var res=await r.json();
+        if(!r.ok)throw new Error(res.message||'Not found');
+        sst('rst','Found! Connecting...','ok');
+        conn(res.reconnect);
+      }catch(e){sst('rst',e.message,'err');b.disabled=false;}
     }
-    function conn(rc){if(!rc||!rc.username||!rc.password)return;var dst=document.querySelector('#lf input[name=dst]').value||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password)+'&dst='+encodeURIComponent(dst);}
-    function setbtn(id,dis,txt){var b=document.getElementById(id);b.disabled=dis;b.innerHTML=dis?'<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:6px"></span>'+txt:txt;}
-    function sst(m,t){var s=document.getElementById('st');s.className='st '+t;s.textContent=m;}
+
+    function conn(rc){if(!rc||!rc.username)return;var dst=document.querySelector('#lf input[name=dst]').value||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function sst(id,m,t){var s=document.getElementById(id);if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
     function fn(v){return new Intl.NumberFormat('en-UG').format(v);}
     function esc(s){return!s?'':s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   </script>
 </body>
-</html>`
+</html>
+
+`
   }
+
 
   // Brings up an OPEN customer SSID on whatever radios the board has and binds
   // them to the isolated arofi-hotspot bridge. Supports RouterOS v6 wireless

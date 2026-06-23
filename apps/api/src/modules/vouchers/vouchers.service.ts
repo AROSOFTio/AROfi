@@ -955,8 +955,8 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-
-      const qrPng = await this.generateVoucherQrPng(voucher.code)
+      const dnsName = `${batch.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
+      const qrPng = await this.generateVoucherQrPng(voucher.code, dnsName)
 
       this.drawVoucherCard(doc, {
         x,
@@ -970,7 +970,7 @@ export class VouchersService {
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
         support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
-        portalHost: this.getVoucherPortalHost(),
+        portalHost: dnsName,
         qrPng,
       })
 
@@ -1286,8 +1286,8 @@ export class VouchersService {
     doc.restore()
   }
 
-  private async generateVoucherQrPng(voucherCode: string) {
-    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode), {
+  private async generateVoucherQrPng(voucherCode: string, dnsName?: string) {
+    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode, dnsName), {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 112,
@@ -1299,7 +1299,10 @@ export class VouchersService {
     return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64')
   }
 
-  private buildVoucherPortalUrl(voucherCode: string) {
+  private buildVoucherPortalUrl(voucherCode: string, dnsName?: string) {
+    if (dnsName) {
+      return `http://${dnsName}/login?username=${encodeURIComponent(voucherCode)}&password=${encodeURIComponent(voucherCode)}`
+    }
     const baseUrl = this.getVoucherQrBaseUrl()
     const separator = baseUrl.includes('?') ? '&' : '?'
     return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
