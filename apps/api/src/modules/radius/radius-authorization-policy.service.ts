@@ -155,6 +155,15 @@ export class RadiusAuthorizationPolicyService {
   }
 
   private normalizeMac(value?: string | null) {
-    return value?.trim().toUpperCase().replace(/-/g, ':') || null
+    if (!value) {
+      return null
+    }
+
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return null
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':') || null
   }
 }

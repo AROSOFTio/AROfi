@@ -944,7 +944,16 @@ export class PortalService {
   }
 
   private normalizeMac(value?: string | null) {
-    return value?.trim().toUpperCase().replace(/-/g, ':') || undefined
+    if (!value) {
+      return undefined
+    }
+
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return undefined
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':')
   }
 
   private tryNormalizePhoneNumber(value?: string | null) {
