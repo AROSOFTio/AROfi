@@ -1,0 +1,8 @@
+-- AlterEnum
+ALTER TYPE "BillingTransactionType" ADD VALUE IF NOT EXISTS 'TENANT_WALLET_TOPUP';
+
+-- AlterTable
+ALTER TABLE "PlatformSetting" ADD COLUMN IF NOT EXISTS "platformWalletBalanceUgx" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "earnedBalanceUgx" INTEGER NOT NULL DEFAULT 0;

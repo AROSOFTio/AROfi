@@ -73,7 +73,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
 
   const verifiedNumbers = profile?.numbers.filter((item) => item.status === 'VERIFIED') ?? []
   const primaryNumber = verifiedNumbers.find((item) => item.isPrimary) ?? verifiedNumbers[0] ?? null
-  const availableUgx = profile?.wallet?.balanceUgx ?? 0
+  const availableUgx = profile?.metrics?.availableBalanceUgx ?? profile?.wallet?.balanceUgx ?? 0
   const feeBps = profile?.rules?.withdrawalFeeBasisPoints ?? 0
   const flatFeeUgx = profile?.rules?.withdrawalFlatFeeUgx ?? 0
   const minimumPayoutUgx = profile?.rules?.minimumPayoutUgx ?? 0
