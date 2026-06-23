@@ -584,10 +584,14 @@ export class MikrotikService {
     var pkgs=[],selId=null;
     
     window.onload=function(){
-      var sp=new URLSearchParams(window.location.search);
-      var v=sp.get('voucher');
+      var search=window.location.search;
+      var v='';
+      if(search&&search.indexOf('voucher=')!==-1){
+        var parts=search.split('voucher=');
+        if(parts.length>1)v=parts[1].split('&')[0];
+      }
       if(v){
-        document.getElementById('vcode').value=v;
+        document.getElementById('vcode').value=decodeURIComponent(v);
         setTimeout(login, 200);
       }
       if(ip)document.getElementById('tip').textContent='IP: '+ip;
@@ -595,12 +599,13 @@ export class MikrotikService {
       load();
     };
 
-    async function load(){
-      try{
-        var r=await fetch(API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo));
+    function load(){
+      fetch(API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo))
+      .then(function(r){
         if(!r.ok)throw new Error('HTTP '+r.status);
-        var d=await r.json();
-        
+        return r.json();
+      })
+      .then(function(d){
         if(d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect){
           conn(d.returningDevice.reconnect);return;
         }
@@ -623,11 +628,12 @@ export class MikrotikService {
         }
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
-      }catch(e){
+      })
+      .catch(function(e){
         document.getElementById('tname').textContent='AROFi Hotspot';
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
-      }
+      });
     }
 
     function openModal(id){document.getElementById(id).classList.add('on');}
@@ -638,80 +644,114 @@ export class MikrotikService {
 
     function openBuy(id){
       selId=id;
-      var p=pkgs.find(function(x){return x.id===id;});
+      var p=pkgs.filter(function(x){return x.id===id;})[0];
       if(p)document.getElementById('bdesc').textContent='Buy '+p.name+' for UGX '+fn(p.amountUgx)+'.';
       openModal('buyModal');
     }
 
-    async function login(){
+    function login(){
       var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\\\s+/g,'');
       if(!code){alert('Enter your voucher code.');return;}
       var b=document.getElementById('lbtn');
       b.disabled=true;b.textContent='...';
-      try{
-        var r=await fetch(API+'/api/portal/redeem-voucher',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
-        var res=await r.json();
-        if(!r.ok)throw new Error(res.message||'Failed');
+      
+      fetch(API+'/api/portal/redeem-voucher',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})
+      })
+      .then(function(r){
+        return r.json().then(function(res){
+          if(!r.ok)throw new Error(res.message||'Failed');
+          return res;
+        });
+      })
+      .then(function(res){
         conn(res.reconnect);
-      }catch(e){alert(e.message);b.disabled=false;b.textContent='Login';}
+      })
+      .catch(function(e){
+        alert(e.message);b.disabled=false;b.textContent='Login';
+      });
     }
 
-    async function pay(){
+    function pay(){
       var ph=document.getElementById('bphone').value.trim();
       var c=ph.replace(/\\\\D/g,'');
-      if(c.startsWith('0'))c='256'+c.slice(1);else if(!c.startsWith('256'))c='256'+c;
+      if(c.indexOf('0')===0)c='256'+c.substring(1);else if(c.indexOf('256')!==0)c='256'+c;
       if(!/^256\\\\d{9}$/.test(c)){sst('bst','Enter a valid number.','err');return;}
       
       sst('bst','Initiating payment...','info');
       var b=document.getElementById('bbtn');b.disabled=true;
-      try{
-        var net=(['70','75','74'].includes(c.slice(3,5)))?'AIRTEL':'MTN';
-        var r=await fetch(API+'/api/payments/portal/initiate',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
-        var pmt=await r.json();
-        if(!r.ok)throw new Error(pmt.message||'Failed');
-        if(pmt.status==='FAILED')throw new Error(pmt.statusMessage||'Failed');
+      
+      var pfx=c.substring(3,5);
+      var net=(pfx==='70'||pfx==='75'||pfx==='74')?'AIRTEL':'MTN';
+      
+      fetch(API+'/api/payments/portal/initiate',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})
+      })
+      .then(function(r){
+        return r.json().then(function(pmt){
+          if(!r.ok)throw new Error(pmt.message||'Failed');
+          if(pmt.status==='FAILED')throw new Error(pmt.statusMessage||'Failed');
+          return pmt;
+        });
+      })
+      .then(function(pmt){
         var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
         if(cu){window.location.href=cu;return;}
         sst('bst','Enter your Mobile Money PIN. Waiting for approval...','info');
         poll(pmt.id,pmt.statusToken);
-      }catch(e){sst('bst',e.message,'err');b.disabled=false;}
+      })
+      .catch(function(e){
+        sst('bst',e.message,'err');b.disabled=false;
+      });
     }
 
     function poll(id,tok){
-      var n=0,iv=setInterval(async function(){
+      var n=0,iv=setInterval(function(){
         if(++n>120){clearInterval(iv);sst('bst','Timed out.','err');document.getElementById('bbtn').disabled=false;return;}
-        try{
-          var r=await fetch(API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''),{method:'POST'});
-          if(!r.ok)return;
-          var p=await r.json();
+        fetch(API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''),{method:'POST'})
+        .then(function(r){if(!r.ok)throw new Error(); return r.json();})
+        .then(function(p){
           if(p.activation){clearInterval(iv);sst('bst','Approved! Connecting...','ok');conn(p.reconnect);}
           else if(p.status==='FAILED'){clearInterval(iv);sst('bst',p.statusMessage||'Declined.','err');document.getElementById('bbtn').disabled=false;}
-        }catch(e){}
+        })
+        .catch(function(){});
       },1500);
     }
 
-    async function rec(){
+    function rec(){
       var txn=document.getElementById('rtxn').value.trim();
       if(!txn){sst('rst','Enter your transaction ID.','err');return;}
       var b=document.getElementById('rbtn');b.disabled=true;
       sst('rst','Searching...','info');
-      try{
-        var r=await fetch(API+'/api/portal/recover-voucher',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})});
-        var res=await r.json();
-        if(!r.ok)throw new Error(res.message||'Not found');
+      fetch(API+'/api/portal/recover-voucher',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo})
+      })
+      .then(function(r){
+        return r.json().then(function(res){
+          if(!r.ok)throw new Error(res.message||'Not found');
+          return res;
+        });
+      })
+      .then(function(res){
         sst('rst','Found! Connecting...','ok');
         conn(res.reconnect);
-      }catch(e){sst('rst',e.message,'err');b.disabled=false;}
+      })
+      .catch(function(e){
+        sst('rst',e.message,'err');b.disabled=false;
+      });
     }
 
     function conn(rc){if(!rc||!rc.username)return;var dst=document.querySelector('#lf input[name=dst]').value||'http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(id,m,t){var s=document.getElementById(id);if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
-    function fn(v){return new Intl.NumberFormat('en-UG').format(v);}
+    function fn(v){var n=v.toString(),r='';for(var i=n.length-1,c=0;i>=0;i--,c++){if(c>0&&c%3===0)r=','+r;r=n[i]+r;}return r;}
     function esc(s){return!s?'':s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   </script>
 </body>
