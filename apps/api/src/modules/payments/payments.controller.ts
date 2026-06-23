@@ -105,6 +105,22 @@ export class PaymentsController {
     return this.paymentsService.handleAggregatorCollectionWebhook(query, headers)
   }
 
+  @Post('webhooks/yo-uganda/disbursement')
+  handleYoUgandaDisbursementWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    return this.paymentsService.handleYoDisbursementWebhook(payload, headers)
+  }
+
+  @Get('webhooks/yo-uganda/disbursement')
+  handleYoUgandaDisbursementReturn(
+    @Query() query: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    return this.paymentsService.handleYoDisbursementWebhook(query, headers)
+  }
+
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.paymentsRead)
   @Get(':paymentId')

@@ -2,12 +2,18 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
+  AuditSeverity,
   BillingChannel,
+  BillingTransactionStatus,
   BillingTransactionType,
+  DisbursementStatus,
+  LedgerDirection,
+  LedgerTransactionType,
   PackageActivationStatus,
   PackageActivationSource,
   PaymentMethod,
@@ -35,6 +41,8 @@ type ProviderGatewayResponse = PaymentProviderResult & {
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name)
+
   private readonly pendingPaymentStatuses = new Set<PaymentStatus>([
     PaymentStatus.INITIATED,
     PaymentStatus.PENDING,
@@ -1124,5 +1132,215 @@ export class PaymentsService {
 
   private toJsonValue(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue
+  }
+
+  // ── Yo Uganda Disbursement IPN Webhook ─────────────────────────────────────
+  // Called by POST/GET /payments/webhooks/yo-uganda/disbursement
+  // Yo Uganda sends this when a vendor payout (acwithdrawfunds) completes or fails.
+  // The payload contains:
+  //   external_ref         → our disbursement.reference (VENDOR-WD-...)
+  //   transaction_reference → Yo's internal ref
+  //   status / transaction_status → SUCCEEDED | FAILED | PENDING | CANCELLED
+  async handleYoDisbursementWebhook(
+    payload: Record<string, unknown>,
+    headers: Record<string, string | string[] | undefined>,
+  ) {
+    const externalRef = this.readPayloadValue(payload, [
+      'ExternalReference', 'external_ref', 'reference', 'PrivateTransactionReference',
+    ])?.toString()
+
+    const providerRef = this.readPayloadValue(payload, [
+      'TransactionReference', 'transaction_reference', 'yopayment_reference',
+    ])?.toString()
+
+    const rawStatus = (
+      this.readPayloadValue(payload, [
+        'Status', 'status', 'TransactionStatus', 'transaction_status',
+      ])?.toString() ?? 'PENDING'
+    ).toUpperCase()
+
+    // Log every webhook — even unmatched ones — for debugging
+    const idempotencyKey = createHash('sha256')
+      .update(JSON.stringify({ externalRef, providerRef, rawStatus, ts: Math.floor(Date.now() / 5000) }))
+      .digest('hex')
+
+    try {
+      await this.prisma.paymentWebhook.create({
+        data: {
+          provider: PaymentProvider.AGGREGATOR,
+          network: PaymentNetwork.MTN,
+          eventType: PaymentEventType.WEBHOOK_RECEIVED,
+          status: rawStatus,
+          idempotencyKey,
+          externalReference: externalRef,
+          providerReference: providerRef,
+          verificationStatus: 'accepted',
+          headers: this.toJsonValue(headers),
+          payload: this.toJsonValue(payload),
+          notes: 'Yo Uganda disbursement IPN webhook',
+        },
+      })
+    } catch {
+      // Duplicate webhook — already processed
+      return { received: true, matched: false, processed: false, duplicate: true }
+    }
+
+    if (!externalRef && !providerRef) {
+      this.logger.warn('Yo Uganda disbursement webhook received without any reference fields', payload)
+      return { received: true, matched: false }
+    }
+
+    // Look up Disbursement by our reference (external_ref) OR Yo's reference (transaction_reference)
+    const disbursement = await this.prisma.disbursement.findFirst({
+      where: {
+        OR: [
+          ...(externalRef ? [{ reference: externalRef }] : []),
+          ...(providerRef ? [{ providerReference: providerRef }] : []),
+        ],
+      },
+      include: { billingTransaction: true, wallet: true },
+    })
+
+    if (!disbursement) {
+      this.logger.warn(
+        `Yo Uganda disbursement IPN: no Disbursement found for external_ref=${externalRef} transaction_reference=${providerRef}`,
+      )
+      return { received: true, matched: false }
+    }
+
+    // Already in a terminal state — idempotent no-op
+    if (
+      disbursement.status === DisbursementStatus.COMPLETED ||
+      disbursement.status === DisbursementStatus.REVERSED ||
+      disbursement.status === DisbursementStatus.FAILED ||
+      disbursement.status === DisbursementStatus.CANCELLED
+    ) {
+      return { received: true, matched: true, processed: false, reason: 'Already in terminal state', status: disbursement.status }
+    }
+
+    const isSuccess = ['SUCCEEDED', 'SUCCESSFUL', 'SUCCESS', 'COMPLETED'].includes(rawStatus)
+    const isFailed  = ['FAILED', 'FAILED_UNKNOWN', 'CANCELLED', 'CANCELED'].includes(rawStatus)
+
+    // Still pending — update providerReference if we now have it, then wait
+    if (!isSuccess && !isFailed) {
+      if (providerRef && !disbursement.providerReference) {
+        await this.prisma.disbursement.update({
+          where: { id: disbursement.id },
+          data: { providerReference: providerRef },
+        })
+      }
+      return { received: true, matched: true, processed: false, reason: 'Payment still PENDING' }
+    }
+
+    const nextStatus = isSuccess ? DisbursementStatus.COMPLETED : DisbursementStatus.FAILED
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.disbursement.update({
+        where: { id: disbursement.id },
+        data: {
+          status: nextStatus,
+          providerReference: providerRef ?? disbursement.providerReference,
+          completedAt: isSuccess ? new Date() : undefined,
+          failedAt: isFailed ? new Date() : undefined,
+          notes: isSuccess
+            ? 'Payout confirmed by Yo Uganda IPN callback.'
+            : `Payout failed per Yo Uganda IPN callback. Status: ${rawStatus}`,
+          metadata: this.toJsonValue({
+            ...(typeof disbursement.metadata === 'object' && disbursement.metadata !== null && !Array.isArray(disbursement.metadata)
+              ? disbursement.metadata as Record<string, unknown>
+              : {}),
+            yoIpnPayload: payload,
+            yoIpnStatus: rawStatus,
+            yoIpnProcessedAt: new Date().toISOString(),
+          }),
+        },
+      })
+
+      // On failure: reverse the wallet debit so the vendor gets their balance back
+      if (isFailed && disbursement.walletId && disbursement.billingTransactionId && disbursement.wallet) {
+        const totalDebitUgx = disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx
+
+        // Credit the wallet back
+        await tx.wallet.update({
+          where: { id: disbursement.walletId },
+          data: { balanceUgx: { increment: totalDebitUgx } },
+        })
+
+        // Reverse the billing transaction
+        await tx.billingTransaction.update({
+          where: { id: disbursement.billingTransactionId },
+          data: { status: BillingTransactionStatus.REVERSED },
+        })
+
+        // Ledger reversal entries
+        await tx.ledgerTransaction.create({
+          data: {
+            tenantId: disbursement.tenantId,
+            walletId: disbursement.walletId,
+            reference: `YO-IPN-REVERSAL-${disbursement.reference}`,
+            type: LedgerTransactionType.DISBURSEMENT,
+            channel: BillingChannel.DISBURSEMENT,
+            description: 'Vendor withdrawal reversed — Yo Uganda payout failed',
+            grossAmountUgx: totalDebitUgx,
+            feeAmountUgx: 0,
+            netAmountUgx: totalDebitUgx,
+            sourceType: 'VendorWithdrawalReversal',
+            sourceId: disbursement.id,
+            metadata: this.toJsonValue({ yoStatus: rawStatus, providerRef }),
+            entries: {
+              create: [
+                {
+                  tenantId: disbursement.tenantId,
+                  walletId: disbursement.walletId,
+                  accountCode: 'tenant_wallet',
+                  direction: LedgerDirection.CREDIT,
+                  amountUgx: totalDebitUgx,
+                  memo: 'Withdrawal reversed — Yo Uganda payout failed',
+                },
+                {
+                  tenantId: disbursement.tenantId,
+                  accountCode: 'disbursement_clearing',
+                  direction: LedgerDirection.DEBIT,
+                  amountUgx: disbursement.amountUgx,
+                  memo: 'Disbursement clearing released',
+                },
+                ...(totalDebitUgx > disbursement.amountUgx
+                  ? [{
+                      tenantId: disbursement.tenantId,
+                      accountCode: 'platform_revenue',
+                      direction: LedgerDirection.DEBIT,
+                      amountUgx: totalDebitUgx - disbursement.amountUgx,
+                      memo: 'Withdrawal fee reversed',
+                    }]
+                  : []),
+              ],
+            },
+          },
+        })
+      }
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId: disbursement.tenantId,
+          action: isSuccess ? 'withdrawal.completed' : 'withdrawal.failed',
+          entity: 'Disbursement',
+          entityId: disbursement.id,
+          severity: isFailed ? AuditSeverity.WARNING : AuditSeverity.INFO,
+          details: {
+            yoStatus: rawStatus,
+            providerRef,
+            externalRef,
+            source: 'yo_ipn_webhook',
+          },
+        },
+      })
+    })
+
+    this.logger.log(
+      `Yo Uganda disbursement IPN processed: ref=${disbursement.reference} → ${nextStatus}`,
+    )
+
+    return { received: true, matched: true, processed: true, status: nextStatus }
   }
 }

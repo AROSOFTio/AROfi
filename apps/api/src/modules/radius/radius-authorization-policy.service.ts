@@ -107,21 +107,6 @@ export class RadiusAuthorizationPolicyService {
       }
     }
 
-    const activeSession = await tx.networkSession.findFirst({
-      where: {
-        activationId: activation.id,
-        status: SessionStatus.ACTIVE,
-        macAddress: {
-          not: observedMac,
-        },
-      },
-      orderBy: { startedAt: 'desc' },
-    })
-
-    if (activeSession) {
-      await this.recordSuspicious(tx, activation, input, SuspiciousAccessAttemptType.CONCURRENT_SESSION, 'Concurrent active session exists for another MAC')
-      return { accepted: false, reason: 'Concurrent session exists for another device', activation }
-    }
 
     return {
       accepted: true,

@@ -5,11 +5,18 @@ import { RadiusAuthorizationPolicyService } from './radius-authorization-policy.
 import { RadiusCredentialService } from './radius-credential.service'
 import { RadiusService } from './radius.service'
 import { AccessLifecycleService } from './access-lifecycle.service'
+import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
 
 @Module({
   imports: [AuthModule],
   controllers: [RadiusController],
-  providers: [RadiusService, RadiusCredentialService, RadiusAuthorizationPolicyService, AccessLifecycleService],
+  providers: [
+    RadiusService,
+    RadiusCredentialService,
+    RadiusAuthorizationPolicyService,
+    AccessLifecycleService,
+    YoUgandaDisbursementService,
+  ],
   exports: [RadiusService, RadiusCredentialService, RadiusAuthorizationPolicyService],
 })
 export class RadiusModule {}

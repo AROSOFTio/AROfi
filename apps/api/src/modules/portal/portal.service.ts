@@ -659,7 +659,10 @@ export class PortalService {
   }
 
   private async clearStaleSessionIfNeeded(activationId: string) {
-    const staleBefore = new Date(Date.now() - 15 * 60 * 1000)
+    // MikroTik sends interim-update every 60s. No signal in 3 minutes = dead session.
+    // 15 minutes was too long — stale ACTIVE sessions blocked reconnect detection
+    // and caused the portal to show "existingActiveAccess=true" incorrectly.
+    const staleBefore = new Date(Date.now() - 3 * 60 * 1000)
     const result = await this.prisma.networkSession.updateMany({
       where: {
         activationId,

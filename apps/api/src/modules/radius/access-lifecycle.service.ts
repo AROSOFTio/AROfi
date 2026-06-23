@@ -10,10 +10,13 @@ import {
   RouterStatus,
   SessionStatus,
   Prisma,
+  DisbursementStatus,
+  BillingTransactionStatus,
 } from '@prisma/client'
 import { execSync, spawn } from 'child_process'
 import { PrismaService } from '../../prisma.service'
 import { RadiusCredentialService } from './radius-credential.service'
+import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
 
 @Injectable()
 export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
@@ -23,6 +26,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly radiusCredentialService: RadiusCredentialService,
+    private readonly yoDisbursementService: YoUgandaDisbursementService,
   ) { }
 
   onModuleInit() {
@@ -62,6 +66,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     await this.processPendingDisconnects()
     await this.cleanStaleSessions()
     await this.markStuckPendingPayments()
+    await this.pollPendingDisbursements()
   }
 
   private async cleanupExpiredRadiusCredentials() {
@@ -609,7 +614,11 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async cleanStaleSessions() {
-    const staleBefore = new Date(Date.now() - 30 * 60 * 1000)
+    // MikroTik sends RADIUS interim-update every 60s (set in hotspot profile).
+    // A session with no accounting signal for 5 minutes is definitively dead.
+    // 30 minutes was too long — ghost ACTIVE sessions caused the captive portal
+    // to report existingActiveAccess=true and skip the package selection screen.
+    const staleBefore = new Date(Date.now() - 5 * 60 * 1000)
     await this.prisma.networkSession.updateMany({
       where: {
         status: SessionStatus.ACTIVE,
@@ -635,5 +644,94 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         failedAt: new Date(),
       },
     })
+  }
+
+  // ── Disbursement Status Polling ────────────────────────────────────────────
+  // Safety net for when Yo Uganda IPN webhooks are missed or delayed.
+  // Polls any disbursement stuck in PROCESSING for more than 2 minutes.
+  // The IPN webhook (Fix 2A/2B) is the primary path; this is the fallback.
+  private async pollPendingDisbursements() {
+    const yoUsername = process.env.YO_UGANDA_USERNAME
+    if (!yoUsername) return // Yo Uganda not configured — skip silently
+
+    const stuckSince = new Date(Date.now() - 2 * 60 * 1000)
+    const pending = await this.prisma.disbursement.findMany({
+      where: {
+        status: DisbursementStatus.PROCESSING,
+        createdAt: { lt: stuckSince },
+        providerReference: { not: null },
+      },
+      include: { billingTransaction: true, wallet: true },
+      take: 10,
+      orderBy: { createdAt: 'asc' },
+    })
+
+    for (const disbursement of pending) {
+      if (!disbursement.providerReference) continue
+
+      try {
+        const statusResult = await this.yoDisbursementService.getDisbursementStatus(
+          disbursement.providerReference,
+        )
+
+        const resultStatus = (statusResult.transactionStatus ?? '').toUpperCase()
+        const isSuccess = ['COMPLETED', 'SUCCEEDED', 'SUCCESSFUL', 'SUCCESS'].includes(resultStatus)
+        const isFailed  = ['FAILED', 'FAILED_UNKNOWN', 'CANCELLED', 'CANCELED'].includes(resultStatus)
+
+        if (!isSuccess && !isFailed) continue // Still pending — try next cycle
+
+        const nextStatus = isSuccess ? DisbursementStatus.COMPLETED : DisbursementStatus.FAILED
+
+        await this.prisma.$transaction(async (tx) => {
+          await tx.disbursement.update({
+            where: { id: disbursement.id },
+            data: {
+              status: nextStatus,
+              completedAt: isSuccess ? new Date() : undefined,
+              failedAt: isFailed ? new Date() : undefined,
+              notes: isSuccess
+                ? 'Confirmed completed via Yo Uganda status poll.'
+                : `Failed per Yo Uganda status poll. Status: ${resultStatus}`,
+            },
+          })
+
+          if (isFailed && disbursement.walletId && disbursement.billingTransactionId && disbursement.wallet) {
+            const totalDebitUgx = disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx
+
+            await tx.wallet.update({
+              where: { id: disbursement.walletId },
+              data: { balanceUgx: { increment: totalDebitUgx } },
+            })
+
+            await tx.billingTransaction.update({
+              where: { id: disbursement.billingTransactionId },
+              data: { status: BillingTransactionStatus.REVERSED },
+            })
+          }
+
+          await tx.auditLog.create({
+            data: {
+              tenantId: disbursement.tenantId,
+              action: isSuccess ? 'withdrawal.completed' : 'withdrawal.failed',
+              entity: 'Disbursement',
+              entityId: disbursement.id,
+              details: {
+                yoStatus: resultStatus,
+                providerReference: disbursement.providerReference,
+                source: 'status_poll',
+              },
+            },
+          })
+        })
+
+        this.logger.log(
+          `pollPendingDisbursements: ${disbursement.reference} → ${nextStatus}`,
+        )
+      } catch (err) {
+        this.logger.warn(
+          `pollPendingDisbursements: status check failed for ${disbursement.reference}: ${err instanceof Error ? err.message : err}`,
+        )
+      }
+    }
   }
 }
