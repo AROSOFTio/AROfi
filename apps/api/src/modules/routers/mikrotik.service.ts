@@ -558,7 +558,7 @@ export class MikrotikService {
       }catch(e){
         document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block';
         sw('voucher');document.querySelectorAll('.tab')[0].style.display='none';
-        sst('Offline mode — enter your voucher code to connect.','info');
+        sst('Offline mode (' + (e.message || e || 'Network Error') + ') — enter your voucher code to connect.','info');
       }
     }
     function sw(t){

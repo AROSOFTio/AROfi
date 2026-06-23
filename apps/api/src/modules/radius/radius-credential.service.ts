@@ -60,7 +60,7 @@ export class RadiusCredentialService {
         username,
         password,
         status: isActive ? RadiusCredentialStatus.ACTIVE : RadiusCredentialStatus.DISABLED,
-        boundMacAddress: input.boundMacAddress ?? activation.boundMacAddress,
+        boundMacAddress: this.normalizeMac(input.boundMacAddress ?? activation.boundMacAddress) ?? null,
         routerId: input.routerId ?? activation.routerId,
         expiresAt: activation.endsAt,
       },
@@ -70,7 +70,7 @@ export class RadiusCredentialService {
         username,
         password,
         status: isActive ? RadiusCredentialStatus.ACTIVE : RadiusCredentialStatus.DISABLED,
-        boundMacAddress: input.boundMacAddress ?? activation.boundMacAddress,
+        boundMacAddress: this.normalizeMac(input.boundMacAddress ?? activation.boundMacAddress) ?? null,
         routerId: input.routerId ?? activation.routerId,
         expiresAt: activation.endsAt,
       },
@@ -149,8 +149,16 @@ export class RadiusCredentialService {
     return randomBytes(12).toString('base64url')
   }
 
-  private normalizeMac(value: string) {
+  private normalizeMac(value?: string | null) {
+    if (!value) {
+      return undefined
+    }
+
     const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
-    return compact.match(/.{1,2}/g)?.join(':') ?? value.trim().toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return undefined
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':')
   }
 }
