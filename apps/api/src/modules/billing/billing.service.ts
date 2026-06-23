@@ -16,6 +16,7 @@ import { BillingPostingService } from './billing-posting.service'
 import { AdjustWalletDto } from './dto/adjust-wallet.dto'
 import { RecordMobileMoneySaleDto } from './dto/record-mobile-money-sale.dto'
 import { FeeEngineService } from './fee-engine.service'
+import { PLATFORM_SETTINGS_ID } from './billing.constants'
 
 type RecordSaleInput = {
   tenantId: string
@@ -210,8 +211,22 @@ export class BillingService {
         balanceUgx: {
           increment: posting.walletDeltaUgx,
         },
+        earnedBalanceUgx: {
+          increment: posting.walletDeltaUgx,
+        },
       },
     })
+
+    if (posting.feeAmountUgx > 0) {
+      await tx.platformSetting.update({
+        where: { id: PLATFORM_SETTINGS_ID },
+        data: {
+          platformWalletBalanceUgx: {
+            increment: posting.feeAmountUgx,
+          },
+        },
+      })
+    }
 
     const billingTransaction = await tx.billingTransaction.create({
       data: {

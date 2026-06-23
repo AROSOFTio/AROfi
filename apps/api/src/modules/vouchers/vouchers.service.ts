@@ -7,6 +7,7 @@ import {
   Prisma,
   VoucherBatchStatus,
   VoucherStatus,
+  WalletOwnerType,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
@@ -797,6 +798,35 @@ export class VouchersService {
           },
         },
       })
+
+      const wallet = await tx.wallet.findFirst({
+        where: {
+          tenantId: voucher.tenantId,
+          ownerType: WalletOwnerType.TENANT,
+          ownerReference: voucher.tenantId,
+        },
+      })
+      if (wallet) {
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            balanceUgx: {
+              decrement: breakdown.feeAmountUgx,
+            },
+          },
+        })
+
+        if (breakdown.feeAmountUgx > 0) {
+          await tx.platformSetting.update({
+            where: { id: 'global' },
+            data: {
+              platformWalletBalanceUgx: {
+                increment: breakdown.feeAmountUgx,
+              },
+            },
+          })
+        }
+      }
 
       const packageRecord = await tx.package.findUnique({
         where: { id: voucher.packageId },

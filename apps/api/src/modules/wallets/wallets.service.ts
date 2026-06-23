@@ -24,6 +24,7 @@ import { RegisterPayoutNumberDto } from './dto/register-payout-number.dto'
 import { RequestPayoutNumberChangeDto } from './dto/request-payout-number-change.dto'
 import { RequestWithdrawalDto } from './dto/request-withdrawal.dto'
 import { SetPayoutSecretDto } from './dto/set-payout-secret.dto'
+import { TopUpWalletDto } from './dto/topup-wallet.dto'
 
 @Injectable()
 export class WalletsService {
@@ -121,7 +122,7 @@ export class WalletsService {
 
   async getPayoutProfile(tenantId: string) {
     const platformSettings = await this.getPlatformSettings()
-    const [profile, numbers, changeRequests, wallet, recentWithdrawals, mmGross, agentCommissionTotal] = await Promise.all([
+    const [profile, numbers, changeRequests, wallet, recentWithdrawals, mmGross, agentCommissionTotal, completedWithdrawals, pendingWithdrawals] = await Promise.all([
       this.prisma.tenantPayoutProfile.findUnique({
         where: { tenantId },
         select: { id: true, termsVersion: true, createdAt: true, updatedAt: true },
@@ -160,7 +161,57 @@ export class WalletsService {
           amountUgx: true,
         },
       }),
+      this.prisma.disbursement.findMany({
+        where: {
+          tenantId,
+          agentId: null,
+          status: DisbursementStatus.COMPLETED,
+        },
+        include: {
+          billingTransaction: {
+            select: {
+              grossAmountUgx: true,
+            },
+          },
+        },
+      }),
+      this.prisma.disbursement.findMany({
+        where: {
+          tenantId,
+          agentId: null,
+          status: {
+            in: [
+              DisbursementStatus.PENDING,
+              DisbursementStatus.APPROVED,
+              DisbursementStatus.PROCESSING,
+              DisbursementStatus.FLAGGED_FOR_REVIEW,
+            ],
+          },
+        },
+        include: {
+          billingTransaction: {
+            select: {
+              grossAmountUgx: true,
+            },
+          },
+        },
+      }),
     ])
+
+    const alreadyWithdrawnUgx = completedWithdrawals.reduce(
+      (sum, wd) => sum + (wd.billingTransaction?.grossAmountUgx ?? wd.amountUgx),
+      0,
+    )
+
+    const pendingWithdrawalsUgx = pendingWithdrawals.reduce(
+      (sum, wd) => sum + (wd.billingTransaction?.grossAmountUgx ?? wd.amountUgx),
+      0,
+    )
+
+    const earnedBalanceUgx = wallet?.earnedBalanceUgx ?? 0
+    const balanceUgx = wallet?.balanceUgx ?? 0
+    const availableUgx = earnedBalanceUgx - alreadyWithdrawnUgx - pendingWithdrawalsUgx
+    const withdrawableBalanceUgx = Math.max(0, Math.min(balanceUgx, availableUgx))
 
     return {
       profile: {
@@ -193,7 +244,11 @@ export class WalletsService {
         totalCollectedUgx: mmGross._sum.grossAmountUgx ?? 0,
         totalFeesUgx: mmGross._sum.feeAmountUgx ?? 0,
         agentCommissionUgx: agentCommissionTotal._sum.amountUgx ?? 0,
-        availableBalanceUgx: wallet?.balanceUgx ?? 0,
+        availableBalanceUgx: withdrawableBalanceUgx,
+        walletBalanceUgx: balanceUgx,
+        earnedBalanceUgx,
+        alreadyWithdrawnUgx,
+        pendingWithdrawalsUgx,
       },
     }
   }
@@ -403,6 +458,60 @@ export class WalletsService {
 
       if (!wallet) {
         throw new BadRequestException('Wallet does not have enough available balance for this withdrawal')
+      }
+
+      const completedWithdrawals = await tx.disbursement.findMany({
+        where: {
+          tenantId,
+          agentId: null,
+          status: DisbursementStatus.COMPLETED,
+        },
+        include: {
+          billingTransaction: {
+            select: {
+              grossAmountUgx: true,
+            },
+          },
+        },
+      })
+
+      const pendingWithdrawals = await tx.disbursement.findMany({
+        where: {
+          tenantId,
+          agentId: null,
+          status: {
+            in: [
+              DisbursementStatus.PENDING,
+              DisbursementStatus.APPROVED,
+              DisbursementStatus.PROCESSING,
+              DisbursementStatus.FLAGGED_FOR_REVIEW,
+            ],
+          },
+        },
+        include: {
+          billingTransaction: {
+            select: {
+              grossAmountUgx: true,
+            },
+          },
+        },
+      })
+
+      const alreadyWithdrawnUgx = completedWithdrawals.reduce(
+        (sum, wd) => sum + (wd.billingTransaction?.grossAmountUgx ?? wd.amountUgx),
+        0,
+      )
+
+      const pendingWithdrawalsUgx = pendingWithdrawals.reduce(
+        (sum, wd) => sum + (wd.billingTransaction?.grossAmountUgx ?? wd.amountUgx),
+        0,
+      )
+
+      const availableUgx = wallet.earnedBalanceUgx - alreadyWithdrawnUgx - pendingWithdrawalsUgx
+      const withdrawableBalanceUgx = Math.max(0, Math.min(wallet.balanceUgx, availableUgx))
+
+      if (withdrawableBalanceUgx < totalDebitUgx) {
+        throw new BadRequestException(`Insufficient withdrawable balance. Your withdrawable balance is UGX ${withdrawableBalanceUgx.toLocaleString('en-US')} (based on cash earnings only).`)
       }
 
       const debited = await tx.wallet.updateMany({
@@ -1238,6 +1347,127 @@ export class WalletsService {
       where: { id: PLATFORM_SETTINGS_ID },
       update: {},
       create: { id: PLATFORM_SETTINGS_ID },
+    })
+  }
+
+  async initiateTopup(tenantId: string, dto: TopUpWalletDto) {
+    const wallet = await this.findTenantWallet(tenantId)
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found')
+    }
+
+    const reference = `TENANT-TOPUP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
+
+    const billingTransaction = await this.prisma.billingTransaction.create({
+      data: {
+        tenantId,
+        walletId: wallet.id,
+        channel: BillingChannel.MOBILE_MONEY,
+        type: BillingTransactionType.TENANT_WALLET_TOPUP,
+        status: BillingTransactionStatus.PENDING,
+        grossAmountUgx: dto.amountUgx,
+        feeAmountUgx: 0,
+        netAmountUgx: dto.amountUgx,
+        customerReference: dto.phoneNumber,
+        externalReference: reference,
+      },
+    })
+
+    const provider = this.paymentRouterService.resolveCollection(PaymentNetwork.MTN)
+
+    try {
+      const response = await provider.collectPayment({
+        amountUgx: dto.amountUgx,
+        currency: 'UGX',
+        phoneNumber: dto.phoneNumber,
+        externalReference: reference,
+        narrative: 'AROFi Wallet Topup',
+      })
+
+      await this.prisma.billingTransaction.update({
+        where: { id: billingTransaction.id },
+        data: {
+          providerReference: response.transactionReference || undefined,
+        },
+      })
+
+      return {
+        success: true,
+        reference,
+        status: 'PENDING',
+        statusMessage: response.statusMessage || 'Topup request sent. Enter MM PIN on your phone.',
+      }
+    } catch (error) {
+      await this.prisma.billingTransaction.update({
+        where: { id: billingTransaction.id },
+        data: {
+          status: BillingTransactionStatus.FAILED,
+        },
+      })
+      throw error
+    }
+  }
+
+  async checkTopupStatus(reference: string, tenantId: string) {
+    const txRecord = await this.prisma.billingTransaction.findUnique({
+      where: { externalReference: reference },
+    })
+
+    if (!txRecord || txRecord.tenantId !== tenantId) {
+      throw new NotFoundException('Topup transaction not found')
+    }
+
+    if (txRecord.status !== BillingTransactionStatus.PENDING) {
+      return txRecord
+    }
+
+    const provider = this.paymentRouterService.resolveCollection(PaymentNetwork.MTN)
+    const providerReference = txRecord.providerReference || txRecord.externalReference
+    try {
+      const gatewayResponse = await provider.getPaymentStatus(providerReference)
+      const providerStatus = (gatewayResponse.transactionStatus ?? '').toUpperCase()
+
+      if (
+        providerStatus === 'SUCCESSFUL' ||
+        providerStatus === 'SUCCEEDED' ||
+        providerStatus === 'PAID' ||
+        providerStatus === 'COMPLETED' ||
+        providerStatus === 'SUCCESS'
+      ) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.billingTransaction.update({
+            where: { id: txRecord.id },
+            data: {
+              status: BillingTransactionStatus.COMPLETED,
+              providerReference: gatewayResponse.transactionReference || providerReference,
+            },
+          })
+
+          if (txRecord.walletId) {
+            await tx.wallet.update({
+              where: { id: txRecord.walletId },
+              data: {
+                balanceUgx: {
+                  increment: txRecord.grossAmountUgx,
+                },
+              },
+            })
+          }
+        })
+      } else if (providerStatus === 'FAILED') {
+        await this.prisma.billingTransaction.update({
+          where: { id: txRecord.id },
+          data: {
+            status: BillingTransactionStatus.FAILED,
+          },
+        })
+      }
+    } catch (error) {
+      console.error('Failed to check topup status', error)
+    }
+
+    return this.prisma.billingTransaction.findUnique({
+      where: { externalReference: reference },
     })
   }
 

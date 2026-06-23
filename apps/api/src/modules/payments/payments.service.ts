@@ -539,6 +539,52 @@ export class PaymentsService {
     })
 
     if (!payment) {
+      if (extracted.externalReference?.startsWith('TENANT-TOPUP-')) {
+        const txRecord = await this.prisma.billingTransaction.findUnique({
+          where: { externalReference: extracted.externalReference },
+        })
+        if (txRecord) {
+          const gatewayResponse = this.mapWebhookToGatewayResponse(payload)
+          const nextStatus = this.mapProviderStatus(gatewayResponse)
+
+          if (nextStatus === PaymentStatus.COMPLETED && txRecord.status !== BillingTransactionStatus.COMPLETED) {
+            await this.prisma.$transaction(async (tx) => {
+              await tx.billingTransaction.update({
+                where: { id: txRecord.id },
+                data: {
+                  status: BillingTransactionStatus.COMPLETED,
+                  providerReference: extracted.providerReference || gatewayResponse.transactionReference || '',
+                },
+              })
+
+              if (txRecord.walletId) {
+                await tx.wallet.update({
+                  where: { id: txRecord.walletId },
+                  data: {
+                    balanceUgx: {
+                      increment: txRecord.grossAmountUgx,
+                    },
+                  },
+                })
+              }
+            })
+          } else if (nextStatus === PaymentStatus.FAILED && txRecord.status === BillingTransactionStatus.PENDING) {
+            await this.prisma.billingTransaction.update({
+              where: { id: txRecord.id },
+              data: {
+                status: BillingTransactionStatus.FAILED,
+              },
+            })
+          }
+
+          return {
+            received: true,
+            matched: true,
+            processed: true,
+          }
+        }
+      }
+
       return {
         received: true,
         matched: false,

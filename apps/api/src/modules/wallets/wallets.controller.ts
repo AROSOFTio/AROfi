@@ -11,6 +11,7 @@ import { RegisterPayoutNumberDto } from './dto/register-payout-number.dto'
 import { RequestPayoutNumberChangeDto } from './dto/request-payout-number-change.dto'
 import { RequestWithdrawalDto } from './dto/request-withdrawal.dto'
 import { SetPayoutSecretDto } from './dto/set-payout-secret.dto'
+import { TopUpWalletDto } from './dto/topup-wallet.dto'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('wallets')
@@ -158,6 +159,20 @@ export class WalletsController {
     }
     const scopedTenantId = this.accessScope.resolveTenantScope(user)
     return this.walletsService.rejectPayoutNumberChange(requestId, user.id, body.reason?.trim() || 'Rejected by Dev Admin', scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingWrite)
+  @Post('topup')
+  initiateTopup(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: TopUpWalletDto) {
+    const tenantId = this.accessScope.requireTenantScope(user)
+    return this.walletsService.initiateTopup(tenantId, dto)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingRead)
+  @Get('topup/:reference/status')
+  checkTopupStatus(@CurrentUser() user: AuthenticatedAdminUser, @Param('reference') reference: string) {
+    const tenantId = this.accessScope.requireTenantScope(user)
+    return this.walletsService.checkTopupStatus(reference, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)

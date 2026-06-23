@@ -54,6 +54,7 @@ enum BillingTransactionType {
   AGENT_FLOAT_RETURN
   AGENT_COMMISSION
   AGENT_DISBURSEMENT
+  TENANT_WALLET_TOPUP
 }
 
 enum BillingTransactionStatus {
@@ -417,6 +418,7 @@ model PlatformSetting {
   supportUrl                 String?
   voucherTemplateDefaultStyle String  @default("signal")
   auditLoggingEnabled        Boolean  @default(true)
+  platformWalletBalanceUgx   Int      @default(0)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
@@ -816,6 +818,7 @@ model Wallet {
   agent               Agent?               @relation(fields: [agentId], references: [id])
   currency            String               @default("UGX")
   balanceUgx          Int                  @default(0)
+  earnedBalanceUgx     Int                  @default(0)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   ledgerTransactions  LedgerTransaction[]
