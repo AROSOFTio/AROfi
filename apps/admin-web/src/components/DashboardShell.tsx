@@ -16,10 +16,11 @@ type DashboardShellProps = {
 
 export default function DashboardShell({ children, initials, session, workspaceTitle }: DashboardShellProps) {
   const pathname = usePathname()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
 
   useEffect(() => {
     setMenuOpen(false)
+    setProfileDropdownOpen(false)
   }, [pathname])
 
   useEffect(() => {
@@ -60,13 +61,95 @@ export default function DashboardShell({ children, initials, session, workspaceT
             </button>
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
-          <div className="topbar-actions">
-            <div style={{ display: 'grid', gap: 2, textAlign: 'right' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{session.user.displayName}</span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{session.user.email}</span>
-            </div>
-            <div className="avatar">{initials}</div>
-            <AdminSessionControl />
+          <div className="topbar-actions" style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: 8,
+                transition: 'background 0.2s',
+                outline: 'none',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-hover)'
+              }}
+              onMouseLeave={(e) => {
+                if (!profileDropdownOpen) {
+                  e.currentTarget.style.background = 'transparent'
+                }
+              }}
+            >
+              <div className="avatar" style={{ margin: 0 }}>{initials}</div>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-secondary)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transform: profileDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {profileDropdownOpen && (
+              <>
+                <div
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 999,
+                  }}
+                  onClick={() => setProfileDropdownOpen(false)}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: 240,
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    boxShadow: 'var(--shadow-md)',
+                    padding: 16,
+                    zIndex: 1000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
+                      {session.user.displayName}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                      {session.user.email}
+                    </span>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <AdminSessionControl />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
         <WorkspaceRouteGuard user={session.user}>
