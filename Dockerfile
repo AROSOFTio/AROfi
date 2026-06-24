@@ -34,17 +34,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV GENERATE_SOURCEMAP=false
 
 # Build portal-web first (smaller app)
-RUN export NODE_OPTIONS='--max-old-space-size=512' && \
+RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
     export NEXT_CPU_LIMIT=1 && \
     npm run build --workspace=arofi-portal
 
 # Build admin-web second (largest app — own dedicated step for memory isolation)
-RUN export NODE_OPTIONS='--max-old-space-size=600' && \
+RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
     export NEXT_CPU_LIMIT=1 && \
     npm run build --workspace=arofi-admin
 
 # Build API last
-RUN export NODE_OPTIONS='--max-old-space-size=600' && \
+RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
     npm run build --workspace=arofi-api
 
 # Prune development dependencies to make production node_modules as small as possible
