@@ -111,14 +111,26 @@ for dir in /etc/radiusclient /etc/radiusclient-ngx; do
   mkdir -p "$dir"
 
   # Write radiusclient.conf
+  # seqfile/mapfile must be set: the pppd radius.so plugin (libfreeradius-client)
+  # dereferences these config fields unconditionally when building the request,
+  # and a missing/unset value crashes pppd with SIGSEGV (Fatal signal 11) the
+  # moment the link comes up — before any auth packet is even sent.
   cat << EOF > "$dir/radiusclient.conf"
 authserver 127.0.0.1:1812
 acctserver 127.0.0.1:1813
 servers $dir/servers
 dictionary /usr/share/freeradius/dictionary
+seqfile $dir/radius.seq
+mapfile $dir/port-id-map
+default_realm
+radius_timeout 10
+radius_retries 3
 login_tries 4
 login_timeout 60
 EOF
+
+  touch "$dir/radius.seq" "$dir/port-id-map"
+  chmod 600 "$dir/radius.seq"
 
   # Write servers file with shared secret
   cat << EOF > "$dir/servers"
