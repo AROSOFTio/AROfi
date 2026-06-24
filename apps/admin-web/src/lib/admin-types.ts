@@ -801,6 +801,12 @@ export type RouterItem = {
   hotspotServerName?: string | null
   portalWalledGardenHosts?: string[]
   ttlAntiTetheringEnabled?: boolean
+  remotePort?: number | null
+  isRemotePortOpen?: boolean
+  remoteSstpIp?: string | null
+  remoteToken?: string | null
+  remoteClientName?: string | null
+  remoteAccessEnabled?: boolean
   status: string
   healthMessage?: string | null
   lastSeenAt?: string | null

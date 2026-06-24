@@ -548,6 +548,12 @@ model Router {
   portalWalledGardenHosts String[]
   ttlAntiTetheringEnabled Boolean @default(false)
   tags                  String[]
+  remotePort            Int?
+  isRemotePortOpen      Boolean              @default(false)
+  remoteSstpIp          String?
+  remoteToken           String?              @unique
+  remoteClientName      String?              @default("AROFI_REMOTE")
+  remoteAccessEnabled   Boolean              @default(false)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   radiusClient          RadiusClient?

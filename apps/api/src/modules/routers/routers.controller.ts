@@ -64,5 +64,32 @@ export class RoutersController {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.routersService.rotateRadiusSecret(routerId, tenantId)
   }
+
+  @RequirePermissions(PERMISSIONS.routersRead)
+  @Get(':routerId/remote-access')
+  getRemoteAccess(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.getRemoteAccess(routerId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post(':routerId/remote-access/open')
+  openRemotePort(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.openRemotePort(routerId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post(':routerId/remote-access/close')
+  closeRemotePort(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.closeRemotePort(routerId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post('remote-access/enable-all')
+  enableAllRemotePorts(@CurrentUser() user: AuthenticatedAdminUser) {
+    return this.routersService.enableAllRemotePorts()
+  }
 }
 

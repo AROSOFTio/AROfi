@@ -34,10 +34,8 @@ const navItems: NavGroup[] = [
     label: 'Routers',
     icon: <RouterIcon />,
     items: [
-      { href: '/routers?view=overview', label: 'Overview', required: ['routers.read'], tenantOnly: true },
-      { href: '/routers?view=setup', label: 'Provisioning', required: ['routers.read'], tenantOnly: true },
-      { href: '/routers?view=inventory', label: 'Inventory', required: ['routers.read'], tenantOnly: true },
-      { href: '/routers?view=health', label: 'Health Checks', required: ['routers.read'], tenantOnly: true },
+      { href: '/admin/router', label: 'Router Observability', required: ['routers.read'], tenantOnly: true },
+      { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true },
       { href: '/hotspots', label: 'Hotspots', required: ['hotspots.read'], tenantOnly: true },
       { href: '/sessions', label: 'Usage Analytics', required: ['sessions.read'], tenantOnly: true },
     ]
@@ -74,12 +72,11 @@ const navItems: NavGroup[] = [
     label: 'Settings',
     icon: <SettingsIcon />,
     items: [
-      { href: '/settings?tab=Business%20Profile', label: 'Business Profile', tenantOnly: true },
-      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payments & Fees', tenantOnly: true },
-      { href: '/settings?tab=Withdrawals', label: 'Withdrawals', tenantOnly: true },
-      { href: '/settings?tab=Router%20%26%20Portal', label: 'Router & Portal', tenantOnly: true },
-      { href: '/settings?tab=Voucher%20Printing', label: 'Voucher Printing', tenantOnly: true },
-      { href: '/settings?tab=Security', label: 'Security', tenantOnly: true },
+      { href: '/settings?tab=Business%20Profile', label: 'General', tenantOnly: true },
+      { href: '/admin/settings/routers', label: 'Routers', tenantOnly: true },
+      { href: '/admin/settings/templates', label: 'Captive Templates', tenantOnly: true },
+      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Gateways', tenantOnly: true },
+      { href: '/settings?tab=Security', label: 'Advanced', tenantOnly: true },
     ]
   },
   {
@@ -95,10 +92,9 @@ const navItems: NavGroup[] = [
     label: 'Router Support',
     icon: <RouterIcon />,
     items: [
-      { href: '/routers?view=overview', label: 'Support Overview', required: ['routers.read'], platformOnly: true },
-      { href: '/routers?view=setup', label: 'Configuration Scripts', required: ['routers.read'], platformOnly: true },
-      { href: '/routers?view=inventory', label: 'Router Inventory', required: ['routers.read'], platformOnly: true },
-      { href: '/routers?view=health', label: 'Health Checks', required: ['routers.read'], platformOnly: true },
+      { href: '/admin/router', label: 'Router Observability', required: ['routers.read'], platformOnly: true },
+      { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], platformOnly: true },
+      { href: '/admin/settings/routers', label: 'Routers Support', required: ['routers.read'], platformOnly: true },
       { href: '/sessions', label: 'Sessions & RADIUS', required: ['sessions.read'], platformOnly: true },
       { href: '/hotspots', label: 'Hotspot Sites', required: ['hotspots.read'], platformOnly: true },
     ]
@@ -118,7 +114,8 @@ const navItems: NavGroup[] = [
     items: [
       { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payments', required: ['settings.manage'], platformOnly: true },
       { href: '/settings?tab=Payment%20%26%20Fees', label: 'Commission', required: ['settings.manage'], platformOnly: true },
-      { href: '/settings?tab=Router%20%26%20Portal', label: 'Router & Portal', required: ['settings.manage'], platformOnly: true },
+      { href: '/admin/settings/routers', label: 'Routers', required: ['settings.manage'], platformOnly: true },
+      { href: '/admin/settings/templates', label: 'Captive Templates', required: ['settings.manage'], platformOnly: true },
       { href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true },
       { href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true },
       { href: '/docs', label: 'Docs' },

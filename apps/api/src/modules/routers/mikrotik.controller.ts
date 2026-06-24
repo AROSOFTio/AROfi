@@ -25,6 +25,26 @@ export class MikrotikController {
     return html;
   }
 
+  @Get('remote-access/install')
+  @Header('Content-Type', 'text/plain')
+  async getRemoteAccessInstall(@Query('token') token?: string, @Req() request?: any) {
+    const authHeader = request?.headers?.['authorization'];
+    const bearerToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7).trim()
+      : null;
+
+    const activeToken = token || bearerToken;
+    if (!activeToken) {
+      throw new NotFoundException('Token not provided');
+    }
+
+    const script = await this.routersService.getRemoteAccessInstallScript(activeToken);
+    if (!script) {
+      throw new NotFoundException('Remote access configuration not found');
+    }
+    return script;
+  }
+
   @Get('provisioned/:key')
   async markProvisioned(
     @Param('key') key: string,

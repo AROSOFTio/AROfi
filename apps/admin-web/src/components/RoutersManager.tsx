@@ -134,6 +134,7 @@ export default function RoutersManager() {
   }
 
   const showTenantSelector = !isVendorWorkspace(session?.user) && tenants.length > 1
+  const isPlatformAdmin = session?.user?.role === 'SUPER_ADMIN' || !session?.user?.tenantId
   const groupsForTenant = useMemo(
     () => (overview?.groups ?? []).filter((group) => group.tenant.id === routerForm.tenantId),
     [overview, routerForm.tenantId],
@@ -326,6 +327,78 @@ export default function RoutersManager() {
     }
   }
 
+  const [remoteTab, setRemoteTab] = useState<'status' | 'install' | 'connect'>('status')
+  const [openingPort, setOpeningPort] = useState(false)
+  const [closingPort, setClosingPort] = useState(false)
+  const [enablingAll, setEnablingAll] = useState(false)
+
+  async function handleOpenRemotePort(routerId: string) {
+    try {
+      setOpeningPort(true)
+      setError(null)
+      setSuccess(null)
+      const updatedRouter = await clientPostApi<any>(`/routers/${routerId}/remote-access/open`, {})
+      if (selectedSetup) {
+        setSelectedSetup({
+          ...selectedSetup,
+          router: {
+            ...selectedSetup.router,
+            ...updatedRouter,
+          }
+        })
+      }
+      setSuccess('Remote WinBox port opened successfully. You can now connect using the Connect tab.')
+      await loadData(routerId)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to open remote port')
+    } finally {
+      setOpeningPort(false)
+    }
+  }
+
+  async function handleCloseRemotePort(routerId: string) {
+    try {
+      setClosingPort(true)
+      setError(null)
+      setSuccess(null)
+      const updatedRouter = await clientPostApi<any>(`/routers/${routerId}/remote-access/close`, {})
+      if (selectedSetup) {
+        setSelectedSetup({
+          ...selectedSetup,
+          router: {
+            ...selectedSetup.router,
+            ...updatedRouter,
+          }
+        })
+      }
+      setSuccess('Remote WinBox port closed successfully.')
+      await loadData(routerId)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to close remote port')
+    } finally {
+      setClosingPort(false)
+    }
+  }
+
+  async function handleEnableAllRemotePorts() {
+    try {
+      setEnablingAll(true)
+      setError(null)
+      setSuccess(null)
+      await clientPostApi<any>(`/routers/remote-access/enable-all`, {})
+      setSuccess('All remote WinBox ports have been enabled for technical support.')
+      if (selectedSetup?.router.id) {
+        const setup = await clientFetchApi<RouterSetupResponse>(`/routers/${selectedSetup.router.id}/setup`)
+        setSelectedSetup(setup)
+      }
+      await loadData(selectedSetup?.router.id)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to enable all remote ports')
+    } finally {
+      setEnablingAll(false)
+    }
+  }
+
   function oneRunCommand() {
     if (!selectedSetup) return ''
     return (
@@ -361,6 +434,40 @@ export default function RoutersManager() {
     setSuccess('Router management connection details copied without password.')
   }
 
+  async function copyRemoteWinBoxDetails() {
+    if (!selectedSetup?.router) {
+      return
+    }
+
+    const router = selectedSetup.router
+    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || 'vpn2.arofi.arosoft.io'
+    const portStr = router.remotePort ? `:${router.remotePort}` : ''
+    const address = `${vpnHost}${portStr}`
+
+    const lines = [
+      `Router: ${router.name}`,
+      `Remote WinBox Address: ${address}`,
+      `Username: admin`,
+      `Password: Leave empty only if router admin password is blank`,
+    ]
+
+    await navigator.clipboard.writeText(lines.join('\n'))
+    setSuccess('Remote WinBox connection details copied.')
+  }
+
+  async function copyRemoteInstallCommand() {
+    if (!selectedSetup?.router) {
+      return
+    }
+
+    const router = selectedSetup.router
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin + '/api' : '')
+    const command = `/tool fetch url="${apiBaseUrl}/mikrotik/remote-access/install?token=${router.remoteToken}" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+
+    await navigator.clipboard.writeText(command)
+    setSuccess('Automatic installation command copied to clipboard.')
+  }
+
   function downloadScript() {
     if (!selectedSetup?.provisioningScript) {
       return
@@ -386,6 +493,17 @@ export default function RoutersManager() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-primary" onClick={() => { setRouterFormError(''); setRouterProcessText(''); setRouterModalOpen(true) }}>Register Router</button>
           <button type="button" className="btn btn-ghost" onClick={() => { setGroupFormError(''); setGroupProcessText(''); setGroupModalOpen(true) }}>Create Group</button>
+          {isPlatformAdmin && (
+            <button
+              type="button"
+              className="btn btn-warning"
+              style={{ backgroundColor: 'var(--amber-mid)', color: '#000' }}
+              onClick={() => void handleEnableAllRemotePorts()}
+              disabled={enablingAll}
+            >
+              {enablingAll ? 'Enabling all...' : 'Enable All Remote Ports'}
+            </button>
+          )}
           <span className="badge badge-info" style={{ padding: '8px 12px' }}>
             {overview?.radiusFoundation.serverHost ?? 'RADIUS pending'}:{overview?.radiusFoundation.authPort ?? 1812}
           </span>
@@ -481,26 +599,167 @@ export default function RoutersManager() {
               </div>
             )}
             {selectedSetup?.router && (
-              <div style={{ display: 'grid', gap: 10, padding: 14, border: '1px solid var(--green-mid)', borderRadius: 12, background: 'var(--green-light)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <strong style={{ color: 'var(--green-dark)', fontSize: 14 }}>Remote WinBox access for vendor</strong>
-                  <button type="button" className="btn btn-primary" onClick={() => void copyRouterAccessDetails()}>Copy WinBox Address</button>
-                </div>
-                {selectedSetup.router.host.includes('.self-service') ? (
-                  <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55 }}>
-                    Run the RouterOS script first. After the router calls back, AROFi will show the remote address here.
+              <div style={{ display: 'grid', gap: 12, padding: 16, border: '1px solid var(--green-mid)', borderRadius: 12, background: 'var(--green-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--green-mid)', paddingBottom: 8 }}>
+                  <strong style={{ color: 'var(--green-dark)', fontSize: 14 }}>Remote WinBox Access</strong>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {(['status', 'install', 'connect'] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        className={`btn ${remoteTab === tab ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ padding: '4px 8px', fontSize: 12, height: 'auto' }}
+                        onClick={() => setRemoteTab(tab)}
+                      >
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8, color: 'var(--text-2)', fontSize: 13 }}>
-                      <span>Address</span><strong style={{ color: 'var(--text-1)', fontFamily: 'monospace' }}>{selectedSetup.router.host}</strong>
-                      <span>Username</span><strong style={{ color: 'var(--text-1)' }}>admin</strong>
-                      <span>Password</span><strong style={{ color: 'var(--text-1)' }}>Leave empty only if router admin password is blank</strong>
+                </div>
+
+                {remoteTab === 'status' && (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Status</span>
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: selectedSetup.router.isRemotePortOpen ? 'var(--success-fg)' : 'var(--danger-fg)',
+                          boxShadow: selectedSetup.router.isRemotePortOpen ? '0 0 8px var(--success-fg)' : 'none'
+                        }} />
+                        {selectedSetup.router.isRemotePortOpen ? 'Connected' : 'Disconnected'}
+                      </strong>
                     </div>
-                    <div style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.5 }}>
-                      Open WinBox and paste the AROFi address into Connect To. Remote login works only if TCP 8291 reaches the MikroTik through public IP, port forwarding, VPN, or tunnel.
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Setup Status</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>
+                        {selectedSetup.router.remoteAccessEnabled ? 'Configured' : 'Not Configured'}
+                      </strong>
                     </div>
-                  </>
+
+                    <div style={{
+                      padding: 10,
+                      border: '1px solid var(--amber-mid)',
+                      borderRadius: 8,
+                      background: 'var(--amber-light)',
+                      color: 'var(--amber-dark)',
+                      fontSize: 12,
+                      lineHeight: 1.4
+                    }}>
+                      <strong>Security Reminder:</strong> Always close your ports if you are not using them to avoid malicious attacks. You can always open your ports again when you want to access your devices.
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      {!selectedSetup.router.isRemotePortOpen ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ flex: 1 }}
+                          onClick={() => void handleOpenRemotePort(selectedSetup.router.id)}
+                          disabled={openingPort}
+                        >
+                          {openingPort ? 'Opening...' : 'Open Port'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          style={{ flex: 1, backgroundColor: 'var(--danger-fg)', color: '#fff' }}
+                          onClick={() => void handleCloseRemotePort(selectedSetup.router.id)}
+                          disabled={closingPort}
+                        >
+                          {closingPort ? 'Closing...' : 'Close Port'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => void loadSetup(selectedSetup.router.id)}
+                        disabled={loadingSetup}
+                      >
+                        Refresh Status
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {remoteTab === 'install' && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Setup Status</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>
+                        {selectedSetup.router.remoteAccessEnabled ? 'Configured' : 'Not Configured'}
+                      </strong>
+                    </div>
+
+                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Run this command in WinBox Terminal to automatically install and configure the remote access VPN interface on the MikroTik router.
+                    </div>
+
+                    <div style={{
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      padding: 10,
+                      background: 'var(--surface-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      wordBreak: 'break-all',
+                      color: 'var(--text-secondary)',
+                      userSelect: 'all'
+                    }}>
+                      {`/tool fetch url="${typeof window !== 'undefined' ? window.location.origin : ''}/api/mikrotik/remote-access/install?token=${selectedSetup.router.remoteToken || ''}" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: 12 }}
+                      onClick={() => void copyRemoteInstallCommand()}
+                    >
+                      Copy Installation Command
+                    </button>
+                  </div>
+                )}
+
+                {remoteTab === 'connect' && (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {!selectedSetup.router.isRemotePortOpen ? (
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: '10px 0' }}>
+                        Port is currently closed. Please go to the <strong>Status</strong> tab and click <strong>Open Port</strong> first.
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 6, color: 'var(--text-secondary)', fontSize: 13 }}>
+                          <span>Address</span>
+                          <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                            {`${process.env.NEXT_PUBLIC_VPN_HOST || 'vpn2.arofi.arosoft.io'}:${selectedSetup.router.remotePort || ''}`}
+                          </strong>
+                          <span>Username</span>
+                          <strong style={{ color: 'var(--text-primary)' }}>admin</strong>
+                          <span>Password</span>
+                          <strong style={{ color: 'var(--text-primary)', fontSize: 12, fontWeight: 'normal', fontStyle: 'italic' }}>
+                            Leave empty only if router admin password is blank
+                          </strong>
+                        </div>
+
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                          Open WinBox on your computer, paste the remote address above into the <strong>Connect To</strong> field, enter your credentials, and click Connect.
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => void copyRemoteWinBoxDetails()}
+                        >
+                          Copy WinBox Address
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             )}

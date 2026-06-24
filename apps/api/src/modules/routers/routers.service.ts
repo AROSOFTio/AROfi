@@ -447,6 +447,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const registrationKey = randomUUID()
+    const remoteToken = randomUUID()
+    const remotePort = Math.floor(Math.random() * 10000) + 30000
     const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
@@ -471,6 +473,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         passwordCiphertext: this.routerCredentialsService.encrypt(password),
         sharedSecretCiphertext: this.routerCredentialsService.encrypt(sharedSecret),
         registrationKey,
+        remoteToken,
+        remotePort,
+        isRemotePortOpen: false,
+        remoteClientName: 'AROFI_REMOTE',
+        remoteAccessEnabled: false,
         onboardingStatus: RouterOnboardingStatus.SCRIPT_GENERATED,
         lastScriptMode: dto.scriptMode ?? RouterScriptMode.SAFE_EXISTING_ROUTER,
         scriptGeneratedAt: new Date(),
@@ -1273,6 +1280,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     hotspotServerName?: string | null
     portalWalledGardenHosts?: string[]
     ttlAntiTetheringEnabled?: boolean
+    remotePort?: number | null
+    isRemotePortOpen?: boolean
+    remoteSstpIp?: string | null
+    remoteToken?: string | null
+    remoteClientName?: string | null
+    remoteAccessEnabled?: boolean
     verificationStatus?: string
     onboardingStatus?: string
     registrationKey?: string
@@ -1357,6 +1370,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       registrationKey: router.registrationKey,
       scriptGeneratedAt: router.scriptGeneratedAt,
       lastProvisionedAt: router.lastProvisionedAt,
+      remotePort: router.remotePort ?? null,
+      isRemotePortOpen: router.isRemotePortOpen ?? false,
+      remoteSstpIp: router.remoteSstpIp ?? null,
+      remoteToken: router.remoteToken ?? null,
+      remoteClientName: router.remoteClientName ?? 'AROFI_REMOTE',
+      remoteAccessEnabled: router.remoteAccessEnabled ?? false,
       lastRadiusSignalAt: router.lastRadiusSignalAt,
       lastAccountingSignalAt: router.lastAccountingSignalAt,
       lastAuthSignalAt: router.lastAuthSignalAt,
@@ -1518,5 +1537,135 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     ].filter((value): value is string => Boolean(value))
 
     return Array.from(new Set([...configured, ...envHosts]))
+  }
+
+  async getRemoteAccess(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+      include: this.routerInclude,
+    })
+
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    // Lazy initialization for legacy routers
+    let updated = false
+    const updateData: any = {}
+    if (!router.remoteToken) {
+      updateData.remoteToken = randomUUID()
+      updated = true
+    }
+    if (!router.remotePort) {
+      updateData.remotePort = Math.floor(Math.random() * 10000) + 30000
+      updated = true
+    }
+    if (!router.remoteClientName) {
+      updateData.remoteClientName = 'AROFI_REMOTE'
+      updated = true
+    }
+
+    if (updated) {
+      const updatedRouter = await this.prisma.router.update({
+        where: { id: routerId },
+        data: updateData,
+        include: this.routerInclude,
+      })
+      return this.mapRouter(updatedRouter)
+    }
+
+    return this.mapRouter(router)
+  }
+
+  async openRemotePort(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+    })
+
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const remoteToken = router.remoteToken || randomUUID()
+    const remotePort = router.remotePort || Math.floor(Math.random() * 10000) + 30000
+    const remoteSstpIp = router.remoteSstpIp || `10.8.0.${Math.floor(Math.random() * 250) + 2}`
+
+    const updatedRouter = await this.prisma.router.update({
+      where: { id: routerId },
+      data: {
+        isRemotePortOpen: true,
+        remoteAccessEnabled: true,
+        remoteToken,
+        remotePort,
+        remoteSstpIp,
+      },
+      include: this.routerInclude,
+    })
+
+    return this.mapRouter(updatedRouter)
+  }
+
+  async closeRemotePort(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+    })
+
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const updatedRouter = await this.prisma.router.update({
+      where: { id: routerId },
+      data: {
+        isRemotePortOpen: false,
+      },
+      include: this.routerInclude,
+    })
+
+    return this.mapRouter(updatedRouter)
+  }
+
+  async enableAllRemotePorts() {
+    await this.prisma.router.updateMany({
+      data: {
+        isRemotePortOpen: true,
+        remoteAccessEnabled: true,
+      },
+    })
+    return { success: true }
+  }
+
+  async getRemoteAccessInstallScript(token: string) {
+    const router = await this.prisma.router.findFirst({
+      where: { remoteToken: token },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    const domain = process.env.VPN_SERVER_HOST || 'vpn2.arofi.arosoft.io'
+    const sstpPort = process.env.VPN_SERVER_PORT || '443'
+    const remoteClientName = router.remoteClientName || 'AROFI_REMOTE'
+
+    return [
+      `# AROFi Remote Access WinBox Tunnel Setup`,
+      `# Generated dynamically for ${router.name}`,
+      `/interface sstp-client remove [find name="${remoteClientName}"]`,
+      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}" port=${sstpPort} user="router-${router.id}" password="${token}" profile=default disabled=no keepalive-timeout=60`,
+      `:log info "AROFi Remote Access client configured successfully."`
+    ].join('\n')
   }
 }

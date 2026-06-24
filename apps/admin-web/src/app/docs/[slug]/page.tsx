@@ -405,6 +405,64 @@ const docs: Record<string, DocPage> = {
       },
     ],
   },
+  'remote-winbox': {
+    title: 'Remote WinBox Access (SSTP VPN)',
+    intro: 'AROFi Remote Access utilizes a secure outbound SSTP (Secure Socket Tunneling Protocol) VPN client tunnel on the MikroTik router. This allows operators and technical support to connect to routers behind CGNAT (Carrier-Grade NAT), firewalls, or dynamic WAN IPs without any public IP or port forwarding setup.',
+    sections: [
+      {
+        heading: '1. How It Works (Bypassing CGNAT)',
+        body: [
+          'Most ISP connections in Uganda (MTN, Airtel, Roke) assign private IP addresses to customers behind CGNAT. This makes direct remote WinBox access (TCP 8291) impossible.',
+          'To bypass this, AROFi creates an SSTP VPN interface on the MikroTik router. The router establishes a secure SSL/TLS connection outwards to the central AROFi VPN gateway (e.g. vpn2.arofi.arosoft.io).',
+          'Once connected, the router is assigned a static IP in the VPN network. When you request a remote port, AROFi maps a high-range public port (e.g. 30000-40000) to the router\'s WinBox port (8291) through the tunnel.',
+        ],
+      },
+      {
+        heading: '2. Supported Devices',
+        body: [
+          'Because SSTP VPN is a native RouterOS feature, AROFi remote access supports ANY MikroTik router regardless of hardware architecture (mipsbe, mmips, arm, arm64, tile, x86).',
+          'It works perfectly on low-end models (RB951, hAP mini, hAP lite, hEX) as well as enterprise cores (CCR series, Cloud Hosted Routers / CHR).',
+        ],
+      },
+      {
+        heading: '3. Step-by-Step Installation',
+        body: [
+          'Step 1: Open the router details under the Routers section in your AROFi dashboard.',
+          'Step 2: Navigate to the Remote WinBox Access card and select the Install tab.',
+          'Step 3: Copy the generated automatic installation script.',
+          'Step 4: Open WinBox, connect to your router locally, go to New Terminal, paste the script, and press Enter.',
+          'The script downloads and imports the configuration, creating an interface named AROFI_REMOTE. Wait a few seconds for the interface status to show connected.',
+        ],
+        commandBlocks: [
+          {
+            title: 'VPN Installation Command Template',
+            commands: [
+              '/tool fetch url="https://YOUR_DOMAIN/api/mikrotik/remote-access/install?token=YOUR_REMOTE_TOKEN" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"',
+            ],
+          },
+        ],
+      },
+      {
+        heading: '4. Opening and Closing Ports',
+        body: [
+          'To maintain security, AROFi allows tenants/vendors to open and close their remote ports on demand.',
+          'Under the Status tab of the Remote WinBox Access panel:',
+          '• Click Open Port to enable the port mapping. The status changes to Connected, and the public port becomes active.',
+          '• Click Close Port to immediately tear down the mapping when you are finished managing the router.',
+          'If you are a Dev/Platform Admin, you can use the "Enable All Remote Ports" button in the main toolbar to temporarily turn on all ports for technical support, audits, or emergency troubleshooting.',
+        ],
+      },
+      {
+        heading: '5. Security Best Practices',
+        body: [
+          'Warning: Keeping remote ports open indefinitely exposes your router to malicious automated brute-force attacks.',
+          '1. Always close your remote port immediately after completing your maintenance task.',
+          '2. Ensure your MikroTik has a strong admin password configured. Do not leave the password empty.',
+          '3. Under /ip service in WinBox, consider changing the default WinBox port or setting an Allowed-From subnet filter for added protection.',
+        ],
+      },
+    ],
+  },
   'winbox-setup': {
     title: 'WinBox setup',
     intro: 'WinBox is used for initial MikroTik access and for manual recovery when automatic setup cannot complete.',
