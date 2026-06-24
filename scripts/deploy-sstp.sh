@@ -78,8 +78,17 @@ linkname sstp
 10.8.0.1:
 plugin radius.so
 plugin radattr.so
-require-mschap-v2
-require-mppe-128
+# FreeRADIUS (config/freeradius/sites-enabled/default) only implements
+# Auth-Type PAP and CHAP — there is no mschap module wired in. Requiring
+# MS-CHAPv2/MPPE here caused FreeRADIUS to reject every auth attempt, so
+# the MikroTik SSTP client looped connecting -> terminating -> disconnected
+# forever. SSTP already runs inside TLS, so PPP-level MPPE is redundant —
+# require plain PAP instead, which matches the Cleartext-Password stored
+# in radcheck for router-<id>.
+require-pap
+refuse-chap
+refuse-mschap
+refuse-mschap-v2
 nobsdcomp
 nodeflate
 nopcomp
