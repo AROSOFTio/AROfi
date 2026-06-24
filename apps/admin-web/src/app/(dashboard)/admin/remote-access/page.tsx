@@ -133,7 +133,7 @@ export default function RemoteAccessPage() {
 
   const winboxAddress = useMemo(() => {
     if (!selectedRouter) return ''
-    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || 'vpn2.arofi.arosoft.io'
+    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || (typeof window !== 'undefined' ? window.location.hostname : 'arofi.arosoftlabs.com')
     return `${vpnHost}:${selectedRouter.remotePort || ''}`
   }, [selectedRouter])
 

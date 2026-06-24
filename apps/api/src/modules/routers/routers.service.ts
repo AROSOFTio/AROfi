@@ -1656,7 +1656,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       return null
     }
 
-    const domain = process.env.VPN_SERVER_HOST || 'vpn2.arofi.arosoft.io'
+    const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'arofi.arosoftlabs.com'
     const sstpPort = process.env.VPN_SERVER_PORT || '443'
     const remoteClientName = router.remoteClientName || 'AROFI_REMOTE'
 

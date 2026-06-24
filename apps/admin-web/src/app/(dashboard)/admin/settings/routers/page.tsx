@@ -178,7 +178,7 @@ export default function SettingsRoutersPage() {
   }
 
   const handleCopyAddress = (router: any) => {
-    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || 'vpn2.arofi.arosoft.io'
+    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || (typeof window !== 'undefined' ? window.location.hostname : 'arofi.arosoftlabs.com')
     const address = `${vpnHost}:${router.remotePort || '30560'}`
     navigator.clipboard.writeText(address)
     setCopiedId(router.id)
