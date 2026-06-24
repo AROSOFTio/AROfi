@@ -51,7 +51,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$BINARY_PATH -p 4443 -c /etc/sstpd/sstpd.crt -k /etc/sstpd/sstpd.key
+ExecStart=$BINARY_PATH -l 0.0.0.0 -p 4443 -c /etc/sstpd/sstpd.crt -k /etc/sstpd/sstpd.key
 Restart=always
 
 [Install]
