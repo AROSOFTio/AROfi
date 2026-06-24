@@ -1723,7 +1723,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${router.name}`,
       `/interface sstp-client remove [find name="${remoteClientName}"]`,
-      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" profile=default disabled=no keepalive-timeout=60 verify-server-certificate=no`,
+      // authentication=pap must be explicit: the server (scripts/deploy-sstp.sh)
+      // requires plain PAP and refuses CHAP/MS-CHAP, but RouterOS sstp-client
+      // does not offer PAP by default, so the router would otherwise fail with
+      // "failed to authenticate ourselves".
+      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile=default disabled=no keepalive-timeout=60 verify-server-certificate=no`,
       `:log info "AROFi Remote Access client configured successfully."`
     ].join('\n')
   }
