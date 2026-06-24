@@ -501,7 +501,7 @@ const docs: Record<string, DocPage> = {
           {
             title: 'VPN Installation Command Template',
             commands: [
-              '/tool fetch url="https://YOUR_DOMAIN/api/mikrotik/remote-access/install?token=YOUR_REMOTE_TOKEN" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"',
+              '/tool fetch url="https://YOUR_DOMAIN/api/mikrotik/remote-access/install/YOUR_REMOTE_TOKEN" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"',
             ],
           },
         ],

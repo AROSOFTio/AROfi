@@ -128,7 +128,7 @@ export default function RemoteAccessPage() {
   const installCommand = useMemo(() => {
     if (!selectedRouter) return ''
     const host = typeof window !== 'undefined' ? window.location.origin : ''
-    return `/tool fetch url="${host}/api/mikrotik/remote-access/install?token=${selectedRouter.remoteToken || ''}" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+    return `/tool fetch url="${host}/api/mikrotik/remote-access/install/${selectedRouter.remoteToken || ''}" dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
   }, [selectedRouter])
 
   const winboxAddress = useMemo(() => {
