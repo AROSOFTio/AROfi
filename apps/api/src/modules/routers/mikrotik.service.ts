@@ -627,7 +627,7 @@ export class MikrotikService {
     }
 
     function login(){
-      var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\\\s+/g,'');
+      var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\s+/g,'');
       if(!code){sst('Enter your voucher code.','err');return;}
       var b=document.getElementById('vbtn');
       b.disabled=true;b.textContent='Connecting...';
@@ -646,9 +646,9 @@ export class MikrotikService {
     function pay(){
       if(!selId){sst('Please select a package first.','err');return;}
       var ph=document.getElementById('phone').value.trim();
-      var c=ph.replace(/\\\\D/g,'');
+      var c=ph.replace(/\\D/g,'');
       if(c.indexOf('0')===0)c='256'+c.substring(1);else if(c.indexOf('256')!==0)c='256'+c;
-      if(!/^256\\\\d{9}$/.test(c)){sst('Enter a valid Mobile Money number.','err');return;}
+      if(!/^256\\d{9}$/.test(c)){sst('Enter a valid Mobile Money number.','err');return;}
       
       sst('Initiating payment...','info');
       var b=document.getElementById('pbtn');b.disabled=true;
