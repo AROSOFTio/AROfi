@@ -1852,5 +1852,34 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Failed to send Telegram alert: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
+
+    // Send WhatsApp alert if configured (CallMeBot or Custom Gateway)
+    const waUrl = process.env.ROUTER_ALERTS_WHATSAPP_URL
+    const waPhone = process.env.ROUTER_ALERTS_WHATSAPP_PHONE
+    const waApiKey = process.env.ROUTER_ALERTS_WHATSAPP_API_KEY
+    if (waUrl && waPhone) {
+      try {
+        let url = waUrl
+        let method = 'POST'
+        let headers: any = { 'Content-Type': 'application/json' }
+        let body: any = JSON.stringify({ phone: waPhone, message })
+
+        if (waUrl.includes('callmebot.com')) {
+          const encodedMessage = encodeURIComponent(message)
+          url = `${waUrl}?phone=${waPhone}&text=${encodedMessage}&apikey=${waApiKey || ''}`
+          method = 'GET'
+          body = undefined
+          headers = undefined
+        }
+
+        await fetch(url, {
+          method,
+          headers,
+          body,
+        })
+      } catch (err) {
+        this.logger.error(`Failed to send WhatsApp alert: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
   }
 }
