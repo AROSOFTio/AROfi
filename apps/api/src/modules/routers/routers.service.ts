@@ -1853,60 +1853,73 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Build the list of WhatsApp recipient numbers
+    const recipients = new Set<string>()
+
+    // 1. Add platform admin's phone if configured
+    if (process.env.ROUTER_ALERTS_WHATSAPP_PHONE) {
+      recipients.add(process.env.ROUTER_ALERTS_WHATSAPP_PHONE.replace('+', '').trim())
+    }
+
+    // 2. Add individual tenant/vendor's support phone if configured
+    if (router.tenant?.supportPhone) {
+      recipients.add(router.tenant.supportPhone.replace('+', '').trim())
+    }
+
     // Send WhatsApp alert if configured (CallMeBot or Custom Gateway)
     const waUrl = process.env.ROUTER_ALERTS_WHATSAPP_URL
-    const waPhone = process.env.ROUTER_ALERTS_WHATSAPP_PHONE
     const waApiKey = process.env.ROUTER_ALERTS_WHATSAPP_API_KEY
     const wahaUrl = process.env.WHATSAPP_GATEWAY_URL
     const wahaApiKey = process.env.WHATSAPP_GATEWAY_API_KEY
 
-    if (wahaUrl && waPhone) {
-      try {
-        const cleanPhone = waPhone.replace('+', '').trim()
-        const chatId = cleanPhone.endsWith('@c.us') ? cleanPhone : `${cleanPhone}@c.us`
-        const url = `${wahaUrl.replace(/\/$/, '')}/api/sendText`
-        
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        }
-        if (wahaApiKey) {
-          headers['X-Api-Key'] = wahaApiKey
-        }
+    for (const phone of recipients) {
+      if (wahaUrl) {
+        try {
+          const chatId = phone.endsWith('@c.us') ? phone : `${phone}@c.us`
+          const url = `${wahaUrl.replace(/\/$/, '')}/api/sendText`
+          
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          }
+          if (wahaApiKey) {
+            headers['X-Api-Key'] = wahaApiKey
+          }
 
-        await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            chatId,
-            text: message,
-            session: 'default',
-          }),
-        })
-      } catch (err) {
-        this.logger.error(`Failed to send WhatsApp alert via WAHA: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    } else if (waUrl && waPhone) {
-      try {
-        let url = waUrl
-        let method = 'POST'
-        let headers: any = { 'Content-Type': 'application/json' }
-        let body: any = JSON.stringify({ phone: waPhone, message })
-
-        if (waUrl.includes('callmebot.com')) {
-          const encodedMessage = encodeURIComponent(message)
-          url = `${waUrl}?phone=${waPhone}&text=${encodedMessage}&apikey=${waApiKey || ''}`
-          method = 'GET'
-          body = undefined
-          headers = undefined
+          await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              chatId,
+              text: message,
+              session: 'default',
+            }),
+          })
+        } catch (err) {
+          this.logger.error(`Failed to send WhatsApp alert to ${phone} via WAHA: ${err instanceof Error ? err.message : String(err)}`)
         }
+      } else if (waUrl) {
+        try {
+          let url = waUrl
+          let method = 'POST'
+          let headers: any = { 'Content-Type': 'application/json' }
+          let body: any = JSON.stringify({ phone, message })
 
-        await fetch(url, {
-          method,
-          headers,
-          body,
-        })
-      } catch (err) {
-        this.logger.error(`Failed to send WhatsApp alert: ${err instanceof Error ? err.message : String(err)}`)
+          if (waUrl.includes('callmebot.com')) {
+            const encodedMessage = encodeURIComponent(message)
+            url = `${waUrl}?phone=${phone}&text=${encodedMessage}&apikey=${waApiKey || ''}`
+            method = 'GET'
+            body = undefined
+            headers = undefined
+          }
+
+          await fetch(url, {
+            method,
+            headers,
+            body,
+          })
+        } catch (err) {
+          this.logger.error(`Failed to send WhatsApp alert to ${phone}: ${err instanceof Error ? err.message : String(err)}`)
+        }
       }
     }
   }
