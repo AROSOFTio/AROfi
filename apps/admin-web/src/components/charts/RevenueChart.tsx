@@ -72,8 +72,8 @@ export function RevenueChart({ data }: { data: ChartPoint[] }) {
       <AreaChart data={formatted} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="gradGross" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#155DFC" stopOpacity={0.18} />
-            <stop offset="95%" stopColor="#155DFC" stopOpacity={0} />
+            <stop offset="5%" stopColor="#2563EB" stopOpacity={0.18} />
+            <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="gradNet" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#16a34a" stopOpacity={0.18} />
@@ -104,7 +104,7 @@ export function RevenueChart({ data }: { data: ChartPoint[] }) {
           wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
           formatter={(value) => <span style={{ color: "var(--text-2, #5f6673)" }}>{value}</span>}
         />
-        <Area type="monotone" dataKey="grossSalesUgx" name="Gross Sales" stroke="#155DFC" fill="url(#gradGross)" strokeWidth={2} dot={false} />
+        <Area type="monotone" dataKey="grossSalesUgx" name="Gross Sales" stroke="#2563EB" fill="url(#gradGross)" strokeWidth={2} dot={false} />
         <Area type="monotone" dataKey="netEarningsUgx" name="Net Earnings" stroke="#16a34a" fill="url(#gradNet)" strokeWidth={2} dot={false} />
         <Area type="monotone" dataKey="platformFeesUgx" name="Platform Fees" stroke="#f59e0b" fill="url(#gradFee)" strokeWidth={1.5} dot={false} />
       </AreaChart>

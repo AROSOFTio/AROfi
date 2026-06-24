@@ -21,15 +21,15 @@
   --text-secondary: var(--text-2);
   --text-muted: var(--text-3);
 
-  /* Brand accent (AROFi blue #155DFC). Kept under --green* names so every
+  /* Brand accent (AROFi blue #2563EB). Kept under --green* names so every
      existing reference recolors instantly. */
-  --green:       #155DFC;
-  --green-light: #e8efff;
-  --green-mid:   #9dbcff;
-  --green-dark:  #0c44c4;
-  --green-soft:  #eef3ff;
-  --brand:       #155DFC;
-  --brand-2:     #4f86ff;
+  --green:       #2563EB;
+  --green-light: #eff6ff;
+  --green-mid:   #93c5fd;
+  --green-dark:  #1d4ed8;
+  --green-soft:  #dbeafe;
+  --brand:       #2563EB;
+  --brand-2:     #3b82f6;
 
   /* Glassy translucent surfaces */
   --glass-bg:     rgba(255, 255, 255, 0.72);
@@ -92,13 +92,13 @@
   --text-secondary: var(--text-2);
   --text-muted: var(--text-3);
 
-  --green:       #5b8cff;
-  --green-light: rgba(21, 93, 252, 0.16);
-  --green-mid:   rgba(21, 93, 252, 0.34);
-  --green-dark:  #7aa3ff;
-  --green-soft:  rgba(21, 93, 252, 0.12);
-  --brand:       #5b8cff;
-  --brand-2:     #155DFC;
+  --green:       #60a5fa;
+  --green-light: rgba(37, 99, 235, 0.16);
+  --green-mid:   rgba(37, 99, 235, 0.34);
+  --green-dark:  #93c5fd;
+  --green-soft:  rgba(37, 99, 235, 0.12);
+  --brand:       #60a5fa;
+  --brand-2:     #2563EB;
 
   --glass-bg:     rgba(22, 27, 34, 0.62);
   --glass-border: rgba(255, 255, 255, 0.08);
