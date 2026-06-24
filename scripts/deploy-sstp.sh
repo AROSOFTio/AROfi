@@ -26,8 +26,38 @@ SECRET="$(appenv RADIUS_SHARED_SECRET)"
 
 # 2. Install sstpd and ppp packages
 echo "[sstp] Installing sstpd and ppp on host..."
-apt-get update
-apt-get install -y sstpd ppp
+if apt-get install -y sstpd ppp; then
+  echo "[sstp] sstpd installed successfully from repositories."
+else
+  echo "[sstp] sstpd not found in repositories. Compiling from source..."
+  apt-get install -y build-essential libevent-dev libssl-dev pkg-config wget ppp
+
+  # Download sstp-server source code
+  cd /tmp
+  wget -O sstp-server-1.0.18.tar.gz "https://sourceforge.net/projects/sstp-server/files/sstp-server/1.0.18/sstp-server-1.0.18.tar.gz/download"
+  tar -zxf sstp-server-1.0.18.tar.gz
+  cd sstp-server-1.0.18
+  ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var
+  make
+  make install
+  ldconfig
+
+  # Create sstpd systemd unit file
+  BINARY_PATH="$(which sstpd || echo /usr/sbin/sstpd)"
+  cat << EOF > /etc/systemd/system/sstpd.service
+[Unit]
+Description=SSTP VPN Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$BINARY_PATH -d -f /etc/sstpd/sstpd.conf
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
 
 # 3. Generate self-signed SSL certificates for SSTP
 echo "[sstp] Generating self-signed SSL certificate..."
