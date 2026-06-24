@@ -45,6 +45,12 @@ export class MikrotikController {
     return script;
   }
 
+  @Get('remote-access/install/:token')
+  @Header('Content-Type', 'text/plain')
+  async getRemoteAccessInstallWithParam(@Param('token') token: string, @Req() request?: any) {
+    return this.getRemoteAccessInstall(token, request);
+  }
+
   @Get('provisioned/:key')
   async markProvisioned(
     @Param('key') key: string,
