@@ -394,7 +394,7 @@ export default function OnboardingWizard({
       }}>
         {/* Top Header */}
         <div style={{
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
+          background: 'linear-gradient(135deg, #2563eb 0%, #0f172a 100%)',
           padding: '24px 32px',
           color: '#ffffff',
           position: 'relative'
