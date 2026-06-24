@@ -77,6 +77,12 @@ linkname sstp
 # Local VPN IP for the VPS, remote is dynamically assigned by RADIUS
 10.8.0.1:
 plugin radius.so
+# Bind the radius plugin to OUR config file explicitly. Without this the
+# plugin uses a compiled-in default path (which on this build is NOT
+# /etc/radiusclient), so it never read our radiusclient.conf/dictionary and
+# logged "rc_avpair_new: unknown attribute" for every basic attribute, then
+# sent an empty Access-Request -> "PAP peer authentication failed".
+radius-config-file /etc/radiusclient/radiusclient.conf
 plugin radattr.so
 # FreeRADIUS (config/freeradius/sites-enabled/default) only implements
 # Auth-Type PAP and CHAP — there is no mschap module wired in. Requiring
@@ -146,18 +152,79 @@ EOF
 EOF
   chmod 600 "$dir/servers"
 
-  # Write minimal dictionary containing standard attributes to prevent dictionary-not-found errors
+  # Write a COMPLETE radiusclient-format dictionary. The pppd radius plugin
+  # builds the Access-Request from these definitions; any attribute it wants
+  # to send that is missing here triggers "rc_avpair_new: unknown attribute"
+  # and is dropped, producing an empty/garbage request. Cover every attribute
+  # and VALUE the plugin uses for PAP auth + accounting.
   cat << 'EOF' > "$dir/dictionary"
-# Minimal RADIUS Dictionary for sstpd
-ATTRIBUTE User-Name 1 string
-ATTRIBUTE User-Password 2 string
-ATTRIBUTE NAS-IP-Address 4 ipaddr
-ATTRIBUTE NAS-Port 5 integer
-ATTRIBUTE Service-Type 6 integer
-ATTRIBUTE Framed-Protocol 7 integer
-ATTRIBUTE Framed-IP-Address 8 ipaddr
-ATTRIBUTE Calling-Station-Id 31 string
-ATTRIBUTE NAS-Identifier 32 string
+# Standard RADIUS dictionary (radiusclient format) for AROFi SSTP
+ATTRIBUTE	User-Name		1	string
+ATTRIBUTE	User-Password		2	string
+ATTRIBUTE	CHAP-Password		3	string
+ATTRIBUTE	NAS-IP-Address		4	ipaddr
+ATTRIBUTE	NAS-Port		5	integer
+ATTRIBUTE	Service-Type		6	integer
+ATTRIBUTE	Framed-Protocol		7	integer
+ATTRIBUTE	Framed-IP-Address	8	ipaddr
+ATTRIBUTE	Framed-IP-Netmask	9	ipaddr
+ATTRIBUTE	Framed-Routing		10	integer
+ATTRIBUTE	Filter-Id		11	string
+ATTRIBUTE	Framed-MTU		12	integer
+ATTRIBUTE	Framed-Compression	13	integer
+ATTRIBUTE	Reply-Message		18	string
+ATTRIBUTE	Callback-Number		19	string
+ATTRIBUTE	State			24	string
+ATTRIBUTE	Class			25	string
+ATTRIBUTE	Vendor-Specific		26	string
+ATTRIBUTE	Session-Timeout		27	integer
+ATTRIBUTE	Idle-Timeout		28	integer
+ATTRIBUTE	Termination-Action	29	integer
+ATTRIBUTE	Called-Station-Id	30	string
+ATTRIBUTE	Calling-Station-Id	31	string
+ATTRIBUTE	NAS-Identifier		32	string
+ATTRIBUTE	Proxy-State		33	string
+ATTRIBUTE	Acct-Status-Type	40	integer
+ATTRIBUTE	Acct-Delay-Time		41	integer
+ATTRIBUTE	Acct-Input-Octets	42	integer
+ATTRIBUTE	Acct-Output-Octets	43	integer
+ATTRIBUTE	Acct-Session-Id		44	string
+ATTRIBUTE	Acct-Authentic		45	integer
+ATTRIBUTE	Acct-Session-Time	46	integer
+ATTRIBUTE	Acct-Input-Packets	47	integer
+ATTRIBUTE	Acct-Output-Packets	48	integer
+ATTRIBUTE	Acct-Terminate-Cause	49	integer
+ATTRIBUTE	Acct-Multi-Session-Id	50	string
+ATTRIBUTE	Acct-Link-Count		51	integer
+ATTRIBUTE	CHAP-Challenge		60	string
+ATTRIBUTE	NAS-Port-Type		61	integer
+ATTRIBUTE	Port-Limit		62	integer
+
+#	Service-Type values
+VALUE		Service-Type		Login-User		1
+VALUE		Service-Type		Framed-User		2
+VALUE		Service-Type		Callback-Login-User	3
+VALUE		Service-Type		Callback-Framed-User	4
+VALUE		Service-Type		Outbound-User		5
+VALUE		Service-Type		Administrative-User	6
+
+#	Framed-Protocol values
+VALUE		Framed-Protocol		PPP			1
+VALUE		Framed-Protocol		SLIP			2
+
+#	Acct-Status-Type values
+VALUE		Acct-Status-Type	Start			1
+VALUE		Acct-Status-Type	Stop			2
+VALUE		Acct-Status-Type	Alive			3
+VALUE		Acct-Status-Type	Interim-Update		3
+
+#	Acct-Authentic values
+VALUE		Acct-Authentic		RADIUS			1
+VALUE		Acct-Authentic		Local			2
+
+#	NAS-Port-Type values
+VALUE		NAS-Port-Type		Async			0
+VALUE		NAS-Port-Type		Virtual			5
 EOF
 done
 
