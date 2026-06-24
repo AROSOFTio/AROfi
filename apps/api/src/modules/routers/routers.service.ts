@@ -36,7 +36,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '120', 10)
   private readonly routerProbeIntervalMs = Number.parseInt(process.env.ROUTER_PROBE_INTERVAL_MS ?? '8000', 10)
   private probeTimer?: ReturnType<typeof setInterval>
+  private alertsTimer?: ReturnType<typeof setInterval>
   private probing = false
+  private alertedRouters = new Set<string>()
 
   private readonly authRadiusEventTypes = new Set<RadiusEventType>([
     RadiusEventType.ACCESS_ACCEPT,
@@ -121,11 +123,24 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     // Sync all existing router VPN credentials to RADIUS database
     void this.syncAllRouterVpnCredentialsToRadius()
+
+    // Start router alert checking loop if alerts are enabled
+    if (process.env.ROUTER_ALERTS_ENABLED !== 'false') {
+      this.alertsTimer = setInterval(() => {
+        void this.checkRouterAlerts()
+      }, 15000)
+      if (this.alertsTimer && typeof this.alertsTimer.unref === 'function') {
+        this.alertsTimer.unref()
+      }
+    }
   }
 
   onModuleDestroy() {
     if (this.probeTimer) {
       clearInterval(this.probeTimer)
+    }
+    if (this.alertsTimer) {
+      clearInterval(this.alertsTimer)
     }
   }
 
@@ -1770,6 +1785,72 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           error instanceof Error ? error.message : String(error)
         }`,
       )
+    }
+  }
+
+  async checkRouterAlerts() {
+    try {
+      const routers = await this.prisma.router.findMany({
+        where: { status: { not: RouterStatus.PENDING } },
+        include: {
+          tenant: true,
+          healthChecks: {
+            orderBy: { checkedAt: 'desc' },
+            take: 1,
+          },
+        },
+      })
+
+      for (const router of routers) {
+        // Resolve dynamic live state (handles heartbeat timeouts for NAT routers)
+        const activeSessions = await this.prisma.networkSession.count({
+          where: {
+            routerId: router.id,
+            status: SessionStatus.ACTIVE,
+          },
+        })
+        const live = this.resolveRouterLiveState(router, activeSessions)
+        const isOffline = live.liveState === 'OFFLINE'
+        const hasAlerted = this.alertedRouters.has(router.id)
+
+        if (isOffline && !hasAlerted) {
+          this.alertedRouters.add(router.id)
+          await this.sendRouterAlert(router, 'OFFLINE', live.secondsSinceLastSignal)
+        } else if (!isOffline && hasAlerted) {
+          this.alertedRouters.delete(router.id)
+          await this.sendRouterAlert(router, 'ONLINE', 0)
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error checking router alerts: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  private async sendRouterAlert(router: any, state: 'ONLINE' | 'OFFLINE', secondsOffline: number | null) {
+    const timeString = new Date().toLocaleString()
+    const message = state === 'OFFLINE'
+      ? `🚨 [ALERT] Router "${router.name}" (Tenant: ${router.tenant.name}) has gone OFFLINE!\nLast seen: ${router.lastSeenAt ? router.lastSeenAt.toLocaleString() : 'Never'}\nTime: ${timeString}`
+      : `✅ [RECOVERY] Router "${router.name}" (Tenant: ${router.tenant.name}) is back ONLINE.\nTime: ${timeString}`
+
+    this.logger.warn(`[ROUTER ALERT] ${message}`)
+
+    // Send Telegram alert if configured
+    const tgToken = process.env.ROUTER_ALERTS_TELEGRAM_BOT_TOKEN
+    const tgChatId = process.env.ROUTER_ALERTS_TELEGRAM_CHAT_ID
+    if (tgToken && tgChatId) {
+      try {
+        const url = `https://api.telegram.org/bot${tgToken}/sendMessage`
+        await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: tgChatId,
+            text: message,
+          }),
+        })
+      } catch (err) {
+        this.logger.error(`Failed to send Telegram alert: ${err instanceof Error ? err.message : String(err)}`)
+      }
     }
   }
 }

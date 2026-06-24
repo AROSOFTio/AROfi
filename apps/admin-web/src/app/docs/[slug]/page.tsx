@@ -263,6 +263,70 @@ const docs: Record<string, DocPage> = {
       }
     ]
   },
+  'block-hotspot-sharing-tethering': {
+    title: 'How to Block Hotspot Sharing/Tethering on MikroTik RouterOS',
+    intro: 'Learn how to prevent clients from tethering their active Wi-Fi hotspot connection to other phones and computers, preserving your paid bandwidth.',
+    sections: [
+      {
+        heading: '1. Why Block Hotspot Sharing?',
+        body: [
+          'A common issue for wireless hotspot operators is when a customer buys a single voucher or logs in on one device, and then uses Wi-Fi sharing, USB tethering, or Bluetooth sharing to connect multiple other devices (like laptops, TVs, or friends\' phones).',
+          'This practice allows multiple users to browse on a single paid session, which causes high bandwidth congestion, slows down the connection for paying users, and significantly reduces your overall sales revenue.',
+          'To run a profitable and premium hotspot network, you must enforce a one-device-per-login rule at the router level.'
+        ]
+      },
+      {
+        heading: '2. Enforcing One-User Session Limits',
+        body: [
+          'The first line of defense is restricting your user profiles to only allow a single active connection.',
+          'In RouterOS, navigate to /ip hotspot user profile. Edit the default profile (and any custom profiles you have generated) and set Shared Users = 1.',
+          'You should also set a Keepalive Timeout of 30 seconds. This ensures that if a user disconnects or turns off their Wi-Fi, the router detects it quickly and frees up the session, preventing the credential from being stuck as active on the server.'
+        ],
+        commandBlocks: [
+          {
+            title: 'Enforce Single Session & Keepalive in RouterOS Terminal',
+            commands: [
+              '/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30s',
+              ':foreach profile in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $profile shared-users=1 keepalive-timeout=30s }'
+            ]
+          }
+        ]
+      },
+      {
+        heading: '3. The TTL Mangle Block (Anti-Tethering)',
+        body: [
+          'Even with Shared Users set to 1, a client can still turn on their phone\'s Wi-Fi hotspot or tethering app to share internet. Because the phone acts as a NAT gateway/router, the MikroTik only sees one MAC address and one IP address, allowing it to bypass the standard hotspot checks.',
+          'To block this, we use the TTL (Time To Live) mangle technique. Every packet transmitted has a TTL value that is decremented by 1 every time it passes through a router/gateway.',
+          'By setting the TTL of all outbound packets leaving the MikroTik hotspot interface to exactly 1, the client\'s phone receives the packet and can process it locally. However, if the phone tries to forward that packet to a tethered device, it decrements the TTL to 0. The phone\'s sharing engine then drops the packet instantly.',
+          'This renders all tethering, Wi-Fi sharing, and hotspot apps completely useless on the client device.'
+        ],
+        commandBlocks: [
+          {
+            title: 'Apply TTL Mangle Rules',
+            commands: [
+              '/ip firewall mangle remove [find comment="AROFi anti-tether"]',
+              ':foreach h in=[/ip hotspot find] do={',
+              '  :local hotInterface [/ip hotspot get $h interface]',
+              '  :if ($hotInterface != "") do={',
+              '    /ip firewall mangle add chain=postrouting action=change-ttl new-ttl=set:1 passthrough=no out-interface=$hotInterface comment="AROFi anti-tether"',
+              '  }',
+              '}'
+            ]
+          }
+        ]
+      },
+      {
+        heading: '4. Testing Your Setup',
+        body: [
+          '1. Log in to the Wi-Fi hotspot on your phone using a voucher or dynamic billing.',
+          '2. Turn on the Wi-Fi Hotspot sharing feature on your phone.',
+          '3. Connect a secondary device (like a laptop) to your phone\'s shared hotspot network.',
+          '4. Try to load any website or ping a public IP address from the secondary device. The connection will fail or time out, while your phone remains fully connected.',
+          'Note: AROFi\'s automated MikroTik provisioning script includes this aggressive TTL anti-tethering protection automatically during router onboarding.'
+        ]
+      }
+    ]
+  },
   payments: {
     title: 'Payments',
     intro: 'AROFi keeps customer payment UX simple while routing to configured providers in the backend.',

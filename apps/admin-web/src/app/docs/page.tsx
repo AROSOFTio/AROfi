@@ -32,6 +32,12 @@ const categories = [
         slug: 'setup-mtn-airtel-wifi-billing',
         badge: 'Technical Guide',
         keywords: 'setup mtn wifi billing, airtel mobile money billing, mikrotik momo'
+      },
+      {
+        title: 'How to Block Hotspot Sharing/Tethering on MikroTik RouterOS',
+        slug: 'block-hotspot-sharing-tethering',
+        badge: 'Security',
+        keywords: 'block hotspot sharing, prevent tethering, mikrotik change ttl, anti tethering'
       }
     ]
   },
