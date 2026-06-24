@@ -1562,7 +1562,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updateData.remoteToken = randomUUID()
       updated = true
     }
-    if (!router.remotePort) {
+    if (!router.remotePort || router.remotePort < 30000 || router.remotePort > 30100) {
       updateData.remotePort = Math.floor(Math.random() * 100) + 30000
       updated = true
     }
@@ -1597,7 +1597,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const remoteToken = router.remoteToken || randomUUID()
-    const remotePort = router.remotePort || Math.floor(Math.random() * 100) + 30000
+    const remotePort = (router.remotePort && router.remotePort >= 30000 && router.remotePort <= 30100)
+      ? router.remotePort
+      : Math.floor(Math.random() * 100) + 30000
     const remoteSstpIp = router.remoteSstpIp || `10.8.0.${Math.floor(Math.random() * 250) + 2}`
 
     const updatedRouter = await this.prisma.router.update({
