@@ -115,11 +115,19 @@ for dir in /etc/radiusclient /etc/radiusclient-ngx; do
   # dereferences these config fields unconditionally when building the request,
   # and a missing/unset value crashes pppd with SIGSEGV (Fatal signal 11) the
   # moment the link comes up — before any auth packet is even sent.
+  # dictionary MUST point at our own minimal file below, NOT at
+  # /usr/share/freeradius/dictionary: that file is the FreeRADIUS *server*
+  # dictionary (uses $INCLUDE / flags / a newer syntax) which the old
+  # libradiusclient parser used by pppd's radius.so cannot read. It silently
+  # failed to load any attribute (even User-Name/User-Password/NAS-IP-Address),
+  # so the plugin sent an empty Access-Request and pppd reported a generic
+  # "PAP peer authentication failed" with "unknown attribute" warnings for
+  # every basic attribute id.
   cat << EOF > "$dir/radiusclient.conf"
 authserver 127.0.0.1:1812
 acctserver 127.0.0.1:1813
 servers $dir/servers
-dictionary /usr/share/freeradius/dictionary
+dictionary $dir/dictionary
 seqfile $dir/radius.seq
 mapfile $dir/port-id-map
 default_realm
@@ -148,6 +156,7 @@ ATTRIBUTE NAS-Port 5 integer
 ATTRIBUTE Service-Type 6 integer
 ATTRIBUTE Framed-Protocol 7 integer
 ATTRIBUTE Framed-IP-Address 8 ipaddr
+ATTRIBUTE Calling-Station-Id 31 string
 ATTRIBUTE NAS-Identifier 32 string
 EOF
 done
