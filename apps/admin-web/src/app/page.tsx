@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Activity, BadgeDollarSign, Radio, Router, Ticket, Users, Wifi } from 'lucide-react'
 import { LoginModal } from '@/components/LoginModal'
