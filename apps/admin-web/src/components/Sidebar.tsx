@@ -35,6 +35,7 @@ const navItems: NavGroup[] = [
     icon: <RouterIcon />,
     items: [
       { href: '/admin/router', label: 'Router Observability', required: ['routers.read'], tenantOnly: true },
+      { href: '/admin/settings/routers?add=true', label: 'Register Router', required: ['routers.manage'], tenantOnly: true },
       { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true },
       { href: '/hotspots', label: 'Hotspots', required: ['hotspots.read'], tenantOnly: true },
       { href: '/sessions', label: 'Usage Analytics', required: ['sessions.read'], tenantOnly: true },

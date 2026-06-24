@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import type { 
   RouterOverviewResponse, 
@@ -98,9 +99,17 @@ export default function SettingsRoutersPage() {
     }
   }
 
+  const searchParams = useSearchParams()
+
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    if (searchParams.get('add') === 'true') {
+      setAddModalOpen(true)
+    }
+  }, [searchParams])
 
   const groupsForTenant = useMemo(() => {
     if (!overview || !routerForm.tenantId) return []

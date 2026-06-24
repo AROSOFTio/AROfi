@@ -10,7 +10,8 @@ import {
   Users, 
   Clock, 
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from 'lucide-react'
 
 // Simple mock data generator for dynamic-looking charts
@@ -130,6 +131,23 @@ export default function RouterObservabilityPage() {
 
         {/* Filters and Dropdown */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <a
+            href="/admin/settings/routers?add=true"
+            className="btn btn-primary"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              height: 'auto',
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              textDecoration: 'none',
+              fontWeight: 600
+            }}
+          >
+            <Plus size={16} /> Register Router
+          </a>
           {/* Router Select */}
           <select 
             value={selectedRouterId} 

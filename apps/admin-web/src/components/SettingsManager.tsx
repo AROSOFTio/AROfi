@@ -69,7 +69,7 @@ type TenantSettings = {
   }
 }
 
-const tabs = ['Business Profile', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security'] as const
+const tabs = ['Business Profile', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security', 'Subscription Plan'] as const
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const portalTemplates = ['classic', 'fresh', 'midnight', 'sunrise', 'minimal']
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
@@ -91,6 +91,40 @@ export default function SettingsManager({
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<string>('FREE')
+
+  useEffect(() => {
+    if (tenant?.settings?.routerOnboardingPreferences) {
+      const prefs = tenant.settings.routerOnboardingPreferences as Record<string, any>
+      if (prefs.selectedPlan) {
+        setSelectedPlan(prefs.selectedPlan)
+      }
+    }
+  }, [tenant])
+
+  async function changePlan(planKey: string) {
+    if (!tenant) return
+    setSaving(true)
+    setMessage('')
+    setError('')
+    try {
+      const payload = {
+        routerOnboardingPreferences: {
+          ...(tenant.settings.routerOnboardingPreferences as Record<string, any>),
+          selectedPlan: planKey
+        }
+      }
+      const tenantQuery = isDevAdmin ? `?tenantId=${tenant.tenant.id}` : ''
+      const saved = await clientPatchApi<TenantSettings>(`/system/tenant-settings${tenantQuery}`, payload)
+      setTenant(saved)
+      setSelectedPlan(planKey)
+      setMessage(`Successfully switched to the ${planKey} plan!`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not change plan')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const effectiveMobileFee = tenant?.settings.tenantMobileMoneyFeePercent ?? platform?.mobileMoneyFeePercent ?? 7
   const effectiveVoucherFee = tenant?.settings.tenantVoucherFeePercent ?? platform?.voucherFeePercent ?? 2
@@ -214,7 +248,7 @@ export default function SettingsManager({
       {error && <div className="badge badge-danger" style={{ marginBottom: 14 }}>{error}</div>}
 
       <div className="settings-grid">
-        {isDevAdmin && platformForm && (
+        {isDevAdmin && platformForm && activeTab !== 'Subscription Plan' && (
           <form className="card" onSubmit={savePlatform}>
             <div className="card-header">
               <span className="card-title">Dev Admin Platform Controls</span>
@@ -272,7 +306,7 @@ export default function SettingsManager({
           </form>
         )}
 
-        {tenantForm && (
+        {tenantForm && activeTab !== 'Subscription Plan' && (
           <form className="card" onSubmit={saveTenant}>
             <div className="card-header">
               <span className="card-title">Vendor Settings</span>
@@ -327,6 +361,155 @@ export default function SettingsManager({
           </form>
         )}
       </div>
+
+      {activeTab === 'Subscription Plan' && tenant && (
+        <div className="card" style={{ padding: '24px 32px', animation: 'fadeIn 0.2s ease-out' }}>
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>Choose Your Platform Plan</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginTop: 4 }}>
+              Select a billing tier that matches your network scale. Transition from commissions to fixed subscriptions as your ISP grows.
+            </p>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 20,
+            marginBottom: 24
+          }}>
+            {[
+              {
+                key: 'FREE',
+                name: 'Starter (Free)',
+                price: 'UGX 0 / Month',
+                desc: 'Perfect for testing and small operations starting out.',
+                commission: '8% Mobile Money / 2% Voucher',
+                routers: 'Up to 5 Routers',
+                features: ['Cloud WinBox Tunnels', 'Free Analytics', 'AROFi branding'],
+                color: '#64748b'
+              },
+              {
+                key: 'PRO',
+                name: 'Pro Plan',
+                price: 'UGX 20,000 / Month',
+                desc: 'For growing ISPs wanting lower fees and branding control.',
+                commission: '4% Mobile Money / 0% Voucher',
+                routers: 'Up to 10 Routers',
+                features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
+                color: '#3b82f6',
+                badge: 'Recommended'
+              },
+              {
+                key: 'ENTERPRISE',
+                name: 'Enterprise Plan',
+                price: 'UGX 70,000 / Month',
+                desc: 'For professional, large-scale networks and operators.',
+                commission: '1.6% mm gateway fee / 0% platform fee',
+                routers: 'Unlimited Routers',
+                features: ['Cloud WinBox Tunnels', 'Custom Domains & SSL', 'Custom SMS Gateway API', 'Priority Support'],
+                color: '#8b5cf6'
+              }
+            ].map((plan) => {
+              const isActivePlan = selectedPlan === plan.key
+              return (
+                <div
+                  key={plan.key}
+                  style={{
+                    border: isActivePlan ? `2px solid ${plan.color}` : '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 20,
+                    background: isActivePlan ? 'var(--bg-muted, #f8fafc)' : 'var(--bg-card, #ffffff)',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: isActivePlan ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), var(--shadow-md)' : 'none',
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                >
+                  {plan.badge && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -12,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: plan.color,
+                      color: '#fff',
+                      padding: '4px 10px',
+                      borderRadius: 12,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      {plan.badge}
+                    </span>
+                  )}
+
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-1)' }}>{plan.name}</h3>
+                    <div style={{ margin: '12px 0' }}>
+                      <span style={{ fontSize: 20, fontWeight: 900, color: plan.color }}>{plan.price}</span>
+                    </div>
+                    <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 14 }}>
+                      {plan.desc}
+                    </p>
+
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 14 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+                        COMMISSION RATES
+                      </div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>{plan.commission}</div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 14 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+                        ROUTER LIMIT
+                      </div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>{plan.routers}</div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 16 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+                        INCLUDED FEATURES
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {plan.features.map((f, i) => (
+                          <li key={i}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={saving || isActivePlan}
+                    onClick={() => changePlan(plan.key)}
+                    className="btn"
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      backgroundColor: isActivePlan ? plan.color : 'transparent',
+                      color: isActivePlan ? '#fff' : 'var(--text-1)',
+                      border: isActivePlan ? 'none' : '1px solid var(--border)',
+                      cursor: isActivePlan ? 'default' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    {isActivePlan ? 'Active Plan ✓' : saving ? 'Updating...' : `Select ${plan.name}`}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -7,7 +7,9 @@ import {
   SystemOverviewResponse,
   TenantOverviewResponse,
   VouchersOverviewResponse,
+  PackageCatalogResponse,
 } from '@/lib/admin-types'
+import OnboardingWizard from '@/components/OnboardingWizard'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -318,13 +320,21 @@ async function PlatformDashboard() {
 async function VendorDashboard({ session, searchParams }: { session: AdminSessionResponse | null; searchParams?: DashboardSearchParams }) {
   const range = resolveDashboardRange(searchParams)
   const query = new URLSearchParams({ from: range.from.toISOString(), to: range.to.toISOString() }).toString()
-  const [billing, routers, sessions, vouchers, payoutProfile] = await Promise.all([
+  const [billing, routers, sessions, vouchers, payoutProfile, packages] = await Promise.all([
     fetchApi<BillingOverviewResponse>(`/billing/overview?${query}`),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<SessionOverviewResponse>('/sessions/overview'),
     fetchApi<VouchersOverviewResponse>('/vouchers/overview'),
     fetchApi<any>('/wallets/payouts/profile/me'),
+    fetchApi<PackageCatalogResponse>('/packages'),
   ])
+
+  const hasRouter = Boolean(routers?.routers && routers.routers.length > 0)
+  const hasPackage = Boolean(packages?.items && packages.items.length > 0)
+  const hasVouchers = Boolean(vouchers?.batches && vouchers.batches.length > 0)
+  const firstRouter = routers?.routers?.[0] || null
+  const onboardingIncomplete = !hasRouter || !hasPackage || !hasVouchers || 
+    Boolean(firstRouter && !firstRouter.provisioningCallbackReceived && firstRouter.onboardingStatus !== 'VERIFIED_ONLINE')
 
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []
@@ -351,6 +361,19 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
   return (
     <div className="tenant-dashboard">
+      {onboardingIncomplete && (
+        <OnboardingWizard
+          session={session!}
+          initialHasRouter={hasRouter}
+          initialRouter={firstRouter}
+          initialHasPackage={hasPackage}
+          initialHasVouchers={hasVouchers}
+          onComplete={async () => {
+            'use server'
+            // Managed on client side
+          }}
+        />
+      )}
       <DashboardAutoRefresh />
       <div className="dashboard-header">
         <div>
