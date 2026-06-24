@@ -27,7 +27,7 @@ SECRET="$(appenv RADIUS_SHARED_SECRET)"
 # 2. Install sstp-client (for pppd plugin) and sstp-server (via pip)
 echo "[sstp] Installing compilation tools and dependencies..."
 apt-get update
-apt-get install -y build-essential libevent-dev libssl-dev pkg-config ppp ppp-dev automake libtool git python3-pip python3-setuptools || true
+apt-get install -y build-essential libevent-dev libssl-dev pkg-config ppp ppp-dev automake libtool git python3-pip python3-setuptools freeradius-common || true
 
 echo "[sstp] Cloning and compiling sstp-client from source..."
 rm -rf /tmp/sstp-client
@@ -106,7 +106,7 @@ for dir in /etc/radiusclient /etc/radiusclient-ngx; do
 authserver 127.0.0.1:1812
 acctserver 127.0.0.1:1813
 servers $dir/servers
-dictionary $dir/dictionary
+dictionary /usr/share/freeradius/dictionary
 login_tries 4
 login_timeout 60
 EOF
