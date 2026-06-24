@@ -27,7 +27,7 @@ SECRET="$(appenv RADIUS_SHARED_SECRET)"
 # 2. Install sstp-client (for pppd plugin) and sstp-server (via pip)
 echo "[sstp] Installing compilation tools and dependencies..."
 apt-get update
-apt-get install -y build-essential libevent-dev libssl-dev pkg-config ppp ppp-dev automake libtool git python3-pip python3-setuptools
+apt-get install -y build-essential libevent-dev libssl-dev pkg-config ppp ppp-dev automake libtool git python3-pip python3-setuptools || true
 
 echo "[sstp] Cloning and compiling sstp-client from source..."
 rm -rf /tmp/sstp-client
@@ -40,7 +40,11 @@ make install
 ldconfig
 
 echo "[sstp] Installing sstp-server via pip..."
-pip3 install --break-system-packages sstp-server
+if ! command -v sstpd >/dev/null 2>&1; then
+  pip3 install --break-system-packages sstp-server || true
+else
+  echo "[sstp] sstpd is already installed, skipping pip install."
+fi
 
 # Create sstpd systemd unit file
 BINARY_PATH="$(which sstpd || echo /usr/local/bin/sstpd)"
@@ -51,7 +55,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$BINARY_PATH -l 0.0.0.0 -p 4443 -c /etc/sstpd/sstpd.crt -k /etc/sstpd/sstpd.key
+ExecStart=$BINARY_PATH -l 0.0.0.0 -p 4443 -c /etc/sstpd/sstpd.crt -k /etc/sstpd/sstpd.key --pppd-config /etc/ppp/options.sstpd
 Restart=always
 
 [Install]
@@ -81,6 +85,16 @@ nodeflate
 nopcomp
 noaccomp
 EOF
+
+# 5b. Configure chap-secrets and pap-secrets wildcards for RADIUS fallback
+echo "[sstp] Configuring chap-secrets and pap-secrets wildcards..."
+touch /etc/ppp/chap-secrets /etc/ppp/pap-secrets
+if ! grep -q "\* \* \"\" \*" /etc/ppp/chap-secrets; then
+  echo '* * "" *' >> /etc/ppp/chap-secrets
+fi
+if ! grep -q "\* \* \"\" \*" /etc/ppp/pap-secrets; then
+  echo '* * "" *' >> /etc/ppp/pap-secrets
+fi
 
 # 6. Configure RADIUS client configurations (support both traditional and ng paths)
 for dir in /etc/radiusclient /etc/radiusclient-ngx; do
