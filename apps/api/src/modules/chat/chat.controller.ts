@@ -18,7 +18,7 @@ export class ChatController {
   }
 
   @Get('messages')
-  getMessages(@Query('sessionId') sessionId: string) {
+  getMessages(@Query('sessionId') sessionId: string): any {
     const session = this.chatService.getSession(sessionId);
     return {
       messages: session ? session.messages : [],

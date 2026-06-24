@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-interface ChatMessage {
+export interface ChatMessage {
   sender: 'visitor' | 'admin';
   text: string;
   timestamp: string;
 }
 
-interface ChatSession {
+export interface ChatSession {
   sessionId: string;
   code: string;
   name: string;
