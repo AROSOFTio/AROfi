@@ -1723,7 +1723,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${router.name}`,
       `/interface sstp-client remove [find name="${remoteClientName}"]`,
-      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}" port=${sstpPort} user="router-${router.id}" password="${token}" profile=default disabled=no keepalive-timeout=60 verify-server-certificate=no`,
+      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" profile=default disabled=no keepalive-timeout=60 verify-server-certificate=no`,
       `:log info "AROFi Remote Access client configured successfully."`
     ].join('\n')
   }
