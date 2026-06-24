@@ -23,6 +23,7 @@ import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCredentialsService } from './router-credentials.service'
+import { RemoteProxyService } from './remote-proxy.service'
 
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
@@ -101,6 +102,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly mikrotikService: MikrotikService,
     private readonly routerCredentialsService: RouterCredentialsService,
+    private readonly remoteProxyService: RemoteProxyService,
   ) {}
 
   onModuleInit() {
@@ -448,7 +450,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     const registrationKey = randomUUID()
     const remoteToken = randomUUID()
-    const remotePort = Math.floor(Math.random() * 10000) + 30000
+    const remotePort = Math.floor(Math.random() * 100) + 30000
     const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
@@ -1561,7 +1563,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updated = true
     }
     if (!router.remotePort) {
-      updateData.remotePort = Math.floor(Math.random() * 10000) + 30000
+      updateData.remotePort = Math.floor(Math.random() * 100) + 30000
       updated = true
     }
     if (!router.remoteClientName) {
@@ -1595,7 +1597,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const remoteToken = router.remoteToken || randomUUID()
-    const remotePort = router.remotePort || Math.floor(Math.random() * 10000) + 30000
+    const remotePort = router.remotePort || Math.floor(Math.random() * 100) + 30000
     const remoteSstpIp = router.remoteSstpIp || `10.8.0.${Math.floor(Math.random() * 250) + 2}`
 
     const updatedRouter = await this.prisma.router.update({
@@ -1609,6 +1611,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
       include: this.routerInclude,
     })
+
+    // Start TCP proxy forwarding to the router's SSTP tunnel IP
+    this.remoteProxyService.startProxy(remotePort, remoteSstpIp, 8291, updatedRouter.name)
 
     return this.mapRouter(updatedRouter)
   }
@@ -1634,16 +1639,36 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       include: this.routerInclude,
     })
 
+    // Stop TCP proxy forwarding
+    if (router.remotePort) {
+      this.remoteProxyService.stopProxy(router.remotePort)
+    }
+
     return this.mapRouter(updatedRouter)
   }
 
   async enableAllRemotePorts() {
+    const routers = await this.prisma.router.findMany({
+      where: {
+        remotePort: { not: null },
+        remoteSstpIp: { not: null },
+      },
+    })
+
     await this.prisma.router.updateMany({
       data: {
         isRemotePortOpen: true,
         remoteAccessEnabled: true,
       },
     })
+
+    // Start TCP proxies for all routers
+    for (const r of routers) {
+      if (r.remotePort && r.remoteSstpIp) {
+        this.remoteProxyService.startProxy(r.remotePort, r.remoteSstpIp, 8291, r.name)
+      }
+    }
+
     return { success: true }
   }
 

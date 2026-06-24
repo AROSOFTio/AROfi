@@ -414,7 +414,7 @@ const docs: Record<string, DocPage> = {
         body: [
           'Most ISP connections in Uganda (MTN, Airtel, Roke) assign private IP addresses to customers behind CGNAT. This makes direct remote WinBox access (TCP 8291) impossible.',
           'To bypass this, AROFi creates an SSTP VPN interface on the MikroTik router. The router establishes a secure SSL/TLS connection outwards to the central AROFi VPN gateway (e.g. vpn2.arofi.arosoft.io).',
-          'Once connected, the router is assigned a static IP in the VPN network. When you request a remote port, AROFi maps a high-range public port (e.g. 30000-40000) to the router\'s WinBox port (8291) through the tunnel.',
+          'Once connected, the router is assigned a static IP in the VPN network. When you request a remote port, AROFi maps a high-range public port (e.g. 30000-30100) to the router\'s WinBox port (8291) through the tunnel.',
         ],
       },
       {
@@ -453,7 +453,15 @@ const docs: Record<string, DocPage> = {
         ],
       },
       {
-        heading: '5. Security Best Practices',
+        heading: '5. VPN Server Configuration on Contabo VPS',
+        body: [
+          'To allow routers to dial SSTP tunnels, ensure an SSTP VPN server (like sstpd or accel-ppp) is installed on your Contabo host VPS and listening on port 443 (or proxied via Nginx).',
+          'Ensure the SSTP server subnet is configured to allocate IP addresses matching the 10.8.0.x subnet.',
+          'Traffic forwarding from ports 30000-30100 is automatically managed by the AROFi API container. Simply expose port range 30000-30100 in docker-compose.yml (already configured).',
+        ],
+      },
+      {
+        heading: '6. Security Best Practices',
         body: [
           'Warning: Keeping remote ports open indefinitely exposes your router to malicious automated brute-force attacks.',
           '1. Always close your remote port immediately after completing your maintenance task.',

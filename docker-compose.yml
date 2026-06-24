@@ -94,6 +94,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    ports:
+      - "30000-30100:30000-30100"
     environment:
       <<: *app-env
       SERVICE_NAME: api
