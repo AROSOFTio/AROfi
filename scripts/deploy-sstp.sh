@@ -51,7 +51,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$BINARY_PATH -p 4443 -c /etc/sstpd/sstpd.crt -k /etc/sstpd/sstpd.key --pppd-opts "file /etc/ppp/options.sstpd"
+ExecStart=$BINARY_PATH -p 4443 -c /etc/sstpd/sstpd.crt -k /etc/sstpd/sstpd.key
 Restart=always
 
 [Install]
@@ -122,8 +122,13 @@ done
 # 7. Enable IP Forwarding on the host VPS
 echo "[sstp] Enabling IP forwarding on host..."
 sysctl -w net.ipv4.ip_forward=1
-if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-  echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+if [ -f /etc/sysctl.conf ]; then
+  if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  fi
+else
+  mkdir -p /etc/sysctl.d
+  echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-ipforward.conf
 fi
 
 # 8. Start and enable sstpd service
