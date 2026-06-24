@@ -109,16 +109,18 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     // Background reachability probe: keeps lastSeenAt fresh for routers whose
     // management API is reachable (public IP / VPN), so the dashboard shows
     // them live within ~2s. Disabled with ROUTER_PROBE_ENABLED=false.
-    if (process.env.ROUTER_PROBE_ENABLED === 'false') {
-      return
+    if (process.env.ROUTER_PROBE_ENABLED !== 'false') {
+      this.probeTimer = setInterval(() => {
+        void this.runReachabilityProbes()
+      }, Math.max(2000, this.routerProbeIntervalMs))
+      // Don't keep the process alive solely for this timer.
+      if (this.probeTimer && typeof this.probeTimer.unref === 'function') {
+        this.probeTimer.unref()
+      }
     }
-    this.probeTimer = setInterval(() => {
-      void this.runReachabilityProbes()
-    }, Math.max(2000, this.routerProbeIntervalMs))
-    // Don't keep the process alive solely for this timer.
-    if (typeof this.probeTimer.unref === 'function') {
-      this.probeTimer.unref()
-    }
+
+    // Sync all existing router VPN credentials to RADIUS database
+    void this.syncAllRouterVpnCredentialsToRadius()
   }
 
   onModuleDestroy() {
@@ -1566,6 +1568,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updateData.remotePort = Math.floor(Math.random() * 100) + 30000
       updated = true
     }
+    if (!router.remoteSstpIp) {
+      updateData.remoteSstpIp = `10.8.0.${Math.floor(Math.random() * 250) + 2}`
+      updated = true
+    }
     if (!router.remoteClientName) {
       updateData.remoteClientName = 'AROFI_REMOTE'
       updated = true
@@ -1577,6 +1583,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         data: updateData,
         include: this.routerInclude,
       })
+      if (updatedRouter.remoteToken && updatedRouter.remoteSstpIp) {
+        await this.syncRadiusVpnCredentials(
+          updatedRouter.id,
+          updatedRouter.remoteToken,
+          updatedRouter.remoteSstpIp,
+        )
+      }
       return this.mapRouter(updatedRouter)
     }
 
@@ -1613,6 +1626,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
       include: this.routerInclude,
     })
+
+    // Sync to FreeRADIUS
+    await this.syncRadiusVpnCredentials(routerId, remoteToken, remoteSstpIp)
 
     // Start TCP proxy forwarding to the router's SSTP tunnel IP
     this.remoteProxyService.startProxy(remotePort, remoteSstpIp, 8291, updatedRouter.name)
@@ -1664,9 +1680,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
     })
 
-    // Start TCP proxies for all routers
+    // Start TCP proxies and sync to RADIUS for all routers
     for (const r of routers) {
-      if (r.remotePort && r.remoteSstpIp) {
+      if (r.remotePort && r.remoteSstpIp && r.remoteToken) {
+        await this.syncRadiusVpnCredentials(r.id, r.remoteToken, r.remoteSstpIp)
         this.remoteProxyService.startProxy(r.remotePort, r.remoteSstpIp, 8291, r.name)
       }
     }
@@ -1684,15 +1701,75 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'arofi.arosoftlabs.com'
-    const sstpPort = process.env.VPN_SERVER_PORT || '443'
+    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
     const remoteClientName = router.remoteClientName || 'AROFI_REMOTE'
 
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${router.name}`,
       `/interface sstp-client remove [find name="${remoteClientName}"]`,
-      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}" port=${sstpPort} user="router-${router.id}" password="${token}" profile=default disabled=no keepalive-timeout=60`,
+      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}" port=${sstpPort} user="router-${router.id}" password="${token}" profile=default disabled=no keepalive-timeout=60 verify-server-certificate=no`,
       `:log info "AROFi Remote Access client configured successfully."`
     ].join('\n')
+  }
+
+  private async syncAllRouterVpnCredentialsToRadius() {
+    try {
+      const routers = await this.prisma.router.findMany({
+        where: {
+          remoteToken: { not: null },
+          remoteSstpIp: { not: null },
+        },
+      })
+      for (const r of routers) {
+        await this.syncRadiusVpnCredentials(r.id, r.remoteToken!, r.remoteSstpIp!)
+      }
+      this.logger.log(`Synchronized ${routers.length} router VPN credentials to FreeRADIUS.`)
+    } catch (error) {
+      this.logger.error(
+        `Failed to synchronize router VPN credentials on startup: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    }
+  }
+
+  async syncRadiusVpnCredentials(routerId: string, remoteToken: string, remoteSstpIp: string) {
+    const username = `router-${routerId}`
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Clear existing rows to prevent duplicates
+        await tx.radCheck.deleteMany({
+          where: { username, attribute: 'Cleartext-Password' },
+        })
+        await tx.radReply.deleteMany({
+          where: { username, attribute: 'Framed-IP-Address' },
+        })
+
+        // Insert fresh settings
+        await tx.radCheck.create({
+          data: {
+            username,
+            attribute: 'Cleartext-Password',
+            op: ':=',
+            value: remoteToken,
+          },
+        })
+        await tx.radReply.create({
+          data: {
+            username,
+            attribute: 'Framed-IP-Address',
+            op: '=',
+            value: remoteSstpIp,
+          },
+        })
+      })
+    } catch (error) {
+      this.logger.error(
+        `Failed to sync RADIUS VPN credentials for router "${routerId}": ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    }
   }
 }
