@@ -103,14 +103,12 @@ for dir in /etc/radiusclient /etc/radiusclient-ngx; do
 
   # Write radiusclient.conf
   cat << EOF > "$dir/radiusclient.conf"
-nas-identifier sstp-vpn
 authserver 127.0.0.1:1812
 acctserver 127.0.0.1:1813
 servers $dir/servers
 dictionary $dir/dictionary
 login_tries 4
 login_timeout 60
-naspotr 0
 EOF
 
   # Write servers file with shared secret
