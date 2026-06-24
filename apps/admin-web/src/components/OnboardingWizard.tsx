@@ -292,7 +292,10 @@ export default function OnboardingWizard({
 
       if (batch) {
         setGeneratedBatch(batch)
-        setSuccess('First voucher batch generated successfully!')
+        setSuccess('Your WiFi system is set up successfully — enjoy your business! A confirmation email is on its way.')
+        clientPostApi('/onboarding/complete', {}).catch(() => {
+          // non-blocking — the dashboard still works even if the email send fails
+        })
         // All complete, call final redirect/callback after short delay
         setTimeout(() => {
           onComplete()

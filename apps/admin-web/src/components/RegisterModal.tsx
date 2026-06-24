@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
 import { setBrowserAdminSession } from '@/lib/admin-session'
+import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 
 type RegisterFormState = {
   tenantName: string
@@ -32,6 +33,42 @@ const initialFormState: RegisterFormState = {
   confirmPassword: '',
 }
 
+const PLAN_CARDS = [
+  {
+    key: 'FREE',
+    name: 'Starter (Free)',
+    price: 'UGX 0 / Month',
+    desc: 'Perfect for testing and small operations starting out.',
+    color: '#64748b',
+    badge: undefined as string | undefined,
+  },
+  {
+    key: 'PRO',
+    name: 'Pro Plan',
+    price: 'UGX 20,000 / Month',
+    desc: 'For growing ISPs wanting lower fees and branding control.',
+    color: '#3b82f6',
+    badge: 'Recommended',
+  },
+  {
+    key: 'ENTERPRISE',
+    name: 'Enterprise Plan',
+    price: 'UGX 70,000 / Month',
+    desc: 'For professional, large-scale networks and operators.',
+    color: '#8b5cf6',
+    badge: undefined as string | undefined,
+  },
+] as const
+
+type PlanKey = (typeof PLAN_CARDS)[number]['key']
+
+type CheckoutStatus = {
+  selectedPlan: string
+  subscriptionStatus: string
+  pendingPlan: string | null
+  checkout: { status: string; statusMessage?: string; amountUgx: number; plan: string } | null
+}
+
 export function RegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [formState, setFormState] = useState(initialFormState)
   const [step, setStep] = useState(1)
@@ -40,11 +77,29 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
   const [success, setSuccess] = useState<TenantRegistrationResponse | null>(null)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
+  // Plan selection (step 4)
+  const [planChoice, setPlanChoice] = useState<PlanKey | null>(null)
+  const [planSaving, setPlanSaving] = useState(false)
+  const [planError, setPlanError] = useState('')
+
+  // Checkout (step 5)
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState('')
+  const [checkoutState, setCheckoutState] = useState<CheckoutStatus | null>(null)
+  const pollRef = useRef<number | null>(null)
+
   const portalHint = useMemo(() => {
     const value = formState.desiredDomain.trim()
     if (!value) return 'Generated automatically'
     return value.includes('.') ? value : `${value}.tenant.arofi`
   }, [formState.desiredDomain])
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current)
+    }
+  }, [])
 
   if (!open) return null
 
@@ -95,6 +150,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       const registration = body as TenantRegistrationResponse
       setBrowserAdminSession(registration.access_token)
       setSuccess(registration)
+      setPhoneNumber(formState.phoneNumber.trim())
       setStep(4)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to create workspace.')
@@ -103,32 +159,175 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
     }
   }
 
+  async function handleSelectPlan(plan: PlanKey) {
+    setPlanError('')
+    setPlanSaving(true)
+    try {
+      await clientPostApi('/subscription/select', { plan })
+      setPlanChoice(plan)
+
+      if (plan === 'FREE') {
+        window.location.href = '/dashboard'
+        return
+      }
+
+      setStep(5)
+    } catch (planRequestError) {
+      setPlanError(planRequestError instanceof Error ? planRequestError.message : 'Unable to save plan selection.')
+    } finally {
+      setPlanSaving(false)
+    }
+  }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      window.clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  function startPolling() {
+    stopPolling()
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const statusResponse = await clientFetchApi<CheckoutStatus>('/subscription/checkout/status')
+        setCheckoutState(statusResponse)
+
+        const checkoutPaymentStatus = statusResponse.checkout?.status
+        if (statusResponse.subscriptionStatus === 'ACTIVE' && !statusResponse.checkout) {
+          stopPolling()
+          setCheckoutLoading(false)
+          window.location.href = '/dashboard'
+        } else if (checkoutPaymentStatus === 'FAILED' || checkoutPaymentStatus === 'CANCELLED' || checkoutPaymentStatus === 'EXPIRED') {
+          stopPolling()
+          setCheckoutLoading(false)
+          setCheckoutError(statusResponse.checkout?.statusMessage || 'Payment was not completed. Please try again.')
+        }
+      } catch (pollError) {
+        // keep polling, transient network errors are common during MoMo prompts
+      }
+    }, 4000)
+  }
+
+  async function handlePayNow() {
+    setCheckoutError('')
+    setCheckoutLoading(true)
+    try {
+      const statusResponse = await clientPostApi<CheckoutStatus>('/subscription/checkout', { phoneNumber })
+      setCheckoutState(statusResponse)
+      startPolling()
+    } catch (checkoutRequestError) {
+      setCheckoutLoading(false)
+      setCheckoutError(checkoutRequestError instanceof Error ? checkoutRequestError.message : 'Unable to start payment.')
+    }
+  }
+
+  async function handleSkipAndPayLater() {
+    setCheckoutError('')
+    setCheckoutLoading(true)
+    try {
+      await clientPostApi('/subscription/skip', {})
+      window.location.href = '/dashboard'
+    } catch (skipError) {
+      setCheckoutLoading(false)
+      setCheckoutError(skipError instanceof Error ? skipError.message : 'Unable to skip payment right now.')
+    }
+  }
+
+  const stepTitles: Record<number, string> = {
+    1: 'Create Tenant Workspace',
+    2: 'Create Tenant Workspace',
+    3: 'Create Tenant Workspace',
+    4: 'Choose Your Plan',
+    5: 'Activate Your Plan',
+  }
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-card">
-        <button type="button" className="modal-close" onClick={onClose}>Close</button>
-        <div className="modal-kicker">Step {step} of 4</div>
-        <h2 className="modal-title">{step === 4 ? 'Workspace Ready' : 'Create Tenant Workspace'}</h2>
+      <div className="modal-card" style={step >= 4 ? { width: 'min(720px, 96vw)' } : undefined}>
+        {step < 4 && <button type="button" className="modal-close" onClick={onClose}>Close</button>}
+        <div className="modal-kicker">Step {step} of 5</div>
+        <h2 className="modal-title">{stepTitles[step]}</h2>
         <div className="wizard-steps">
-          {[1, 2, 3, 4].map((item) => <span key={item} className={item <= step ? 'active' : ''} />)}
+          {[1, 2, 3, 4, 5].map((item) => <span key={item} className={item <= step ? 'active' : ''} />)}
         </div>
 
         {step === 4 && success ? (
-          <div className="sop-list">
-            {[
-              ['Add Your Router', 'Go to Routers, register the MikroTik, then paste the generated script into WinBox Terminal.'],
-              ['Create Packages', 'Publish at least one package with price, duration, and optional data limits.'],
-              ['Test the Portal', 'Connect a phone to the WiFi and open the captive portal to buy a package.'],
-              ['Go Live', 'Confirm RADIUS traffic, accounting, voucher redemption, and paid activation.'],
-            ].map(([title, description], index) => (
-              <div key={title} className="sop-item">
-                <strong>{index + 1}. {title}</strong>
-                <span>{description}</span>
-              </div>
-            ))}
-            <button type="button" className="btn btn-primary btn-block" onClick={() => { window.location.href = '/dashboard' }}>
-              Open Dashboard
-            </button>
+          <div style={{ marginTop: 18 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 18 }}>
+              Select a billing tier that matches your network scale. You can change this anytime in Settings.
+            </p>
+            {planError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{planError}</p>}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              {PLAN_CARDS.map((plan) => (
+                <div
+                  key={plan.key}
+                  style={{
+                    border: `1px solid var(--border)`,
+                    borderRadius: 12,
+                    padding: 18,
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}
+                >
+                  {plan.badge && (
+                    <span style={{
+                      position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
+                      background: plan.color, color: '#fff', padding: '3px 10px', borderRadius: 12,
+                      fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}>{plan.badge}</span>
+                  )}
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 800 }}>{plan.name}</h3>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: plan.color, margin: '8px 0' }}>{plan.price}</div>
+                    <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{plan.desc}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={planSaving}
+                    onClick={() => handleSelectPlan(plan.key)}
+                    className="btn btn-primary btn-block"
+                    style={{ backgroundColor: plan.color, borderColor: plan.color }}
+                  >
+                    {planSaving ? 'Saving...' : `Select ${plan.name}`}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : step === 5 && success ? (
+          <div style={{ marginTop: 18 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 18 }}>
+              Enter the phone number to charge for your {planChoice === 'ENTERPRISE' ? 'Enterprise' : 'Pro'} subscription. You can also skip and pay later — your account will still work.
+            </p>
+            {checkoutError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{checkoutError}</p>}
+            {checkoutState?.checkout?.status === 'PENDING' && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+                Check your phone and enter your Mobile Money PIN to approve the payment. This page will update automatically.
+              </p>
+            )}
+            <div className="form-group">
+              <label className="form-label">Phone Number (MTN or Airtel)</label>
+              <input
+                className="form-input"
+                type="text"
+                value={phoneNumber}
+                onChange={(event) => setPhoneNumber(event.target.value)}
+                placeholder="07XXXXXXXX"
+                disabled={checkoutLoading}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 18 }}>
+              <button type="button" className="btn btn-ghost" onClick={handleSkipAndPayLater} disabled={checkoutLoading}>
+                Skip and pay later
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handlePayNow} disabled={checkoutLoading || !phoneNumber.trim()}>
+                {checkoutLoading ? 'Processing...' : 'Pay Now'}
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>

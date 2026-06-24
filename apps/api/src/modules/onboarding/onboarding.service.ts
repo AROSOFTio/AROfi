@@ -2,9 +2,11 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger }
 import { FeatureLimitCategory, WalletOwnerType } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { randomUUID } from 'crypto'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { AuthService } from '../auth/auth.module'
 import { RoleCatalogService } from '../auth/role-catalog.service'
+import { MailService } from '../mail/mail.service'
 import { RegisterTenantDto } from './dto/register-tenant.dto'
 
 const DEFAULT_FEATURE_LIMITS = [
@@ -95,7 +97,43 @@ export class OnboardingService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly roleCatalogService: RoleCatalogService,
+    private readonly mailService: MailService,
   ) {}
+
+  async completeOnboarding(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        tenantSettings: { select: { routerOnboardingPreferences: true } },
+        users: { orderBy: { createdAt: 'asc' }, take: 1, select: { email: true, firstName: true, lastName: true } },
+      },
+    })
+
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found')
+    }
+
+    const prefs = (tenant.tenantSettings?.routerOnboardingPreferences as Record<string, unknown> | null) ?? {}
+    const alreadySent = Boolean(prefs.onboardingCompletedAt)
+    const recipientEmail = tenant.supportEmail ?? tenant.users[0]?.email
+
+    if (!alreadySent && recipientEmail) {
+      const recipientName = tenant.users[0] ? `${tenant.users[0].firstName} ${tenant.users[0].lastName}`.trim() : tenant.name
+      await this.mailService.sendOnboardingCompleteEmail({
+        to: recipientEmail,
+        tenantName: tenant.name,
+        recipientName: recipientName || tenant.name,
+      })
+
+      await this.prisma.tenantSetting.upsert({
+        where: { tenantId },
+        update: { routerOnboardingPreferences: { ...prefs, onboardingCompletedAt: new Date().toISOString() } as Prisma.InputJsonValue },
+        create: { tenantId, routerOnboardingPreferences: { ...prefs, onboardingCompletedAt: new Date().toISOString() } as Prisma.InputJsonValue },
+      })
+    }
+
+    return { ok: true, emailSent: !alreadySent && Boolean(recipientEmail) }
+  }
 
   async registerTenant(dto: RegisterTenantDto) {
     try {

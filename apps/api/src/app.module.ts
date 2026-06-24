@@ -20,6 +20,8 @@ import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { MailModule } from './modules/mail/mail.module';
 
 @Controller('health')
 export class HealthController {
@@ -56,6 +58,8 @@ export class HealthController {
     BillingModule,
     WalletsModule,
     ChatModule,
+    SubscriptionModule,
+    MailModule,
   ],
   controllers: [HealthController],
   providers: [
