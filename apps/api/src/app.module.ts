@@ -19,6 +19,7 @@ import { SystemModule } from './modules/system/system.module';
 import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Controller('health')
 export class HealthController {
@@ -54,6 +55,7 @@ export class HealthController {
     VouchersModule,
     BillingModule,
     WalletsModule,
+    ChatModule,
   ],
   controllers: [HealthController],
   providers: [
