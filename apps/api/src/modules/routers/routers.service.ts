@@ -1857,7 +1857,35 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const waUrl = process.env.ROUTER_ALERTS_WHATSAPP_URL
     const waPhone = process.env.ROUTER_ALERTS_WHATSAPP_PHONE
     const waApiKey = process.env.ROUTER_ALERTS_WHATSAPP_API_KEY
-    if (waUrl && waPhone) {
+    const wahaUrl = process.env.WHATSAPP_GATEWAY_URL
+    const wahaApiKey = process.env.WHATSAPP_GATEWAY_API_KEY
+
+    if (wahaUrl && waPhone) {
+      try {
+        const cleanPhone = waPhone.replace('+', '').trim()
+        const chatId = cleanPhone.endsWith('@c.us') ? cleanPhone : `${cleanPhone}@c.us`
+        const url = `${wahaUrl.replace(/\/$/, '')}/api/sendText`
+        
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        }
+        if (wahaApiKey) {
+          headers['X-Api-Key'] = wahaApiKey
+        }
+
+        await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            chatId,
+            text: message,
+            session: 'default',
+          }),
+        })
+      } catch (err) {
+        this.logger.error(`Failed to send WhatsApp alert via WAHA: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    } else if (waUrl && waPhone) {
       try {
         let url = waUrl
         let method = 'POST'

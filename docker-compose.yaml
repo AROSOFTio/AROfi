@@ -166,5 +166,23 @@ services:
       timeout: 5s
       retries: 5
 
+  whatsapp:
+    image: devlikeapro/waha:latest
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    environment:
+      - WAHA_PRINT_QR=true
+      - WAHA_SECURITY_API_KEY=${WHATSAPP_GATEWAY_API_KEY:-}
+    volumes:
+      - wa-sessions:/app/.sessions
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   pg-data:
+  wa-sessions:
