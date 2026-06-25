@@ -66,29 +66,42 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
 
     const server = net.createServer((clientSocket) => {
       this.logger.log(`New remote WinBox connection request for ${routerName} on port ${localPort}`)
-      
-      const remoteSocket = net.connect(remotePort, remoteHost, () => {
+
+      const remoteSocket = net.connect(remotePort, remoteHost)
+      // Without this, a down/unreachable SSTP tunnel leaves the OS-level TCP
+      // connect attempt to hang for minutes with no 'error' event, so WinBox
+      // sits on "Authenticating..." forever instead of failing fast.
+      remoteSocket.setTimeout(8000)
+
+      remoteSocket.once('connect', () => {
+        remoteSocket.setTimeout(0)
         this.logger.log(`Established tunnel connection to ${routerName} (${remoteHost}:${remotePort})`)
         clientSocket.pipe(remoteSocket)
         remoteSocket.pipe(clientSocket)
       })
 
+      remoteSocket.on('timeout', () => {
+        this.logger.warn(`Tunnel connection to ${routerName} (${remoteHost}:${remotePort}) timed out - is its SSTP VPN tunnel up?`)
+        remoteSocket.destroy()
+        clientSocket.destroy()
+      })
+
       clientSocket.on('error', (err) => {
         this.logger.debug(`Client socket error on port ${localPort}: ${err.message}`)
-        remoteSocket.end()
+        remoteSocket.destroy()
       })
 
       remoteSocket.on('error', (err) => {
         this.logger.warn(`Tunnel socket error connecting to ${routerName} (${remoteHost}:${remotePort}): ${err.message}`)
-        clientSocket.end()
+        clientSocket.destroy()
       })
 
       clientSocket.on('close', () => {
-        remoteSocket.end()
+        remoteSocket.destroy()
       })
 
       remoteSocket.on('close', () => {
-        clientSocket.end()
+        clientSocket.destroy()
       })
     })
 
