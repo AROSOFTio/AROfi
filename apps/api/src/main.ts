@@ -12,6 +12,10 @@ import * as compression from 'compression';
 async function bootstrap() {
   assertRequiredProductionConfig()
   const app = await NestFactory.create(AppModule);
+  // Behind Coolify's reverse proxy, req.ip otherwise resolves to the proxy's
+  // own address for every request platform-wide, which collapses the global
+  // ThrottlerGuard's per-IP bucket into one shared bucket for all tenants.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.setGlobalPrefix('api');
   app.use(helmet());
   app.use(compression({

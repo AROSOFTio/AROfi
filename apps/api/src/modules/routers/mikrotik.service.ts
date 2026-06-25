@@ -192,6 +192,16 @@ export class MikrotikService {
       `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30s`,
       `# Enforce shared-users=1 and keepalive-timeout=30s on all user profiles to prevent concurrent session sharing`,
       `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=30s }`,
+      // dns-name on the profile only controls which name the HotSpot itself answers
+      // for unauthenticated clients it already intercepted; resolving the name from
+      // a fresh DNS query (e.g. a customer scanning the printed voucher QR before
+      // they've been trapped) needs an explicit static record too. This must run in
+      // BOTH provisioning modes — SAFE_EXISTING_ROUTER reuses the operator's own
+      // hotspot, which has no reason to already know about "<tenant>.wifi".
+      ...(input.dnsName ? [
+        `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
+      ] : []),
     ]
 
     const walledGarden = [
@@ -264,10 +274,6 @@ export class MikrotikService {
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
-      ...(input.dnsName ? [
-        `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
-        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
-      ] : []),
       ``,
       `# Detect WAN interface dynamically so NAT works on any router model`,
       `# Try multiple methods: default route → PPPoE → LTE → any non-hotspot interface with IP`,
