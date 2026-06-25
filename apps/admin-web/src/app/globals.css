@@ -1452,27 +1452,6 @@ body.mobile-nav-locked { overflow: hidden; }
   font-size: 14px;
 }
 
-.btn {
-  border-radius: 6px;
-  min-height: 40px;
-}
-
-.btn-primary {
-  background: #18181b;
-}
-
-.btn-ghost {
-  background: #fff;
-  color: var(--text-1);
-}
-
-.form-input {
-  background: #fff;
-  border-radius: 6px;
-  min-height: 45px;
-  font-size: 16px;
-}
-
 .table-toolbar {
   display: flex;
   align-items: center;
@@ -1523,15 +1502,6 @@ th {
 td {
   color: #050505;
   font-size: 16px;
-}
-
-.modal-overlay {
-  background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: none;
-}
-
-.modal-card {
-  border-radius: 8px;
 }
 
 .tenant-dashboard {
@@ -2272,6 +2242,36 @@ td { font-size: 13px; }
 @media (max-width: 560px) {
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* Shared boolean-toggle card — used for every checkbox inside forms
+   (withdrawal confirmations, settings flags) so they read as one consistent
+   control instead of a loose checklist. */
+.check-card {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-app);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.check-card input { margin-top: 2px; }
+
+.form-grid .form-subheading {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin: 10px 0 -2px;
+}
+.form-grid .form-subheading:first-child { margin-top: 0; }
 
 /* Selectable mode cards (replaces dropdowns where the choice is important) */
 .mode-card {

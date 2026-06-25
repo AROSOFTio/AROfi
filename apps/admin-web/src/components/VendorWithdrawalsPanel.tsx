@@ -394,9 +394,10 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
               <form onSubmit={withdraw}>
                 <div className="modal-kicker">Wallet withdrawal</div>
                 <h2 className="modal-title">Withdraw to registered number</h2>
-                <FormGrid>
+                <div className="form-grid" style={{ marginTop: 22 }}>
                   <ReadOnlyLine label="Withdraw to" value={primaryNumber ? `${primaryNumber.network} ${maskPhone(primaryNumber.normalizedPhone)}` : 'No verified primary payout number'} />
-                  <Field label="Amount to send">
+                  <label className="form-group">
+                    <span className="form-label">Amount to send</span>
                     <input
                       name="amountUgx"
                       type="number"
@@ -408,35 +409,40 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                       className="form-input"
                       disabled={busy === 'withdraw'}
                     />
-                  </Field>
-                  <MathBreakdown
-                    amountUgx={withdrawalMath.amountUgx}
-                    feeAmountUgx={withdrawalMath.feeAmountUgx}
-                    totalDebitUgx={withdrawalMath.totalDebitUgx}
-                    remainingUgx={withdrawalMath.remainingUgx}
-                    exceedsBalance={withdrawalMath.exceedsBalance}
-                    belowMinimum={withdrawalMath.belowMinimum}
-                  />
-                  <Field label="Disbursement secret key">
+                  </label>
+                  <div className="form-span-2">
+                    <MathBreakdown
+                      amountUgx={withdrawalMath.amountUgx}
+                      feeAmountUgx={withdrawalMath.feeAmountUgx}
+                      totalDebitUgx={withdrawalMath.totalDebitUgx}
+                      remainingUgx={withdrawalMath.remainingUgx}
+                      exceedsBalance={withdrawalMath.exceedsBalance}
+                      belowMinimum={withdrawalMath.belowMinimum}
+                    />
+                  </div>
+                  <label className="form-group form-span-2">
+                    <span className="form-label">Disbursement secret key</span>
                     <input name="secretKey" type="password" required placeholder="Required for every withdrawal" className="form-input" disabled={busy === 'withdraw'} />
-                  </Field>
-                  <label style={checkRowStyle}>
+                  </label>
+                  <label className="check-card form-span-2">
                     <input name="confirmPhoneInPossession" type="checkbox" required disabled={busy === 'withdraw'} />
                     <span>I confirm I have this registered payout phone with me.</span>
                   </label>
-                  <label style={checkRowStyle}>
+                  <label className="check-card form-span-2">
                     <input name="acceptFinalTerms" type="checkbox" required disabled={busy === 'withdraw'} />
                     <span>I accept that after provider disbursement, this payout is final and cannot be reversed by AROFi.</span>
                   </label>
-                  <FormProcessStatus
-                    busy={busy === 'withdraw'}
-                    error={modalError}
-                    text={progress || 'Sending withdrawal to the provider. This window closes after AROFi receives the API response.'}
-                  />
-                  <button className="btn btn-primary btn-block" disabled={busy === 'withdraw' || !primaryNumber || withdrawalMath.exceedsBalance || withdrawalMath.belowMinimum}>
+                  <div className="form-span-2">
+                    <FormProcessStatus
+                      busy={busy === 'withdraw'}
+                      error={modalError}
+                      text={progress || 'Sending withdrawal to the provider. This window closes after AROFi receives the API response.'}
+                    />
+                  </div>
+                  <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'withdraw' || !primaryNumber || withdrawalMath.exceedsBalance || withdrawalMath.belowMinimum}>
                     {busy === 'withdraw' ? 'Processing withdrawal...' : 'Withdraw'}
                   </button>
-                </FormGrid>
+                </div>
               </form>
             )}
 
@@ -444,15 +450,26 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
               <form onSubmit={setSecret}>
                 <div className="modal-kicker">Security</div>
                 <h2 className="modal-title">{profile.profile.secretConfigured ? 'Change secret key' : 'Set secret key'}</h2>
-                <FormGrid>
-                  <Field label="Secret key">
-                    {profile.profile.secretConfigured && <input name="currentSecretKey" type="password" placeholder="Current withdrawal secret or use password below" className="form-input" disabled={busy === 'secret'} />}
+                <div className="form-grid" style={{ marginTop: 22 }}>
+                  {profile.profile.secretConfigured && (
+                    <label className="form-group">
+                      <span className="form-label">Current secret key</span>
+                      <input name="currentSecretKey" type="password" placeholder="Current withdrawal secret or use password below" className="form-input" disabled={busy === 'secret'} />
+                    </label>
+                  )}
+                  <label className="form-group">
+                    <span className="form-label">Current account password</span>
                     <input name="currentPassword" type="password" placeholder="Current account password" className="form-input" disabled={busy === 'secret'} />
+                  </label>
+                  <label className="form-group form-span-2">
+                    <span className="form-label">New secret key</span>
                     <input name="secretKey" type="password" minLength={8} required placeholder="At least 8 characters" className="form-input" disabled={busy === 'secret'} />
-                  </Field>
-                  <FormProcessStatus busy={busy === 'secret'} error={modalError} text={progress || 'Saving secret key and refreshing profile.'} />
-                  <button className="btn btn-primary btn-block" disabled={busy === 'secret'}>{busy === 'secret' ? 'Saving secret key...' : 'Save secret key'}</button>
-                </FormGrid>
+                  </label>
+                  <div className="form-span-2">
+                    <FormProcessStatus busy={busy === 'secret'} error={modalError} text={progress || 'Saving secret key and refreshing profile.'} />
+                  </div>
+                  <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'secret'}>{busy === 'secret' ? 'Saving secret key...' : 'Save secret key'}</button>
+                </div>
               </form>
             )}
 
@@ -460,27 +477,33 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
               <form onSubmit={addNumber}>
                 <div className="modal-kicker">Payout setup</div>
                 <h2 className="modal-title">Register payout number</h2>
-                <FormGrid>
-                  <Field label="Network">
+                <div className="form-grid" style={{ marginTop: 22 }}>
+                  <label className="form-group">
+                    <span className="form-label">Network</span>
                     <select name="network" className="form-input" required disabled={busy === 'number'}>
                       <option value="MTN">MTN</option>
                       <option value="AIRTEL">Airtel</option>
                     </select>
-                  </Field>
-                  <Field label="Phone number">
+                  </label>
+                  <label className="form-group">
+                    <span className="form-label">Phone number</span>
                     <input name="phoneNumber" required placeholder="0771234567" className="form-input" disabled={busy === 'number'} />
-                  </Field>
-                  <Field label="Label">
+                  </label>
+                  <label className="form-group">
+                    <span className="form-label">Label</span>
                     <input name="label" placeholder="Owner or business line" className="form-input" disabled={busy === 'number'} />
-                  </Field>
-                  <Field label="Owner name">
+                  </label>
+                  <label className="form-group">
+                    <span className="form-label">Owner name</span>
                     <input name="ownerName" placeholder="Registered owner name" className="form-input" disabled={busy === 'number'} />
-                  </Field>
-                  <FormProcessStatus busy={busy === 'number'} error={modalError} text={progress || 'Registering payout number and refreshing profile.'} />
-                  <button className="btn btn-primary btn-block" disabled={busy === 'number' || verifiedNumbers.length >= 2}>
+                  </label>
+                  <div className="form-span-2">
+                    <FormProcessStatus busy={busy === 'number'} error={modalError} text={progress || 'Registering payout number and refreshing profile.'} />
+                  </div>
+                  <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'number' || verifiedNumbers.length >= 2}>
                     {busy === 'number' ? 'Submitting number...' : 'Submit number for verification'}
                   </button>
-                </FormGrid>
+                </div>
               </form>
             )}
 
@@ -488,33 +511,41 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
               <form onSubmit={requestChange}>
                 <div className="modal-kicker">Approval required</div>
                 <h2 className="modal-title">Request payout number change</h2>
-                <FormGrid>
-                  <Field label="Existing number">
+                <div className="form-grid" style={{ marginTop: 22 }}>
+                  <label className="form-group">
+                    <span className="form-label">Existing number</span>
                     <select name="existingPayoutNumberId" className="form-input" disabled={busy === 'change'}>
                       <option value="">Add or replace payout number</option>
                       {verifiedNumbers.map((number) => (
                         <option key={number.id} value={number.id}>{number.network} - {number.normalizedPhone}</option>
                       ))}
                     </select>
-                  </Field>
-                  <Field label="New network">
+                  </label>
+                  <label className="form-group">
+                    <span className="form-label">New network</span>
                     <select name="network" className="form-input" required disabled={busy === 'change'}>
                       <option value="MTN">MTN</option>
                       <option value="AIRTEL">Airtel</option>
                     </select>
-                  </Field>
-                  <Field label="New phone number">
+                  </label>
+                  <label className="form-group form-span-2">
+                    <span className="form-label">New phone number</span>
                     <input name="phoneNumber" required placeholder="New phone number" className="form-input" disabled={busy === 'change'} />
-                  </Field>
-                  <Field label="Reason">
+                  </label>
+                  <label className="form-group form-span-2">
+                    <span className="form-label">Reason</span>
                     <textarea name="reason" required minLength={10} placeholder="Explain why this payout number should change" className="form-input" rows={4} disabled={busy === 'change'} />
-                  </Field>
-                  <Notice tone="danger" text="Withdrawals to this new number will be disabled until verified or approved." />
-                  <FormProcessStatus busy={busy === 'change'} error={modalError} text={progress || 'Submitting number change request for approval.'} />
-                  <button className="btn btn-primary btn-block" disabled={busy === 'change'}>
+                  </label>
+                  <div className="form-span-2">
+                    <Notice tone="danger" text="Withdrawals to this new number will be disabled until verified or approved." />
+                  </div>
+                  <div className="form-span-2">
+                    <FormProcessStatus busy={busy === 'change'} error={modalError} text={progress || 'Submitting number change request for approval.'} />
+                  </div>
+                  <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'change'}>
                     {busy === 'change' ? 'Submitting request...' : 'Submit request'}
                   </button>
-                </FormGrid>
+                </div>
               </form>
             )}
           </div>
@@ -561,19 +592,6 @@ function Activity({ label, value }: { label: string; value: string }) {
         <div style={{ color: 'var(--text-1)', fontSize: 13, fontWeight: 700 }}>{value}</div>
       </div>
     </div>
-  )
-}
-
-function FormGrid({ children }: { children: ReactNode }) {
-  return <div style={{ display: 'grid', gap: 16, marginTop: 22 }}>{children}</div>
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label style={{ display: 'grid', gap: 7 }}>
-      <span style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 700 }}>{label}</span>
-      {children}
-    </label>
   )
 }
 
@@ -655,12 +673,3 @@ const mathRowStyle = {
   marginTop: 8,
 }
 
-const checkRowStyle = {
-  display: 'grid',
-  gridTemplateColumns: '18px 1fr',
-  gap: 10,
-  alignItems: 'start',
-  color: 'var(--text-2)',
-  fontSize: 13,
-  lineHeight: 1.5,
-}

@@ -257,29 +257,36 @@ export default function SettingsManager({
             <div className="form-grid">
               {activeTab === 'Payment & Fees' && (
                 <>
+                  <FormSubheading text="Platform Fees" />
                   <Input name="mobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.mobileMoneyFeePercent} />
                   <Input name="voucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.voucherFeePercent} />
+                  <FormSubheading text="Collection Routes" />
                   <Select name="mtnCollectionProvider" label="MTN Collection Route" defaultValue={platformForm.mtnCollectionProvider} options={providerOptions} />
                   <Select name="airtelCollectionProvider" label="Airtel Collection Route" defaultValue={platformForm.airtelCollectionProvider} options={providerOptions} />
+                  <FormSubheading text="Customer Portal Networks" />
                   <Check name="network-MTN" label="Allow MTN on customer portal" defaultChecked={platformForm.allowedPaymentNetworks.includes('MTN')} />
                   <Check name="network-AIRTEL" label="Allow Airtel on customer portal when route is ready" defaultChecked={platformForm.allowedPaymentNetworks.includes('AIRTEL')} />
                 </>
               )}
               {activeTab === 'Withdrawals' && (
                 <>
+                  <FormSubheading text="Fees & Minimum" />
                   <Input name="minimumWithdrawalUgx" label="Minimum Withdrawal UGX" defaultValue={platformForm.minimumWithdrawalUgx} />
                   <Input name="withdrawalFeePercent" label="Withdrawal Fee %" defaultValue={platformForm.withdrawalFeePercent} />
                   <Input name="withdrawalFlatFeeUgx" label="Withdrawal Flat Fee UGX" defaultValue={platformForm.withdrawalFlatFeeUgx} />
                   <Input name="maxPayoutNumbers" label="Max Payout Numbers" defaultValue={platformForm.maxPayoutNumbers} />
-                  <Input name="requireApprovalAboveAmountUgx" label="Review Withdrawals Above UGX" defaultValue={platformForm.requireApprovalAboveAmountUgx ?? ''} />
-                  <Input name="failedSecretAttemptsBeforeLock" label="Failed Secret Attempts Before Lock" defaultValue={platformForm.failedSecretAttemptsBeforeLock} />
-                  <Input name="withdrawalLockMinutes" label="Withdrawal Lock Minutes" defaultValue={platformForm.withdrawalLockMinutes} />
+                  <FormSubheading text="Disbursement Routes" />
                   <Select name="mtnDisbursementProvider" label="MTN Disbursement Route" defaultValue={platformForm.mtnDisbursementProvider} options={providerOptions} />
                   <Select name="airtelDisbursementProvider" label="Airtel Disbursement Route" defaultValue={platformForm.airtelDisbursementProvider} options={providerOptions} />
+                  <FormSubheading text="Approval Rules" />
+                  <Input name="requireApprovalAboveAmountUgx" label="Review Withdrawals Above UGX" defaultValue={platformForm.requireApprovalAboveAmountUgx ?? ''} />
                   <Check name="instantWithdrawalsEnabled" label="Instant withdrawals enabled by default" defaultChecked={platformForm.instantWithdrawalsEnabled} />
                   <Check name="requireApprovalForFirstWithdrawal" label="Review first withdrawal" defaultChecked={platformForm.requireApprovalForFirstWithdrawal} />
                   <Check name="payoutNumberChangeRequiresApproval" label="Payout number changes require approval" defaultChecked={platformForm.payoutNumberChangeRequiresApproval} />
                   <Check name="requireWithdrawalApproval" label="Force review for every withdrawal" defaultChecked={platformForm.requireWithdrawalApproval} />
+                  <FormSubheading text="Security Limits" />
+                  <Input name="failedSecretAttemptsBeforeLock" label="Failed Secret Attempts Before Lock" defaultValue={platformForm.failedSecretAttemptsBeforeLock} />
+                  <Input name="withdrawalLockMinutes" label="Withdrawal Lock Minutes" defaultValue={platformForm.withdrawalLockMinutes} />
                 </>
               )}
               {activeTab === 'Router & Portal' && (
@@ -292,7 +299,10 @@ export default function SettingsManager({
                 <Select name="voucherTemplateDefaultStyle" label="Default Voucher Style" defaultValue={platformForm.voucherTemplateDefaultStyle === 'signal-card' ? 'signal' : platformForm.voucherTemplateDefaultStyle} options={voucherTemplates} />
               )}
               {activeTab === 'Security' && (
-                <Check name="auditLoggingEnabled" label="Audit logging enabled" defaultChecked={platformForm.auditLoggingEnabled} />
+                <>
+                  <FormSubheading text="Audit" />
+                  <Check name="auditLoggingEnabled" label="Audit logging enabled" defaultChecked={platformForm.auditLoggingEnabled} />
+                </>
               )}
               {activeTab === 'Business Profile' && (
                 <>
@@ -345,11 +355,18 @@ export default function SettingsManager({
               )}
               {activeTab === 'Security' && (
                 <>
+                  <FormSubheading text="Device Resets" />
                   <Check name="allowDeviceReset" label="Allow device binding resets" defaultChecked={tenantForm.allowDeviceReset} />
                   <Input name="maxResetsPerActivation" label="Max resets per activation" defaultValue={tenantForm.maxResetsPerActivation ?? 0} />
-                  {isDevAdmin && <Check name="kycCompleted" label="Vendor KYC complete" defaultChecked={tenantForm.kycCompleted ?? true} />}
-                  {isDevAdmin && <Check name="accountActive" label="Vendor account active" defaultChecked={tenantForm.accountActive ?? true} />}
-                  {isDevAdmin && <Check name="fraudHold" label="Put vendor withdrawals on fraud hold" defaultChecked={tenantForm.fraudHold ?? false} />}
+                  {isDevAdmin && (
+                    <>
+                      <FormSubheading text="Dev Admin Account Controls" />
+                      <Check name="kycCompleted" label="Vendor KYC complete" defaultChecked={tenantForm.kycCompleted ?? true} />
+                      <Check name="accountActive" label="Vendor account active" defaultChecked={tenantForm.accountActive ?? true} />
+                      <Check name="fraudHold" label="Put vendor withdrawals on fraud hold" defaultChecked={tenantForm.fraudHold ?? false} />
+                    </>
+                  )}
+                  <FormSubheading text="Terms" />
                   <Check name="termsAccepted" label="Accept current vendor operating terms" defaultChecked={Boolean(tenantForm.termsAcceptedAt)} />
                 </>
               )}
@@ -545,11 +562,15 @@ function Select({ name, label, defaultValue, options }: { name: string; label: s
 
 function Check({ name, label, defaultChecked }: { name: string; label: string; defaultChecked: boolean }) {
   return (
-    <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-2)', fontWeight: 700 }}>
+    <label className="check-card">
       <input type="checkbox" name={name} defaultChecked={defaultChecked} />
-      {label}
+      <span>{label}</span>
     </label>
   )
+}
+
+function FormSubheading({ text }: { text: string }) {
+  return <div className="form-subheading">{text}</div>
 }
 
 function ReadOnly({ label, value }: { label: string; value: string }) {
