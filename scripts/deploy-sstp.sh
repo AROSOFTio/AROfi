@@ -39,6 +39,20 @@ make
 make install
 ldconfig
 
+# Disable the sstp-pppd-plugin.so so that sstpd does NOT attempt Crypto Binding
+# (HLAK) verification. The plugin's presence is auto-detected by sstpd's factory:
+# if pppd can load it, sstpd requires the Higher Layer Authentication Key from
+# PPP — which PAP never generates. The result is sstpd waiting forever for an
+# HLAK that never arrives, then pppd times out (exit 16) and the connection
+# drops. Disabling it tells sstpd to skip crypto binding entirely, which is
+# safe because SSTP already runs inside TLS.
+for plugin_dir in /usr/lib/pppd/*/sstp-pppd-plugin.so /usr/local/lib/pppd/*/sstp-pppd-plugin.so; do
+  if [ -f "$plugin_dir" ]; then
+    echo "[sstp] Disabling sstp-pppd-plugin.so at $plugin_dir (prevents HLAK/crypto-binding deadlock)"
+    mv "$plugin_dir" "${plugin_dir}.disabled"
+  fi
+done
+
 echo "[sstp] Installing sstp-server via pip..."
 if ! command -v sstpd >/dev/null 2>&1; then
   pip3 install --break-system-packages sstp-server || true
@@ -250,6 +264,39 @@ else
   mkdir -p /etc/sysctl.d
   echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-ipforward.conf
 fi
+
+# 7b. Configure iptables for PPP VPN traffic
+# The default FORWARD policy is DROP on most servers (Docker sets this).
+# PPP interfaces (ppp0, ppp1, etc.) need explicit FORWARD rules to pass
+# traffic, plus a MASQUERADE/NAT rule so VPN clients can reach the internet.
+echo "[sstp] Configuring iptables for PPP VPN (10.8.0.0/24)..."
+
+# Allow forwarding for PPP VPN subnet
+iptables -C FORWARD -s 10.8.0.0/24 -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -s 10.8.0.0/24 -j ACCEPT
+iptables -C FORWARD -d 10.8.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I FORWARD 2 -d 10.8.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Detect default outbound interface
+WAN_IF=$(ip route | awk '/^default/{print $5; exit}')
+if [ -n "$WAN_IF" ]; then
+  echo "[sstp] WAN interface: $WAN_IF"
+  iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -o "$WAN_IF" -j MASQUERADE 2>/dev/null || \
+    iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o "$WAN_IF" -j MASQUERADE
+else
+  echo "[sstp] WARNING: Could not detect WAN interface; skipping MASQUERADE rule"
+fi
+
+# Persist iptables rules across reboots
+if command -v iptables-save >/dev/null 2>&1; then
+  if command -v netfilter-persistent >/dev/null 2>&1; then
+    netfilter-persistent save
+  elif [ -d /etc/iptables ]; then
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+  else
+    apt-get install -y iptables-persistent 2>/dev/null || true
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+  fi
+fi
+echo "[sstp] iptables rules applied."
 
 # 8. Start and enable sstpd service
 echo "[sstp] Restarting sstpd service..."
