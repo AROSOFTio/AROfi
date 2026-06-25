@@ -684,7 +684,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         const warnings: string[] = baseWarning ? [baseWarning] : []
         let managementHost = router.host
         const shouldReplaceManagementHost =
-          Boolean(normalizedSourceIp) && this.isPendingSelfServiceHost(router.host)
+          Boolean(normalizedSourceIp) &&
+          (this.isPendingSelfServiceHost(router.host) ||
+            router.host === '192.168.88.1' ||
+            router.remoteAccessEnabled)
 
         if (shouldReplaceManagementHost) {
           const duplicateHost = await tx.router.findFirst({
@@ -1728,11 +1731,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${router.name}`,
       `/interface sstp-client remove [find name="${remoteClientName}"]`,
-      // authentication=pap must be explicit: the server (scripts/deploy-sstp.sh)
-      // requires plain PAP and refuses CHAP/MS-CHAP, but RouterOS sstp-client
-      // does not offer PAP by default, so the router would otherwise fail with
-      // "failed to authenticate ourselves".
-      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile=default disabled=no keepalive-timeout=60 verify-server-certificate=no`,
+      `/ppp profile remove [find name="AROFi_Profile"]`,
+      `/ppp profile add name="AROFi_Profile" on-up=":delay 5s; /tool fetch url=\\"https://${domain}/api/mikrotik/script/${router.registrationKey}\\" check-certificate=no dst-path=\\"vpn-setup.rsc\\" mode=https; :delay 2s; /import file-name=\\"vpn-setup.rsc\\"; :delay 1s; /file remove \\"vpn-setup.rsc\\""`,
+      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" disabled=no keepalive-timeout=60 verify-server-certificate=no`,
+      `:do { /interface list member add interface="${remoteClientName}" list=LAN } on-error={}`,
       `:log info "AROFi Remote Access client configured successfully."`
     ].join('\n')
   }
