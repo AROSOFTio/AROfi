@@ -12,6 +12,14 @@ server default {
 	}
 
 	authorize {
+		# Strip Message-Authenticator (attr 80) from incoming Access-Requests.
+		# pppd 2.5.2's radius.so adds MA to requests, causing FreeRADIUS to
+		# mirror it in responses. The old libfreeradius-client in pppd cannot
+		# validate MA in responses, causing "invalid reply digest" and auth failure.
+		# Stripping it from requests prevents FreeRADIUS from adding it to replies.
+		update request {
+			Message-Authenticator !* ANY
+		}
 		preprocess
 		chap
 		files

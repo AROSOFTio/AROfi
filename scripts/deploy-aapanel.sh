@@ -23,10 +23,11 @@ compose() {
 }
 
 random_secret() {
+  local num_bytes="${1:-32}"
   if command -v openssl >/dev/null 2>&1; then
-    openssl rand -hex 32
+    openssl rand -hex "$num_bytes"
   else
-    date +%s%N | sha256sum | awk '{print $1}'
+    date +%s%N | sha256sum | awk '{print $1}' | cut -c1-$((num_bytes * 2))
   fi
 }
 
@@ -47,9 +48,10 @@ create_env_if_missing() {
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_JWT_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_PORTAL_TOKEN_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_ROUTER_SECRET/$(random_secret)/g" "$ENV_FILE"
-  sed -i "s/CHANGE_ME_RANDOM_RADIUS_SHARED_SECRET/$(random_secret)/g" "$ENV_FILE"
-  sed -i "s/CHANGE_ME_RANDOM_RADIUS_INTERNAL_API_KEY/$(random_secret)/g" "$ENV_FILE"
-  sed -i "s/CHANGE_ME_RANDOM_RADIUS_DISCONNECT_SECRET/$(random_secret)/g" "$ENV_FILE"
+  # RADIUS shared secret MUST be <= 32/64 characters to avoid buffer limits in pppd's radius client library
+  sed -i "s/CHANGE_ME_RANDOM_RADIUS_SHARED_SECRET/$(random_secret 16)/g" "$ENV_FILE"
+  sed -i "s/CHANGE_ME_RANDOM_RADIUS_INTERNAL_API_KEY/$(random_secret 16)/g" "$ENV_FILE"
+  sed -i "s/CHANGE_ME_RANDOM_RADIUS_DISCONNECT_SECRET/$(random_secret 16)/g" "$ENV_FILE"
 
   echo "Created $ENV_FILE with generated secrets."
   echo "Edit payment credentials before going live:"

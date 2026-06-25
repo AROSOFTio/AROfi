@@ -468,6 +468,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const registrationKey = randomUUID()
     const remoteToken = randomUUID()
     const remotePort = Math.floor(Math.random() * 100) + 30000
+    const remoteSstpIp = `10.8.0.${Math.floor(Math.random() * 250) + 2}`
     const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
@@ -494,9 +495,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         registrationKey,
         remoteToken,
         remotePort,
+        remoteSstpIp,
         isRemotePortOpen: false,
         remoteClientName: 'AROFI_REMOTE',
-        remoteAccessEnabled: false,
+        remoteAccessEnabled: true,
         onboardingStatus: RouterOnboardingStatus.SCRIPT_GENERATED,
         lastScriptMode: dto.scriptMode ?? RouterScriptMode.SAFE_EXISTING_ROUTER,
         scriptGeneratedAt: new Date(),
@@ -531,6 +533,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
       include: this.routerInclude,
       })
+
+      // Sync VPN credentials to FreeRADIUS
+      await this.syncRadiusVpnCredentials(router.id, remoteToken, remoteSstpIp)
 
       this.reloadFreeradiusNasClients()
 

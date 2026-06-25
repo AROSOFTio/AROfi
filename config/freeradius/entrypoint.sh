@@ -14,11 +14,24 @@ if [ -d /arofi-freeradius ]; then
     fi
 
     cp /arofi-freeradius/clients.conf "$raddb_dir/clients.conf"
+    if [ -n "${RADIUS_SHARED_SECRET:-}" ]; then
+      sed -i "s/\$ENV{RADIUS_SHARED_SECRET}/$RADIUS_SHARED_SECRET/g" "$raddb_dir/clients.conf"
+    fi
     mkdir -p "$raddb_dir/mods-config/files" "$raddb_dir/mods-available" "$raddb_dir/sites-enabled" "$raddb_dir/mods-enabled"
     cp /arofi-freeradius/mods-config/files/authorize "$raddb_dir/mods-config/files/authorize"
     cp /arofi-freeradius/mods-available/sql "$raddb_dir/mods-available/sql"
     cp /arofi-freeradius/sites-enabled/default "$raddb_dir/sites-enabled/default"
     cp /arofi-freeradius/sites-enabled/inner-tunnel "$raddb_dir/sites-enabled/inner-tunnel"
+    # Find the group owner of radiusd.conf dynamically, fallback to freerad
+    RAD_GROUP=$(stat -c '%g' "$raddb_dir/radiusd.conf" 2>/dev/null || stat -c '%G' "$raddb_dir/radiusd.conf" 2>/dev/null || echo "freerad")
+
+    chown :"$RAD_GROUP" \
+      "$raddb_dir/clients.conf" \
+      "$raddb_dir/mods-config/files/authorize" \
+      "$raddb_dir/mods-available/sql" \
+      "$raddb_dir/sites-enabled/default" \
+      "$raddb_dir/sites-enabled/inner-tunnel"
+
     chmod 0640 \
       "$raddb_dir/clients.conf" \
       "$raddb_dir/mods-config/files/authorize" \
