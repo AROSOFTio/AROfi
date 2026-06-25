@@ -274,7 +274,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 22 }}>
+          <div className="vendor-metrics-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 22 }}>
             <Metric label="Verified numbers" value={`${verifiedNumbers.length}/2`} />
             <Metric label="Secret key" value={profile.profile.secretConfigured ? 'Set' : 'Missing'} />
             <Metric label="Minimum payout" value={minimumPayoutUgx > 0 ? formatCurrency(minimumPayoutUgx) : 'None'} />

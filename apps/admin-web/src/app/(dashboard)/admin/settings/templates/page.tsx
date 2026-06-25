@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   Palette, 
   Smartphone, 
@@ -50,6 +50,177 @@ export default function HotspotTemplatesPage() {
   const [selectedTheme, setSelectedTheme] = useState<'dark' | 'light'>('dark')
   
   const currentTemplate = templates.find(t => t.id === selectedTemplateId) || templates[0]
+
+  const mockupStyles = useMemo(() => {
+    const isDark = selectedTheme === 'dark'
+    const accent = currentTemplate.accentColor
+    
+    if (selectedTemplateId === 'liquid-glass') {
+      return {
+        viewport: {
+          background: isDark 
+            ? 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)' 
+            : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+          display: 'flex',
+          flexDirection: 'column' as const,
+          justifyContent: 'center' as const,
+          alignItems: 'center' as const,
+          padding: 20,
+          position: 'relative' as const,
+          width: '100%',
+          height: '100%',
+          borderRadius: 16,
+          overflow: 'hidden',
+          transition: 'all 0.3s'
+        },
+        card: {
+          background: isDark ? 'rgba(30, 41, 59, 0.45)' : 'rgba(255, 255, 255, 0.45)',
+          backdropFilter: 'blur(12px)',
+          border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(255, 255, 255, 0.3)',
+          borderRadius: 16,
+          padding: 18,
+          width: '100%',
+          boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(31, 38, 135, 0.06)',
+          zIndex: 2,
+          display: 'grid',
+          gap: 12
+        },
+        input: {
+          padding: 8,
+          borderRadius: 8,
+          border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
+          background: isDark ? 'rgba(15, 23, 42, 0.3)' : 'rgba(255, 255, 255, 0.5)',
+          backdropFilter: 'blur(4px)',
+          fontSize: 11,
+          color: isDark ? '#f1f5f9' : '#0f172a',
+          outline: 'none',
+          width: '100%'
+        },
+        button: {
+          background: `linear-gradient(135deg, ${accent} 0%, #1d4ed8 100%)`,
+          color: '#ffffff',
+          border: 'none',
+          borderRadius: 8,
+          padding: '10px 14px',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          marginTop: 6,
+          boxShadow: `0 4px 14px ${accent}44`
+        }
+      }
+    } else if (selectedTemplateId === 'neon-cyber') {
+      return {
+        viewport: {
+          background: '#090a0f',
+          backgroundImage: 'linear-gradient(rgba(236, 72, 153, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(236, 72, 153, 0.05) 1px, transparent 1px)',
+          backgroundSize: '15px 15px',
+          fontFamily: 'Courier New, Courier, monospace',
+          display: 'flex',
+          flexDirection: 'column' as const,
+          justifyContent: 'center' as const,
+          alignItems: 'center' as const,
+          padding: 20,
+          position: 'relative' as const,
+          width: '100%',
+          height: '100%',
+          borderRadius: 16,
+          overflow: 'hidden',
+          transition: 'all 0.3s'
+        },
+        card: {
+          background: '#0d0f19',
+          border: `2px solid ${accent}`,
+          boxShadow: `0 0 15px ${accent}66, inset 0 0 8px ${accent}22`,
+          borderRadius: 8,
+          padding: 16,
+          width: '100%',
+          zIndex: 2,
+          display: 'grid',
+          gap: 12
+        },
+        input: {
+          padding: 8,
+          borderRadius: 4,
+          border: `1px solid ${accent}88`,
+          background: '#04060a',
+          fontFamily: 'monospace',
+          fontSize: 11,
+          color: accent,
+          outline: 'none',
+          boxShadow: `inset 0 0 4px ${accent}33`,
+          width: '100%'
+        },
+        button: {
+          background: 'transparent',
+          color: accent,
+          border: `2px solid ${accent}`,
+          borderRadius: 4,
+          padding: '10px 14px',
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: 'monospace',
+          textTransform: 'uppercase' as const,
+          cursor: 'pointer',
+          marginTop: 6,
+          boxShadow: `0 0 10px ${accent}44`,
+          textShadow: `0 0 5px ${accent}`
+        }
+      }
+    } else {
+      // minimalist-clean
+      return {
+        viewport: {
+          background: isDark ? '#0f172a' : '#f8fafc',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+          display: 'flex',
+          flexDirection: 'column' as const,
+          justifyContent: 'center' as const,
+          alignItems: 'center' as const,
+          padding: 20,
+          position: 'relative' as const,
+          width: '100%',
+          height: '100%',
+          borderRadius: 16,
+          overflow: 'hidden',
+          transition: 'all 0.3s'
+        },
+        card: {
+          background: isDark ? '#1e293b' : '#ffffff',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: 20,
+          width: '100%',
+          boxShadow: 'var(--shadow-sm)',
+          zIndex: 2,
+          display: 'grid',
+          gap: 12
+        },
+        input: {
+          padding: 8,
+          borderRadius: 6,
+          border: '1px solid var(--border)',
+          background: isDark ? '#0f172a' : '#f8fafc',
+          fontSize: 11,
+          color: isDark ? '#f1f5f9' : '#0f172a',
+          outline: 'none',
+          width: '100%'
+        },
+        button: {
+          background: accent,
+          color: '#ffffff',
+          border: 'none',
+          borderRadius: 6,
+          padding: '10px 14px',
+          fontSize: 12,
+          fontWeight: 500,
+          cursor: 'pointer',
+          marginTop: 6
+        }
+      }
+    }
+  }, [selectedTemplateId, selectedTheme, currentTemplate])
 
   return (
     <div style={{ display: 'grid', gap: 24, maxWidth: 980, margin: '0 auto' }}>
@@ -181,7 +352,7 @@ export default function HotspotTemplatesPage() {
             maxWidth: 320,
             margin: '0 auto',
             width: '100%'
-          }}>
+          }} className="mobile-phone-mockup">
             
             {/* Phone Notch */}
             <div style={{
@@ -192,27 +363,13 @@ export default function HotspotTemplatesPage() {
               backgroundColor: '#202b40',
               borderRadius: '0 0 12px 12px',
               zIndex: 10
-            }} />
+            }} className="phone-notch" />
 
             {/* Rendered Template Viewport */}
-            <div style={{
-              width: '100%',
-              height: '100%',
-              backgroundColor: selectedTheme === 'dark' ? '#0f172a' : '#f8fafc',
-              color: selectedTheme === 'dark' ? '#f1f5f9' : '#0f172a',
-              borderRadius: 16,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              padding: 20,
-              position: 'relative',
-              transition: 'background-color 0.3s',
-              fontFamily: 'sans-serif'
-            }}>
+            <div style={mockupStyles.viewport}>
               
               {/* Optional Glassmorphism Circles behind screen */}
-              {currentTemplate.id === 'liquid-glass' && (
+              {selectedTemplateId === 'liquid-glass' && (
                 <>
                   <div style={{
                     position: 'absolute',
@@ -238,52 +395,47 @@ export default function HotspotTemplatesPage() {
               )}
 
               {/* Captive Portal UI elements inside phone */}
-              <div style={{ zIndex: 2, display: 'grid', gap: 14, textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: currentTemplate.accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <Sparkles size={18} /> AROFi Guest
+              <div style={mockupStyles.card}>
+                <div style={{ 
+                  fontSize: selectedTemplateId === 'neon-cyber' ? 16 : 18, 
+                  fontWeight: selectedTemplateId === 'neon-cyber' ? 800 : 700, 
+                  color: currentTemplate.accentColor, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: 6,
+                  textShadow: selectedTemplateId === 'neon-cyber' ? `0 0 8px ${currentTemplate.accentColor}` : 'none'
+                }}>
+                  <Sparkles size={16} /> AROFi Guest
                 </div>
                 
-                <span style={{ fontSize: 11, color: selectedTheme === 'dark' ? '#94a3b8' : '#64748b' }}>
+                <span style={{ 
+                  fontSize: 10.5, 
+                  color: selectedTheme === 'dark' ? '#94a3b8' : '#64748b',
+                  fontFamily: selectedTemplateId === 'neon-cyber' ? 'monospace' : 'inherit'
+                }}>
                   Enter payment or voucher credentials to get online
                 </span>
 
                 {/* Input Fields */}
-                <div style={{ display: 'grid', gap: 8, textAlign: 'left', marginTop: 10 }}>
+                <div style={{ display: 'grid', gap: 8, textAlign: 'left', marginTop: selectedTemplateId === 'neon-cyber' ? 4 : 8 }}>
                   <div style={{ display: 'grid', gap: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600 }}>Phone Number</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 600 }}>Phone Number</span>
                     <input 
                       type="text" 
-                      placeholder="0700 000 000" 
+                      placeholder="0770 000 000" 
                       disabled
-                      style={{
-                        padding: 8,
-                        borderRadius: 6,
-                        border: selectedTheme === 'dark' ? '1px solid #334155' : '1px solid #cbd5e1',
-                        background: selectedTheme === 'dark' ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.8)',
-                        backdropFilter: currentTemplate.id === 'liquid-glass' ? 'blur(4px)' : 'none',
-                        fontSize: 11,
-                        color: 'inherit',
-                        outline: 'none'
-                      }}
+                      style={mockupStyles.input}
                     />
                   </div>
 
                   <div style={{ display: 'grid', gap: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600 }}>Voucher Code</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 600 }}>Voucher Code</span>
                     <input 
                       type="text" 
                       placeholder="X-XXXXXX" 
                       disabled
-                      style={{
-                        padding: 8,
-                        borderRadius: 6,
-                        border: selectedTheme === 'dark' ? '1px solid #334155' : '1px solid #cbd5e1',
-                        background: selectedTheme === 'dark' ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.8)',
-                        backdropFilter: currentTemplate.id === 'liquid-glass' ? 'blur(4px)' : 'none',
-                        fontSize: 11,
-                        color: 'inherit',
-                        outline: 'none'
-                      }}
+                      style={mockupStyles.input}
                     />
                   </div>
                 </div>
@@ -291,18 +443,7 @@ export default function HotspotTemplatesPage() {
                 {/* Action button */}
                 <button
                   type="button"
-                  style={{
-                    backgroundColor: currentTemplate.accentColor,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 6,
-                    padding: '10px 14px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    marginTop: 10,
-                    boxShadow: `0 4px 10px ${currentTemplate.accentColor}33`
-                  }}
+                  style={mockupStyles.button}
                   disabled
                 >
                   Pay & Connect

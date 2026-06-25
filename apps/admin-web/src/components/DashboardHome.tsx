@@ -320,21 +320,27 @@ async function PlatformDashboard() {
 async function VendorDashboard({ session, searchParams }: { session: AdminSessionResponse | null; searchParams?: DashboardSearchParams }) {
   const range = resolveDashboardRange(searchParams)
   const query = new URLSearchParams({ from: range.from.toISOString(), to: range.to.toISOString() }).toString()
-  const [billing, routers, sessions, vouchers, payoutProfile, packages] = await Promise.all([
+  const [billing, routers, sessions, vouchers, payoutProfile, packages, tenantSettings] = await Promise.all([
     fetchApi<BillingOverviewResponse>(`/billing/overview?${query}`),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<SessionOverviewResponse>('/sessions/overview'),
     fetchApi<VouchersOverviewResponse>('/vouchers/overview'),
     fetchApi<any>('/wallets/payouts/profile/me'),
     fetchApi<PackageCatalogResponse>('/packages'),
+    fetchApi<any>('/system/tenant-settings').catch(() => null),
   ])
 
   const hasRouter = Boolean(routers?.routers && routers.routers.length > 0)
   const hasPackage = Boolean(packages?.items && packages.items.length > 0)
   const hasVouchers = Boolean(vouchers?.batches && vouchers.batches.length > 0)
   const firstRouter = routers?.routers?.[0] || null
-  const onboardingIncomplete = !hasRouter || !hasPackage || !hasVouchers || 
-    Boolean(firstRouter && !firstRouter.provisioningCallbackReceived && firstRouter.onboardingStatus !== 'VERIFIED_ONLINE')
+
+  const prefs = (tenantSettings?.settings?.routerOnboardingPreferences as Record<string, any> | null) ?? {}
+  const onboardingCompletedAt = prefs.onboardingCompletedAt
+
+  // Only show the onboarding wizard for brand-new tenants who haven't set ANYTHING up yet and haven't completed onboarding.
+  const isNewTenant = !hasRouter && !hasPackage && !hasVouchers
+  const onboardingIncomplete = isNewTenant && !onboardingCompletedAt
 
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []

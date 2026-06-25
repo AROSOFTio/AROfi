@@ -71,7 +71,20 @@ export default function OnboardingWizard({
   })
   const [generatedBatch, setGeneratedBatch] = useState<any | null>(null)
   
-  const [dismissed, setDismissed] = useState(false)
+  const DISMISS_KEY = `arofi_wizard_dismissed_${session.user.tenantId ?? 'new'}`
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem(DISMISS_KEY) === '1'
+  })
+  
+  const handleDismiss = () => {
+    setDismissed(true)
+    try { localStorage.setItem(DISMISS_KEY, '1') } catch {}
+  }
+  const handleResume = () => {
+    setDismissed(false)
+    try { localStorage.removeItem(DISMISS_KEY) } catch {}
+  }
 
   // Determine initial step based on progress
   useEffect(() => {
@@ -350,7 +363,7 @@ export default function OnboardingWizard({
         </div>
         <button
           type="button"
-          onClick={() => setDismissed(false)}
+          onClick={() => handleResume()}
           className="btn btn-primary"
           style={{
             fontSize: 13,
@@ -385,7 +398,7 @@ export default function OnboardingWizard({
       justifyContent: 'center',
       padding: 16,
       overflowY: 'auto'
-    }}>
+    }} className="onboarding-modal-overlay">
       <div style={{
         background: 'var(--bg-card, #ffffff)',
         border: '1px solid var(--border, #e2e8f0)',
@@ -394,17 +407,17 @@ export default function OnboardingWizard({
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), var(--shadow-lg)',
         overflow: 'hidden',
         animation: 'fadeIn 0.2s ease-out'
-      }}>
+      }} className="onboarding-modal-card">
         {/* Top Header */}
         <div style={{
           background: 'linear-gradient(135deg, #2563eb 0%, #0f172a 100%)',
-          padding: '24px 32px',
+          padding: 'clamp(16px, 4vw, 24px) clamp(16px, 5vw, 32px)',
           color: '#ffffff',
           position: 'relative'
         }}>
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={() => handleDismiss()}
             style={{
               position: 'absolute',
               top: 24,
@@ -520,7 +533,7 @@ export default function OnboardingWizard({
         </div>
 
         {/* Content Box */}
-        <div style={{ padding: '24px 32px' }}>
+        <div style={{ padding: 'clamp(16px, 4vw, 24px) clamp(14px, 5vw, 32px)' }}>
           {error && (
             <div style={{
               background: 'rgba(239, 68, 68, 0.05)',
