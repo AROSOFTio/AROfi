@@ -112,6 +112,14 @@ if ! grep -q "\* \* \"\" \*" /etc/ppp/pap-secrets; then
 fi
 
 # 6. Configure RADIUS client configurations (support both traditional and ng paths)
+# Detect FreeRADIUS container IP dynamically to handle Docker bridge NAT correctly
+RADIUS_IP=""
+if docker ps -q --filter name=arofi-freeradius >/dev/null 2>&1; then
+  RADIUS_IP=$(docker inspect arofi-freeradius | grep '"IPAddress"' | tail -1 | sed 's/.*: "//;s/".*//' || true)
+fi
+[ -n "$RADIUS_IP" ] || RADIUS_IP="127.0.0.1"
+echo "[sstp] FreeRADIUS container IP detected: $RADIUS_IP"
+
 for dir in /etc/radiusclient /etc/radiusclient-ngx; do
   echo "[sstp] Preparing RADIUS client config in $dir..."
   mkdir -p "$dir"
@@ -130,8 +138,8 @@ for dir in /etc/radiusclient /etc/radiusclient-ngx; do
   # "PAP peer authentication failed" with "unknown attribute" warnings for
   # every basic attribute id.
   cat << EOF > "$dir/radiusclient.conf"
-authserver 127.0.0.1:1812
-acctserver 127.0.0.1:1813
+authserver $RADIUS_IP:1812
+acctserver $RADIUS_IP:1813
 servers $dir/servers
 dictionary $dir/dictionary
 seqfile $dir/radius.seq
@@ -150,6 +158,9 @@ EOF
   cat << EOF > "$dir/servers"
 127.0.0.1 $SECRET
 EOF
+  if [ "$RADIUS_IP" != "127.0.0.1" ]; then
+    echo "$RADIUS_IP $SECRET" >> "$dir/servers"
+  fi
   chmod 600 "$dir/servers"
 
   # Write a COMPLETE radiusclient-format dictionary. The pppd radius plugin
