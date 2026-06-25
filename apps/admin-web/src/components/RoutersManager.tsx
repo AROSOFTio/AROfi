@@ -13,6 +13,7 @@ import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
+import { DNS_BOOTSTRAP, buildSetupFallbackCommand } from '@/lib/mikrotik-commands'
 
 type GroupFormState = {
   tenantId: string
@@ -401,10 +402,7 @@ export default function RoutersManager() {
 
   function oneRunCommand() {
     if (!selectedSetup) return ''
-    return (
-      selectedSetup.oneRunCommand ??
-      `/tool fetch url="https://arofi.arosoftlabs.com/api/mikrotik/script/${selectedSetup.router.registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
-    )
+    return selectedSetup.oneRunCommand ?? buildSetupFallbackCommand(selectedSetup.router.registrationKey)
   }
 
   async function copyScript() {
@@ -462,7 +460,7 @@ export default function RoutersManager() {
 
     const router = selectedSetup.router
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin + '/api' : '')
-    const command = `/tool fetch url="${apiBaseUrl}/mikrotik/remote-access/install/${router.remoteToken}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+    const command = `${DNS_BOOTSTRAP}/tool fetch url="${apiBaseUrl}/mikrotik/remote-access/install/${router.remoteToken}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
 
     await navigator.clipboard.writeText(command)
     setSuccess('Automatic installation command copied to clipboard.')
@@ -711,7 +709,7 @@ export default function RoutersManager() {
                       color: 'var(--text-secondary)',
                       userSelect: 'all'
                     }}>
-                      {`/tool fetch url="${typeof window !== 'undefined' ? window.location.origin : ''}/api/mikrotik/remote-access/install/${selectedSetup.router.remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`}
+                      {`${DNS_BOOTSTRAP}/tool fetch url="${typeof window !== 'undefined' ? window.location.origin : ''}/api/mikrotik/remote-access/install/${selectedSetup.router.remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`}
                     </div>
 
                     <button

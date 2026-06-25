@@ -19,6 +19,7 @@ import {
   Ticket
 } from 'lucide-react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { buildRemoteAccessInstallCommand } from '@/lib/mikrotik-commands'
 import { AdminSessionResponse } from '@/lib/admin-types'
 
 type OnboardingWizardProps = {
@@ -207,9 +208,8 @@ export default function OnboardingWizard({
   // Copy installation script to clipboard
   const handleCopyScript = () => {
     if (!registeredRouter) return
-    const host = typeof window !== 'undefined' ? window.location.origin : 'https://arofi.arosoftlabs.com'
-    const command = `/tool fetch url="${host}/api/mikrotik/remote-access/install/${registeredRouter.remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
-    
+    const command = buildRemoteAccessInstallCommand(registeredRouter.remoteToken)
+
     navigator.clipboard.writeText(command)
     setCopiedText(true)
     setTimeout(() => setCopiedText(false), 2000)
@@ -702,7 +702,7 @@ export default function OnboardingWizard({
                   paddingRight: 40,
                   lineHeight: 1.6
                 }}>
-                  {`/tool fetch url="${typeof window !== 'undefined' ? window.location.origin : 'https://arofi.arosoftlabs.com'}/api/mikrotik/remote-access/install/${registeredRouter.remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`}
+                  {buildRemoteAccessInstallCommand(registeredRouter.remoteToken)}
                 </pre>
                 
                 <button

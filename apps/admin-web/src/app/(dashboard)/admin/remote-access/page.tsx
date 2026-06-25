@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { buildRemoteAccessInstallCommand } from '@/lib/mikrotik-commands'
 import type { RouterOverviewResponse, RouterSetupResponse } from '@/lib/admin-types'
 import { 
   Globe, 
@@ -127,8 +128,7 @@ export default function RemoteAccessPage() {
 
   const installCommand = useMemo(() => {
     if (!selectedRouter) return ''
-    const host = typeof window !== 'undefined' ? window.location.origin : ''
-    return `/tool fetch url="${host}/api/mikrotik/remote-access/install/${selectedRouter.remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+    return buildRemoteAccessInstallCommand(selectedRouter.remoteToken)
   }, [selectedRouter])
 
   const winboxAddress = useMemo(() => {
