@@ -50,8 +50,19 @@ server default {
 
 	post-auth {
 		sql
+		# Strip Message-Authenticator (attr 80) from all replies.
+		# FreeRADIUS 3.2.5 adds it automatically as a BlastRADIUS security
+		# measure, but pppd's old libfreeradius-client (radius.so) cannot
+		# validate it and reports "invalid reply digest from RADIUS server",
+		# causing PAP authentication to fail for all SSTP VPN connections.
+		update reply {
+			Message-Authenticator !* ANY
+		}
 		Post-Auth-Type Reject {
 			sql
+			update reply {
+				Message-Authenticator !* ANY
+			}
 		}
 	}
 }
