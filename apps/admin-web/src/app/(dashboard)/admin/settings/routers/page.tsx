@@ -129,11 +129,20 @@ export default function SettingsRoutersPage() {
     setSubmitting(true)
 
     try {
+      const apiPort = Number.parseInt(routerForm.apiPort, 10)
+      const portalWalledGardenHosts = routerForm.portalWalledGardenHosts
+        .split(',')
+        .map((host) => host.trim())
+        .filter(Boolean)
+        .slice(0, 12)
+
       await clientPostApi('/routers', {
         ...routerForm,
         groupId: routerForm.groupId || undefined,
         hotspotId: routerForm.hotspotId || undefined,
         host: routerForm.host || '192.168.88.1',
+        apiPort: Number.isFinite(apiPort) ? apiPort : undefined,
+        portalWalledGardenHosts: portalWalledGardenHosts.length > 0 ? portalWalledGardenHosts : undefined,
       })
       
       setAddModalOpen(false)
