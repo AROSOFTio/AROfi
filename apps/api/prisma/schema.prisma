@@ -344,6 +344,7 @@ enum SupportTicketChannel {
   EMAIL
   PHONE
   INTERNAL
+  CHAT
 }
 
 model Tenant {
@@ -1500,10 +1501,41 @@ model SupportTicket {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   messages          SupportTicketMessage[]
+  chatSession       ChatSession?
 
   @@unique([tenantId, reference])
   @@index([tenantId, status, createdAt])
   @@index([priority, createdAt])
+}
+
+enum ChatMessageSender {
+  VISITOR
+  ADMIN
+}
+
+model ChatSession {
+  id              String         @id @default(uuid())
+  sessionId       String         @unique
+  code            String         @unique
+  name            String
+  supportTicketId String?        @unique
+  supportTicket   SupportTicket? @relation(fields: [supportTicketId], references: [id])
+  lastActiveAt    DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  messages        ChatMessage[]
+
+  @@index([lastActiveAt])
+}
+
+model ChatMessage {
+  id            String            @id @default(uuid())
+  chatSessionId String
+  chatSession   ChatSession       @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  sender        ChatMessageSender
+  text          String
+  createdAt     DateTime          @default(now())
+
+  @@index([chatSessionId, createdAt])
 }
 
 model SupportTicketMessage {

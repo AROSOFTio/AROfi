@@ -15,6 +15,7 @@ import {
 } from '@prisma/client'
 import { execSync, spawn } from 'child_process'
 import { PrismaService } from '../../prisma.service'
+import { MailService } from '../mail/mail.service'
 import { RadiusCredentialService } from './radius-credential.service'
 import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
 
@@ -27,7 +28,44 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly radiusCredentialService: RadiusCredentialService,
     private readonly yoDisbursementService: YoUgandaDisbursementService,
+    private readonly mailService: MailService,
   ) { }
+
+  // Best-effort, fire-and-forget: a slow/broken mail server must never delay
+  // or fail a withdrawal settlement that already succeeded in the database.
+  private async notifyWithdrawalEmail(input: { tenantId: string; status: 'COMPLETED' | 'FAILED'; amountUgx: number; reference: string }) {
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: input.tenantId },
+        select: {
+          name: true,
+          supportEmail: true,
+          users: { select: { email: true, firstName: true, lastName: true }, take: 1 },
+        },
+      })
+      const recipientEmail = tenant?.supportEmail ?? tenant?.users[0]?.email
+      if (!tenant || !recipientEmail) {
+        return
+      }
+
+      const recipientName = tenant.users[0]
+        ? `${tenant.users[0].firstName ?? ''} ${tenant.users[0].lastName ?? ''}`.trim() || tenant.name
+        : tenant.name
+
+      await this.mailService.sendWithdrawalStatusEmail({
+        to: recipientEmail,
+        tenantName: tenant.name,
+        recipientName,
+        status: input.status,
+        amountUgx: input.amountUgx,
+        reference: input.reference,
+      })
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send withdrawal ${input.status} email for tenant ${input.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
 
   onModuleInit() {
     if (process.env.RADIUS_DISCONNECT_ENABLED === 'true') {
@@ -734,6 +772,13 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(
           `pollPendingDisbursements: ${disbursement.reference} → ${nextStatus}`,
         )
+
+        void this.notifyWithdrawalEmail({
+          tenantId: disbursement.tenantId,
+          status: isSuccess ? 'COMPLETED' : 'FAILED',
+          amountUgx: disbursement.amountUgx,
+          reference: disbursement.reference,
+        })
       } catch (err) {
         this.logger.warn(
           `pollPendingDisbursements: status check failed for ${disbursement.reference}: ${err instanceof Error ? err.message : err}`,

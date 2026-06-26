@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import {
   BillingChannel,
   BillingTransactionStatus,
@@ -12,7 +12,9 @@ import {
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
 import { FeeEngineService } from '../billing/fee-engine.service'
+import { MailService } from '../mail/mail.service'
 import { PackageActivationService } from '../payments/package-activation.service'
+import { WhatsAppService } from '../whatsapp/whatsapp.service'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
@@ -83,12 +85,16 @@ const voucherPdfTemplates: Record<
 
 @Injectable()
 export class VouchersService {
+  private readonly logger = new Logger(VouchersService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly billingService: BillingService,
     private readonly packageActivationService: PackageActivationService,
     private readonly voucherCodeService: VoucherCodeService,
     private readonly feeEngineService: FeeEngineService,
+    private readonly mailService: MailService,
+    private readonly whatsAppService: WhatsAppService,
   ) {}
 
   async getOverview(tenantId?: string) {
@@ -723,7 +729,24 @@ export class VouchersService {
     const accessPhoneNumber =
       dto.accessPhoneNumber ?? this.normalizePhoneNumber(dto.customerReference)
 
-    return this.prisma.$transaction(async (tx) => {
+    let receiptInfo: {
+      tenantId: string
+      packageName: string
+      grossAmountUgx: number
+      feeAmountUgx: number
+      netAmountUgx: number
+      customerReference?: string | null
+      reference: string
+    } | null = null
+
+    let customerWhatsAppInfo: {
+      phoneNumber: string
+      packageName: string
+      durationMinutes: number
+      companionVoucherCodes: string[]
+    } | null = null
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const updatedVoucher = await tx.voucher.update({
         where: { id: voucher.id },
         data: {
@@ -858,6 +881,18 @@ export class VouchersService {
         throw new NotFoundException('Package not found for voucher redemption')
       }
 
+      if (!wasSold) {
+        receiptInfo = {
+          tenantId: voucher.tenantId,
+          packageName: packageRecord.name,
+          grossAmountUgx,
+          feeAmountUgx,
+          netAmountUgx,
+          customerReference: dto.customerReference,
+          reference: redemptionReference,
+        }
+      }
+
       const activation = await this.packageActivationService.activateInTransaction(tx, {
         tenantId: voucher.tenantId,
         packageId: voucher.packageId,
@@ -895,6 +930,15 @@ export class VouchersService {
         deviceLimit: packageRecord.deviceLimit,
       })
 
+      if (accessPhoneNumber) {
+        customerWhatsAppInfo = {
+          phoneNumber: accessPhoneNumber,
+          packageName: packageRecord.name,
+          durationMinutes: packageRecord.durationMinutes,
+          companionVoucherCodes,
+        }
+      }
+
       return {
         voucher: updatedVoucher,
         redemption,
@@ -902,6 +946,97 @@ export class VouchersService {
         companionVoucherCodes,
       }
     })
+
+    if (receiptInfo) {
+      // Best-effort, fire-and-forget: a slow/broken mail server must never
+      // delay or fail a redemption that already succeeded.
+      void this.sendSaleReceiptEmailSafely({ ...receiptInfo, channel: 'Voucher' })
+    }
+
+    if (customerWhatsAppInfo) {
+      void this.sendCustomerWhatsAppConfirmation(customerWhatsAppInfo)
+    }
+
+    return result
+  }
+
+  private async sendCustomerWhatsAppConfirmation(input: {
+    phoneNumber: string
+    packageName: string
+    durationMinutes: number
+    companionVoucherCodes: string[]
+  }) {
+    if (!this.whatsAppService.isConfigured()) {
+      return
+    }
+
+    const lines = [
+      `✅ Voucher redeemed for *${input.packageName}*.`,
+      `Your device is connecting now.`,
+    ]
+    if (input.companionVoucherCodes.length > 0) {
+      lines.push('', `Your package covers ${input.companionVoucherCodes.length + 1} devices. Share these codes so your friends can connect on their own phones:`)
+      for (const code of input.companionVoucherCodes) {
+        lines.push(`• ${code}`)
+      }
+      lines.push('', 'Each code works on one device only and expires soon, so share them right away.')
+    }
+
+    try {
+      await this.whatsAppService.sendTextMessage(input.phoneNumber, lines.join('\n'))
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send WhatsApp confirmation to ${input.phoneNumber}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  private async sendSaleReceiptEmailSafely(input: {
+    tenantId: string
+    packageName: string
+    channel: 'Mobile Money' | 'Voucher'
+    grossAmountUgx: number
+    feeAmountUgx: number
+    netAmountUgx: number
+    customerReference?: string | null
+    reference: string
+  }) {
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: input.tenantId },
+        select: {
+          name: true,
+          supportEmail: true,
+          users: { select: { email: true, firstName: true, lastName: true }, take: 1 },
+        },
+      })
+      const recipientEmail = tenant?.supportEmail ?? tenant?.users[0]?.email
+      if (!tenant || !recipientEmail) {
+        return
+      }
+
+      const recipientName = tenant.users[0]
+        ? `${tenant.users[0].firstName ?? ''} ${tenant.users[0].lastName ?? ''}`.trim() || tenant.name
+        : tenant.name
+
+      await this.mailService.sendSaleReceiptEmail({
+        to: recipientEmail,
+        tenantName: tenant.name,
+        recipientName,
+        packageName: input.packageName,
+        channel: input.channel,
+        grossAmountUgx: input.grossAmountUgx,
+        feeAmountUgx: input.feeAmountUgx,
+        netAmountUgx: input.netAmountUgx,
+        customerReference: input.customerReference,
+        reference: input.reference,
+        occurredAt: new Date(),
+      })
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send sale receipt email for tenant ${input.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }
 
   private normalizePhoneNumber(value?: string | null) {

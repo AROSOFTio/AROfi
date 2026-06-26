@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
 import { BillingModule } from '../billing/billing.module'
+import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { PaymentsController } from './payments.controller'
 import { PackageActivationService } from './package-activation.service'
@@ -17,9 +18,10 @@ import { WalletLedgerService } from './wallet-ledger.service'
 import { YoUgandaCollectionService } from './yo-uganda-collection.service'
 import { YoUgandaDisbursementService } from './yo-uganda-disbursement.service'
 import { VoucherCodeService } from '../vouchers/voucher-code.service'
+import { WhatsAppModule } from '../whatsapp/whatsapp.module'
 
 @Module({
-  imports: [AuthModule, BillingModule, RadiusModule],
+  imports: [AuthModule, BillingModule, MailModule, RadiusModule, WhatsAppModule],
   controllers: [PaymentsController],
   providers: [
     AirtelMoneyCollectionService,

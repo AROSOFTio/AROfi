@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
+import { MailModule } from '../mail/mail.module'
 import { PaymentsModule } from '../payments/payments.module'
 import { SubscriptionController } from './subscription.controller'
 import { SubscriptionService } from './subscription.service'
 
 @Module({
-  imports: [AuthModule, PaymentsModule],
+  imports: [AuthModule, MailModule, PaymentsModule],
   controllers: [SubscriptionController],
   providers: [SubscriptionService],
   exports: [SubscriptionService],

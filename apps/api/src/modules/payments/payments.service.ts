@@ -27,6 +27,8 @@ import {
 import { createHash, randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
+import { MailService } from '../mail/mail.service'
+import { WhatsAppService } from '../whatsapp/whatsapp.service'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
 import { PackageActivationService } from './package-activation.service'
 import { PaymentProviderResult } from './payment-provider.interface'
@@ -122,6 +124,8 @@ export class PaymentsService {
     private readonly paymentRouterService: PaymentRouterService,
     private readonly phoneNumberService: PhoneNumberService,
     private readonly packageActivationService: PackageActivationService,
+    private readonly mailService: MailService,
+    private readonly whatsAppService: WhatsAppService,
   ) {}
 
   async getOverview(tenantId?: string) {
@@ -632,7 +636,24 @@ export class PaymentsService {
       headers?: Record<string, string | string[] | undefined>
     },
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    let receiptInfo: {
+      tenantId: string
+      packageName: string
+      grossAmountUgx: number
+      feeAmountUgx: number
+      netAmountUgx: number
+      customerReference?: string | null
+      reference: string
+    } | null = null
+
+    let customerWhatsAppInfo: {
+      phoneNumber: string
+      packageName: string
+      durationMinutes: number
+      companionVoucherCodes: string[]
+    } | null = null
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
         include: this.paymentInclude,
@@ -758,6 +779,16 @@ export class PaymentsService {
             }),
           }))
 
+        receiptInfo = {
+          tenantId: payment.tenantId,
+          packageName: packageRecord.name,
+          grossAmountUgx: billingTransaction.grossAmountUgx,
+          feeAmountUgx: billingTransaction.feeAmountUgx,
+          netAmountUgx: billingTransaction.netAmountUgx,
+          customerReference: updatedCustomerRef ?? payment.phoneNumber,
+          reference: payment.externalReference,
+        }
+
         const activation = await this.packageActivationService.activateInTransaction(tx, {
           tenantId: payment.tenantId,
           packageId: payment.packageId,
@@ -793,6 +824,15 @@ export class PaymentsService {
           packageId: payment.packageId,
           deviceLimit: packageRecord.deviceLimit,
         })
+
+        if (payment.phoneNumber) {
+          customerWhatsAppInfo = {
+            phoneNumber: payment.phoneNumber,
+            packageName: packageRecord.name,
+            durationMinutes: packageRecord.durationMinutes,
+            companionVoucherCodes,
+          }
+        }
 
         await tx.payment.update({
           where: { id: payment.id },
@@ -833,6 +873,96 @@ export class PaymentsService {
       })
       return this.attachReconnectPayload(refreshedPayment)
     })
+
+    if (receiptInfo) {
+      // Best-effort, fire-and-forget: a slow/broken mail server must never
+      // delay or fail a payment confirmation that already succeeded.
+      void this.sendSaleReceiptEmailSafely(receiptInfo)
+    }
+
+    if (customerWhatsAppInfo) {
+      void this.sendCustomerWhatsAppConfirmation(customerWhatsAppInfo)
+    }
+
+    return result
+  }
+
+  private async sendCustomerWhatsAppConfirmation(input: {
+    phoneNumber: string
+    packageName: string
+    durationMinutes: number
+    companionVoucherCodes: string[]
+  }) {
+    if (!this.whatsAppService.isConfigured()) {
+      return
+    }
+
+    const lines = [
+      `✅ Payment confirmed for *${input.packageName}*.`,
+      `Your device is connecting now.`,
+    ]
+    if (input.companionVoucherCodes.length > 0) {
+      lines.push('', `Your package covers ${input.companionVoucherCodes.length + 1} devices. Share these codes so your friends can connect on their own phones:`)
+      for (const code of input.companionVoucherCodes) {
+        lines.push(`• ${code}`)
+      }
+      lines.push('', 'Each code works on one device only and expires soon, so share them right away.')
+    }
+
+    try {
+      await this.whatsAppService.sendTextMessage(input.phoneNumber, lines.join('\n'))
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send WhatsApp confirmation to ${input.phoneNumber}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  private async sendSaleReceiptEmailSafely(input: {
+    tenantId: string
+    packageName: string
+    grossAmountUgx: number
+    feeAmountUgx: number
+    netAmountUgx: number
+    customerReference?: string | null
+    reference: string
+  }) {
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: input.tenantId },
+        select: {
+          name: true,
+          supportEmail: true,
+          users: { select: { email: true, firstName: true, lastName: true }, take: 1 },
+        },
+      })
+      const recipientEmail = tenant?.supportEmail ?? tenant?.users[0]?.email
+      if (!tenant || !recipientEmail) {
+        return
+      }
+
+      const recipientName = tenant.users[0]
+        ? `${tenant.users[0].firstName ?? ''} ${tenant.users[0].lastName ?? ''}`.trim() || tenant.name
+        : tenant.name
+
+      await this.mailService.sendSaleReceiptEmail({
+        to: recipientEmail,
+        tenantName: tenant.name,
+        recipientName,
+        packageName: input.packageName,
+        channel: 'Mobile Money',
+        grossAmountUgx: input.grossAmountUgx,
+        feeAmountUgx: input.feeAmountUgx,
+        netAmountUgx: input.netAmountUgx,
+        customerReference: input.customerReference,
+        reference: input.reference,
+        occurredAt: new Date(),
+      })
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send sale receipt email for tenant ${input.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }
 
   private attachReconnectPayload<T extends { status: PaymentStatus; activation?: {

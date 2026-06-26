@@ -13,11 +13,12 @@ import {
   PayoutNumberStatus,
   WalletOwnerType,
 } from '@prisma/client'
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import * as bcrypt from 'bcrypt'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
+import { MailService } from '../mail/mail.service'
 import { PaymentRouterService } from '../payments/payment-router.service'
 import { PhoneNumberService } from '../payments/phone-number.service'
 import { RegisterPayoutNumberDto } from './dto/register-payout-number.dto'
@@ -28,11 +29,57 @@ import { TopUpWalletDto } from './dto/topup-wallet.dto'
 
 @Injectable()
 export class WalletsService {
+  private readonly logger = new Logger(WalletsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentRouterService: PaymentRouterService,
     private readonly phoneNumberService: PhoneNumberService,
+    private readonly mailService: MailService,
   ) {}
+
+  // Best-effort, fire-and-forget: a slow/broken mail server must never delay
+  // or fail a withdrawal action that already succeeded in the database.
+  private async notifyWithdrawalEmail(input: {
+    tenantId: string
+    status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+    amountUgx: number
+    reference: string
+    reason?: string | null
+  }) {
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: input.tenantId },
+        select: {
+          name: true,
+          supportEmail: true,
+          users: { select: { email: true, firstName: true, lastName: true }, take: 1 },
+        },
+      })
+      const recipientEmail = tenant?.supportEmail ?? tenant?.users[0]?.email
+      if (!tenant || !recipientEmail) {
+        return
+      }
+
+      const recipientName = tenant.users[0]
+        ? `${tenant.users[0].firstName ?? ''} ${tenant.users[0].lastName ?? ''}`.trim() || tenant.name
+        : tenant.name
+
+      await this.mailService.sendWithdrawalStatusEmail({
+        to: recipientEmail,
+        tenantName: tenant.name,
+        recipientName,
+        status: input.status,
+        amountUgx: input.amountUgx,
+        reference: input.reference,
+        reason: input.reason,
+      })
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send withdrawal ${input.status} email for tenant ${input.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
 
   async listWallets(tenantId?: string) {
     const items = await this.prisma.wallet.findMany({
@@ -681,6 +728,14 @@ export class WalletsService {
         this.prisma.wallet.findUniqueOrThrow({ where: { id: reserved.walletId } }),
       ])
 
+      void this.notifyWithdrawalEmail({
+        tenantId,
+        status: 'REQUESTED',
+        amountUgx: dto.amountUgx,
+        reference: disbursement.reference,
+        reason: reviewReason,
+      })
+
       return {
         disbursement,
         billingTransaction,
@@ -859,6 +914,13 @@ export class WalletsService {
         notes: 'Withdrawal approved. Submitting to provider.',
         metadata: this.toJsonValue({ ...(this.objectMetadata(disbursement.metadata)), approvedByUserId: actorUserId }),
       },
+    })
+
+    void this.notifyWithdrawalEmail({
+      tenantId: disbursement.tenantId,
+      status: 'APPROVED',
+      amountUgx: disbursement.amountUgx,
+      reference: disbursement.reference,
     })
 
     return this.submitReservedWithdrawal(disbursement.id)
@@ -1238,7 +1300,7 @@ export class WalletsService {
       ? DisbursementStatus.COMPLETED
       : DisbursementStatus.PROCESSING
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const billingTransaction = await tx.billingTransaction.update({
         where: { id: input.reserved.billingTransactionId },
         data: { status: BillingTransactionStatus.COMPLETED },
@@ -1281,6 +1343,15 @@ export class WalletsService {
         providerStatus: input.providerResponse.transactionStatus,
       }
     })
+
+    void this.notifyWithdrawalEmail({
+      tenantId: result.disbursement.tenantId,
+      status: finalStatus === DisbursementStatus.COMPLETED ? 'COMPLETED' : 'PROCESSING',
+      amountUgx: typeof input.payoutAmountUgx === 'number' ? input.payoutAmountUgx : result.disbursement.amountUgx,
+      reference: result.disbursement.reference,
+    })
+
+    return result
   }
 
   private providerResponseCompleted(providerResponse: { statusCode?: number; transactionStatus?: string; status?: string }) {
@@ -1391,7 +1462,7 @@ export class WalletsService {
     notes?: string
     extraMetadata?: Record<string, unknown>
   }) {
-    await this.prisma.$transaction(async (tx) => {
+    const released = await this.prisma.$transaction(async (tx) => {
       const disbursement = await tx.disbursement.findUnique({ where: { id: input.disbursementId } })
       if (
         !disbursement ||
@@ -1399,7 +1470,7 @@ export class WalletsService {
         disbursement.status === DisbursementStatus.REVERSED ||
         disbursement.status === DisbursementStatus.CANCELLED
       ) {
-        return
+        return false
       }
 
       await tx.wallet.update({
@@ -1489,7 +1560,19 @@ export class WalletsService {
         details: { errorMessage: input.errorMessage, totalDebitUgx: input.totalDebitUgx },
         client: tx,
       })
+
+      return true
     })
+
+    if (released) {
+      void this.notifyWithdrawalEmail({
+        tenantId: input.tenantId,
+        status: input.disbursementStatus === DisbursementStatus.REVERSED ? 'REJECTED' : 'FAILED',
+        amountUgx: input.amountUgx,
+        reference: input.reference,
+        reason: input.errorMessage,
+      })
+    }
   }
 
   private buildDateFilter(filters: { from?: string; to?: string }) {

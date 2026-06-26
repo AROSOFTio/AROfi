@@ -1,12 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, BadRequestException, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { PaymentNetwork, PaymentStatus, Prisma, SubscriptionPlanTier } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
+import { MailService } from '../mail/mail.service'
 import { PaymentRouterService } from '../payments/payment-router.service'
 import { PhoneNumberService } from '../payments/phone-number.service'
 import { mapRawStatusToPaymentStatus } from '../payments/payment-provider.interface'
 import { SubscriptionPlanKey } from './dto/select-plan.dto'
+
+// How far ahead of expiry to start emailing a renewal reminder.
+const EXPIRY_REMINDER_WINDOW_DAYS = 3
 
 // Commission rates are intentionally NOT listed here: they are DevAdmin-configured
 // (PlatformSetting.{mobileMoneyFeeBps,voucherFeeBps,proMobileMoneyFeeBps,...}) and
@@ -59,16 +63,109 @@ type SubscriptionPreferences = {
   subscriptionPendingPlan?: SubscriptionPlanKey
   subscriptionPaidUntil?: string
   subscriptionPayment?: SubscriptionPaymentState
+  subscriptionExpiryReminderSentForExpiresAt?: string
   [key: string]: unknown
 }
 
 @Injectable()
-export class SubscriptionService {
+export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(SubscriptionService.name)
+  private reminderTimer?: NodeJS.Timeout
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentRouterService: PaymentRouterService,
     private readonly phoneNumberService: PhoneNumberService,
+    private readonly mailService: MailService,
   ) {}
+
+  onModuleInit() {
+    if (process.env.SUBSCRIPTION_EXPIRY_REMINDERS_ENABLED === 'false') {
+      return
+    }
+    const intervalMs = Number.parseInt(process.env.SUBSCRIPTION_EXPIRY_REMINDER_INTERVAL_MS ?? '21600000', 10) // 6h default
+    this.reminderTimer = setInterval(() => {
+      void this.sendExpiryReminders().catch((error) => this.logger.error(error))
+    }, intervalMs)
+    void this.sendExpiryReminders().catch((error) => this.logger.error(error))
+  }
+
+  onModuleDestroy() {
+    if (this.reminderTimer) {
+      clearInterval(this.reminderTimer)
+    }
+  }
+
+  // Reminds tenants on a paid plan whose subscription renews within the next
+  // few days, so a lapsed payment doesn't silently drop them back to Free.
+  // Dedupes per renewal cycle by remembering which expiresAt it last
+  // reminded for, in the same JSON prefs blob the checkout flow already uses.
+  private async sendExpiryReminders() {
+    const now = new Date()
+    const windowEnd = new Date(now.getTime() + EXPIRY_REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+
+    const expiringTenants = await this.prisma.tenantSetting.findMany({
+      where: {
+        subscriptionPlan: { in: [SubscriptionPlanTier.PRO, SubscriptionPlanTier.ENTERPRISE] },
+        subscriptionPlanExpiresAt: { gte: now, lte: windowEnd },
+      },
+      select: {
+        tenantId: true,
+        subscriptionPlan: true,
+        subscriptionPlanExpiresAt: true,
+        routerOnboardingPreferences: true,
+        tenant: {
+          select: {
+            name: true,
+            supportEmail: true,
+            users: { select: { email: true, firstName: true, lastName: true }, take: 1 },
+          },
+        },
+      },
+    })
+
+    for (const row of expiringTenants) {
+      if (!row.subscriptionPlanExpiresAt) continue
+
+      const prefs = (row.routerOnboardingPreferences as SubscriptionPreferences | null) ?? {}
+      const alreadyRemindedForThisCycle = prefs.subscriptionExpiryReminderSentForExpiresAt === row.subscriptionPlanExpiresAt.toISOString()
+      if (alreadyRemindedForThisCycle) continue
+
+      const recipientEmail = row.tenant.supportEmail ?? row.tenant.users[0]?.email
+      if (!recipientEmail) continue
+
+      const recipientName = row.tenant.users[0]
+        ? `${row.tenant.users[0].firstName ?? ''} ${row.tenant.users[0].lastName ?? ''}`.trim() || row.tenant.name
+        : row.tenant.name
+
+      const daysRemaining = Math.max(0, Math.ceil((row.subscriptionPlanExpiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+
+      try {
+        await this.mailService.sendSubscriptionExpiryReminderEmail({
+          to: recipientEmail,
+          tenantName: row.tenant.name,
+          recipientName,
+          plan: row.subscriptionPlan as 'PRO' | 'ENTERPRISE',
+          expiresAt: row.subscriptionPlanExpiresAt,
+          daysRemaining,
+        })
+
+        await this.prisma.tenantSetting.update({
+          where: { tenantId: row.tenantId },
+          data: {
+            routerOnboardingPreferences: {
+              ...prefs,
+              subscriptionExpiryReminderSentForExpiresAt: row.subscriptionPlanExpiresAt.toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+        })
+      } catch (error) {
+        this.logger.warn(
+          `Failed to send subscription expiry reminder for tenant ${row.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
+  }
 
   async getPlanCatalog() {
     const platformSettings = await this.prisma.platformSetting.upsert({

@@ -18,8 +18,8 @@ export class ChatController {
   }
 
   @Get('messages')
-  getMessages(@Query('sessionId') sessionId: string): any {
-    const session = this.chatService.getSession(sessionId);
+  async getMessages(@Query('sessionId') sessionId: string): Promise<any> {
+    const session = await this.chatService.getSession(sessionId);
     return {
       messages: session ? session.messages : [],
       code: session ? session.code : null,
