@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Activity, BadgeDollarSign, Radio, Router, Ticket, Users, Wifi } from 'lucide-react'
+import { Activity, BadgeDollarSign, Check, Radio, Router, Ticket, Users, Wifi } from 'lucide-react'
 import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
 
@@ -11,6 +11,41 @@ const features = [
   { icon: Ticket, title: 'WiFi Packages & Vouchers', text: 'Sell hourly & daily bundles, print voucher batches for field agents — all from one place.' },
   { icon: BadgeDollarSign, title: 'MTN MoMo & Airtel Money', text: 'Auto-collect mobile money. Wallets, settlements and reconciliation built-in.' },
   { icon: Users, title: 'Multi-Tenant · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
+]
+
+// Mirrors SUBSCRIPTION_PLAN_CATALOG in apps/api/src/modules/subscription/subscription.service.ts
+// — keep these in sync if the plans/commission rates ever change there.
+const pricingTiers = [
+  {
+    key: 'FREE',
+    name: 'Starter',
+    priceUgx: 0,
+    period: null,
+    commissionSummary: '8% Mobile Money · 2% Voucher',
+    routerLimit: 'Up to 5 Routers/Hotspots',
+    features: ['Cloud WinBox Tunnels', 'Free Analytics', 'AROFi branding'],
+    featured: false,
+  },
+  {
+    key: 'PRO',
+    name: 'Pro',
+    priceUgx: 20000,
+    period: '/month',
+    commissionSummary: '4% Mobile Money · 0% Voucher',
+    routerLimit: 'Up to 10 Routers/Hotspots',
+    features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
+    featured: true,
+  },
+  {
+    key: 'ENTERPRISE',
+    name: 'Enterprise',
+    priceUgx: 70000,
+    period: '/month',
+    commissionSummary: '1.6% MM gateway fee · 0% platform fee',
+    routerLimit: 'Unlimited Routers/Hotspots',
+    features: ['Cloud WinBox Tunnels', 'Custom Domains & SSL', 'Custom SMS Gateway API', 'Priority Support'],
+    featured: false,
+  },
 ]
 
 // Decorative, illustrative figures for the hero preview — not live data.
@@ -151,6 +186,40 @@ export default function RootPage() {
             <p>{feature.text}</p>
           </article>
         ))}
+      </section>
+
+      <section className="home-pricing" id="pricing">
+        <div className="home-pricing-head">
+          <div className="home-kicker"><BadgeDollarSign size={15} /> Pricing</div>
+          <h2>Start free. Upgrade when it pays for itself.</h2>
+          <p>All plans include MTN MoMo &amp; Airtel Money collection, vouchers, and RADIUS-billed hotspots — AROFi only earns when you do.</p>
+        </div>
+        <div className="home-pricing-grid">
+          {pricingTiers.map((tier) => (
+            <article key={tier.key} className={`home-pricing-card ${tier.featured ? 'featured' : ''}`}>
+              {tier.featured && <div className="home-pricing-badge">Most Popular</div>}
+              <h3>{tier.name}</h3>
+              <div className="home-pricing-price">
+                <strong>UGX {tier.priceUgx.toLocaleString()}</strong>
+                {tier.period && <span>{tier.period}</span>}
+              </div>
+              <div className="home-pricing-commission">{tier.commissionSummary}</div>
+              <div className="home-pricing-routers">{tier.routerLimit}</div>
+              <ul className="home-pricing-list">
+                {tier.features.map((feature) => (
+                  <li key={feature}><Check size={15} /> {feature}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className={`btn ${tier.featured ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setRegisterOpen(true)}
+              >
+                {tier.priceUgx === 0 ? 'Start for Free' : 'Get Started'}
+              </button>
+            </article>
+          ))}
+        </div>
       </section>
 
       {/* Footer */}

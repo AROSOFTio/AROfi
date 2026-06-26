@@ -1060,6 +1060,118 @@ body.mobile-nav-locked { overflow: hidden; }
   font-size: 13px;
 }
 
+.home-pricing {
+  max-width: 1180px;
+  margin: 72px auto 0;
+  padding: 0 24px;
+}
+
+.home-pricing-head {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 36px;
+}
+
+.home-pricing-head h2 {
+  margin: 12px 0;
+  font-size: clamp(26px, 4vw, 36px);
+}
+
+.home-pricing-head p {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.home-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.home-pricing-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  border-radius: 16px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home-pricing-card.featured {
+  border-color: var(--green);
+  box-shadow: 0 24px 60px rgba(21, 93, 252, 0.16);
+}
+
+.home-pricing-badge {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.home-pricing-card h3 {
+  font-size: 18px;
+}
+
+.home-pricing-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.home-pricing-price strong {
+  font-size: 28px;
+}
+
+.home-pricing-price span {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.home-pricing-commission {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.home-pricing-routers {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.home-pricing-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  flex: 1;
+}
+
+.home-pricing-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.home-pricing-list li svg {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -2876,6 +2988,7 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   .settings-grid { grid-template-columns: 1fr; }
   .home-hero { grid-template-columns: 1fr; margin-top: 40px; }
   .home-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page-title { font-size: 24px; }
   .page-subtitle { font-size: 14px; }
 }
@@ -2984,6 +3097,7 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 
   /* Home features: single column */
   .home-feature-grid { grid-template-columns: 1fr; }
+  .home-pricing-grid { grid-template-columns: 1fr; }
 }
 
 /* ── 640px ── */
