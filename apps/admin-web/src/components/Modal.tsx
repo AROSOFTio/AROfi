@@ -1,6 +1,6 @@
 'use client'
 
-import type { CSSProperties, MouseEvent, ReactNode } from 'react'
+import { useEffect, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 
 type ModalSize = 'compact' | 'default' | 'wide'
 
@@ -26,6 +26,21 @@ export function Modal({
   closeDisabled?: boolean
   children: ReactNode
 }) {
+  // Without this, the page behind the overlay keeps its own scroll position
+  // and can still capture wheel/touch input, which is what made modals feel
+  // "hard to scroll" — input was landing on the hidden background, not the
+  // modal's own scrollable card.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [open])
+
   if (!open) {
     return null
   }

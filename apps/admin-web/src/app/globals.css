@@ -7,12 +7,17 @@
 ═══════════════════════════════════════════════ */
 :root,
 [data-theme="light"] {
-  --bg-app:      #ffffff;
+  /* bg-app is the content canvas, bg-card is what floats on top of it — they
+     used to be the same #ffffff, which meant every "card" had zero visible
+     contrast against the page (no border-radius/depth was perceptible no
+     matter what each component styled). bg-app is now a soft off-white so
+     white cards actually read as elevated surfaces. */
+  --bg-app:      #f6f7f9;
   --bg-card:     #ffffff;
   --bg-sidebar:  #ffffff;
   --bg-hover:    #f4f4f5;
-  --border:      #e4e4e7;
-  --border-soft: #eeeeef;
+  --border:      #dfe3e8;
+  --border-soft: #ebedf0;
 
   --text-1: #050505;
   --text-2: #5f6673;
@@ -461,14 +466,16 @@ body {
    CARDS
 ═══════════════════════════════════════════════ */
 .card {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
-  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  /* Glass/blur surfaces only read as "glass" over a colored or gradient
+     background. The dashboard canvas is flat (--bg-app), so a translucent
+     blurred card rendered as a plain card with no visible depth. A solid
+     surface + border + shadow actually shows up. */
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
   margin-bottom: 20px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .card-header {

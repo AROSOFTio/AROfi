@@ -298,7 +298,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 18, padding: '0 22px 22px' }}>
-        <section className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 12 }}>
+        <section className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg-card)' }}>
           <table>
             <thead>
               <tr>
@@ -358,7 +358,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
             <input className="form-input" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} style={{ maxWidth: 180 }} />
           </div>
         )}
-        <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 12 }}>
+        <div className="table-wrap" style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg-card)' }}>
           <table>
             <thead>
               <tr>
