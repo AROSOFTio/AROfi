@@ -344,7 +344,7 @@ export class PortalService {
   }) {
     const transactionId = input.transactionId.trim()
     if (!transactionId) {
-      throw new BadRequestException('Transaction ID is required')
+      throw new BadRequestException('Phone number or transaction ID is required')
     }
 
     const resolvedHotspot = await this.resolveHotspotContext({
@@ -386,7 +386,10 @@ export class PortalService {
       const redemption = await this.prisma.voucherRedemption.findFirst({
         where: {
           tenantId: (resolvedHotspot as any).tenantId,
-          customerReference: transactionId,
+          OR: [
+            { customerReference: transactionId },
+            ...(normalizedPhone ? [{ customerReference: normalizedPhone }] : []),
+          ],
         },
         orderBy: { createdAt: 'desc' },
       })
@@ -401,7 +404,7 @@ export class PortalService {
     }
 
     if (!activationId) {
-      throw new NotFoundException('Could not find a valid voucher for this transaction ID')
+      throw new NotFoundException('Could not find a valid voucher for that phone number or transaction ID')
     }
 
     const activation = await this.prisma.packageActivation.findUnique({

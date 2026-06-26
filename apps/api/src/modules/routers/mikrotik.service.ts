@@ -488,15 +488,23 @@ export class MikrotikService {
     .spinner{width:30px;height:30px;border:3px solid #bfdbfe;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
     .spin-wrap p{color:#64748b;font-size:13px;margin-top:10px}
-    .tabs{display:flex;background:#f1f5f9;padding:3px;border-radius:10px;margin-bottom:16px;gap:3px}
-    .tab{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border-radius:8px;transition:all .18s}
-    .tab.on{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-    .pkgs{max-height:196px;overflow-y:auto;margin-bottom:16px}
-    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color .18s}
+    .quick-row{display:flex;gap:8px;margin-bottom:10px}
+    .quick-row input{flex:1}
+    .quick-row button{width:auto;padding:11px 18px;white-space:nowrap}
+    .find-link{display:block;width:100%;text-align:center;background:#eff6ff;border:1px solid #bfdbfe;color:#2563EB;font-size:12.5px;font-weight:700;padding:9px;border-radius:9px;cursor:pointer;margin-bottom:16px}
+    .find-panel{display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:16px}
+    .find-panel.on{display:block}
+    .section-label{text-align:center;font-size:12.5px;color:#64748b;margin-bottom:12px}
+    .pkgs{max-height:280px;overflow-y:auto;margin-bottom:14px}
+    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:border-color .18s}
     .pkg.sel{border-color:#2563EB;background:#eff6ff}
     .pkg h3{font-size:14px;font-weight:700;color:#0f172a}
     .pkg p{font-size:12px;color:#64748b;margin-top:1px}
-    .price{font-size:13px;font-weight:800;color:#2563EB;white-space:nowrap;margin-left:10px}
+    .price{font-size:13px;font-weight:800;color:#2563EB;white-space:nowrap}
+    .buy-btn{background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:9px 16px;font-size:13px;font-weight:800;border-radius:9px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.22)}
+    .pay-box{display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:13px;margin-bottom:14px}
+    .pay-box.on{display:block}
+    .pay-box .pname{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:10px}
     lbl{display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
     .iw{position:relative;margin-bottom:13px}
     input[type=text],input[type=tel]{width:100%;background:#f8fafc;border:1px solid #e2e8f0;padding:11px 13px;border-radius:10px;color:#0f172a;font-size:15px;outline:none;transition:border-color .18s}
@@ -504,13 +512,16 @@ export class MikrotikService {
     .btn{width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:13px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;box-shadow:0 3px 10px rgba(37,99,235,.22);transition:all .18s}
     .btn:hover{opacity:.92;transform:translateY(-1px)}
     .btn:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none;box-shadow:none}
-    .btn-outline{width:100%;background:transparent;color:#2563EB;border:1px solid #2563EB;padding:13px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;margin-top:8px;transition:all .18s}
-    .btn-outline:hover{background:#eff6ff}
     .st{margin-top:13px;padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.4;display:none}
     .st.err{background:#fff1f2;border:1px solid #fecdd3;color:#be123c;display:block}
     .st.ok{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;display:block}
     .st.info{background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:block}
-    .pane{display:none}.pane.on{display:block}
+    .accept{text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-top:6px}
+    .accept-label{font-size:12px;font-weight:700;color:#475569;margin-bottom:8px}
+    .accept-logos{display:flex;justify-content:center;gap:8px}
+    .net-badge{font-size:11px;font-weight:800;padding:5px 12px;border-radius:999px;color:#fff}
+    .net-mtn{background:#ffcc00;color:#0b1f3a}
+    .net-airtel{background:#e60012}
     .footer{text-align:center;margin-top:18px;font-size:12px;color:#64748b;display:none}
     .tech{margin-top:20px;text-align:center;font-size:11px;color:#94a3b8}
   </style>
@@ -527,42 +538,45 @@ export class MikrotikService {
       <h1 id="tname">AROFi Hotspot</h1>
       <p id="ttag">Instant high-speed internet access</p>
     </div>
-    
+
     <div id="loading" class="spin-wrap"><div class="spinner"></div><p>Loading packages...</p></div>
-    
+
     <div id="content" style="display:none">
-      <div class="tabs">
-        <div class="tab on" id="t-momo" onclick="sw('momo')">Buy Package</div>
-        <div class="tab" id="t-voucher" onclick="sw('voucher')">Voucher</div>
+      <div class="quick-row">
+        <input type="text" id="vcode" placeholder="Enter your voucher code">
+        <button class="btn" id="vbtn" onclick="login()">Login</button>
       </div>
-      
-      <div id="pane-momo" class="pane on">
-        <div class="pkgs" id="plist"></div>
-        <div class="iw">
-          <lbl>Mobile Money Number</lbl>
-          <input type="tel" id="phone" placeholder="e.g. 0771234567" oninput="dnet(this.value)">
+      <div class="find-link" onclick="toggleFind()">Already bought? Find My Voucher</div>
+      <div class="find-panel" id="findPanel">
+        <div class="iw" style="margin-bottom:9px">
+          <input type="text" id="rtxn" placeholder="Phone number or Transaction ID">
         </div>
-        <button class="btn" id="pbtn" onclick="pay()">Pay and Connect</button>
+        <button class="btn" id="rbtn" onclick="rec()">Find Voucher</button>
       </div>
-      
-      <div id="pane-voucher" class="pane">
-        <div class="iw">
-          <lbl>Voucher Code</lbl>
-          <input type="text" id="vcode" placeholder="Enter voucher code">
+
+      <p class="section-label">Select a package and pay with Mobile Money</p>
+      <div class="pkgs" id="plist"></div>
+
+      <div class="pay-box" id="payBox">
+        <div class="pname" id="payPkgName"></div>
+        <div class="iw" style="margin-bottom:9px">
+          <input type="tel" id="phone" placeholder="e.g. 0771234567">
         </div>
-        <button class="btn" id="vbtn" onclick="login()">Connect to Internet</button>
-        <div style="text-align:center;margin:15px 0;font-size:12px;color:#94a3b8">OR</div>
-        <div class="iw">
-          <lbl>Mobile Money Transaction ID</lbl>
-          <input type="text" id="rtxn" placeholder="Enter TXN ID to recover voucher">
-        </div>
-        <button class="btn-outline" id="rbtn" onclick="rec()">Find Voucher</button>
+        <button class="btn" id="pbtn" onclick="pay()">Pay Now</button>
       </div>
-      
+
+      <div class="accept">
+        <div class="accept-label">We accept:</div>
+        <div class="accept-logos">
+          <span class="net-badge net-mtn">MTN MoMo</span>
+          <span class="net-badge net-airtel">Airtel Money</span>
+        </div>
+      </div>
+
       <div class="st" id="st"></div>
     </div>
   </div>
-  
+
   <div class="footer" id="footer">
     <div>Need help? Contact support: <span id="sph" style="color:#2563EB;font-weight:700"></span></div>
   </div>
@@ -603,11 +617,10 @@ export class MikrotikService {
         if(parts.length>1)v=parts[1].split('&')[0];
       }
       if(v){
-        sw('voucher');
         document.getElementById('vcode').value=decodeURIComponent(v);
         setTimeout(login, 200);
       }
-      
+
       if(ip)document.getElementById('tip').textContent='IP: '+ip;
       if(mac)document.getElementById('tmac').textContent='MAC: '+mac.toUpperCase();
       load();
@@ -628,14 +641,8 @@ export class MikrotikService {
       x.send(data?JSON.stringify(data):null);
     }
 
-    function sw(t){
-      document.getElementById('pane-momo').classList.remove('on');
-      document.getElementById('pane-voucher').classList.remove('on');
-      document.getElementById('t-momo').classList.remove('on');
-      document.getElementById('t-voucher').classList.remove('on');
-      document.getElementById('pane-'+t).classList.add('on');
-      document.getElementById('t-'+t).classList.add('on');
-      sst('','');
+    function toggleFind(){
+      document.getElementById('findPanel').classList.toggle('on');
     }
 
     function load(){
@@ -649,7 +656,7 @@ export class MikrotikService {
         if(d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect){
           conn(d.returningDevice.reconnect);return;
         }
-        
+
         pkgs=d.packages||[];
         document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';
         if(d.tenant&&d.tenant.supportPhone){
@@ -658,16 +665,13 @@ export class MikrotikService {
         }
 
         var el=document.getElementById('plist');el.innerHTML='';
-        if(pkgs.length){
-          pkgs.forEach(function(p){
-            var d2=p.description||(fdur(p.durationMinutes)+(p.dataLimitMb?' · '+fmb(p.dataLimitMb):' · Unlimited data'));
-            var c=document.createElement('div');c.className='pkg';
-            c.onclick=function(){selPkg(p.id);};
-            c.innerHTML='<div class="pkg-info"><h3>'+esc(p.name)+'</h3><p>'+esc(d2)+'</p></div><div class="price">UGX '+fn(p.amountUgx)+'</div>';
-            el.appendChild(c);
-          });
-          selPkg(pkgs[0].id);
-        }
+        pkgs.forEach(function(p){
+          var d2=p.description||(fdur(p.durationMinutes)+(p.dataLimitMb?' · '+fmb(p.dataLimitMb):' · Unlimited data'));
+          var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;
+          c.innerHTML='<div class="pkg-info"><h3>'+esc(p.name)+'</h3><p>'+esc(d2)+'</p></div><div class="price">UGX '+fn(p.amountUgx)+'</div><button type="button" class="buy-btn" data-id="'+esc(p.id)+'">BUY</button>';
+          c.querySelector('.buy-btn').onclick=function(){selPkg(p.id);};
+          el.appendChild(c);
+        });
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
       });
@@ -678,20 +682,29 @@ export class MikrotikService {
       var els=document.querySelectorAll('.pkg');
       for(var i=0;i<els.length;i++){
         els[i].classList.remove('sel');
-        if(pkgs[i]&&pkgs[i].id===id)els[i].classList.add('sel');
       }
+      var chosen=document.getElementById('pkg-'+id);
+      if(chosen)chosen.classList.add('sel');
+
+      var pkg=null;
+      for(var j=0;j<pkgs.length;j++){if(pkgs[j].id===id){pkg=pkgs[j];break;}}
+      document.getElementById('payPkgName').textContent=pkg?(pkg.name+' · UGX '+fn(pkg.amountUgx)):'';
+      var box=document.getElementById('payBox');
+      box.classList.add('on');
+      box.scrollIntoView({behavior:'smooth',block:'center'});
+      document.getElementById('phone').focus();
     }
 
     function login(){
       var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\s+/g,'');
       if(!code){sst('Enter your voucher code.','err');return;}
       var b=document.getElementById('vbtn');
-      b.disabled=true;b.textContent='Connecting...';
+      b.disabled=true;b.textContent='Logging in...';
       sst('Verifying voucher...','info');
-      
+
       ajax('POST', API+'/api/portal/redeem-voucher', {code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
         if(err){
-          sst(err.message||'Failed','err');b.disabled=false;b.textContent='Connect to Internet';
+          sst(err.message||'Failed','err');b.disabled=false;b.textContent='Login';
         } else {
           sst('Success! Connecting...','ok');
           conn(res.reconnect);
@@ -736,17 +749,16 @@ export class MikrotikService {
 
     function rec(){
       var txn=document.getElementById('rtxn').value.trim();
-      if(!txn){sst('Enter your Mobile Money Transaction ID.','err');return;}
+      if(!txn){sst('Enter your phone number or transaction ID.','err');return;}
       var b=document.getElementById('rbtn');b.disabled=true;b.textContent='Searching...';
       sst('Searching for voucher...','info');
-      
+
       ajax('POST', API+'/api/portal/recover-voucher', {transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
         if(err){ sst(err.message||'Not found','err');b.disabled=false;b.textContent='Find Voucher'; }
         else { sst('Found! Connecting...','ok');conn(res.reconnect); }
       });
     }
 
-    function dnet(v){}
     function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
