@@ -152,11 +152,19 @@ export class MikrotikService {
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
+    const statusHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}`
+    const fallbackStatusHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}`
     const heartbeatUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl, remoteClientName)
     const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
-    const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl, profileName)
+    const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(
+      loginHtmlUrl,
+      fallbackLoginHtmlUrl,
+      statusHtmlUrl,
+      fallbackStatusHtmlUrl,
+      profileName,
+    )
 
     // SAFE_EXISTING_ROUTER = the operator already has a working HotSpot; we only
     // wire it to AROFi RADIUS/portal. Any other mode builds a fresh customer
@@ -400,7 +408,13 @@ export class MikrotikService {
     ]
   }
 
-  private buildLoginHtmlInstallScript(loginHtmlUrl: string, fallbackLoginHtmlUrl: string, profileName?: string) {
+  private buildLoginHtmlInstallScript(
+    loginHtmlUrl: string,
+    fallbackLoginHtmlUrl: string,
+    statusHtmlUrl: string,
+    fallbackStatusHtmlUrl: string,
+    profileName?: string,
+  ) {
     const profileSet = profileName
       ? [`/ip hotspot profile set [find name="${this.escape(profileName)}"] html-directory=hotspot`]
       : []
@@ -419,6 +433,25 @@ export class MikrotikService {
       `  } on-error={`,
       `    :put "WARNING: login.html install FAILED — portal will show MikroTik default UI."`,
       `    :put "Fix: /tool fetch url=\\"${loginHtmlUrl}\\" dst-path=\\"hotspot/login.html\\""`,
+      `  }`,
+      `}`,
+      // Without a custom status.html, MikroTik falls back to its stock post-auth
+      // page ("You are logged in. If nothing happens, click here") which needs a
+      // manual tap on some captive-portal webviews. Our version meta-refreshes +
+      // JS-redirects immediately so the customer never has to touch anything.
+      `:do {`,
+      `  /tool fetch url="${statusHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/status.html"`,
+      `  :if ([:len [/file find name="hotspot/status.html"]] > 0) do={`,
+      `    :put "AROFi HotSpot status.html installed."`,
+      `  } else={`,
+      `    :error "status.html not found after fetch"`,
+      `  }`,
+      `} on-error={`,
+      `  :do {`,
+      `    /tool fetch url="${fallbackStatusHtmlUrl}" mode=http dst-path="hotspot/status.html"`,
+      `    :put "AROFi HotSpot status.html installed by HTTP fallback."`,
+      `  } on-error={`,
+      `    :put "WARNING: status.html install FAILED — post-login page will need a manual tap."`,
       `  }`,
       `}`,
       ...profileSet,
@@ -714,7 +747,7 @@ export class MikrotikService {
     }
 
     function dnet(v){}
-    function conn(rc){if(!rc||!rc.username)return;var dst='http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
@@ -727,6 +760,40 @@ export class MikrotikService {
 `
   }
 
+  // Post-auth confirmation page MikroTik shows right after RADIUS accepts the
+  // login. Without this, MikroTik falls back to its stock status.html, which
+  // requires a manual "click here" tap on some captive-portal mini-browsers
+  // (Android/iOS "sign in to network") instead of redirecting immediately.
+  // Meta-refresh covers webviews that block JS; the script covers the rest.
+  buildStatusHtml() {
+    return `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0;url=$(link-orig-esc)">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connected</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#eff6ff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center}
+    .spinner{width:30px;height:30px;border:3px solid #bfdbfe;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;margin-bottom:14px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    p{color:#475569;font-size:14px}
+    a{color:#2563EB;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <p>You're connected. Redirecting&hellip;</p>
+  <p style="margin-top:10px"><a href="$(link-orig-esc)">Click here if nothing happens</a></p>
+  <script>
+    window.location.replace("$(link-orig-esc)");
+  </script>
+</body>
+</html>
+`
+  }
 
   // Brings up an OPEN customer SSID on whatever radios the board has and binds
   // them to the isolated arofi-hotspot bridge. Supports RouterOS v6 wireless

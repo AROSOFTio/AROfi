@@ -25,6 +25,16 @@ export class MikrotikController {
     return html;
   }
 
+  @Get('status-html/:key')
+  @Header('Content-Type', 'text/html')
+  async getStatusHtml(@Param('key') key: string) {
+    const html = await this.routersService.getMikrotikStatusHtmlByKey(key);
+    if (!html) {
+      throw new NotFoundException('Router status.html not found');
+    }
+    return html;
+  }
+
   @Get('remote-access/install')
   @Header('Content-Type', 'text/plain')
   async getRemoteAccessInstall(@Query('token') token?: string, @Req() request?: any) {

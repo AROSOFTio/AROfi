@@ -925,6 +925,19 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     )
   }
 
+  async getMikrotikStatusHtmlByKey(key: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+      select: { id: true },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    return this.mikrotikService.buildStatusHtml()
+  }
+
   async rotateRadiusSecret(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
