@@ -185,6 +185,11 @@ export class MikrotikService {
       `# 1. Make sure management stays reachable (no credential changes)`,
       `:do { /ip service set ${apiService} port=${input.apiPort} disabled=no } on-error={}`,
       `:do { /ip service set winbox port=8291 disabled=no } on-error={}`,
+      // www = WebFig, the router's built-in browser-based admin panel. Unlike
+      // WinBox, it needs no app — just a phone browser — so it's the phone
+      // re-entry point for field agents without a laptop. Force it on the
+      // same way winbox is, since some operators harden it off by default.
+      `:do { /ip service set www disabled=no } on-error={}`,
       `:do { /tool mac-server set allowed-interface-list=all } on-error={}`,
       `:do { /tool mac-server mac-winbox set allowed-interface-list=all } on-error={}`,
       ``,

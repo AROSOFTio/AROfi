@@ -35,6 +35,15 @@ export class MikrotikController {
     return html;
   }
 
+  @Get('mobile-setup/:key')
+  async getMobileSetup(@Param('key') key: string) {
+    const summary = await this.routersService.getMobileSetupSummaryByKey(key);
+    if (!summary) {
+      throw new NotFoundException('Router not found');
+    }
+    return summary;
+  }
+
   @Get('remote-access/install')
   @Header('Content-Type', 'text/plain')
   async getRemoteAccessInstall(@Query('token') token?: string, @Req() request?: any) {

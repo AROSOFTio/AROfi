@@ -412,6 +412,13 @@ export default function RoutersManager() {
     setSuccess('One-run RouterOS command copied to clipboard.')
   }
 
+  async function copyMobileSetupLink() {
+    if (!selectedSetup?.router.registrationKey) return
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    await navigator.clipboard.writeText(`${origin}/setup/${selectedSetup.router.registrationKey}`)
+    setSuccess('Phone setup link copied — send it to whoever is at the router with just a phone.')
+  }
+
   async function copyRouterAccessDetails() {
     if (!selectedSetup?.router) {
       return
@@ -844,6 +851,7 @@ export default function RoutersManager() {
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy command</button>
+                <button type="button" className="btn btn-ghost" onClick={() => void copyMobileSetupLink()}>Copy phone setup link</button>
                 <button type="button" className="btn btn-ghost" onClick={downloadScript}>Download .rsc</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleRotateSecret(selectedSetup.router.id)}>Rotate secret</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleHealthCheck(selectedSetup.router.id)} disabled={runningHealthCheckId === selectedSetup.router.id}>{runningHealthCheckId === selectedSetup.router.id ? 'Checking…' : 'Re-check status'}</button>

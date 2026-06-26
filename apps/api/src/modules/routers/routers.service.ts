@@ -948,6 +948,28 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
   }
 
+  // Public, key-scoped summary for the phone-first setup page (apps/admin-web
+  // /setup/[key]). Deliberately minimal — no secrets, NAS info, or anything
+  // beyond what the existing public one-run command already exposes -- this
+  // is meant to be opened on a field agent's phone with no AROFi login.
+  async getMobileSetupSummaryByKey(key: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { registrationKey: key },
+      include: { tenant: { select: { name: true } } },
+    })
+
+    if (!router) {
+      return null
+    }
+
+    return {
+      routerName: router.name,
+      tenantName: router.tenant.name,
+      host: router.host,
+      oneRunCommand: this.mikrotikService.buildOneRunCommand(router.registrationKey),
+    }
+  }
+
   async getMikrotikLoginHtmlByKey(key: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
