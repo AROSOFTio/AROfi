@@ -157,7 +157,7 @@ export default function HotspotsManager() {
       <div className="charts-grid">
         {createOpen && (
           <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
-            <div className="modal-card" style={{ width: 'min(760px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
               <div className="modal-kicker">Hotspot site</div>
               <h2 className="modal-title">Create Hotspot Site</h2>

@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, KeyRound, Plus, RefreshCw, ShieldCheck, Wallet } from 'lucide-react'
 import FormProcessStatus from '@/components/FormProcessStatus'
+import { Modal } from '@/components/Modal'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 
@@ -386,14 +387,26 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         </div>
       </section>
 
-      {action && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !busy && setAction(null)}>
-          <div className="modal-card" style={{ width: 'min(620px, 100%)' }} onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="modal-close" onClick={() => setAction(null)} disabled={Boolean(busy)}>Close</button>
+      <Modal
+        open={Boolean(action)}
+        onClose={() => setAction(null)}
+        closeDisabled={Boolean(busy)}
+        style={{ width: 'min(620px, 100%)' }}
+        kicker={
+          action === 'withdraw' ? 'Wallet withdrawal'
+          : action === 'secret' ? 'Security'
+          : action === 'number' ? 'Payout setup'
+          : 'Approval required'
+        }
+        title={
+          action === 'withdraw' ? 'Withdraw to registered number'
+          : action === 'secret' ? (profile.profile.secretConfigured ? 'Change secret key' : 'Set secret key')
+          : action === 'number' ? 'Register payout number'
+          : 'Request payout number change'
+        }
+      >
             {action === 'withdraw' && (
               <form onSubmit={withdraw}>
-                <div className="modal-kicker">Wallet withdrawal</div>
-                <h2 className="modal-title">Withdraw to registered number</h2>
                 <div className="form-grid" style={{ marginTop: 22 }}>
                   <ReadOnlyLine label="Withdraw to" value={primaryNumber ? `${primaryNumber.network} ${maskPhone(primaryNumber.normalizedPhone)}` : 'No verified primary payout number'} />
                   <label className="form-group">
@@ -448,8 +461,6 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
 
             {action === 'secret' && (
               <form onSubmit={setSecret}>
-                <div className="modal-kicker">Security</div>
-                <h2 className="modal-title">{profile.profile.secretConfigured ? 'Change secret key' : 'Set secret key'}</h2>
                 <div className="form-grid" style={{ marginTop: 22 }}>
                   {profile.profile.secretConfigured && (
                     <label className="form-group">
@@ -475,8 +486,6 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
 
             {action === 'number' && (
               <form onSubmit={addNumber}>
-                <div className="modal-kicker">Payout setup</div>
-                <h2 className="modal-title">Register payout number</h2>
                 <div className="form-grid" style={{ marginTop: 22 }}>
                   <label className="form-group">
                     <span className="form-label">Network</span>
@@ -509,8 +518,6 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
 
             {action === 'change' && (
               <form onSubmit={requestChange}>
-                <div className="modal-kicker">Approval required</div>
-                <h2 className="modal-title">Request payout number change</h2>
                 <div className="form-grid" style={{ marginTop: 22 }}>
                   <label className="form-group">
                     <span className="form-label">Existing number</span>
@@ -548,9 +555,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
                 </div>
               </form>
             )}
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

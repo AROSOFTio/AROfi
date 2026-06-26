@@ -94,7 +94,7 @@ export default function RegisterAgentPanel() {
                 <input className="form-input" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder="Can generate and sell printed vouchers." />
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 12 }}>
-                To let this agent sign in, create a staff user with the VoucherAgent role from Users & Roles.
+                Sign-in needs a separate staff user (Users &amp; Roles → VoucherAgent).
               </p>
               {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>

@@ -404,7 +404,7 @@ export default function VouchersManager() {
 
       {templateModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingTemplate && setTemplateModalOpen(false)}>
-          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+          <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setTemplateModalOpen(false)} disabled={submittingTemplate}>Close</button>
             <div className="modal-kicker">Voucher template</div>
             <h2 className="modal-title">Create Voucher Template</h2>
@@ -491,7 +491,7 @@ export default function VouchersManager() {
 
       {batchModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingBatch && setBatchModalOpen(false)}>
-          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+          <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setBatchModalOpen(false)} disabled={submittingBatch}>Close</button>
             <div className="modal-kicker">Voucher batch</div>
             <h2 className="modal-title">Generate Voucher Batch</h2>

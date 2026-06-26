@@ -802,7 +802,7 @@ export default function RoutersManager() {
 
       {routerModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingRouter && setRouterModalOpen(false)}>
-          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+          <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setRouterModalOpen(false)} disabled={submittingRouter}>Close</button>
             <RouterCreateCard
               formState={routerForm}

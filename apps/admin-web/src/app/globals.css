@@ -1179,47 +1179,57 @@ body.mobile-nav-locked { overflow: hidden; }
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(2, 6, 23, 0.55);
-  backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(3px);
 }
 
 .modal-card {
-  width: min(760px, 100%);
-  max-height: 90vh;
+  width: min(480px, 100%);
+  max-height: 85vh;
   overflow: auto;
-  border-radius: 18px;
-  padding: 30px;
+  border-radius: 14px;
+  padding: 22px;
   position: relative;
-  animation: slideUp 0.25s ease both;
+  animation: slideUp 0.16s ease both;
 }
 
 .modal-card.compact {
-  width: min(430px, 100%);
+  width: min(360px, 100%);
+}
+
+.modal-card.wide {
+  width: min(720px, 100%);
 }
 
 .modal-close {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  border: 1px solid var(--border);
-  background: var(--bg-app);
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: transparent;
   color: var(--text-2);
   border-radius: 8px;
-  padding: 6px 10px;
+  padding: 4px 8px;
+  font-size: 13px;
   cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--bg-app);
 }
 
 .modal-kicker {
   color: var(--green);
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .modal-title {
-  margin-top: 8px;
-  font-size: 28px;
+  margin-top: 6px;
+  font-size: 19px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 

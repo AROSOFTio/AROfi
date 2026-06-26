@@ -189,7 +189,7 @@ export default function PackagesManager() {
 
       {createOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
-          <div className="modal-card" style={{ width: 'min(980px, 100%)' }} onClick={(event) => event.stopPropagation()}>
+          <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
             <div className="modal-kicker">Package catalog</div>
             <h2 className="modal-title">{editingId ? 'Edit Package' : 'Create Package'}</h2>

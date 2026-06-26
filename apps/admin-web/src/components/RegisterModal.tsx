@@ -255,7 +255,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
         {step === 4 && success ? (
           <div style={{ marginTop: 18 }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 18 }}>
-              Select a billing tier that matches your network scale. You can change this anytime in Settings.
+              Choose a plan. You can change it later in Settings.
             </p>
             {planError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{planError}</p>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
@@ -301,7 +301,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
         ) : step === 5 && success ? (
           <div style={{ marginTop: 18 }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 18 }}>
-              Enter the phone number to charge for your {planChoice === 'ENTERPRISE' ? 'Enterprise' : 'Pro'} subscription. You can also skip and pay later — your account will still work.
+              Mobile money number for your {planChoice === 'ENTERPRISE' ? 'Enterprise' : 'Pro'} subscription, or skip and pay later.
             </p>
             {checkoutError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{checkoutError}</p>}
             {checkoutState?.checkout?.status === 'PENDING' && (
