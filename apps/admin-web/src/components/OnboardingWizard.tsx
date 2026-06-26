@@ -21,6 +21,7 @@ import {
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { buildRemoteAccessInstallCommand } from '@/lib/mikrotik-commands'
 import { AdminSessionResponse } from '@/lib/admin-types'
+import { DurationInput } from '@/components/DurationInput'
 
 type OnboardingWizardProps = {
   session: AdminSessionResponse
@@ -891,16 +892,13 @@ export default function OnboardingWizard({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: 600 }}>Duration (Minutes)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className="form-input"
-                    value={packageForm.durationMinutes}
-                    onChange={(e) => setPackageForm(prev => ({ ...prev, durationMinutes: e.target.value }))}
-                    placeholder="60"
-                    required
-                    style={{ padding: '10px 12px', borderRadius: 8 }}
+                  <label className="form-label" style={{ fontWeight: 600 }}>Duration</label>
+                  <DurationInput
+                    valueMinutes={packageForm.durationMinutes}
+                    onChangeMinutes={(minutes) => setPackageForm(prev => ({ ...prev, durationMinutes: minutes }))}
+                    inputClassName="form-input"
+                    selectClassName="form-input"
+                    fieldStyle={{ padding: '10px 12px', borderRadius: 8 }}
                   />
                 </div>
               </div>

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { PackageCatalogResponse, TenantOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
+import { DurationInput } from '@/components/DurationInput'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDuration } from '@/lib/format'
 
@@ -220,8 +221,14 @@ export default function PackagesManager() {
                 <input className="form-input" value={formState.code} onChange={(event) => setFormState((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))} placeholder="STARTER-2H" required disabled={Boolean(editingId)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Duration (minutes)</label>
-                <input className="form-input" type="number" min={1} value={formState.durationMinutes} onChange={(event) => setFormState((previous) => ({ ...previous, durationMinutes: event.target.value }))} required />
+                <label className="form-label">Duration</label>
+                <DurationInput
+                  key={editingId ?? 'create'}
+                  valueMinutes={formState.durationMinutes}
+                  onChangeMinutes={(minutes) => setFormState((previous) => ({ ...previous, durationMinutes: minutes }))}
+                  inputClassName="form-input"
+                  selectClassName="form-input"
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Initial Price (UGX)</label>
