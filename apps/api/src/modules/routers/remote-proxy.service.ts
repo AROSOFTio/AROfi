@@ -126,4 +126,53 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
       this.activeProxies.delete(localPort)
     }
   }
+
+  // Direct TCP probe of the router's SSTP tunnel IP, bypassing the public
+  // proxy port entirely. Used by the "Test Connection" action so the admin UI
+  // can report whether the tunnel itself is actually reachable right now,
+  // instead of inferring it from the static isRemotePortOpen DB flag (which
+  // only records that the proxy listener was switched on, not that the
+  // router's SSTP client is currently connected to it).
+  async probeTunnel(remoteHost: string, remotePort = 8291, timeoutMs = 5000) {
+    return new Promise<{ reachable: boolean; latencyMs?: number; message: string }>((resolve) => {
+      const socket = new net.Socket()
+      const startedAt = Date.now()
+      let settled = false
+
+      const finish = (result: { reachable: boolean; latencyMs?: number; message: string }) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        socket.destroy()
+        resolve(result)
+      }
+
+      socket.setTimeout(timeoutMs)
+
+      socket.once('connect', () => {
+        finish({
+          reachable: true,
+          latencyMs: Date.now() - startedAt,
+          message: 'SSTP tunnel reachable; WinBox port responded',
+        })
+      })
+
+      socket.once('timeout', () => {
+        finish({
+          reachable: false,
+          message: `Timed out after ${timeoutMs}ms connecting to ${remoteHost}:${remotePort} - the router's SSTP tunnel is likely down`,
+        })
+      })
+
+      socket.once('error', (error) => {
+        finish({
+          reachable: false,
+          message: `${error.message} - the router's SSTP tunnel is likely down`,
+        })
+      })
+
+      socket.connect(remotePort, remoteHost)
+    })
+  }
 }

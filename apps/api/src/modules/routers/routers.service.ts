@@ -1703,6 +1703,33 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return this.mapRouter(updatedRouter)
   }
 
+  async testRemoteAccess(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+    })
+
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const testedAt = new Date().toISOString()
+
+    if (!router.isRemotePortOpen) {
+      return { reachable: false, message: 'Remote port is closed. Open it first from the Status tab.', testedAt }
+    }
+
+    if (!router.remoteSstpIp) {
+      return { reachable: false, message: 'No SSTP tunnel IP has been assigned to this router yet.', testedAt }
+    }
+
+    const probe = await this.remoteProxyService.probeTunnel(router.remoteSstpIp, 8291)
+    return { ...probe, testedAt }
+  }
+
   async enableAllRemotePorts() {
     const routers = await this.prisma.router.findMany({
       where: {

@@ -87,6 +87,13 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @Post(':routerId/remote-access/test')
+  testRemoteAccess(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.testRemoteAccess(routerId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
   @Post('remote-access/enable-all')
   enableAllRemotePorts(@CurrentUser() user: AuthenticatedAdminUser) {
     return this.routersService.enableAllRemotePorts()

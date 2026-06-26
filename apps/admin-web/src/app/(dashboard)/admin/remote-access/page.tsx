@@ -30,6 +30,12 @@ export default function RemoteAccessPage() {
   const [closingPort, setClosingPort] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [copiedText, setCopiedText] = useState<string | null>(null)
+  const [tunnelTest, setTunnelTest] = useState<{
+    reachable: boolean
+    latencyMs?: number
+    message: string
+    testedAt: string
+  } | null>(null)
 
   const loadRouters = async () => {
     try {
@@ -54,6 +60,7 @@ export default function RemoteAccessPage() {
       setError(null)
       const setup = await clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`)
       setSelectedSetup(setup)
+      setTunnelTest(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load router details')
     } finally {
@@ -73,6 +80,35 @@ export default function RemoteAccessPage() {
 
   const selectedRouter = selectedSetup?.router
 
+  // The "Port Open" badge only reflects whether the proxy mapping is switched
+  // on in the DB - it says nothing about whether the router's SSTP tunnel is
+  // actually up right now. Auto-probe as soon as we know the port is open so
+  // the page never silently shows a stale "Connected" state.
+  useEffect(() => {
+    if (selectedRouter?.id && selectedRouter.isRemotePortOpen && !tunnelTest && !testingConnection) {
+      handleTestConnection(selectedRouter.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRouter?.id, selectedRouter?.isRemotePortOpen])
+
+  // Handle test connection - probes the router's actual SSTP tunnel IP, not
+  // the unrelated host:apiPort used by the generic router health-check.
+  const handleTestConnection = async (routerId: string) => {
+    try {
+      setTestingConnection(true)
+      setError(null)
+      const result = await clientPostApi<{ reachable: boolean; latencyMs?: number; message: string; testedAt: string }>(
+        `/routers/${routerId}/remote-access/test`,
+        {},
+      )
+      setTunnelTest(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Test connection failed')
+    } finally {
+      setTestingConnection(false)
+    }
+  }
+
   // Handle open port
   const handleOpenRemotePort = async () => {
     if (!selectedRouter) return
@@ -81,6 +117,7 @@ export default function RemoteAccessPage() {
       setError(null)
       await clientPostApi(`/routers/${selectedRouter.id}/remote-access/open`)
       await loadSetup(selectedRouter.id)
+      await handleTestConnection(selectedRouter.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to open remote port')
     } finally {
@@ -100,23 +137,6 @@ export default function RemoteAccessPage() {
       setError(err instanceof Error ? err.message : 'Failed to close remote port')
     } finally {
       setClosingPort(false)
-    }
-  }
-
-  // Handle test connection
-  const handleTestConnection = async () => {
-    if (!selectedRouter) return
-    try {
-      setTestingConnection(true)
-      setError(null)
-      // Call standard health-check endpoint to see if endpoint is live
-      await clientPostApi(`/routers/${selectedRouter.id}/health-check`)
-      await loadSetup(selectedRouter.id)
-      alert('Router connection test initiated! Please check status again shortly.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Test connection failed')
-    } finally {
-      setTestingConnection(false)
     }
   }
 
@@ -188,8 +208,8 @@ export default function RemoteAccessPage() {
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
-          <span className={`badge ${isPortOpen ? 'badge-success' : 'badge-danger'}`}>
-            {isPortOpen ? 'Connected' : 'Disconnected'}
+          <span className={`badge ${isPortOpen ? 'badge-success' : 'badge-danger'}`} title="Whether the proxy port mapping is switched on - not proof the SSTP tunnel itself is currently up">
+            {isPortOpen ? 'Port Open' : 'Port Closed'}
           </span>
         </div>
       </div>
@@ -259,16 +279,16 @@ export default function RemoteAccessPage() {
 
             <div style={{ display: 'grid', gap: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14 }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Port Tunnel Status</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Port Mapping</span>
                 <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ 
-                    width: 8, 
-                    height: 8, 
-                    borderRadius: '50%', 
+                  <span style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
                     backgroundColor: isPortOpen ? 'var(--success-fg)' : 'var(--danger-fg)',
                     boxShadow: isPortOpen ? '0 0 8px var(--success-fg)' : 'none'
                   }} />
-                  {isPortOpen ? 'Port Open / Traversal Active' : 'Disconnected'}
+                  {isPortOpen ? 'Port Open / Traversal Active' : 'Port Closed'}
                 </strong>
               </div>
 
@@ -276,6 +296,36 @@ export default function RemoteAccessPage() {
                 <span style={{ color: 'var(--text-secondary)' }}>Configured Address</span>
                 <strong style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>
                   {isPortOpen ? `Port ${selectedRouter?.remotePort || 'N/A'} Open` : 'Remote access disabled'}
+                </strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  Tunnel Reachability
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Live check of the router's SSTP tunnel - separate from port mapping above
+                  </div>
+                </span>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, textAlign: 'right' }}>
+                  {tunnelTest ? (
+                    <>
+                      <span style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: tunnelTest.reachable ? 'var(--success-fg)' : 'var(--danger-fg)',
+                        boxShadow: tunnelTest.reachable ? '0 0 8px var(--success-fg)' : 'none',
+                        flexShrink: 0
+                      }} />
+                      <span style={{ fontSize: 13 }}>
+                        {tunnelTest.reachable
+                          ? `Reachable${tunnelTest.latencyMs != null ? ` (${tunnelTest.latencyMs}ms)` : ''}`
+                          : tunnelTest.message}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Not tested yet</span>
+                  )}
                 </strong>
               </div>
             </div>
@@ -315,10 +365,10 @@ export default function RemoteAccessPage() {
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={handleTestConnection}
+                onClick={() => selectedRouter && handleTestConnection(selectedRouter.id)}
                 disabled={testingConnection || !isPortOpen}
               >
-                <Link2 size={14} style={{ marginRight: 6 }} /> Test Connection
+                <Link2 size={14} className={testingConnection ? 'animate-spin' : ''} style={{ marginRight: 6 }} /> {testingConnection ? 'Testing...' : 'Test Connection'}
               </button>
             </div>
           </div>
