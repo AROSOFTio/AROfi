@@ -274,6 +274,16 @@ echo "[sstp] Configuring iptables for PPP VPN (10.8.0.0/24)..."
 # Allow forwarding for PPP VPN subnet
 iptables -C FORWARD -s 10.8.0.0/24 -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -s 10.8.0.0/24 -j ACCEPT
 iptables -C FORWARD -d 10.8.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I FORWARD 2 -d 10.8.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT
+# The two rules above only cover the router's own outbound traffic and
+# replies to connections it initiated. They do NOT allow a NEW connection
+# initiated from the Docker side (the API container's WinBox proxy /
+# tunnel-reachability probe in RemoteProxyService) toward a router's SSTP
+# IP on 10.8.0.0/24 - that traffic crosses this same FORWARD chain and was
+# silently dropped by the default policy, making every remote-WinBox/proxy
+# connection attempt look identical to a dead tunnel (connect timeout, no
+# RST). Explicitly accept all traffic destined to the VPN subnet so the API
+# container can reach routers there.
+iptables -C FORWARD -d 10.8.0.0/24 -j ACCEPT 2>/dev/null || iptables -I FORWARD 3 -d 10.8.0.0/24 -j ACCEPT
 
 # Detect default outbound interface
 WAN_IF=$(ip route | awk '/^default/{print $5; exit}')
