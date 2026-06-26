@@ -502,9 +502,11 @@ export class MikrotikService {
     .pkg p{font-size:12px;color:#64748b;margin-top:1px}
     .price{font-size:13px;font-weight:800;color:#2563EB;white-space:nowrap}
     .buy-btn{background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:9px 16px;font-size:13px;font-weight:800;border-radius:9px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.22)}
-    .pay-box{display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:13px;margin-bottom:14px}
-    .pay-box.on{display:block}
-    .pay-box .pname{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:10px}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
+    .modal-overlay.on{display:flex}
+    .pay-box{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 50px rgba(15,23,42,.25);position:relative}
+    .pay-box .pclose{position:absolute;top:12px;right:14px;background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;line-height:1}
+    .pay-box .pname{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:14px;padding-right:20px}
     lbl{display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
     .iw{position:relative;margin-bottom:13px}
     input[type=text],input[type=tel]{width:100%;background:#f8fafc;border:1px solid #e2e8f0;padding:11px 13px;border-radius:10px;color:#0f172a;font-size:15px;outline:none;transition:border-color .18s}
@@ -557,14 +559,6 @@ export class MikrotikService {
       <p class="section-label">Select a package and pay with Mobile Money</p>
       <div class="pkgs" id="plist"></div>
 
-      <div class="pay-box" id="payBox">
-        <div class="pname" id="payPkgName"></div>
-        <div class="iw" style="margin-bottom:9px">
-          <input type="tel" id="phone" placeholder="e.g. 0771234567">
-        </div>
-        <button class="btn" id="pbtn" onclick="pay()">Pay Now</button>
-      </div>
-
       <div class="accept">
         <div class="accept-label">We accept:</div>
         <div class="accept-logos">
@@ -577,12 +571,23 @@ export class MikrotikService {
     </div>
   </div>
 
+  <div class="modal-overlay" id="payOverlay" onclick="if(event.target===this)closePay()">
+    <div class="pay-box">
+      <button type="button" class="pclose" onclick="closePay()">&times;</button>
+      <div class="pname" id="payPkgName"></div>
+      <div class="iw" style="margin-bottom:9px">
+        <input type="tel" id="phone" placeholder="e.g. 0771234567">
+      </div>
+      <button class="btn" id="pbtn" onclick="pay()">Pay Now</button>
+    </div>
+  </div>
+
   <div class="footer" id="footer">
     <div>Need help? Contact support: <span id="sph" style="color:#2563EB;font-weight:700"></span></div>
   </div>
   <div class="tech">
     <span id="tip">IP: </span> | <span id="tmac">MAC: </span><br><br>
-    Powered By <span style="color:#2563EB;font-weight:600">AROFi</span><br>
+    Powered By <a href="https://arofi.arosoftlabs.com" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
     Terms and Conditions Apply
   </div>
 
@@ -689,10 +694,13 @@ export class MikrotikService {
       var pkg=null;
       for(var j=0;j<pkgs.length;j++){if(pkgs[j].id===id){pkg=pkgs[j];break;}}
       document.getElementById('payPkgName').textContent=pkg?(pkg.name+' · UGX '+fn(pkg.amountUgx)):'';
-      var box=document.getElementById('payBox');
-      box.classList.add('on');
-      box.scrollIntoView({behavior:'smooth',block:'center'});
+      document.getElementById('pbtn').disabled=false;
+      document.getElementById('payOverlay').classList.add('on');
       document.getElementById('phone').focus();
+    }
+
+    function closePay(){
+      document.getElementById('payOverlay').classList.remove('on');
     }
 
     function login(){
