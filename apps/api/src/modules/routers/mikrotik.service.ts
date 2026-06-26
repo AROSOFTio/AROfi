@@ -189,9 +189,17 @@ export class MikrotikService {
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
       `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
-      `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30s`,
-      `# Enforce shared-users=1 and keepalive-timeout=30s on all user profiles to prevent concurrent session sharing`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=30s }`,
+      // keepalive-timeout=30s was too aggressive: captive-portal mini-browsers
+      // (Android/iOS/Windows "sign in to network") auto-close themselves right
+      // after showing "You are logged in", which stops the heartbeat and got
+      // the device logged out ~30s later even though it never left the WiFi.
+      // shared-users=1 + MAC-bound RADIUS credentials already prevent sharing,
+      // so this only needs to reclaim genuinely abandoned sessions, not police
+      // normal logins. 2m matches MikroTik's own default. Package-expiry
+      // disconnection is unaffected — that's enforced separately via the
+      // RADIUS Session-Timeout attribute, which still cuts off instantly.
+      `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=2m`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=2m }`,
       // dns-name on the profile only controls which name the HotSpot itself answers
       // for unauthenticated clients it already intercepted; resolving the name from
       // a fresh DNS query (e.g. a customer scanning the printed voucher QR before
