@@ -16,6 +16,7 @@ import { PhoneNumberService } from './phone-number.service'
 import { WalletLedgerService } from './wallet-ledger.service'
 import { YoUgandaCollectionService } from './yo-uganda-collection.service'
 import { YoUgandaDisbursementService } from './yo-uganda-disbursement.service'
+import { VoucherCodeService } from '../vouchers/voucher-code.service'
 
 @Module({
   imports: [AuthModule, BillingModule, RadiusModule],
@@ -34,6 +35,7 @@ import { YoUgandaDisbursementService } from './yo-uganda-disbursement.service'
     PaymentsService,
     PhoneNumberService,
     WalletLedgerService,
+    VoucherCodeService,
   ],
   exports: [PackageActivationService, PaymentRouterService, PaymentsService, PhoneNumberService, YoUgandaCollectionService, YoUgandaDisbursementService],
 })

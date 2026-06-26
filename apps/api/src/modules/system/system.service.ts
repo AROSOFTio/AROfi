@@ -8,12 +8,14 @@ import {
   PackageStatus,
   Prisma,
   SessionStatus,
+  SubscriptionPlanTier,
   SupportTicketPriority,
   SupportTicketStatus,
 } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
+import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import type { AuthenticatedAdminUser } from '../auth/auth.module'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto'
@@ -51,6 +53,25 @@ export class SystemService {
 
     if (dto.mobileMoneyFeePercent !== undefined) data.mobileMoneyFeeBps = this.percentToBps(dto.mobileMoneyFeePercent, 'mobileMoneyFeePercent')
     if (dto.voucherFeePercent !== undefined) data.voucherFeeBps = this.percentToBps(dto.voucherFeePercent, 'voucherFeePercent')
+    if (dto.proMobileMoneyFeePercent !== undefined) data.proMobileMoneyFeeBps = this.percentToBps(dto.proMobileMoneyFeePercent, 'proMobileMoneyFeePercent')
+    if (dto.proVoucherFeePercent !== undefined) data.proVoucherFeeBps = this.percentToBps(dto.proVoucherFeePercent, 'proVoucherFeePercent')
+    if (dto.enterpriseMobileMoneyFeePercent !== undefined) {
+      data.enterpriseMobileMoneyFeeBps = this.percentToBps(dto.enterpriseMobileMoneyFeePercent, 'enterpriseMobileMoneyFeePercent')
+    }
+    if (dto.enterpriseVoucherFeePercent !== undefined) {
+      data.enterpriseVoucherFeeBps = this.percentToBps(dto.enterpriseVoucherFeePercent, 'enterpriseVoucherFeePercent')
+    }
+    if (dto.freeRouterLimit !== undefined) data.freeRouterLimit = this.positiveInt(dto.freeRouterLimit, 'freeRouterLimit')
+    if (dto.proRouterLimit !== undefined) data.proRouterLimit = this.positiveInt(dto.proRouterLimit, 'proRouterLimit')
+    if (dto.enterpriseRouterLimit !== undefined) {
+      data.enterpriseRouterLimit = dto.enterpriseRouterLimit === null ? null : this.positiveInt(dto.enterpriseRouterLimit, 'enterpriseRouterLimit')
+    }
+    if (dto.freeAnalyticsHistoryDays !== undefined) data.freeAnalyticsHistoryDays = this.positiveInt(dto.freeAnalyticsHistoryDays, 'freeAnalyticsHistoryDays')
+    if (dto.proAnalyticsHistoryDays !== undefined) data.proAnalyticsHistoryDays = this.positiveInt(dto.proAnalyticsHistoryDays, 'proAnalyticsHistoryDays')
+    if (dto.enterpriseAnalyticsHistoryDays !== undefined) {
+      data.enterpriseAnalyticsHistoryDays =
+        dto.enterpriseAnalyticsHistoryDays === null ? null : this.positiveInt(dto.enterpriseAnalyticsHistoryDays, 'enterpriseAnalyticsHistoryDays')
+    }
     if (dto.minimumWithdrawalUgx !== undefined) data.minimumWithdrawalUgx = this.nonNegativeInt(dto.minimumWithdrawalUgx, 'minimumWithdrawalUgx')
     if (dto.withdrawalFeePercent !== undefined) data.withdrawalFeeBps = this.percentToBps(dto.withdrawalFeePercent, 'withdrawalFeePercent')
     if (dto.withdrawalFlatFeeUgx !== undefined) data.withdrawalFlatFeeUgx = this.nonNegativeInt(dto.withdrawalFlatFeeUgx, 'withdrawalFlatFeeUgx')
@@ -140,13 +161,30 @@ export class SystemService {
   }
 
   async updateTenantSettings(tenantId: string, dto: UpdateTenantSettingsDto, actor: AuthenticatedAdminUser, canManageFees: boolean) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, tenantSettings: { select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true } } },
+    })
     if (!tenant) {
       throw new NotFoundException('Tenant not found')
     }
 
     const tenantData: Prisma.TenantUpdateInput = {}
     const settingsData: Prisma.TenantSettingUpdateInput = {}
+
+    // Custom branding (logo, brand color, portal template) is a Pro/Enterprise
+    // perk - Free tenants stay on AROFi's default look. DevAdmin can still set
+    // it manually as a courtesy/override via canManageFees.
+    const effectiveTier = tenant.tenantSettings
+      ? resolveEffectiveSubscriptionTier(tenant.tenantSettings.subscriptionPlan, tenant.tenantSettings.subscriptionPlanExpiresAt)
+      : SubscriptionPlanTier.FREE
+    const canCustomizeBranding = canManageFees || effectiveTier !== SubscriptionPlanTier.FREE
+    const wantsCustomLogo = dto.logoUrl !== undefined && this.nullableTrim(dto.logoUrl) !== null
+    const wantsCustomBrandColor = dto.brandColor !== undefined && this.nullableTrim(dto.brandColor) !== null
+    const wantsCustomTemplate = dto.portalTemplate !== undefined && dto.portalTemplate.trim() !== 'classic'
+    if (!canCustomizeBranding && (wantsCustomLogo || wantsCustomBrandColor || wantsCustomTemplate)) {
+      throw new BadRequestException('Custom branding (logo, brand color, portal template) requires a Pro or Enterprise plan')
+    }
 
     if (dto.businessName !== undefined) {
       const businessName = dto.businessName.trim()
@@ -426,7 +464,10 @@ export class SystemService {
   async createSupportTicket(dto: CreateSupportTicketDto) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: dto.tenantId },
-      select: { id: true },
+      select: {
+        id: true,
+        tenantSettings: { select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true } },
+      },
     })
 
     if (!tenant) {
@@ -434,6 +475,12 @@ export class SystemService {
     }
 
     const reference = await this.resolveTicketReference(dto.tenantId, dto.reference)
+    // Enterprise's "Priority Support" perk: tickets default to HIGH instead of
+    // NORMAL when the submitter doesn't pick a priority explicitly.
+    const effectiveTier = tenant.tenantSettings
+      ? resolveEffectiveSubscriptionTier(tenant.tenantSettings.subscriptionPlan, tenant.tenantSettings.subscriptionPlanExpiresAt)
+      : SubscriptionPlanTier.FREE
+    const defaultPriority = effectiveTier === SubscriptionPlanTier.ENTERPRISE ? SupportTicketPriority.HIGH : SupportTicketPriority.NORMAL
 
     return this.prisma.supportTicket.create({
       data: {
@@ -441,7 +488,7 @@ export class SystemService {
         reference,
         subject: dto.subject.trim(),
         category: dto.category.trim(),
-        priority: dto.priority ?? SupportTicketPriority.NORMAL,
+        priority: dto.priority ?? defaultPriority,
         status: dto.status ?? SupportTicketStatus.OPEN,
         channel: dto.channel,
         customerReference: dto.customerReference?.trim(),
@@ -711,6 +758,10 @@ export class SystemService {
     id: string
     mobileMoneyFeeBps: number
     voucherFeeBps: number
+    proMobileMoneyFeeBps: number
+    proVoucherFeeBps: number
+    enterpriseMobileMoneyFeeBps: number
+    enterpriseVoucherFeeBps: number
     minimumWithdrawalUgx: number
     withdrawalFeeBps: number
     withdrawalFlatFeeUgx: number
@@ -740,6 +791,10 @@ export class SystemService {
       ...settings,
       mobileMoneyFeePercent: this.bpsToPercent(settings.mobileMoneyFeeBps),
       voucherFeePercent: this.bpsToPercent(settings.voucherFeeBps),
+      proMobileMoneyFeePercent: this.bpsToPercent(settings.proMobileMoneyFeeBps),
+      proVoucherFeePercent: this.bpsToPercent(settings.proVoucherFeeBps),
+      enterpriseMobileMoneyFeePercent: this.bpsToPercent(settings.enterpriseMobileMoneyFeeBps),
+      enterpriseVoucherFeePercent: this.bpsToPercent(settings.enterpriseVoucherFeeBps),
       withdrawalFeePercent: this.bpsToPercent(settings.withdrawalFeeBps),
     }
   }

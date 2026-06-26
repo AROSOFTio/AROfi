@@ -10,16 +10,21 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   const resolvedSearchParams = await searchParams
   const tenantQuery = isDevAdmin && resolvedSearchParams?.tenantId ? `?tenantId=${resolvedSearchParams.tenantId}` : ''
 
-  const [platformSettings, tenantSettings] = await Promise.all([
+  const [platformSettings, tenantSettings, subscriptionPlans, subscriptionStatus] = await Promise.all([
     isDevAdmin ? fetchApi('/system/settings') : Promise.resolve(null),
     isVendor || tenantQuery ? fetchApi(`/system/tenant-settings${tenantQuery}`) : Promise.resolve(null),
+    fetchApi('/subscription/plans'),
+    isVendor ? fetchApi('/subscription/status') : Promise.resolve(null),
   ])
 
   return (
     <SettingsManager
       user={session?.user ?? { permissions: [] }}
+      isVendor={isVendor}
       initialPlatformSettings={platformSettings as never}
       initialTenantSettings={tenantSettings as never}
+      initialSubscriptionPlans={subscriptionPlans as never}
+      initialSubscriptionStatus={subscriptionStatus as never}
     />
   )
 }

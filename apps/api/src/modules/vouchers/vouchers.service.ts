@@ -889,10 +889,17 @@ export class VouchersService {
 
       await this.refreshBatchStatus(voucher.batchId, tx)
 
+      const companionVoucherCodes = await this.packageActivationService.generateCompanionVouchersForPackage(tx, {
+        tenantId: voucher.tenantId,
+        packageId: voucher.packageId,
+        deviceLimit: packageRecord.deviceLimit,
+      })
+
       return {
         voucher: updatedVoucher,
         redemption,
         activation,
+        companionVoucherCodes,
       }
     })
   }

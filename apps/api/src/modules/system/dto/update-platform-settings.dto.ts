@@ -16,6 +16,56 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  proMobileMoneyFeePercent?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  proVoucherFeePercent?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  enterpriseMobileMoneyFeePercent?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  enterpriseVoucherFeePercent?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  freeRouterLimit?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  proRouterLimit?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  enterpriseRouterLimit?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  freeAnalyticsHistoryDays?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  proAnalyticsHistoryDays?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  enterpriseAnalyticsHistoryDays?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   minimumWithdrawalUgx?: number
 
   @IsOptional()

@@ -3,7 +3,6 @@ import {
   PackageActivationStatus,
   Prisma,
   RadiusCredentialStatus,
-  SessionStatus,
   SuspiciousAccessAttemptType,
 } from '@prisma/client'
 
@@ -21,11 +20,7 @@ export class RadiusAuthorizationPolicyService {
     const credential = await tx.radiusCredential.findUnique({
       where: { username: input.username },
       include: {
-        activation: {
-          include: {
-            package: true,
-          },
-        },
+        activation: true,
       },
     })
 
@@ -77,36 +72,11 @@ export class RadiusAuthorizationPolicyService {
       return { accepted: false, reason: 'Credential is already bound to another device', activation }
     }
 
-    const deviceLimit = activation.package?.deviceLimit ?? 1
-
-    if (deviceLimit > 1) {
-      // Multi-device package: count distinct active MACs
-      const activeMacRows = await tx.networkSession.findMany({
-        where: {
-          activationId: activation.id,
-          status: SessionStatus.ACTIVE,
-          NOT: { macAddress: null },
-        },
-        select: { macAddress: true },
-        distinct: ['macAddress'],
-      })
-      const activeMacs = new Set(
-        activeMacRows.map((r) => this.normalizeMac(r.macAddress)).filter(Boolean),
-      )
-      if (!activeMacs.has(observedMac) && activeMacs.size >= deviceLimit) {
-        await this.recordSuspicious(
-          tx, activation, input,
-          SuspiciousAccessAttemptType.SECOND_DEVICE,
-          `Device limit (${deviceLimit}) reached. Active MACs: ${activeMacs.size}`,
-        )
-        return {
-          accepted: false,
-          reason: `Maximum ${deviceLimit} device(s) already connected on this plan`,
-          activation,
-        }
-      }
-    }
-
+    // Every credential is locked to exactly one MAC, full stop. Packages with
+    // Package.deviceLimit > 1 don't relax this — they get extra devices by
+    // minting separate single-device companion vouchers at activation time
+    // (see PackageActivationService.generateCompanionVouchersForPackage), so
+    // each device has its own credential instead of sharing one login.
 
     return {
       accepted: true,

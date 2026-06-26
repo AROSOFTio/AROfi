@@ -14,6 +14,10 @@ describe('FeeEngineService', () => {
         upsert: jest.fn().mockResolvedValue({
           mobileMoneyFeeBps: 700,
           voucherFeeBps: 200,
+          proMobileMoneyFeeBps: 400,
+          proVoucherFeeBps: 0,
+          enterpriseMobileMoneyFeeBps: 160,
+          enterpriseVoucherFeeBps: 0,
         }),
       },
       tenantSetting: {
@@ -58,6 +62,60 @@ describe('FeeEngineService', () => {
       feeBasisPoints: 500,
       feeSource: 'TENANT_OVERRIDE',
       basisPoints: 500,
+    })
+  })
+
+  it('uses the DevAdmin-configured Pro rate for a tenant on an active Pro plan', async () => {
+    prisma.tenantSetting.findUnique.mockResolvedValue({
+      tenantMobileMoneyFeeBps: null,
+      tenantVoucherFeeBps: null,
+      subscriptionPlan: 'PRO',
+      subscriptionPlanExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    })
+
+    await expect(service.calculateBreakdown(BillingChannel.MOBILE_MONEY, 10000, 'tenant-1')).resolves.toEqual({
+      grossAmountUgx: 10000,
+      feeAmountUgx: 400,
+      netAmountUgx: 9600,
+      feeBasisPoints: 400,
+      feeSource: 'PLAN_TIER',
+      basisPoints: 400,
+    })
+  })
+
+  it('uses the DevAdmin-configured Enterprise voucher rate for a tenant on an active Enterprise plan', async () => {
+    prisma.tenantSetting.findUnique.mockResolvedValue({
+      tenantMobileMoneyFeeBps: null,
+      tenantVoucherFeeBps: null,
+      subscriptionPlan: 'ENTERPRISE',
+      subscriptionPlanExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    })
+
+    await expect(service.calculateBreakdown(BillingChannel.VOUCHER, 10000, 'tenant-1')).resolves.toEqual({
+      grossAmountUgx: 10000,
+      feeAmountUgx: 0,
+      netAmountUgx: 10000,
+      feeBasisPoints: 0,
+      feeSource: 'PLAN_TIER',
+      basisPoints: 0,
+    })
+  })
+
+  it('falls back to the Free/global rate once a paid plan has expired without renewal', async () => {
+    prisma.tenantSetting.findUnique.mockResolvedValue({
+      tenantMobileMoneyFeeBps: null,
+      tenantVoucherFeeBps: null,
+      subscriptionPlan: 'PRO',
+      subscriptionPlanExpiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    })
+
+    await expect(service.calculateBreakdown(BillingChannel.MOBILE_MONEY, 10000, 'tenant-1')).resolves.toEqual({
+      grossAmountUgx: 10000,
+      feeAmountUgx: 700,
+      netAmountUgx: 9300,
+      feeBasisPoints: 700,
+      feeSource: 'GLOBAL_DEFAULT',
+      basisPoints: 700,
     })
   })
 

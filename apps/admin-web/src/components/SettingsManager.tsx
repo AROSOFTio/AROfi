@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { clientPatchApi } from '@/lib/client-api'
+import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 
 type AdminUser = {
   permissions: string[]
@@ -12,6 +12,16 @@ type AdminUser = {
 type PlatformSettings = {
   mobileMoneyFeePercent: number
   voucherFeePercent: number
+  proMobileMoneyFeePercent: number
+  proVoucherFeePercent: number
+  enterpriseMobileMoneyFeePercent: number
+  enterpriseVoucherFeePercent: number
+  freeRouterLimit: number
+  proRouterLimit: number
+  enterpriseRouterLimit?: number | null
+  freeAnalyticsHistoryDays: number
+  proAnalyticsHistoryDays: number
+  enterpriseAnalyticsHistoryDays?: number | null
   minimumWithdrawalUgx: number
   withdrawalFeePercent: number
   withdrawalFlatFeeUgx: number
@@ -69,6 +79,45 @@ type TenantSettings = {
   }
 }
 
+type SubscriptionPlanCatalogItem = {
+  key: 'FREE' | 'PRO' | 'ENTERPRISE'
+  name: string
+  amountUgx: number
+  routerLimit: string
+  features: string[]
+  commissionSummary: string
+}
+
+type SubscriptionCheckoutState = {
+  status: string
+  statusMessage?: string | null
+  amountUgx: number
+  plan: string
+} | null
+
+type SubscriptionStatus = {
+  selectedPlan: string
+  subscriptionStatus: 'ACTIVE' | 'PENDING_PAYMENT' | 'SKIPPED'
+  pendingPlan: string | null
+  paidUntil: string | null
+  checkout: SubscriptionCheckoutState
+}
+
+const PLAN_CARD_META: Record<string, { price: string; desc: string; color: string; badge?: string }> = {
+  FREE: { price: 'UGX 0 / Month', desc: 'Perfect for testing and small operations starting out.', color: '#64748b' },
+  PRO: {
+    price: 'UGX 20,000 / Month',
+    desc: 'For growing ISPs wanting lower fees and branding control.',
+    color: '#3b82f6',
+    badge: 'Recommended',
+  },
+  ENTERPRISE: {
+    price: 'UGX 70,000 / Month',
+    desc: 'For professional, large-scale networks and operators.',
+    color: '#8b5cf6',
+  },
+}
+
 const tabs = ['Business Profile', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security', 'Subscription Plan'] as const
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const portalTemplates = ['classic', 'fresh', 'midnight', 'sunrise', 'minimal']
@@ -76,12 +125,18 @@ const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
 
 export default function SettingsManager({
   user,
+  isVendor,
   initialPlatformSettings,
   initialTenantSettings,
+  initialSubscriptionPlans,
+  initialSubscriptionStatus,
 }: {
   user: AdminUser
+  isVendor: boolean
   initialPlatformSettings: PlatformSettings | null
   initialTenantSettings: TenantSettings | null
+  initialSubscriptionPlans: SubscriptionPlanCatalogItem[]
+  initialSubscriptionStatus: SubscriptionStatus | null
 }) {
   const searchParams = useSearchParams()
   const isDevAdmin = user.permissions.includes('ALL')
@@ -91,38 +146,88 @@ export default function SettingsManager({
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [selectedPlan, setSelectedPlan] = useState<string>('FREE')
+  const [subscriptionPlans] = useState(initialSubscriptionPlans)
+  const [subStatus, setSubStatus] = useState(initialSubscriptionStatus)
+  const [planSaving, setPlanSaving] = useState(false)
+  const [planPhoneNumber, setPlanPhoneNumber] = useState('')
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState('')
+  const pollRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (tenant?.settings?.routerOnboardingPreferences) {
-      const prefs = tenant.settings.routerOnboardingPreferences as Record<string, any>
-      if (prefs.selectedPlan) {
-        setSelectedPlan(prefs.selectedPlan)
-      }
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current)
     }
-  }, [tenant])
+  }, [])
 
-  async function changePlan(planKey: string) {
-    if (!tenant) return
-    setSaving(true)
+  function stopPolling() {
+    if (pollRef.current) {
+      window.clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  function startPolling() {
+    stopPolling()
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const statusResponse = await clientFetchApi<SubscriptionStatus>('/subscription/checkout/status')
+        setSubStatus(statusResponse)
+
+        const checkoutPaymentStatus = statusResponse.checkout?.status
+        if (statusResponse.subscriptionStatus === 'ACTIVE' && !statusResponse.checkout) {
+          stopPolling()
+          setCheckoutLoading(false)
+          setMessage(`Payment confirmed! You're now on the ${statusResponse.selectedPlan} plan.`)
+        } else if (checkoutPaymentStatus === 'FAILED' || checkoutPaymentStatus === 'CANCELLED' || checkoutPaymentStatus === 'EXPIRED') {
+          stopPolling()
+          setCheckoutLoading(false)
+          setCheckoutError(statusResponse.checkout?.statusMessage || 'Payment was not completed. Please try again.')
+        }
+      } catch {
+        // transient network errors are common while waiting on a mobile money prompt - keep polling
+      }
+    }, 4000)
+  }
+
+  async function handleSelectPlan(planKey: string) {
+    setPlanSaving(true)
+    setCheckoutError('')
     setMessage('')
     setError('')
     try {
-      const payload = {
-        routerOnboardingPreferences: {
-          ...(tenant.settings.routerOnboardingPreferences as Record<string, any>),
-          selectedPlan: planKey
-        }
+      const statusResponse = await clientPostApi<SubscriptionStatus>('/subscription/select', { plan: planKey })
+      setSubStatus(statusResponse)
+      if (planKey === 'FREE') {
+        setMessage('Switched to the Starter (Free) plan.')
       }
-      const tenantQuery = isDevAdmin ? `?tenantId=${tenant.tenant.id}` : ''
-      const saved = await clientPatchApi<TenantSettings>(`/system/tenant-settings${tenantQuery}`, payload)
-      setTenant(saved)
-      setSelectedPlan(planKey)
-      setMessage(`Successfully switched to the ${planKey} plan!`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not change plan')
     } finally {
-      setSaving(false)
+      setPlanSaving(false)
+    }
+  }
+
+  async function handlePayNow() {
+    setCheckoutError('')
+    setCheckoutLoading(true)
+    try {
+      const statusResponse = await clientPostApi<SubscriptionStatus>('/subscription/checkout', { phoneNumber: planPhoneNumber })
+      setSubStatus(statusResponse)
+      startPolling()
+    } catch (caught) {
+      setCheckoutLoading(false)
+      setCheckoutError(caught instanceof Error ? caught.message : 'Unable to start payment.')
+    }
+  }
+
+  async function handleSkipPayment() {
+    setCheckoutError('')
+    try {
+      const statusResponse = await clientPostApi<SubscriptionStatus>('/subscription/skip', {})
+      setSubStatus(statusResponse)
+    } catch (caught) {
+      setCheckoutError(caught instanceof Error ? caught.message : 'Unable to cancel checkout.')
     }
   }
 
@@ -144,32 +249,70 @@ export default function SettingsManager({
     setError('')
     try {
       const form = new FormData(event.currentTarget)
-      const payload = {
-        mobileMoneyFeePercent: numberValue(form, 'mobileMoneyFeePercent'),
-        voucherFeePercent: numberValue(form, 'voucherFeePercent'),
-        minimumWithdrawalUgx: numberValue(form, 'minimumWithdrawalUgx'),
-        withdrawalFeePercent: numberValue(form, 'withdrawalFeePercent'),
-        withdrawalFlatFeeUgx: numberValue(form, 'withdrawalFlatFeeUgx'),
-        requireWithdrawalApproval: form.get('requireWithdrawalApproval') === 'on',
-        instantWithdrawalsEnabled: form.get('instantWithdrawalsEnabled') === 'on',
-        requireApprovalForFirstWithdrawal: form.get('requireApprovalForFirstWithdrawal') === 'on',
-        requireApprovalAboveAmountUgx: nullableNumberValue(form, 'requireApprovalAboveAmountUgx'),
-        failedSecretAttemptsBeforeLock: numberValue(form, 'failedSecretAttemptsBeforeLock'),
-        withdrawalLockMinutes: numberValue(form, 'withdrawalLockMinutes'),
-        payoutNumberChangeRequiresApproval: form.get('payoutNumberChangeRequiresApproval') === 'on',
-        maxPayoutNumbers: numberValue(form, 'maxPayoutNumbers'),
-        allowedPaymentNetworks: ['MTN', 'AIRTEL'].filter((network) => form.get(`network-${network}`) === 'on'),
-        mtnCollectionProvider: stringValue(form, 'mtnCollectionProvider'),
-        airtelCollectionProvider: stringValue(form, 'airtelCollectionProvider'),
-        mtnDisbursementProvider: stringValue(form, 'mtnDisbursementProvider'),
-        airtelDisbursementProvider: stringValue(form, 'airtelDisbursementProvider'),
-        routerAutoConnectEnabled: form.get('routerAutoConnectEnabled') === 'on',
-        captivePortalFallbackMessage: stringValue(form, 'captivePortalFallbackMessage'),
-        supportPhone: stringValue(form, 'supportPhone'),
-        supportEmail: stringValue(form, 'supportEmail'),
-        supportUrl: stringValue(form, 'supportUrl'),
-        voucherTemplateDefaultStyle: stringValue(form, 'voucherTemplateDefaultStyle'),
-        auditLoggingEnabled: form.get('auditLoggingEnabled') === 'on',
+      // Only the active tab's inputs are mounted in this form. Scoping the
+      // payload to that same tab (instead of reading every key unconditionally)
+      // stops a save on e.g. "Withdrawals" from sending mobileMoneyFeePercent: 0
+      // for fields that simply aren't rendered right now, which would silently
+      // zero out the other tabs' settings.
+      const payload: Record<string, unknown> = {}
+      if (activeTab === 'Payment & Fees') {
+        Object.assign(payload, {
+          mobileMoneyFeePercent: numberValue(form, 'mobileMoneyFeePercent'),
+          voucherFeePercent: numberValue(form, 'voucherFeePercent'),
+          proMobileMoneyFeePercent: numberValue(form, 'proMobileMoneyFeePercent'),
+          proVoucherFeePercent: numberValue(form, 'proVoucherFeePercent'),
+          enterpriseMobileMoneyFeePercent: numberValue(form, 'enterpriseMobileMoneyFeePercent'),
+          enterpriseVoucherFeePercent: numberValue(form, 'enterpriseVoucherFeePercent'),
+          mtnCollectionProvider: stringValue(form, 'mtnCollectionProvider'),
+          airtelCollectionProvider: stringValue(form, 'airtelCollectionProvider'),
+          allowedPaymentNetworks: ['MTN', 'AIRTEL'].filter((network) => form.get(`network-${network}`) === 'on'),
+        })
+      }
+      if (activeTab === 'Withdrawals') {
+        Object.assign(payload, {
+          minimumWithdrawalUgx: numberValue(form, 'minimumWithdrawalUgx'),
+          withdrawalFeePercent: numberValue(form, 'withdrawalFeePercent'),
+          withdrawalFlatFeeUgx: numberValue(form, 'withdrawalFlatFeeUgx'),
+          requireWithdrawalApproval: form.get('requireWithdrawalApproval') === 'on',
+          instantWithdrawalsEnabled: form.get('instantWithdrawalsEnabled') === 'on',
+          requireApprovalForFirstWithdrawal: form.get('requireApprovalForFirstWithdrawal') === 'on',
+          requireApprovalAboveAmountUgx: nullableNumberValue(form, 'requireApprovalAboveAmountUgx'),
+          failedSecretAttemptsBeforeLock: numberValue(form, 'failedSecretAttemptsBeforeLock'),
+          withdrawalLockMinutes: numberValue(form, 'withdrawalLockMinutes'),
+          payoutNumberChangeRequiresApproval: form.get('payoutNumberChangeRequiresApproval') === 'on',
+          maxPayoutNumbers: numberValue(form, 'maxPayoutNumbers'),
+          mtnDisbursementProvider: stringValue(form, 'mtnDisbursementProvider'),
+          airtelDisbursementProvider: stringValue(form, 'airtelDisbursementProvider'),
+        })
+      }
+      if (activeTab === 'Router & Portal') {
+        Object.assign(payload, {
+          routerAutoConnectEnabled: form.get('routerAutoConnectEnabled') === 'on',
+          captivePortalFallbackMessage: stringValue(form, 'captivePortalFallbackMessage'),
+          freeRouterLimit: numberValue(form, 'freeRouterLimit'),
+          proRouterLimit: numberValue(form, 'proRouterLimit'),
+          enterpriseRouterLimit: nullableNumberValue(form, 'enterpriseRouterLimit'),
+          freeAnalyticsHistoryDays: numberValue(form, 'freeAnalyticsHistoryDays'),
+          proAnalyticsHistoryDays: numberValue(form, 'proAnalyticsHistoryDays'),
+          enterpriseAnalyticsHistoryDays: nullableNumberValue(form, 'enterpriseAnalyticsHistoryDays'),
+        })
+      }
+      if (activeTab === 'Voucher Printing') {
+        Object.assign(payload, {
+          voucherTemplateDefaultStyle: stringValue(form, 'voucherTemplateDefaultStyle'),
+        })
+      }
+      if (activeTab === 'Security') {
+        Object.assign(payload, {
+          auditLoggingEnabled: form.get('auditLoggingEnabled') === 'on',
+        })
+      }
+      if (activeTab === 'Business Profile') {
+        Object.assign(payload, {
+          supportPhone: stringValue(form, 'supportPhone'),
+          supportEmail: stringValue(form, 'supportEmail'),
+          supportUrl: stringValue(form, 'supportUrl'),
+        })
       }
       const saved = await clientPatchApi<PlatformSettings>('/system/settings', payload)
       setPlatform(saved)
@@ -189,29 +332,51 @@ export default function SettingsManager({
     setError('')
     try {
       const form = new FormData(event.currentTarget)
-      const payload = {
-        businessName: stringValue(form, 'businessName'),
-        supportPhone: stringValue(form, 'supportPhone'),
-        supportEmail: stringValue(form, 'supportEmail'),
-        logoUrl: stringValue(form, 'logoUrl'),
-        brandColor: stringValue(form, 'brandColor'),
-        portalTemplate: stringValue(form, 'portalTemplate'),
-        routerAutoConnectEnabled: form.get('routerAutoConnectEnabled') === 'on',
-        voucherPrintDefaultTemplate: stringValue(form, 'voucherPrintDefaultTemplate'),
-        redeemableWhenGenerated: form.get('redeemableWhenGenerated') === 'on',
-        allowDeviceReset: form.get('allowDeviceReset') === 'on',
-        maxResetsPerActivation: numberValue(form, 'maxResetsPerActivation'),
-        supportText: stringValue(form, 'supportText'),
-        termsAccepted: form.get('termsAccepted') === 'on',
-        ...(isDevAdmin
-          ? {
-              tenantMobileMoneyFeePercent: nullableNumberValue(form, 'tenantMobileMoneyFeePercent'),
-              tenantVoucherFeePercent: nullableNumberValue(form, 'tenantVoucherFeePercent'),
-              kycCompleted: form.get('kycCompleted') === 'on',
-              accountActive: form.get('accountActive') === 'on',
-              fraudHold: form.get('fraudHold') === 'on',
-            }
-          : {}),
+      // Same reasoning as savePlatform: only the active tab's inputs are
+      // mounted, so the payload must be scoped to that tab or saving one tab
+      // would silently blank out every other tab's vendor settings.
+      const payload: Record<string, unknown> = {}
+      if (activeTab === 'Business Profile') {
+        Object.assign(payload, {
+          businessName: stringValue(form, 'businessName'),
+          supportPhone: stringValue(form, 'supportPhone'),
+          supportEmail: stringValue(form, 'supportEmail'),
+          logoUrl: stringValue(form, 'logoUrl'),
+          brandColor: stringValue(form, 'brandColor'),
+          portalTemplate: stringValue(form, 'portalTemplate'),
+        })
+      }
+      if (activeTab === 'Payment & Fees' && isDevAdmin) {
+        Object.assign(payload, {
+          tenantMobileMoneyFeePercent: nullableNumberValue(form, 'tenantMobileMoneyFeePercent'),
+          tenantVoucherFeePercent: nullableNumberValue(form, 'tenantVoucherFeePercent'),
+        })
+      }
+      if (activeTab === 'Router & Portal') {
+        Object.assign(payload, {
+          routerAutoConnectEnabled: form.get('routerAutoConnectEnabled') === 'on',
+          supportText: stringValue(form, 'supportText'),
+        })
+      }
+      if (activeTab === 'Voucher Printing') {
+        Object.assign(payload, {
+          voucherPrintDefaultTemplate: stringValue(form, 'voucherPrintDefaultTemplate'),
+          redeemableWhenGenerated: form.get('redeemableWhenGenerated') === 'on',
+        })
+      }
+      if (activeTab === 'Security') {
+        Object.assign(payload, {
+          allowDeviceReset: form.get('allowDeviceReset') === 'on',
+          maxResetsPerActivation: numberValue(form, 'maxResetsPerActivation'),
+          termsAccepted: form.get('termsAccepted') === 'on',
+          ...(isDevAdmin
+            ? {
+                kycCompleted: form.get('kycCompleted') === 'on',
+                accountActive: form.get('accountActive') === 'on',
+                fraudHold: form.get('fraudHold') === 'on',
+              }
+            : {}),
+        })
       }
       const tenantQuery = isDevAdmin ? `?tenantId=${tenant.tenant.id}` : ''
       const saved = await clientPatchApi<TenantSettings>(`/system/tenant-settings${tenantQuery}`, payload)
@@ -257,9 +422,15 @@ export default function SettingsManager({
             <div className="form-grid">
               {activeTab === 'Payment & Fees' && (
                 <>
-                  <FormSubheading text="Platform Fees" />
+                  <FormSubheading text="Starter Plan Commission (applies to every tenant by default)" />
                   <Input name="mobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.mobileMoneyFeePercent} />
                   <Input name="voucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.voucherFeePercent} />
+                  <FormSubheading text="Pro Plan Commission" />
+                  <Input name="proMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.proMobileMoneyFeePercent} />
+                  <Input name="proVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.proVoucherFeePercent} />
+                  <FormSubheading text="Enterprise Plan Commission" />
+                  <Input name="enterpriseMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.enterpriseMobileMoneyFeePercent} />
+                  <Input name="enterpriseVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.enterpriseVoucherFeePercent} />
                   <FormSubheading text="Collection Routes" />
                   <Select name="mtnCollectionProvider" label="MTN Collection Route" defaultValue={platformForm.mtnCollectionProvider} options={providerOptions} />
                   <Select name="airtelCollectionProvider" label="Airtel Collection Route" defaultValue={platformForm.airtelCollectionProvider} options={providerOptions} />
@@ -293,6 +464,14 @@ export default function SettingsManager({
                 <>
                   <Check name="routerAutoConnectEnabled" label="Enable router auto-connect after payment" defaultChecked={platformForm.routerAutoConnectEnabled} />
                   <TextArea name="captivePortalFallbackMessage" label="Captive Portal Fallback Message" defaultValue={platformForm.captivePortalFallbackMessage} />
+                  <FormSubheading text="Router Limits by Plan" />
+                  <Input name="freeRouterLimit" label="Starter Router Limit" defaultValue={platformForm.freeRouterLimit} />
+                  <Input name="proRouterLimit" label="Pro Router Limit" defaultValue={platformForm.proRouterLimit} />
+                  <Input name="enterpriseRouterLimit" label="Enterprise Router Limit (blank = unlimited)" defaultValue={platformForm.enterpriseRouterLimit ?? ''} />
+                  <FormSubheading text="Analytics History Window by Plan (days)" />
+                  <Input name="freeAnalyticsHistoryDays" label="Starter History (days)" defaultValue={platformForm.freeAnalyticsHistoryDays} />
+                  <Input name="proAnalyticsHistoryDays" label="Pro History (days)" defaultValue={platformForm.proAnalyticsHistoryDays} />
+                  <Input name="enterpriseAnalyticsHistoryDays" label="Enterprise History (days, blank = unlimited)" defaultValue={platformForm.enterpriseAnalyticsHistoryDays ?? ''} />
                 </>
               )}
               {activeTab === 'Voucher Printing' && (
@@ -328,6 +507,11 @@ export default function SettingsManager({
                   <Input name="businessName" label="Business Name" defaultValue={tenantForm.businessName ?? tenant?.tenant.name ?? ''} />
                   <Input name="supportPhone" label="Support Phone" defaultValue={tenantForm.supportPhone ?? tenant?.tenant.supportPhone ?? ''} />
                   <Input name="supportEmail" label="Support Email" defaultValue={tenantForm.supportEmail ?? tenant?.tenant.supportEmail ?? ''} />
+                  {isVendor && subStatus?.selectedPlan === 'FREE' && (
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
+                      Custom logo, brand color, and portal template require the Pro or Enterprise plan.
+                    </p>
+                  )}
                   <Input name="logoUrl" label="Logo URL" defaultValue={tenantForm.logoUrl ?? tenant?.tenant.logoUrl ?? ''} />
                   <Input name="brandColor" label="Brand Color" defaultValue={tenantForm.brandColor ?? tenant?.tenant.brandColor ?? ''} />
                   <Select name="portalTemplate" label="Portal Template" defaultValue={tenantForm.portalTemplate ?? tenant?.tenant.portalTemplate ?? 'classic'} options={portalTemplates} />
@@ -384,9 +568,56 @@ export default function SettingsManager({
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>Choose Your Platform Plan</h2>
             <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginTop: 4 }}>
-              Select a billing tier that matches your network scale. Transition from commissions to fixed subscriptions as your ISP grows.
+              Select a billing tier that matches your network scale. Commission rates are set by AROFi and apply the moment payment confirms.
             </p>
+            {!isVendor && (
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
+                Viewing this tenant's plan as DevAdmin. Plan changes and payment must be initiated by the tenant from their own dashboard.
+              </p>
+            )}
           </div>
+
+          {isVendor && subStatus?.subscriptionStatus === 'PENDING_PAYMENT' && subStatus.pendingPlan && (
+            <div style={{
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 18,
+              marginBottom: 24,
+              background: 'var(--bg-muted, #f8fafc)'
+            }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+                Complete payment for the {subStatus.pendingPlan} plan
+              </h3>
+              {checkoutError && (
+                <div className="badge badge-danger" style={{ marginBottom: 10 }}>{checkoutError}</div>
+              )}
+              {subStatus.checkout ? (
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {checkoutLoading || subStatus.checkout.status === 'PENDING' || subStatus.checkout.status === 'INITIATED'
+                    ? 'Waiting for mobile money confirmation on your phone...'
+                    : subStatus.checkout.statusMessage || subStatus.checkout.status}
+                </p>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <label className="form-group" style={{ flex: 1, minWidth: 180 }}>
+                    <span className="form-label">Mobile Money Number</span>
+                    <input
+                      className="form-input"
+                      value={planPhoneNumber}
+                      onChange={(event) => setPlanPhoneNumber(event.target.value)}
+                      placeholder="07XXXXXXXX"
+                    />
+                  </label>
+                  <button type="button" className="btn btn-primary" disabled={checkoutLoading || !planPhoneNumber} onClick={handlePayNow}>
+                    {checkoutLoading ? 'Sending prompt...' : 'Pay Now'}
+                  </button>
+                  <button type="button" className="btn btn-ghost" disabled={checkoutLoading} onClick={handleSkipPayment}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{
             display: 'grid',
@@ -394,45 +625,15 @@ export default function SettingsManager({
             gap: 20,
             marginBottom: 24
           }}>
-            {[
-              {
-                key: 'FREE',
-                name: 'Starter (Free)',
-                price: 'UGX 0 / Month',
-                desc: 'Perfect for testing and small operations starting out.',
-                commission: '8% Mobile Money / 2% Voucher',
-                routers: 'Up to 5 Routers',
-                features: ['Cloud WinBox Tunnels', 'Free Analytics', 'AROFi branding'],
-                color: '#64748b'
-              },
-              {
-                key: 'PRO',
-                name: 'Pro Plan',
-                price: 'UGX 20,000 / Month',
-                desc: 'For growing ISPs wanting lower fees and branding control.',
-                commission: '4% Mobile Money / 0% Voucher',
-                routers: 'Up to 10 Routers',
-                features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
-                color: '#3b82f6',
-                badge: 'Recommended'
-              },
-              {
-                key: 'ENTERPRISE',
-                name: 'Enterprise Plan',
-                price: 'UGX 70,000 / Month',
-                desc: 'For professional, large-scale networks and operators.',
-                commission: '1.6% mm gateway fee / 0% platform fee',
-                routers: 'Unlimited Routers',
-                features: ['Cloud WinBox Tunnels', 'Custom Domains & SSL', 'Custom SMS Gateway API', 'Priority Support'],
-                color: '#8b5cf6'
-              }
-            ].map((plan) => {
-              const isActivePlan = selectedPlan === plan.key
+            {subscriptionPlans.map((plan) => {
+              const meta = PLAN_CARD_META[plan.key] ?? PLAN_CARD_META.FREE
+              const isActivePlan = subStatus?.selectedPlan === plan.key
+              const isPendingThisPlan = subStatus?.pendingPlan === plan.key
               return (
                 <div
                   key={plan.key}
                   style={{
-                    border: isActivePlan ? `2px solid ${plan.color}` : '1px solid var(--border)',
+                    border: isActivePlan ? `2px solid ${meta.color}` : '1px solid var(--border)',
                     borderRadius: 12,
                     padding: 20,
                     background: isActivePlan ? 'var(--bg-muted, #f8fafc)' : 'var(--bg-card, #ffffff)',
@@ -444,13 +645,13 @@ export default function SettingsManager({
                     transition: 'all 0.2s ease-in-out'
                   }}
                 >
-                  {plan.badge && (
+                  {meta.badge && (
                     <span style={{
                       position: 'absolute',
                       top: -12,
                       left: '50%',
                       transform: 'translateX(-50%)',
-                      background: plan.color,
+                      background: meta.color,
                       color: '#fff',
                       padding: '4px 10px',
                       borderRadius: 12,
@@ -459,31 +660,31 @@ export default function SettingsManager({
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em'
                     }}>
-                      {plan.badge}
+                      {meta.badge}
                     </span>
                   )}
 
                   <div>
                     <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-1)' }}>{plan.name}</h3>
                     <div style={{ margin: '12px 0' }}>
-                      <span style={{ fontSize: 20, fontWeight: 900, color: plan.color }}>{plan.price}</span>
+                      <span style={{ fontSize: 20, fontWeight: 900, color: meta.color }}>{meta.price}</span>
                     </div>
                     <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 14 }}>
-                      {plan.desc}
+                      {meta.desc}
                     </p>
 
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 14 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
                         COMMISSION RATES
                       </div>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>{plan.commission}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>{plan.commissionSummary}</div>
                     </div>
 
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 14 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
                         ROUTER LIMIT
                       </div>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>{plan.routers}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-1)' }}>{plan.routerLimit}</div>
                     </div>
 
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 16 }}>
@@ -498,29 +699,37 @@ export default function SettingsManager({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={saving || isActivePlan}
-                    onClick={() => changePlan(plan.key)}
-                    className="btn"
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 8,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      backgroundColor: isActivePlan ? plan.color : 'transparent',
-                      color: isActivePlan ? '#fff' : 'var(--text-1)',
-                      border: isActivePlan ? 'none' : '1px solid var(--border)',
-                      cursor: isActivePlan ? 'default' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6
-                    }}
-                  >
-                    {isActivePlan ? 'Active Plan ✓' : saving ? 'Updating...' : `Select ${plan.name}`}
-                  </button>
+                  {isVendor && (
+                    <button
+                      type="button"
+                      disabled={planSaving || isActivePlan || isPendingThisPlan}
+                      onClick={() => handleSelectPlan(plan.key)}
+                      className="btn"
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        backgroundColor: isActivePlan ? meta.color : 'transparent',
+                        color: isActivePlan ? '#fff' : 'var(--text-1)',
+                        border: isActivePlan ? 'none' : '1px solid var(--border)',
+                        cursor: isActivePlan ? 'default' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6
+                      }}
+                    >
+                      {isActivePlan
+                        ? 'Active Plan ✓'
+                        : isPendingThisPlan
+                          ? 'Awaiting payment...'
+                          : planSaving
+                            ? 'Updating...'
+                            : `Select ${plan.name}`}
+                    </button>
+                  )}
                 </div>
               )
             })}

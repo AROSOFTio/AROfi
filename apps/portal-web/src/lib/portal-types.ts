@@ -86,6 +86,7 @@ export type PortalPayment = {
     durationMinutes: number
   }
   activation?: PortalActivation | null
+  companionVoucherCodes?: string[]
   billingTransaction?: {
     id: string
     grossAmountUgx: number
@@ -227,6 +228,7 @@ export type PortalRedeemVoucherResponse = {
     }
   }
   activation?: PortalActivation | null
+  companionVoucherCodes?: string[]
   accessToken?: string | null
   session?: PortalCustomerSession | null
   reconnect?: {

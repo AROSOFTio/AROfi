@@ -1,10 +1,16 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import {
   PackageActivationSource,
   PackageActivationStatus,
   Prisma,
+  VoucherBatchStatus,
 } from '@prisma/client'
 import { RadiusCredentialService } from '../radius/radius-credential.service'
+import { VoucherCodeService } from '../vouchers/voucher-code.service'
+
+// Companion vouchers for multi-device packages must expire well before they
+// could be hoarded or resold separately from the bundle that paid for them.
+const COMPANION_VOUCHER_EXPIRY_HOURS = 60
 
 type ActivatePackageInput = {
   tenantId: string
@@ -32,7 +38,12 @@ type ActivatePackageInput = {
 
 @Injectable()
 export class PackageActivationService {
-  constructor(private readonly radiusCredentialService: RadiusCredentialService) {}
+  private readonly logger = new Logger(PackageActivationService.name)
+
+  constructor(
+    private readonly radiusCredentialService: RadiusCredentialService,
+    private readonly voucherCodeService: VoucherCodeService,
+  ) {}
 
   async activateInTransaction(tx: Prisma.TransactionClient, input: ActivatePackageInput) {
     const existingActivation = input.paymentId
@@ -102,6 +113,108 @@ export class PackageActivationService {
     })
 
     return activation
+  }
+
+  // Multi-device packages (Package.deviceLimit > 1) sell ONE payment/voucher
+  // but should let several people connect from their own devices. RADIUS
+  // enforces a strict one-MAC-per-credential lock (see
+  // RadiusAuthorizationPolicyService), so instead of sharing one login we
+  // mint (deviceLimit - 1) standalone single-use companion vouchers for the
+  // same package the moment the first device activates, and hand the codes
+  // back to the buyer to share. faceValueUgx is 0 because the revenue was
+  // already recorded on the original payment/voucher sale - these are not a
+  // second sale. Shared by both the mobile-money and voucher-redemption
+  // activation paths so it lives here rather than in VouchersService.
+  async generateCompanionVouchersForPackage(
+    tx: Prisma.TransactionClient,
+    params: { tenantId: string; packageId: string; deviceLimit?: number | null },
+  ): Promise<string[]> {
+    const quantity = (params.deviceLimit ?? 1) - 1
+    if (quantity <= 0) {
+      return []
+    }
+
+    // Best-effort: a failure here must NOT roll back the customer's already-paid
+    // activation. Worst case they get zero companion vouchers and can ask support.
+    try {
+      const batchNumber = this.voucherCodeService.generateBatchNumber('COMPANION')
+      const voucherCodes = await this.generateUniqueVoucherCodes(tx, quantity)
+      const expiresAt = new Date(Date.now() + COMPANION_VOUCHER_EXPIRY_HOURS * 60 * 60 * 1000)
+
+      const batch = await tx.voucherBatch.create({
+        data: {
+          tenantId: params.tenantId,
+          packageId: params.packageId,
+          batchNumber,
+          prefix: 'COMPANION',
+          quantity,
+          faceValueUgx: 0,
+          expiresAt,
+          status: VoucherBatchStatus.ACTIVE,
+          notes: 'Auto-generated multi-device companion vouchers',
+        },
+      })
+
+      await tx.voucher.createMany({
+        data: voucherCodes.map((code, index) => ({
+          tenantId: params.tenantId,
+          batchId: batch.id,
+          packageId: params.packageId,
+          code,
+          serialNumber: this.voucherCodeService.generateSerialNumber(batchNumber, index + 1),
+          faceValueUgx: 0,
+          expiresAt,
+        })),
+      })
+
+      return voucherCodes
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate companion vouchers for package ${params.packageId} (tenant ${params.tenantId}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+      return []
+    }
+  }
+
+  private async generateUniqueVoucherCodes(tx: Prisma.TransactionClient, quantity: number) {
+    const codes = new Set<string>()
+    let attempts = 0
+
+    while (codes.size < quantity && attempts < quantity * 20) {
+      codes.add(this.voucherCodeService.generateVoucherCode('MIXED', 10))
+      attempts += 1
+    }
+
+    if (codes.size < quantity) {
+      throw new Error('Could not generate enough unique companion voucher codes')
+    }
+
+    const existingCodes = await tx.voucher.findMany({
+      where: { code: { in: Array.from(codes) } },
+      select: { code: true },
+    })
+
+    for (const existing of existingCodes) {
+      codes.delete(existing.code)
+    }
+
+    attempts = 0
+    while (codes.size < quantity && attempts < quantity * 20) {
+      const candidate = this.voucherCodeService.generateVoucherCode('MIXED', 10)
+      const exists = await tx.voucher.findUnique({ where: { code: candidate }, select: { id: true } })
+      if (!exists) {
+        codes.add(candidate)
+      }
+      attempts += 1
+    }
+
+    if (codes.size < quantity) {
+      throw new Error('Could not generate enough unique companion voucher codes')
+    }
+
+    return Array.from(codes).slice(0, quantity)
   }
 
   private normalizeMac(value?: string | null) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, ForbiddenException, Get, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -30,6 +30,15 @@ export class BillingController {
   getSales(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.billingService.getSales(scopedTenantId, query)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingRead)
+  @Get('sales-by-tenant')
+  getSalesByTenant(@CurrentUser() user: AuthenticatedAdminUser, @Query() query?: BillingReportFilters) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can view sales broken down by vendor/tenant')
+    }
+    return this.billingService.getSalesByTenant(query)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)

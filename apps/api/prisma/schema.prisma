@@ -14,6 +14,12 @@ enum PackageStatus {
   ARCHIVED
 }
 
+enum SubscriptionPlanTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
 enum PricingStrategy {
   FIXED
 }
@@ -67,6 +73,7 @@ enum BillingTransactionStatus {
 enum FeeSettingSource {
   GLOBAL_DEFAULT
   TENANT_OVERRIDE
+  PLAN_TIER
 }
 
 enum PaymentProvider {
@@ -395,6 +402,16 @@ model PlatformSetting {
   id                         String   @id @default("global")
   mobileMoneyFeeBps          Int      @default(700)
   voucherFeeBps              Int      @default(200)
+  proMobileMoneyFeeBps       Int      @default(400)
+  proVoucherFeeBps           Int      @default(0)
+  enterpriseMobileMoneyFeeBps Int     @default(160)
+  enterpriseVoucherFeeBps    Int      @default(0)
+  freeRouterLimit            Int      @default(5)
+  proRouterLimit             Int      @default(10)
+  enterpriseRouterLimit      Int?
+  freeAnalyticsHistoryDays   Int      @default(7)
+  proAnalyticsHistoryDays    Int      @default(30)
+  enterpriseAnalyticsHistoryDays Int?
   minimumWithdrawalUgx       Int      @default(0)
   withdrawalFeeBps           Int      @default(0)
   withdrawalFlatFeeUgx       Int      @default(0)
@@ -1203,6 +1220,8 @@ model TenantSetting {
   tenant                  Tenant   @relation(fields: [tenantId], references: [id])
   tenantMobileMoneyFeeBps Int?
   tenantVoucherFeeBps     Int?
+  subscriptionPlan        SubscriptionPlanTier @default(FREE)
+  subscriptionPlanExpiresAt DateTime?
   businessName            String?
   supportPhone            String?
   supportEmail            String?

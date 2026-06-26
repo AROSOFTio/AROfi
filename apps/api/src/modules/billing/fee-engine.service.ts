@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
-import { BillingChannel, FeeSettingSource, Prisma } from '@prisma/client'
+import { BillingChannel, FeeSettingSource, Prisma, SubscriptionPlanTier } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { BILLING_FEE_BASIS_POINTS, PLATFORM_SETTINGS_ID } from './billing.constants'
 
 @Injectable()
@@ -25,6 +26,8 @@ export class FeeEngineService {
             select: {
               tenantMobileMoneyFeeBps: true,
               tenantVoucherFeeBps: true,
+              subscriptionPlan: true,
+              subscriptionPlanExpiresAt: true,
             },
           })
         : null,
@@ -44,7 +47,17 @@ export class FeeEngineService {
       }
     }
 
+    const effectiveTier = tenantSettings
+      ? resolveEffectiveSubscriptionTier(tenantSettings.subscriptionPlan, tenantSettings.subscriptionPlanExpiresAt)
+      : SubscriptionPlanTier.FREE
+
     if (channel === BillingChannel.MOBILE_MONEY) {
+      if (effectiveTier === SubscriptionPlanTier.PRO) {
+        return { basisPoints: platformSettings.proMobileMoneyFeeBps, source: FeeSettingSource.PLAN_TIER }
+      }
+      if (effectiveTier === SubscriptionPlanTier.ENTERPRISE) {
+        return { basisPoints: platformSettings.enterpriseMobileMoneyFeeBps, source: FeeSettingSource.PLAN_TIER }
+      }
       return {
         basisPoints: platformSettings.mobileMoneyFeeBps,
         source: FeeSettingSource.GLOBAL_DEFAULT,
@@ -52,6 +65,12 @@ export class FeeEngineService {
     }
 
     if (channel === BillingChannel.VOUCHER) {
+      if (effectiveTier === SubscriptionPlanTier.PRO) {
+        return { basisPoints: platformSettings.proVoucherFeeBps, source: FeeSettingSource.PLAN_TIER }
+      }
+      if (effectiveTier === SubscriptionPlanTier.ENTERPRISE) {
+        return { basisPoints: platformSettings.enterpriseVoucherFeeBps, source: FeeSettingSource.PLAN_TIER }
+      }
       return {
         basisPoints: platformSettings.voucherFeeBps,
         source: FeeSettingSource.GLOBAL_DEFAULT,

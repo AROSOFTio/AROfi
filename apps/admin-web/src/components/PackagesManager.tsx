@@ -251,6 +251,11 @@ export default function PackagesManager() {
                   <option value="4">4 devices</option>
                   <option value="5">5 devices — max allowed</option>
                 </select>
+                {Number(formState.deviceLimit) > 1 && (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Only the device that pays or redeems connects automatically. The other {Number(formState.deviceLimit) - 1} device{Number(formState.deviceLimit) > 2 ? 's' : ''} get a short-lived bonus voucher code to share — each works on one device only.
+                  </p>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Download Kbps (optional)</label>

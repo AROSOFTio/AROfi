@@ -12,6 +12,7 @@ import {
 } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { BillingPostingService } from './billing-posting.service'
 import { AdjustWalletDto } from './dto/adjust-wallet.dto'
 import { RecordMobileMoneySaleDto } from './dto/record-mobile-money-sale.dto'
@@ -320,6 +321,7 @@ export class BillingService {
   }
 
   async getOverview(tenantId?: string, filters: BillingReportFilters = {}) {
+    filters = await this.clampFiltersToAnalyticsWindow(tenantId, filters)
     const transactionWhere = this.buildTransactionWhere(tenantId, filters)
     const dateWhere = this.buildDateWhere(filters)
     const [transactions, wallets, ledgerEntries, disbursements, activeUsers, onlineRouters, dataUsage] = await Promise.all([
@@ -482,6 +484,7 @@ export class BillingService {
   }
 
   async getSales(tenantId?: string, filters: BillingReportFilters = {}) {
+    filters = await this.clampFiltersToAnalyticsWindow(tenantId, filters)
     const items = await this.prisma.billingTransaction.findMany({
       where: {
         ...this.buildTransactionWhere(tenantId, filters),
@@ -517,7 +520,64 @@ export class BillingService {
     }
   }
 
+  // DevAdmin-only: every other report here is either platform-wide-combined
+  // or scoped to a single tenant. This groups completed sales by tenant so
+  // DevAdmin can see who's actually selling without flipping through tenants
+  // one at a time.
+  async getSalesByTenant(filters: BillingReportFilters = {}) {
+    const where: Prisma.BillingTransactionWhereInput = {
+      ...this.buildTransactionWhere(undefined, filters),
+      type: {
+        in: [
+          BillingTransactionType.MOBILE_MONEY_SALE,
+          BillingTransactionType.VOUCHER_SALE,
+          BillingTransactionType.VOUCHER_REDEMPTION,
+        ],
+      },
+      status: BillingTransactionStatus.COMPLETED,
+    }
+
+    const grouped = await this.prisma.billingTransaction.groupBy({
+      by: ['tenantId'],
+      where,
+      _sum: { grossAmountUgx: true, feeAmountUgx: true, netAmountUgx: true },
+      _count: { _all: true },
+    })
+
+    const tenantIds = grouped.map((row) => row.tenantId)
+    const tenants = await this.prisma.tenant.findMany({
+      where: { id: { in: tenantIds } },
+      select: { id: true, name: true, tenantSettings: { select: { subscriptionPlan: true } } },
+    })
+    const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]))
+
+    const rows = grouped
+      .map((row) => ({
+        tenantId: row.tenantId,
+        tenantName: tenantById.get(row.tenantId)?.name ?? 'Unknown tenant',
+        subscriptionPlan: tenantById.get(row.tenantId)?.tenantSettings?.subscriptionPlan ?? 'FREE',
+        salesCount: row._count._all,
+        grossSalesUgx: row._sum.grossAmountUgx ?? 0,
+        platformFeesUgx: row._sum.feeAmountUgx ?? 0,
+        netEarningsUgx: row._sum.netAmountUgx ?? 0,
+      }))
+      .sort((a, b) => b.grossSalesUgx - a.grossSalesUgx)
+
+    return {
+      rows,
+      summary: {
+        tenantCount: rows.length,
+        totalSalesCount: rows.reduce((total, row) => total + row.salesCount, 0),
+        totalGrossSalesUgx: rows.reduce((total, row) => total + row.grossSalesUgx, 0),
+        totalPlatformFeesUgx: rows.reduce((total, row) => total + row.platformFeesUgx, 0),
+        totalNetEarningsUgx: rows.reduce((total, row) => total + row.netEarningsUgx, 0),
+      },
+      filters: this.presentFilters(filters),
+    }
+  }
+
   async getTransactions(tenantId?: string, filters: BillingReportFilters = {}) {
+    filters = await this.clampFiltersToAnalyticsWindow(tenantId, filters)
     const items = await this.prisma.billingTransaction.findMany({
       where: this.buildTransactionWhere(tenantId, filters),
       include: this.transactionInclude,
@@ -579,6 +639,49 @@ export class BillingService {
       ...(filters.packageId ? { packageId: filters.packageId } : {}),
       ...(paymentWhere ? { payment: paymentWhere } : {}),
     }
+  }
+
+  // Free/Pro plans only get to look back N days of analytics; Enterprise is
+  // unlimited. DevAdmin's platform-wide view (no tenantId) is never clamped.
+  private async clampFiltersToAnalyticsWindow(tenantId: string | undefined, filters: BillingReportFilters): Promise<BillingReportFilters> {
+    if (!tenantId) {
+      return filters
+    }
+
+    const [platformSettings, tenantSettings] = await Promise.all([
+      this.prisma.platformSetting.upsert({
+        where: { id: PLATFORM_SETTINGS_ID },
+        update: {},
+        create: { id: PLATFORM_SETTINGS_ID },
+      }),
+      this.prisma.tenantSetting.findUnique({
+        where: { tenantId },
+        select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true },
+      }),
+    ])
+
+    const effectiveTier = tenantSettings
+      ? resolveEffectiveSubscriptionTier(tenantSettings.subscriptionPlan, tenantSettings.subscriptionPlanExpiresAt)
+      : 'FREE'
+
+    const historyDays =
+      effectiveTier === 'ENTERPRISE'
+        ? platformSettings.enterpriseAnalyticsHistoryDays
+        : effectiveTier === 'PRO'
+          ? platformSettings.proAnalyticsHistoryDays
+          : platformSettings.freeAnalyticsHistoryDays
+
+    if (historyDays === null) {
+      return filters
+    }
+
+    const earliestAllowed = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
+    const requestedFrom = filters.from ? new Date(filters.from) : null
+    if (!requestedFrom || Number.isNaN(requestedFrom.getTime()) || requestedFrom < earliestAllowed) {
+      return { ...filters, from: earliestAllowed.toISOString() }
+    }
+
+    return filters
   }
 
   private buildDateWhere(filters: BillingReportFilters): { createdAt?: Prisma.DateTimeFilter } {

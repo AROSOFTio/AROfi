@@ -85,6 +85,7 @@ const navItems: NavGroup[] = [
     icon: <TenantIcon />,
     items: [
       { href: '/tenants', label: 'Vendors', required: ['tenants.read'], platformOnly: true },
+      { href: '/sales-by-tenant', label: 'Sales by Vendor', required: ['billing.read'], platformOnly: true },
       { href: '/users?tab=staff', label: 'Platform Staff', required: ['users.read'], platformOnly: true },
       { href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true },
     ]

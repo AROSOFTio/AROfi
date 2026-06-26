@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Loader2, LogIn, Ticket, Wifi } from 'lucide-react'
+import { ArrowRight, Check, Copy, Loader2, LogIn, Share2, Ticket, Wifi } from 'lucide-react'
 import type {
   PortalContextResponse,
   PortalCustomerSession,
@@ -33,6 +33,8 @@ type HotspotParams = {
 }
 
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
+// Mirrors COMPANION_VOUCHER_EXPIRY_HOURS in apps/api/.../package-activation.service.ts
+const COMPANION_VOUCHER_EXPIRY_LABEL = 'within 60 hours'
 const portalStorageKey = 'arofi.portal.access_token'
 const paymentReturnStorageKey = 'arofi.portal.payment_return'
 const portalTemplateStyles: Record<
@@ -291,7 +293,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
+  const [companionVoucherCodes, setCompanionVoucherCodes] = useState<string[]>([])
+  const [copiedVoucherCode, setCopiedVoucherCode] = useState('')
   const autoConnectAttemptedRef = useRef(false)
+  // Auto-connect navigates the whole page away (see autoSubmitHotspotLogin),
+  // which would yank the companion-voucher popup off screen before the buyer
+  // can read it. When there are codes to show, hold the navigation here and
+  // fire it once the popup is dismissed instead of running it immediately.
+  const pendingAutoConnectRef = useRef<(() => void) | null>(null)
   const [qrVoucherCode, setQrVoucherCode] = useState('')
   const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
@@ -371,6 +380,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode('')
       setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
 
+      const hasCompanionCodes = Boolean(redemption.companionVoucherCodes?.length)
+      if (redemption.companionVoucherCodes?.length) {
+        setCompanionVoucherCodes(redemption.companionVoucherCodes)
+      }
+
       if (redemption.reconnect?.username && redemption.reconnect?.password) {
         const effectiveLoginUrl =
           redemption.reconnect.loginUrl ||
@@ -379,9 +393,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           null
         if (effectiveLoginUrl) {
           if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-          setConnectionStatus('reconnecting')
-          setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
-          window.setTimeout(() => autoSubmitHotspotLogin({ ...redemption.reconnect, loginUrl: effectiveLoginUrl }), 100)
+          const runAutoConnect = () => {
+            setConnectionStatus('reconnecting')
+            setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
+            autoSubmitHotspotLogin({ ...redemption.reconnect, loginUrl: effectiveLoginUrl })
+          }
+
+          if (hasCompanionCodes) {
+            // Hold off the page navigation until the buyer dismisses the voucher popup.
+            pendingAutoConnectRef.current = runAutoConnect
+          } else {
+            window.setTimeout(runAutoConnect, 100)
+          }
           return
         }
       }
@@ -766,6 +789,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
 
   async function handleCompletedPayment(payment: PortalPayment) {
+    const hasCompanionCodes = Boolean(payment.companionVoucherCodes?.length)
+    if (payment.companionVoucherCodes?.length) {
+      setCompanionVoucherCodes(payment.companionVoucherCodes)
+    }
+
     // Build best possible loginUrl from all sources
     const effectiveLoginUrl =
       payment.reconnect?.loginUrl ||
@@ -776,14 +804,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const hasCredentials = payment.reconnect?.username && payment.reconnect?.password
 
     if (effectiveLoginUrl && hasCredentials) {
-      // Auto-connect immediately — no delay, no intermediate message
       if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-      setConnectionStatus('reconnecting')
-      setStatusMessage('')
-      autoSubmitHotspotLogin(
-        { ...payment.reconnect, loginUrl: effectiveLoginUrl },
-        effectiveLoginUrl,
-      )
+      const runAutoConnect = () => {
+        setConnectionStatus('reconnecting')
+        setStatusMessage('')
+        autoSubmitHotspotLogin(
+          { ...payment.reconnect, loginUrl: effectiveLoginUrl },
+          effectiveLoginUrl,
+        )
+      }
+
+      if (hasCompanionCodes) {
+        // Hold off the page navigation until the buyer dismisses the voucher popup.
+        pendingAutoConnectRef.current = runAutoConnect
+      } else {
+        runAutoConnect()
+      }
       return
     }
 
@@ -802,6 +838,34 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         // ignore — session will update on next poll
       }
     }
+  }
+
+  function dismissCompanionVoucherPopup() {
+    setCompanionVoucherCodes([])
+    const runAutoConnect = pendingAutoConnectRef.current
+    pendingAutoConnectRef.current = null
+    runAutoConnect?.()
+  }
+
+  function handleCopyVoucherCode(code: string) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code).catch(() => {})
+    }
+    setCopiedVoucherCode(code)
+    window.setTimeout(() => setCopiedVoucherCode(''), 2000)
+  }
+
+  async function handleShareVoucherCodes() {
+    const message = `You're connected on AROFi WiFi! Use one of these voucher codes to connect your own device:\n${companionVoucherCodes.join('\n')}`
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ text: message })
+        return
+      } catch {
+        // user cancelled the native share sheet — fall through to clipboard copy
+      }
+    }
+    handleCopyVoucherCode(companionVoucherCodes.join(', '))
   }
 
   async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1301,6 +1365,67 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </div>
             </section>
           )}
+
+        {companionVoucherCodes.length > 0 && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 px-4">
+            <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-950">
+                    {companionVoucherCodes.length === 1 ? 'Bonus code for a friend' : `${companionVoucherCodes.length} bonus codes for your group`}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Your package covers {companionVoucherCodes.length + 1} devices. Share {companionVoucherCodes.length === 1 ? 'this code' : 'these codes'} so the others can connect on their own phones.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissCompanionVoucherPopup}
+                  className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {companionVoucherCodes.map((code) => (
+                  <div key={code} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <span className="font-mono text-sm font-bold tracking-wide text-slate-950">{code}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyVoucherCode(code)}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                    >
+                      {copiedVoucherCode === code ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedVoucherCode === code ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-3 text-xs text-slate-500">
+                Each code works on one device only, and must be used soon — it expires {COMPANION_VOUCHER_EXPIRY_LABEL}.
+              </p>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleShareVoucherCodes}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white"
+                >
+                  <Share2 className="h-4 w-4" /> Share
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissCompanionVoucherPopup}
+                  className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     </div>
   )

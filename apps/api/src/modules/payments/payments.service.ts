@@ -788,10 +788,20 @@ export class PaymentsService {
           }),
         })
 
+        const companionVoucherCodes = await this.packageActivationService.generateCompanionVouchersForPackage(tx, {
+          tenantId: payment.tenantId,
+          packageId: payment.packageId,
+          deviceLimit: packageRecord.deviceLimit,
+        })
+
         await tx.payment.update({
           where: { id: payment.id },
           data: {
             billingTransactionId: billingTransaction.id,
+            metadata: this.toJsonValue({
+              ...(payment.metadata && typeof payment.metadata === 'object' && !Array.isArray(payment.metadata) ? payment.metadata : {}),
+              companionVoucherCodes,
+            }),
           },
         })
 
@@ -846,8 +856,17 @@ export class PaymentsService {
     const username = payment.activation.radiusCredential?.username ?? payment.activation.radiusUsername
     const password = payment.activation.radiusCredential?.password ?? payment.activation.radiusPassword
 
+    const companionVoucherCodes =
+      payment.metadata &&
+      typeof payment.metadata === 'object' &&
+      !Array.isArray(payment.metadata) &&
+      Array.isArray((payment.metadata as Record<string, unknown>).companionVoucherCodes)
+        ? ((payment.metadata as Record<string, unknown>).companionVoucherCodes as string[])
+        : []
+
     return {
       ...payment,
+      companionVoucherCodes,
       reconnect: {
         method: 'mikrotik-hotspot-post',
         loginUrl,

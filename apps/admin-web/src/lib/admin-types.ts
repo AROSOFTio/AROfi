@@ -358,6 +358,25 @@ export type BillingSalesResponse = {
   items: BillingTransactionItem[]
 }
 
+export type BillingSalesByTenantResponse = {
+  rows: Array<{
+    tenantId: string
+    tenantName: string
+    subscriptionPlan: 'FREE' | 'PRO' | 'ENTERPRISE'
+    salesCount: number
+    grossSalesUgx: number
+    platformFeesUgx: number
+    netEarningsUgx: number
+  }>
+  summary: {
+    tenantCount: number
+    totalSalesCount: number
+    totalGrossSalesUgx: number
+    totalPlatformFeesUgx: number
+    totalNetEarningsUgx: number
+  }
+}
+
 export type BillingTransactionsResponse = {
   summary: {
     totalTransactions: number

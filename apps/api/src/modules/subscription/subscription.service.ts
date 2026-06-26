@@ -1,41 +1,44 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { PaymentNetwork, PaymentStatus, Prisma } from '@prisma/client'
+import { PaymentNetwork, PaymentStatus, Prisma, SubscriptionPlanTier } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { PaymentRouterService } from '../payments/payment-router.service'
 import { PhoneNumberService } from '../payments/phone-number.service'
 import { mapRawStatusToPaymentStatus } from '../payments/payment-provider.interface'
 import { SubscriptionPlanKey } from './dto/select-plan.dto'
 
+// Commission rates are intentionally NOT listed here: they are DevAdmin-configured
+// (PlatformSetting.{mobileMoneyFeeBps,voucherFeeBps,proMobileMoneyFeeBps,...}) and
+// must be read live in getPlanCatalog() below, never hardcoded, so a DevAdmin rate
+// change takes effect immediately for every tenant on that tier without a redeploy.
 export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
   name: string
   amountUgx: number
-  commissionSummary: string
   routerLimit: string
   features: string[]
 }> = {
   FREE: {
     name: 'Starter (Free)',
     amountUgx: 0,
-    commissionSummary: '8% Mobile Money / 2% Voucher',
     routerLimit: 'Up to 5 Routers',
-    features: ['Cloud WinBox Tunnels', 'Free Analytics', 'AROFi branding'],
+    features: ['Cloud WinBox Tunnels', '7-day analytics history', 'AROFi branding'],
   },
   PRO: {
     name: 'Pro Plan',
     amountUgx: 20000,
-    commissionSummary: '4% Mobile Money / 0% Voucher',
     routerLimit: 'Up to 10 Routers',
     features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
   },
   ENTERPRISE: {
     name: 'Enterprise Plan',
     amountUgx: 70000,
-    commissionSummary: '1.6% mm gateway fee / 0% platform fee',
     routerLimit: 'Unlimited Routers',
-    features: ['Cloud WinBox Tunnels', 'Custom Domains & SSL', 'Custom SMS Gateway API', 'Priority Support'],
+    features: ['Cloud WinBox Tunnels', 'Priority Support', 'Custom Domains & SMS Gateway (coming soon)'],
   },
 }
+
+const SUBSCRIPTION_PLAN_DURATION_MS = 30 * 24 * 60 * 60 * 1000
 
 type SubscriptionPaymentState = {
   id: string
@@ -67,8 +70,31 @@ export class SubscriptionService {
     private readonly phoneNumberService: PhoneNumberService,
   ) {}
 
-  getPlanCatalog() {
-    return Object.entries(SUBSCRIPTION_PLAN_CATALOG).map(([key, value]) => ({ key, ...value }))
+  async getPlanCatalog() {
+    const platformSettings = await this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+    })
+
+    const commissionSummaryByPlan: Record<SubscriptionPlanKey, string> = {
+      FREE: this.formatCommissionSummary(platformSettings.mobileMoneyFeeBps, platformSettings.voucherFeeBps),
+      PRO: this.formatCommissionSummary(platformSettings.proMobileMoneyFeeBps, platformSettings.proVoucherFeeBps),
+      ENTERPRISE: this.formatCommissionSummary(
+        platformSettings.enterpriseMobileMoneyFeeBps,
+        platformSettings.enterpriseVoucherFeeBps,
+      ),
+    }
+
+    return Object.entries(SUBSCRIPTION_PLAN_CATALOG).map(([key, value]) => ({
+      key,
+      ...value,
+      commissionSummary: commissionSummaryByPlan[key as SubscriptionPlanKey],
+    }))
+  }
+
+  private formatCommissionSummary(mobileMoneyFeeBps: number, voucherFeeBps: number) {
+    return `${mobileMoneyFeeBps / 100}% Mobile Money / ${voucherFeeBps / 100}% Voucher`
   }
 
   async getStatus(tenantId: string) {
@@ -85,6 +111,7 @@ export class SubscriptionService {
       prefs.subscriptionPendingPlan = undefined
       prefs.subscriptionPaidUntil = undefined
       prefs.subscriptionPayment = undefined
+      await this.persistActivePlan(tenantId, 'FREE', null)
     } else {
       prefs.subscriptionPendingPlan = plan
       prefs.subscriptionStatus = 'PENDING_PAYMENT'
@@ -179,11 +206,13 @@ export class SubscriptionService {
     }
 
     if (status === PaymentStatus.COMPLETED) {
+      const paidUntil = new Date(Date.now() + SUBSCRIPTION_PLAN_DURATION_MS)
       prefs.selectedPlan = payment.plan
       prefs.subscriptionStatus = 'ACTIVE'
       prefs.subscriptionPendingPlan = undefined
-      prefs.subscriptionPaidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      prefs.subscriptionPaidUntil = paidUntil.toISOString()
       prefs.subscriptionPayment = undefined
+      await this.persistActivePlan(tenantId, payment.plan, paidUntil)
     } else if (status === PaymentStatus.FAILED || status === PaymentStatus.CANCELLED || status === PaymentStatus.EXPIRED) {
       prefs.subscriptionStatus = 'PENDING_PAYMENT'
       prefs.subscriptionPayment = undefined
@@ -231,6 +260,22 @@ export class SubscriptionService {
       where: { tenantId },
       update: { routerOnboardingPreferences: prefs as Prisma.InputJsonValue },
       create: { tenantId, routerOnboardingPreferences: prefs as Prisma.InputJsonValue },
+    })
+  }
+
+  // Writes the authoritative plan columns the fee engine and reporting read
+  // directly (TenantSetting.subscriptionPlan/subscriptionPlanExpiresAt),
+  // separate from the JSON checkout-flow bookkeeping in routerOnboardingPreferences.
+  private async persistActivePlan(tenantId: string, plan: SubscriptionPlanKey, expiresAt: Date | null) {
+    const data = {
+      subscriptionPlan: plan as SubscriptionPlanTier,
+      subscriptionPlanExpiresAt: expiresAt,
+    }
+
+    await this.prisma.tenantSetting.upsert({
+      where: { tenantId },
+      update: data,
+      create: { tenantId, ...data },
     })
   }
 }

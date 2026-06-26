@@ -19,6 +19,8 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
+import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { MikrotikService } from './mikrotik.service'
@@ -442,6 +444,40 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
   }
 
+  // Free/Pro plans cap how many routers a tenant can onboard; Enterprise is
+  // unlimited (enterpriseRouterLimit is left null in PlatformSetting).
+  private async enforceRouterLimit(tenantId: string) {
+    const [platformSettings, tenantSettings, routerCount] = await Promise.all([
+      this.prisma.platformSetting.upsert({
+        where: { id: PLATFORM_SETTINGS_ID },
+        update: {},
+        create: { id: PLATFORM_SETTINGS_ID },
+      }),
+      this.prisma.tenantSetting.findUnique({
+        where: { tenantId },
+        select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true },
+      }),
+      this.prisma.router.count({ where: { tenantId } }),
+    ])
+
+    const effectiveTier = tenantSettings
+      ? resolveEffectiveSubscriptionTier(tenantSettings.subscriptionPlan, tenantSettings.subscriptionPlanExpiresAt)
+      : 'FREE'
+
+    const limit =
+      effectiveTier === 'ENTERPRISE'
+        ? platformSettings.enterpriseRouterLimit
+        : effectiveTier === 'PRO'
+          ? platformSettings.proRouterLimit
+          : platformSettings.freeRouterLimit
+
+    if (limit !== null && routerCount >= limit) {
+      throw new BadRequestException(
+        `Router limit reached (${limit} on the ${effectiveTier} plan). Upgrade your plan to add more routers.`,
+      )
+    }
+  }
+
   async createRouter(dto: CreateRouterDto) {
     const [tenant, group, hotspot] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: dto.tenantId } }),
@@ -464,6 +500,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     if (hotspot && hotspot.tenantId !== dto.tenantId) {
       throw new BadRequestException('Hotspot does not belong to the tenant')
     }
+
+    await this.enforceRouterLimit(dto.tenantId)
 
     const registrationKey = randomUUID()
     const remoteToken = randomUUID()

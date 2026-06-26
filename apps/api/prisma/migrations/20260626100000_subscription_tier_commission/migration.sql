@@ -1,0 +1,15 @@
+DO $$ BEGIN
+  CREATE TYPE "SubscriptionPlanTier" AS ENUM ('FREE', 'PRO', 'ENTERPRISE');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+ALTER TYPE "FeeSettingSource" ADD VALUE IF NOT EXISTS 'PLAN_TIER';
+
+ALTER TABLE "PlatformSetting" ADD COLUMN IF NOT EXISTS "proMobileMoneyFeeBps" INTEGER NOT NULL DEFAULT 400;
+ALTER TABLE "PlatformSetting" ADD COLUMN IF NOT EXISTS "proVoucherFeeBps" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "PlatformSetting" ADD COLUMN IF NOT EXISTS "enterpriseMobileMoneyFeeBps" INTEGER NOT NULL DEFAULT 160;
+ALTER TABLE "PlatformSetting" ADD COLUMN IF NOT EXISTS "enterpriseVoucherFeeBps" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "TenantSetting" ADD COLUMN IF NOT EXISTS "subscriptionPlan" "SubscriptionPlanTier" NOT NULL DEFAULT 'FREE';
+ALTER TABLE "TenantSetting" ADD COLUMN IF NOT EXISTS "subscriptionPlanExpiresAt" TIMESTAMP(3);
