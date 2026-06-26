@@ -30,6 +30,7 @@ describe('WalletsService withdrawals', () => {
   }
 
   const prisma: any = {
+    tenant: { findUnique: jest.fn().mockResolvedValue(null) },
     tenantPayoutProfile: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -50,8 +51,9 @@ describe('WalletsService withdrawals', () => {
   }
 
   const phoneNumberService: any = {}
+  const mailService: any = { sendWithdrawalStatusEmail: jest.fn() }
 
-  const service = new WalletsService(prisma, paymentRouter, phoneNumberService)
+  const service = new WalletsService(prisma, paymentRouter, phoneNumberService, mailService)
 
   const settings = {
     id: 'global',

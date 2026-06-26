@@ -11,6 +11,8 @@ describe('PaymentsService', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
   )
 
   it('normalizes local Uganda phone numbers to 256 format', () => {
