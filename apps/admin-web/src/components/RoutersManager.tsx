@@ -281,6 +281,13 @@ export default function RoutersManager() {
       })
       setRouterProcessText('Generating RouterOS setup details and refreshing inventory.')
       setSelectedSetup(setup)
+      // The success message below promises "the one-run command below" --
+      // that command lives on the Provisioning tab, not Overview (which
+      // defaults to showing a "Remote WinBox Access" panel that's an
+      // unrelated, optional feature). Without this, people were copying the
+      // wrong command because it was the first "copy a command" button they
+      // saw.
+      setActiveRouterView('setup')
       setSuccess('Router registered successfully. Copy the one-run WinBox command below.')
       setRouterForm((previous) => ({
         ...initialRouterForm(),
@@ -701,8 +708,14 @@ export default function RoutersManager() {
                       </strong>
                     </div>
 
+                    <div style={{ padding: 10, border: '1px solid var(--warn-fg)', borderRadius: 8, background: 'var(--warn-bg)', color: 'var(--warn-fg)', fontSize: 12, lineHeight: 1.4 }}>
+                      <strong>This is NOT the main router setup command.</strong> It only sets up
+                      an optional VPN tunnel for AROFi remote support. The required hotspot/RADIUS
+                      command is on the <strong>Provisioning</strong> tab.
+                    </div>
+
                     <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      Run this command in WinBox Terminal to automatically install and configure the remote access VPN interface on the MikroTik router.
+                      Run this command in WinBox Terminal to install the optional remote-access VPN interface.
                     </div>
 
                     <div style={{
@@ -902,7 +915,10 @@ export default function RoutersManager() {
         loading={loading}
         routers={overview?.routers ?? []}
         recentHealthChecks={overview?.recentHealthChecks ?? []}
-        onLoadSetup={(routerId) => void loadSetup(routerId)}
+        onLoadSetup={(routerId) => {
+          setActiveRouterView('setup')
+          void loadSetup(routerId)
+        }}
         onHealthCheck={(routerId) => void handleHealthCheck(routerId)}
         runningHealthCheckId={runningHealthCheckId}
       />}

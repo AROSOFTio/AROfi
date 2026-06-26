@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import type { 
@@ -37,6 +38,12 @@ export default function SettingsRoutersPage() {
   // Modals & Menu active states
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  // Viewport-fixed coordinates for the actions dropdown, since it's rendered
+  // via a portal -- it used to be position:absolute inside a <td>, which got
+  // silently clipped by .table-wrap's overflow-x (overflow-x: auto on one
+  // axis makes the other axis "auto" too per the CSS spec, so any dropdown
+  // overflowing the table's box just vanished instead of showing).
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null)
   const [configModalOpen, setConfigModalOpen] = useState<any | null>(null)
   const [renameModalOpen, setRenameModalOpen] = useState<any | null>(null)
   const [passwordModalOpen, setPasswordModalOpen] = useState<any | null>(null)
@@ -305,33 +312,42 @@ export default function SettingsRoutersPage() {
                       <td style={{ padding: '16px 20px', color: 'var(--text-secondary)' }}>
                         {isOnline ? (router.uptime || '2d 14h 5m') : 'Offline'}
                       </td>
-                      <td style={{ padding: '16px 20px', textAlign: 'right', position: 'relative' }}>
+                      <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                         <button
                           type="button"
                           className="btn btn-ghost"
                           style={{ padding: 6, borderRadius: '50%' }}
-                          onClick={() => setActiveMenuId(activeMenuId === router.id ? null : router.id)}
+                          onClick={(event) => {
+                            if (activeMenuId === router.id) {
+                              setActiveMenuId(null)
+                              return
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            setMenuPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+                            setActiveMenuId(router.id)
+                          }}
                         >
                           <MoreVertical size={16} />
                         </button>
 
-                        {/* Actions Dropdown */}
-                        {activeMenuId === router.id && (
+                        {/* Actions Dropdown — rendered via portal so the table's
+                            overflow-x:auto can never clip it */}
+                        {activeMenuId === router.id && menuPosition && createPortal(
                           <>
-                            <div 
-                              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10 }}
+                            <div
+                              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
                               onClick={() => setActiveMenuId(null)}
                             />
                             <div style={{
-                              position: 'absolute',
-                              right: 20,
-                              top: '80%',
+                              position: 'fixed',
+                              right: menuPosition.right,
+                              top: menuPosition.top,
                               background: 'var(--bg-card)',
                               border: '1px solid var(--border)',
                               borderRadius: 10,
                               boxShadow: 'var(--shadow-lg)',
                               width: 200,
-                              zIndex: 11,
+                              zIndex: 1001,
                               display: 'flex',
                               flexDirection: 'column',
                               padding: 6,
@@ -418,7 +434,8 @@ export default function SettingsRoutersPage() {
                                 <Trash2 size={14} style={{ marginRight: 8 }} /> Delete
                               </button>
                             </div>
-                          </>
+                          </>,
+                          document.body,
                         )}
                       </td>
                     </tr>

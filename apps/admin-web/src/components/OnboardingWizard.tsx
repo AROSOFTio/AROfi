@@ -56,6 +56,13 @@ export default function OnboardingWizard({
   const [registeredRouter, setRegisteredRouter] = useState<any | null>(initialRouter)
   const [pollingActive, setPollingActive] = useState(false)
   const [copiedText, setCopiedText] = useState(false)
+  // Counts unverified check attempts (auto-poll ticks + manual "Check Now"
+  // clicks). "Skip script validation" only unlocks after a few real attempts,
+  // so a new user can't bail out of step 2 before the router has even had a
+  // fair chance to call back -- they'd land in the dashboard with the
+  // hotspot/RADIUS setup never having actually run.
+  const [checkAttempts, setCheckAttempts] = useState(0)
+  const REQUIRED_CHECK_ATTEMPTS = 3
 
   // Step 3 states
   const [packageForm, setPackageForm] = useState({
@@ -120,6 +127,8 @@ export default function OnboardingWizard({
           if (setup.router.provisioningCallbackReceived || setup.router.onboardingStatus === 'VERIFIED_ONLINE') {
             setPollingActive(false)
             setSuccess('Router connection verified! You can now proceed.')
+          } else {
+            setCheckAttempts((count) => count + 1)
           }
         }
       } catch (err) {
@@ -196,6 +205,7 @@ export default function OnboardingWizard({
         if (setup.router.provisioningCallbackReceived || setup.router.onboardingStatus === 'VERIFIED_ONLINE') {
           setSuccess('Router connection verified successfully!')
         } else {
+          setCheckAttempts((count) => count + 1)
           setError('We haven\'t received a signal from your router yet. Please ensure the command was pasted and run successfully in the WinBox terminal.')
         }
       }
@@ -835,20 +845,26 @@ export default function OnboardingWizard({
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trouble connecting? Paste command exactly.</span>
-                <button
-                  type="button"
-                  onClick={handleNextFromScript}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    fontSize: 12,
-                    textDecoration: 'underline',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Skip script validation for now
-                </button>
+                {checkAttempts >= REQUIRED_CHECK_ATTEMPTS ? (
+                  <button
+                    type="button"
+                    onClick={handleNextFromScript}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: 12,
+                      textDecoration: 'underline',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Skip script validation for now
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    Skip unlocks after {REQUIRED_CHECK_ATTEMPTS - checkAttempts} more check{REQUIRED_CHECK_ATTEMPTS - checkAttempts === 1 ? '' : 's'} — use &quot;Check Now&quot; above.
+                  </span>
+                )}
               </div>
             </div>
           )}
