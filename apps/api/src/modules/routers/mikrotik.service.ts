@@ -26,6 +26,7 @@ type ProvisioningInput = {
   hotspotNetworkName?: string | null
   portalBaseUrl?: string | null
   dnsName?: string | null
+  remoteClientName?: string | null
 }
 
 @Injectable()
@@ -140,6 +141,7 @@ export class MikrotikService {
     const ssid = (input.hotspotNetworkName || input.routerName || 'AROFi Free WiFi').slice(0, 32)
     const hotspotName = input.hotspotServerName || 'arofi-hotspot'
     const addressesPerMac = Math.min(Math.max(input.deviceLimit ?? 1, 1), 5)
+    const remoteClientName = input.remoteClientName || 'AROFI_REMOTE'
     // Isolated hotspot subnet. Chosen to avoid the common 192.168.88.x / 10.0.0.x
     // ranges so it does not clash with the operator's existing LAN/management.
     const gatewayIp = '10.55.0.1'
@@ -152,7 +154,7 @@ export class MikrotikService {
     const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
     const heartbeatUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
-    const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl)
+    const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl, remoteClientName)
     const heartbeatScript = this.buildHeartbeatScheduler(heartbeatUrl, fallbackHeartbeatUrl)
     const loginHtmlInstallScript = this.buildLoginHtmlInstallScript(loginHtmlUrl, fallbackLoginHtmlUrl, profileName)
 
@@ -285,9 +287,11 @@ export class MikrotikService {
       ``,
       `# Detect WAN interface dynamically so NAT works on any router model`,
       `# Try multiple methods: default route → PPPoE → LTE → any non-hotspot interface with IP`,
-      ...this.buildWanDetectionScript('wanIface'),
+      `# Every fallback below also excludes our own remote-access tunnel (${this.escape(remoteClientName)})`,
+      `# so customer traffic never gets masqueraded into AROFi's management VPN.`,
+      ...this.buildWanDetectionScript('wanIface', remoteClientName),
       `:if ($wanIface = "") do={`,
-      `  :foreach ppp in=[/interface find type=pppoe] do={ :set wanIface [/interface get $ppp name] }`,
+      `  :foreach ppp in=[/interface find type=pppoe] do={ :local pppName [/interface get $ppp name]; :if ($pppName != "${this.escape(remoteClientName)}") do={ :set wanIface $pppName } }`,
       `}`,
       `:if ($wanIface = "") do={`,
       `  :foreach lte in=[/interface lte find] do={ :set wanIface [/interface lte get $lte name] }`,
@@ -295,7 +299,7 @@ export class MikrotikService {
       `:if ($wanIface = "") do={`,
       `  :foreach addr in=[/ip address find] do={`,
       `    :local addrIf [/ip address get $addr interface]`,
-      `    :if ($addrIf != "arofi-hotspot" && $addrIf != "") do={ :set wanIface $addrIf }`,
+      `    :if ($addrIf != "arofi-hotspot" && $addrIf != "" && $addrIf != "${this.escape(remoteClientName)}") do={ :set wanIface $addrIf }`,
       `  }`,
       `}`,
       `/ip firewall nat remove [find comment="AROFi hotspot nat"]`,
@@ -371,11 +375,11 @@ export class MikrotikService {
     ]
   }
 
-  private buildProvisioningCallbackScript(callbackUrl: string, fallbackCallbackUrl: string) {
+  private buildProvisioningCallbackScript(callbackUrl: string, fallbackCallbackUrl: string, remoteClientName: string) {
     return [
       `:delay 3s`,
       `:local nasIp ""`,
-      ...this.buildWanDetectionScript('cbWanIface'),
+      ...this.buildWanDetectionScript('cbWanIface', remoteClientName),
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
       `    :local rawAddr [/ip address get [find interface=$cbWanIface] address]`,
@@ -811,7 +815,15 @@ export class MikrotikService {
     return `http://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}:4012`
   }
 
-  private buildWanDetectionScript(varName: string) {
+  // excludeIface MUST be skipped here: AROFi's own remote-access SSTP tunnel
+  // (named excludeIface) is itself an active interface with a default route
+  // back to our VPN server, and this loop used to overwrite wanIface with
+  // whichever default route it saw LAST. If the tunnel's route was processed
+  // after the real WAN's, every hotspot client got NAT-masqueraded into our
+  // management tunnel instead of the internet — RADIUS login would succeed
+  // but no real traffic ever got through.
+  private buildWanDetectionScript(varName: string, excludeIface: string) {
+    const excluded = this.escape(excludeIface)
     return [
       `:local ${varName} ""`,
       `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
@@ -827,7 +839,7 @@ export class MikrotikService {
       `      $parser`,
       `    } on-error={}`,
       `  }`,
-      `  :if ($arofiTmpIface != "") do={ :set ${varName} $arofiTmpIface }`,
+      `  :if ($arofiTmpIface != "" && $arofiTmpIface != "${excluded}") do={ :set ${varName} $arofiTmpIface }`,
       `}`,
     ]
   }

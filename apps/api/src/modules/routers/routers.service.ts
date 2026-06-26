@@ -838,6 +838,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
         hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,
         dnsName: `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`,
+        remoteClientName: router.remoteClientName,
       }),
       setupDiagnostics: await this.getSetupDiagnostics(router.id),
       radiusClient: router.radiusClient
@@ -905,6 +906,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       dnsName: router.tenant
         ? `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
         : null,
+      remoteClientName: router.remoteClientName,
     })
   }
 
