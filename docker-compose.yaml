@@ -1,0 +1,168 @@
+# Coolify deployment for AROfi — split mode.
+#
+# Same image as the all-in-one Dockerfile, but run as 5 separate containers
+# (nginx, api, admin, portal, postgres) instead of one. This gives each
+# process its own memory ceiling (mem_limit) so a spike in one service can't
+# starve the others — important on small (2-4GB) hosts where one shared
+# container running nginx + 3 Node servers had no per-process isolation.
+#
+# Build cost stays low: all four app services build from the identical
+# Dockerfile/context, so after the first build the other three are pure
+# BuildKit cache hits (only SERVICE_NAME differs at runtime).
+#
+# To switch a Coolify resource that's currently on the "Dockerfile" build
+# pack to this file: change its Build Pack to "Docker Compose" pointing at
+# this docker-compose.yml. Rolling back is just switching the build pack
+# back — the root Dockerfile's all-in-one path (SERVICE_NAME=all) is
+# untouched.
+#
+# There are intentionally NO host bind mounts here: Coolify maps relative
+# compose bind mounts to a managed host path and creates them as directories,
+# which breaks file mounts like ./config/nginx.conf. The nginx config is
+# baked into the image instead (config/nginx.split.conf).
+
+x-app-env: &app-env
+  NODE_ENV: ${NODE_ENV:-production}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-arofi}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-arofi}?schema=public
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  PORTAL_TOKEN_SECRET: ${PORTAL_TOKEN_SECRET:?PORTAL_TOKEN_SECRET is required}
+  ROUTER_CREDENTIAL_SECRET: ${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
+  RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
+  RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://arofi.arosoftlabs.com}
+  API_PUBLIC_HOST: ${API_PUBLIC_HOST:-arofi.arosoftlabs.com}
+  PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:-arofi.arosoftlabs.com}
+  APP_BASE_URL: ${APP_BASE_URL:-https://arofi.arosoftlabs.com}
+  ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.arosoftlabs.com}
+  PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.arosoftlabs.com/portal}
+  VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://arofi.arosoftlabs.com/portal}
+  ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
+  ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-5000}
+  RADIUS_SERVER_HOST: ${RADIUS_SERVER_HOST:-127.0.0.1}
+  RADIUS_PUBLIC_HOST: ${RADIUS_PUBLIC_HOST:-167.233.68.36}
+  RADIUS_AUTH_PORT: ${RADIUS_AUTH_PORT:-1812}
+  RADIUS_ACCOUNTING_PORT: ${RADIUS_ACCOUNTING_PORT:-1813}
+  RADIUS_DISCONNECT_ENABLED: ${RADIUS_DISCONNECT_ENABLED:-false}
+  PAYMENT_CUSTOMER_LABEL: ${PAYMENT_CUSTOMER_LABEL:-Pay}
+  PAYMENT_DEFAULT_CURRENCY: ${PAYMENT_DEFAULT_CURRENCY:-UGX}
+  MTN_COLLECTION_PROVIDER: ${MTN_COLLECTION_PROVIDER:-AGGREGATOR}
+  AIRTEL_COLLECTION_PROVIDER: ${AIRTEL_COLLECTION_PROVIDER:-AGGREGATOR}
+  MTN_DISBURSEMENT_PROVIDER: ${MTN_DISBURSEMENT_PROVIDER:-MTN_MOMO_DIRECT}
+  AIRTEL_DISBURSEMENT_PROVIDER: ${AIRTEL_DISBURSEMENT_PROVIDER:-AIRTEL_MONEY_DIRECT}
+  PESAPAL_MODE: ${PESAPAL_MODE:-sandbox}
+  PESAPAL_BASE_URL: ${PESAPAL_BASE_URL:-https://cybqa.pesapal.com/pesapalv3}
+  PESAPAL_CONSUMER_KEY: ${PESAPAL_CONSUMER_KEY:-}
+  PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
+  PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
+  PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://arofi.arosoftlabs.com/portal}
+  # SSR calls from admin-web go straight to the api container on the compose
+  # network instead of 127.0.0.1 (which only worked inside the old single
+  # all-in-one container).
+  API_SERVER_URL: http://api:3000/api
+  NEXT_PUBLIC_API_URL: /api
+  PORT: 3000
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Coolify assigns the configured domain to service "nginx" on port 3000
+      # and wires up the reverse proxy automatically.
+      - SERVICE_FQDN_NGINX_3000
+      - SERVICE_NAME=nginx
+    depends_on:
+      api:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      portal:
+        condition: service_healthy
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "30000-30100:30000-30100"
+    environment:
+      <<: *app-env
+      SERVICE_NAME: api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      SERVICE_NAME: admin
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      SERVICE_NAME: portal
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 320m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/portal 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-arofi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-arofi}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arofi} -d ${POSTGRES_DB:-arofi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg-data:
