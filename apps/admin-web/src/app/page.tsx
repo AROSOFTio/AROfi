@@ -6,6 +6,11 @@ import { Activity, BadgeDollarSign, Check, Radio, Router, Ticket, Users, Wifi } 
 import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
 
+// Pricing is hidden from the public marketing page for now — signup always
+// lands new tenants on the Free plan (see SHOW_PRICING in RegisterModal).
+// Flip back on when pricing is ready to go public; section JSX is untouched.
+const SHOW_PRICING = false
+
 const features = [
   { icon: Router, title: 'MikroTik Hotspot Billing', text: 'One RouterOS command to onboard. No lockouts, no console diving. Any MikroTik model.' },
   { icon: Ticket, title: 'WiFi Packages & Vouchers', text: 'Sell hourly & daily bundles, print voucher batches for field agents — all from one place.' },
@@ -112,7 +117,7 @@ export default function RootPage() {
         <div className="home-actions">
           <Link href="/docs" className="btn btn-ghost">Docs</Link>
           <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
-          <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started Free</button>
+          <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Register Free</button>
         </div>
       </nav>
 
@@ -122,7 +127,7 @@ export default function RootPage() {
           <h1>Run your WiFi<br />like a business.</h1>
           <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, no IT team, free to start.</p>
           <div className="home-cta">
-            <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Start for Free</button>
+            <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Your WiFi Business</button>
             <Link href="/docs" className="btn btn-ghost">Documentation</Link>
             <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
           </div>
@@ -188,39 +193,41 @@ export default function RootPage() {
         ))}
       </section>
 
-      <section className="home-pricing" id="pricing">
-        <div className="home-pricing-head">
-          <div className="home-kicker"><BadgeDollarSign size={15} /> Pricing</div>
-          <h2>Start free. Upgrade when it pays for itself.</h2>
-          <p>All plans include MTN MoMo &amp; Airtel Money collection, vouchers, and RADIUS-billed hotspots — AROFi only earns when you do.</p>
-        </div>
-        <div className="home-pricing-grid">
-          {pricingTiers.map((tier) => (
-            <article key={tier.key} className={`home-pricing-card ${tier.featured ? 'featured' : ''}`}>
-              {tier.featured && <div className="home-pricing-badge">Most Popular</div>}
-              <h3>{tier.name}</h3>
-              <div className="home-pricing-price">
-                <strong>UGX {tier.priceUgx.toLocaleString()}</strong>
-                {tier.period && <span>{tier.period}</span>}
-              </div>
-              <div className="home-pricing-commission">{tier.commissionSummary}</div>
-              <div className="home-pricing-routers">{tier.routerLimit}</div>
-              <ul className="home-pricing-list">
-                {tier.features.map((feature) => (
-                  <li key={feature}><Check size={15} /> {feature}</li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className={`btn ${tier.featured ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setRegisterOpen(true)}
-              >
-                {tier.priceUgx === 0 ? 'Start for Free' : 'Get Started'}
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
+      {SHOW_PRICING && (
+        <section className="home-pricing" id="pricing">
+          <div className="home-pricing-head">
+            <div className="home-kicker"><BadgeDollarSign size={15} /> Pricing</div>
+            <h2>Register free. Upgrade when it pays for itself.</h2>
+            <p>All plans include MTN MoMo &amp; Airtel Money collection, vouchers, and RADIUS-billed hotspots — AROFi only earns when you do.</p>
+          </div>
+          <div className="home-pricing-grid">
+            {pricingTiers.map((tier) => (
+              <article key={tier.key} className={`home-pricing-card ${tier.featured ? 'featured' : ''}`}>
+                {tier.featured && <div className="home-pricing-badge">Most Popular</div>}
+                <h3>{tier.name}</h3>
+                <div className="home-pricing-price">
+                  <strong>UGX {tier.priceUgx.toLocaleString()}</strong>
+                  {tier.period && <span>{tier.period}</span>}
+                </div>
+                <div className="home-pricing-commission">{tier.commissionSummary}</div>
+                <div className="home-pricing-routers">{tier.routerLimit}</div>
+                <ul className="home-pricing-list">
+                  {tier.features.map((feature) => (
+                    <li key={feature}><Check size={15} /> {feature}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className={`btn ${tier.featured ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setRegisterOpen(true)}
+                >
+                  {tier.priceUgx === 0 ? 'Register Free' : 'Get Started'}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="home-footer">

@@ -2,8 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
-import { setBrowserAdminSession } from '@/lib/admin-session'
+import { getAppDashboardUrl, setBrowserAdminSession } from '@/lib/admin-session'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+
+// Plan/payment picker is hidden from public signup for now — everyone lands
+// on the Free plan and goes straight to the dashboard. Flip this back on
+// when pricing is ready to go public; the step 4/5 UI below is untouched.
+const SHOW_PRICING = false
 
 type RegisterFormState = {
   tenantName: string
@@ -151,6 +156,12 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       setBrowserAdminSession(registration.access_token)
       setSuccess(registration)
       setPhoneNumber(formState.phoneNumber.trim())
+
+      if (!SHOW_PRICING) {
+        await handleSelectPlan('FREE')
+        return
+      }
+
       setStep(4)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to create workspace.')
@@ -167,7 +178,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       setPlanChoice(plan)
 
       if (plan === 'FREE') {
-        window.location.href = '/dashboard'
+        window.location.href = getAppDashboardUrl()
         return
       }
 
@@ -197,7 +208,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
         if (statusResponse.subscriptionStatus === 'ACTIVE' && !statusResponse.checkout) {
           stopPolling()
           setCheckoutLoading(false)
-          window.location.href = '/dashboard'
+          window.location.href = getAppDashboardUrl()
         } else if (checkoutPaymentStatus === 'FAILED' || checkoutPaymentStatus === 'CANCELLED' || checkoutPaymentStatus === 'EXPIRED') {
           stopPolling()
           setCheckoutLoading(false)
@@ -227,7 +238,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
     setCheckoutLoading(true)
     try {
       await clientPostApi('/subscription/skip', {})
-      window.location.href = '/dashboard'
+      window.location.href = getAppDashboardUrl()
     } catch (skipError) {
       setCheckoutLoading(false)
       setCheckoutError(skipError instanceof Error ? skipError.message : 'Unable to skip payment right now.')
