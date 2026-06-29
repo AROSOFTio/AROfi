@@ -61,7 +61,7 @@ x-app-env: &app-env
   SMTP_USER: ${SMTP_USER:-}
   SMTP_PASS: ${SMTP_PASS:-}
   SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AROFi}
-  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@arofi.io}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@arofi.net}
   # SSR calls from admin-web go straight to the api container on the compose
   # network instead of 127.0.0.1 (which only worked inside the old single
   # all-in-one container).
