@@ -12,7 +12,7 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     this.logger.log('Initializing remote WinBox access proxies...')
     try {
-      // Sanitize any legacy remotePort values that are outside the 30000-30100 range
+      // Sanitize any legacy remotePort values that are outside the 31000-31100 range
       const allRouters = await this.prisma.router.findMany({
         where: {
           remotePort: { not: null },
@@ -20,8 +20,8 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
       })
 
       for (const r of allRouters) {
-        if (r.remotePort && (r.remotePort < 30000 || r.remotePort > 30100)) {
-          const newPort = Math.floor(Math.random() * 100) + 30000
+        if (r.remotePort && (r.remotePort < 31000 || r.remotePort > 31100)) {
+          const newPort = Math.floor(Math.random() * 100) + 31000
           await this.prisma.router.update({
             where: { id: r.id },
             data: { remotePort: newPort },

@@ -505,7 +505,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     const registrationKey = randomUUID()
     const remoteToken = randomUUID()
-    const remotePort = Math.floor(Math.random() * 100) + 30000
+    const remotePort = Math.floor(Math.random() * 100) + 31000
     const remoteSstpIp = `10.8.0.${Math.floor(Math.random() * 250) + 2}`
     const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
@@ -1662,8 +1662,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updateData.remoteToken = randomUUID()
       updated = true
     }
-    if (!router.remotePort || router.remotePort < 30000 || router.remotePort > 30100) {
-      updateData.remotePort = Math.floor(Math.random() * 100) + 30000
+    if (!router.remotePort || router.remotePort < 31000 || router.remotePort > 31100) {
+      updateData.remotePort = Math.floor(Math.random() * 100) + 31000
       updated = true
     }
     if (!router.remoteSstpIp) {
@@ -1708,9 +1708,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const remoteToken = router.remoteToken || randomUUID()
-    const remotePort = (router.remotePort && router.remotePort >= 30000 && router.remotePort <= 30100)
+    const remotePort = (router.remotePort && router.remotePort >= 31000 && router.remotePort <= 31100)
       ? router.remotePort
-      : Math.floor(Math.random() * 100) + 30000
+      : Math.floor(Math.random() * 100) + 31000
     const remoteSstpIp = router.remoteSstpIp || `10.8.0.${Math.floor(Math.random() * 250) + 2}`
 
     const updatedRouter = await this.prisma.router.update({
