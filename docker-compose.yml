@@ -83,7 +83,7 @@ services:
         condition: service_healthy
     mem_limit: 64m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -104,7 +104,7 @@ services:
         condition: service_healthy
     mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -123,7 +123,7 @@ services:
         condition: service_healthy
     mem_limit: 384m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -142,7 +142,7 @@ services:
         condition: service_healthy
     mem_limit: 320m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/portal 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/portal 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
