@@ -1,7 +1,16 @@
-// One-off script to create/update a single SuperAdmin user without touching
-// anything else in the database. Safe to run against production -- unlike
-// seed.ts, this does NOT create demo tenants, routers, vouchers, or sample
-// billing data.
+// One-off script to create/update a single platform-level developer admin
+// without touching anything else in the database. Safe to run against
+// production -- unlike seed.ts, this does NOT create demo tenants, routers,
+// vouchers, or sample billing data.
+//
+// tenantId is intentionally left null: authorization (both
+// apps/admin-web/src/lib/workspace.ts's isPlatformAdmin/isVendorWorkspace and
+// apps/api's AccessScopeService.isSuperAdmin/resolveTenantScope) gates on
+// role/permissions ('SuperAdmin' / 'ALL'), not on tenantId. But
+// resolveTenantScope falls back to `requestedTenantId ?? user.tenantId` --
+// if this user had a real tenantId, any caller that forgets to pass
+// requestedTenantId would silently scope to that one tenant instead of
+// seeing/operating platform-wide. null makes that fallback a no-op.
 //
 // Usage:
 //   ADMIN_EMAIL=admin@arofi.net ADMIN_PASSWORD_HASH='$2a$12$...' npx tsx prisma/create-admin.ts
@@ -23,18 +32,12 @@ async function main() {
     create: { name: 'SuperAdmin', permissions: ['ALL'] },
   })
 
-  const masterTenant = await prisma.tenant.upsert({
-    where: { domain: 'arosoft.io' },
-    update: { name: 'AROSOFT Master Tenant' },
-    create: { name: 'AROSOFT Master Tenant', domain: 'arosoft.io' },
-  })
-
   const user = await prisma.user.upsert({
     where: { email },
     update: {
       password: passwordHash,
       roleId: superAdminRole.id,
-      tenantId: masterTenant.id,
+      tenantId: null,
     },
     create: {
       email,
@@ -42,11 +45,11 @@ async function main() {
       firstName: 'System',
       lastName: 'Administrator',
       roleId: superAdminRole.id,
-      tenantId: masterTenant.id,
+      tenantId: null,
     },
   })
 
-  console.log(`SuperAdmin user ready: ${user.email} (id: ${user.id})`)
+  console.log(`Platform devadmin ready: ${user.email} (id: ${user.id}, tenantId: ${user.tenantId})`)
 }
 
 main()
