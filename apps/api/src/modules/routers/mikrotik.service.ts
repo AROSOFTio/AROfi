@@ -13,6 +13,7 @@ type ProvisioningInput = {
   apiPort: number
   connectionMode: RouterConnectionMode
   radiusHost: string
+  radiusSecondaryHost?: string
   radiusAuthPort: number
   radiusAccountingPort: number
   sharedSecret: string
@@ -123,12 +124,18 @@ export class MikrotikService {
       sharedSecret ??
       this.configService.get<string>('RADIUS_SHARED_SECRET') ??
       ''
+    // Optional standby FreeRADIUS instance on the same shared secret. RouterOS
+    // natively supports multiple `/radius add service=hotspot` entries and
+    // fails over to the next one if the first stops answering — no extra
+    // logic needed on the router side, just a second config line.
+    const secondaryHost = this.configService.get<string>('RADIUS_SECONDARY_HOST') || undefined
 
     return {
       host,
       authPort,
       accountingPort,
       sharedSecret: secret,
+      secondaryHost,
     }
   }
 
@@ -195,7 +202,15 @@ export class MikrotikService {
       ``,
       `# 2. AROFi RADIUS server for HotSpot auth + accounting`,
       `/radius remove [find where comment="AROFi ${this.escape(registrationKey)}"]`,
+      `/radius remove [find where comment="AROFi ${this.escape(registrationKey)} standby"]`,
       `/radius add service=hotspot address=${input.radiusHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=5s comment="AROFi ${this.escape(registrationKey)}"`,
+      ...(input.radiusSecondaryHost
+        ? [
+            // Same secret, second host: RouterOS tries entries in order and
+            // fails over automatically if the primary stops responding.
+            `/radius add service=hotspot address=${input.radiusSecondaryHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=5s comment="AROFi ${this.escape(registrationKey)} standby"`,
+          ]
+        : []),
       `:do { /radius incoming set accept=yes } on-error={}`,
     ]
 

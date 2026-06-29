@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
+import type { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -84,6 +85,44 @@ export class AgentsController {
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.agentsService.createSettlement(agentId, dto, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsRead)
+  @Get('disbursements/export.csv')
+  async exportDisbursementsCsv(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Res() response: Response,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    const file = await this.agentsService.exportDisbursementsCsv(scopedTenantId)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @Post('settlements/:settlementId/cancel')
+  cancelSettlement(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('settlementId') settlementId: string,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.agentsService.cancelSettlement(settlementId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.disbursementsRead)
+  @Get('settlements/:settlementId/receipt.pdf')
+  async getSettlementReceipt(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('settlementId') settlementId: string,
+    @Res() response: Response,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    const file = await this.agentsService.renderSettlementReceipt(settlementId, tenantId)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)

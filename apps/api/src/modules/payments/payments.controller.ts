@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Throttle } from '@nestjs/throttler'
+import type { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -24,6 +26,23 @@ export class PaymentsController {
     return this.paymentsService.getOverview(scopedTenantId)
   }
 
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.paymentsRead)
+  @Get('export.csv')
+  async exportPaymentsCsv(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Res() response: Response,
+    @Query('tenantId') tenantId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    const file = await this.paymentsService.exportPaymentsCsv(scopedTenantId, from, to)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
+  }
+
   @Get('portal/context')
   getPortalContext(
     @Query('tenantDomain') tenantDomain?: string,
@@ -32,6 +51,7 @@ export class PaymentsController {
     return this.paymentsService.getPortalContext(tenantDomain, phoneNumber)
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('portal/initiate')
   initiatePortalPayment(@Body() dto: InitiatePortalPaymentDto) {
     return this.paymentsService.initiatePortalPayment(dto)

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+# Manual VPS deployment: plain Docker Compose on a bare server, no Coolify and
+# no control panel required.
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-/www/wwwroot/arofi.arosoft.io}"
+PROJECT_DIR="${PROJECT_DIR:-/opt/arofi}"
 ENV_FILE="${PROJECT_DIR}/.env"
 SEED_DATABASE="false"
 
@@ -36,15 +38,14 @@ create_env_if_missing() {
     return
   fi
 
-  if [ ! -f ".env.aapanel.example" ]; then
-    echo ".env is missing and .env.aapanel.example was not found."
+  if [ ! -f ".env.vps.example" ]; then
+    echo ".env is missing and .env.vps.example was not found."
     exit 1
   fi
 
-  cp .env.aapanel.example "$ENV_FILE"
+  cp .env.vps.example "$ENV_FILE"
 
   sed -i "s/CHANGE_ME_STRONG_POSTGRES_PASSWORD/$(random_secret)/g" "$ENV_FILE"
-  sed -i "s/CHANGE_ME_STRONG_REDIS_PASSWORD/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_JWT_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_PORTAL_TOKEN_SECRET/$(random_secret)/g" "$ENV_FILE"
   sed -i "s/CHANGE_ME_64_CHAR_RANDOM_ROUTER_SECRET/$(random_secret)/g" "$ENV_FILE"
@@ -72,7 +73,6 @@ require_env_value() {
 create_env_if_missing
 
 require_env_value POSTGRES_PASSWORD
-require_env_value REDIS_PASSWORD
 require_env_value JWT_SECRET
 require_env_value PORTAL_TOKEN_SECRET
 require_env_value ROUTER_CREDENTIAL_SECRET
@@ -95,7 +95,7 @@ echo "Building AROFi images..."
 compose build --no-cache
 
 echo "Starting database services..."
-compose up -d postgres redis
+compose up -d postgres
 
 echo "Applying database migrations..."
 compose run --rm api npx prisma migrate deploy
@@ -115,7 +115,8 @@ echo "Current containers:"
 compose ps
 
 echo
-echo "Done. In aaPanel, reverse proxy arofi.arosoft.io to:"
+echo "Done. Point your reverse proxy (Nginx/Apache/host control panel) for"
+echo "arofi.arosoft.io to:"
 echo "  http://127.0.0.1:4012"
 echo
 echo "Useful checks:"

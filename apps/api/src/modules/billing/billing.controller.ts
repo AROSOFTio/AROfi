@@ -1,4 +1,5 @@
-import { Body, Controller, ForbiddenException, Get, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, ForbiddenException, Get, Post, Query, Res, UseGuards } from '@nestjs/common'
+import type { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -46,6 +47,36 @@ export class BillingController {
   getTransactions(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.billingService.getTransactions(scopedTenantId, query)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingRead)
+  @Get('sales/export.csv')
+  async exportSalesCsv(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Res() response: Response,
+    @Query('tenantId') tenantId?: string,
+    @Query() query?: BillingReportFilters,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    const file = await this.billingService.exportSalesCsv(scopedTenantId, query)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingRead)
+  @Get('transactions/export.csv')
+  async exportTransactionsCsv(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Res() response: Response,
+    @Query('tenantId') tenantId?: string,
+    @Query() query?: BillingReportFilters,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    const file = await this.billingService.exportTransactionsCsv(scopedTenantId, query)
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)

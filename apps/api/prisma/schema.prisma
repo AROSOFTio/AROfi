@@ -397,6 +397,41 @@ model Tenant {
   payoutNumbers       TenantPayoutNumber[]
   payoutNumberChangeRequests TenantPayoutNumberChangeRequest[]
   disconnectionAttempts DisconnectionAttempt[]
+  kycDocuments        KycDocument[]
+}
+
+enum KycDocumentType {
+  BUSINESS_REGISTRATION
+  OWNER_ID
+  PROOF_OF_ADDRESS
+  OTHER
+}
+
+enum KycDocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model KycDocument {
+  id           String            @id @default(uuid())
+  tenantId     String
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+  documentType KycDocumentType
+  fileName     String
+  mimeType     String
+  fileSize     Int
+  fileData     Bytes
+  status       KycDocumentStatus @default(PENDING)
+  uploadedById String?
+  reviewedById String?
+  reviewNotes  String?
+  reviewedAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
 }
 
 model PlatformSetting {
@@ -463,6 +498,19 @@ model User {
   updatedAt              DateTime          @updatedAt
   generatedVoucherBatches VoucherBatch[]   @relation("VoucherBatchGenerator")
   voucherRedemptions     VoucherRedemption[] @relation("VoucherRedemptionActor")
+  refreshTokens          RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, revokedAt])
 }
 
 model Agent {

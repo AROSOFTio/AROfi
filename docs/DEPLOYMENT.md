@@ -42,7 +42,25 @@ AROFi enforces MAC binding, `Simultaneous-Use := 1`, MikroTik `shared-users=1`, 
 
 ## Database Backup and Restore
 
-### Backup (run daily via cron)
+### Automated offsite backups
+
+The `backup` service in `docker-compose.yml` runs continuously alongside the stack (see `config/backup/`). It dumps Postgres every `BACKUP_INTERVAL_SECONDS` (default 24h), gzips it, and — if `BACKUP_S3_BUCKET` is set — uploads it to any S3-compatible bucket (AWS S3, Backblaze B2, DigitalOcean Spaces, Cloudflare R2, MinIO). Set these in `.env`:
+
+```
+BACKUP_S3_BUCKET=your-bucket-name
+BACKUP_S3_ACCESS_KEY_ID=...
+BACKUP_S3_SECRET_ACCESS_KEY=...
+BACKUP_S3_REGION=us-east-1          # omit/irrelevant for non-AWS endpoints
+BACKUP_S3_ENDPOINT=                  # only needed for non-AWS S3-compatible providers
+BACKUP_RETENTION_DAYS=14             # local copies older than this are pruned
+BACKUP_INTERVAL_SECONDS=86400
+```
+
+If `BACKUP_S3_BUCKET` is left empty, backups are still taken but stay local-only inside the `backup-data` volume — the container logs a warning every cycle so this isn't silently missed. **Set the S3 variables before going live**; a local-only backup doesn't protect against the VPS itself being lost.
+
+Check it's running: `docker compose logs -f backup`
+
+### Manual one-off backup
 
 ```sh
 docker compose exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
@@ -54,4 +72,18 @@ docker compose exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB | gzip > bac
 gunzip -c backup_YYYYMMDD_HHMMSS.sql.gz | docker compose exec -T postgres psql -U $POSTGRES_USER $POSTGRES_DB
 ```
 
-Store backups offsite (S3, Google Cloud Storage, or similar). Test restore at least once before going live.
+Test a real restore at least once before going live — an untested backup is not a backup.
+
+## High Availability
+
+**FreeRADIUS:** set `RADIUS_SECONDARY_HOST` to a second FreeRADIUS instance's address (same `RADIUS_SHARED_SECRET`, same SQL backend) and every router's provisioning script automatically gets a backup RADIUS entry — MikroTik fails over to it natively if the primary stops responding. This only helps if both instances point at a healthy Postgres, though; it doesn't make Postgres itself redundant. Re-run provisioning on existing routers after setting this for it to take effect.
+
+**Postgres:** there is currently no replication or automatic failover — a single Postgres container backs the whole stack. If it goes down, FreeRADIUS can't authenticate anyone (new or already-paying customers), regardless of how many FreeRADIUS instances exist. This is a real architectural gap, not yet closed in this repo, and closing it is an infrastructure decision rather than a code change:
+- **Managed Postgres** (AWS RDS, DigitalOcean Managed DB, Supabase, Neon, etc.) — handles replication/failover for you, costs more, least ops work.
+- **Self-hosted streaming replication** (a read replica you manually promote on failure) — cheaper, but failover isn't automatic; you need a runbook and someone on call.
+- **Self-hosted automated failover** (Patroni + etcd/Consul) — no ongoing cost beyond hardware, but meaningfully more to operate and get right.
+- **Accept the risk for now** — the automated backups and Sentry error monitoring above are the mitigation: you lose at most one backup interval of data and find out fast when Postgres is unhealthy, but uptime isn't guaranteed.
+
+## Error Monitoring
+
+Set `SENTRY_DSN` in `.env` to get notified when something breaks in production instead of finding out from a customer complaint. Without it, the API runs exactly as before — Sentry is a no-op when the DSN is unset. Get a free DSN at sentry.io, create a Node project, and paste the DSN in.

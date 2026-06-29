@@ -39,8 +39,16 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
 
+      - name: Run tests
+        run: npx turbo run test --cache-dir=.turbo
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
+
   deploy:
     name: Deploy to Production
+    # Tests are a real gate, not a formality: this job will not run, and
+    # production will not be touched, unless build-verify (build + test) passes.
     needs: [build-verify]
     runs-on: ubuntu-latest
 

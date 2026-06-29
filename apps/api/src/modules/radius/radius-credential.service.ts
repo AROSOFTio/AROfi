@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import {
   PackageActivationStatus,
   Prisma,
@@ -17,6 +17,8 @@ type ProvisionInput = {
 
 @Injectable()
 export class RadiusCredentialService {
+  private readonly logger = new Logger(RadiusCredentialService.name)
+
   async provisionForActivation(tx: Prisma.TransactionClient, input: ProvisionInput) {
     const activation = await tx.packageActivation.findUnique({
       where: { id: input.activationId },
@@ -124,8 +126,8 @@ export class RadiusCredentialService {
       }
 
       await tx.radReply.createMany({ data: replies })
-      console.log(
-        `[RADIUS] Provisioned username=${username} activationId=${activation.id} expiresAt=${activation.endsAt.toISOString()}`,
+      this.logger.log(
+        `Provisioned username=${username} activationId=${activation.id} expiresAt=${activation.endsAt.toISOString()}`,
       )
     }
 

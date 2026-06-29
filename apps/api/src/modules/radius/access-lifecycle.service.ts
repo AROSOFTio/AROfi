@@ -14,6 +14,7 @@ import {
   BillingTransactionStatus,
 } from '@prisma/client'
 import { execSync, spawn } from 'child_process'
+import * as Sentry from '@sentry/node'
 import { PrismaService } from '../../prisma.service'
 import { MailService } from '../mail/mail.service'
 import { RadiusCredentialService } from './radius-credential.service'
@@ -105,6 +106,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     await this.cleanStaleSessions()
     await this.markStuckPendingPayments()
     await this.pollPendingDisbursements()
+    await this.reconcileOrphanedPayments()
   }
 
   private async cleanupExpiredRadiusCredentials() {
@@ -674,6 +676,63 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         endedAt: new Date(),
       },
     })
+  }
+
+  // Safety net for a webhook-processing bug: a customer paid (status COMPLETED)
+  // but no PackageActivation was ever created, so they were charged with no
+  // internet access. Gives webhook handling a 5-minute grace window before
+  // flagging, and dedupes via AuditLog so each orphan is only reported once.
+  private async reconcileOrphanedPayments() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const graceWindow = new Date(Date.now() - 5 * 60 * 1000)
+
+    const orphaned = await this.prisma.payment.findMany({
+      where: {
+        status: PaymentStatus.COMPLETED,
+        activation: null,
+        completedAt: { gte: cutoff, lte: graceWindow },
+      },
+      take: 25,
+    })
+
+    for (const payment of orphaned) {
+      const alreadyFlagged = await this.prisma.auditLog.findFirst({
+        where: { entity: 'Payment', entityId: payment.id, action: 'payment.orphaned' },
+        select: { id: true },
+      })
+      if (alreadyFlagged) {
+        continue
+      }
+
+      this.logger.error(
+        `ORPHANED PAYMENT: ${payment.id} (${payment.externalReference}) is COMPLETED but has no activation. The customer may have been charged without receiving access. Investigate immediately.`,
+      )
+      Sentry.captureMessage(`Orphaned payment: completed with no activation (${payment.externalReference})`, {
+        level: 'error',
+        extra: {
+          paymentId: payment.id,
+          tenantId: payment.tenantId,
+          amountUgx: payment.amountUgx,
+          phoneNumber: payment.phoneNumber,
+        },
+      })
+
+      await this.prisma.auditLog.create({
+        data: {
+          tenantId: payment.tenantId,
+          action: 'payment.orphaned',
+          entity: 'Payment',
+          entityId: payment.id,
+          severity: 'CRITICAL',
+          details: {
+            externalReference: payment.externalReference,
+            amountUgx: payment.amountUgx,
+            phoneNumber: payment.phoneNumber,
+            completedAt: payment.completedAt?.toISOString(),
+          },
+        },
+      })
+    }
   }
 
   private async markStuckPendingPayments() {

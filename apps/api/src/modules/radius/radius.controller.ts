@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, UnauthorizedException, UseGuards } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { Throttle } from '@nestjs/throttler'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -26,12 +27,14 @@ export class RadiusController {
     return this.radiusService.getOverview(scopedTenantId)
   }
 
+  @Throttle({ default: { ttl: 1_000, limit: 50 } })
   @Post('auth-events')
   recordAuthEvent(@Body() dto: RecordRadiusAuthEventDto, @Headers('x-radius-api-key') apiKey?: string) {
     this.assertInternalRadiusAccess(apiKey)
     return this.radiusService.recordAuthEvent(dto)
   }
 
+  @Throttle({ default: { ttl: 1_000, limit: 50 } })
   @Post('accounting-events')
   recordAccountingEvent(@Body() dto: RecordRadiusAccountingEventDto, @Headers('x-radius-api-key') apiKey?: string) {
     this.assertInternalRadiusAccess(apiKey)

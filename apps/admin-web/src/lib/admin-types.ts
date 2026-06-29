@@ -3,6 +3,19 @@ export type TenantSummary = {
   name: string
 }
 
+export type KycDocumentItem = {
+  id: string
+  documentType: 'BUSINESS_REGISTRATION' | 'OWNER_ID' | 'PROOF_OF_ADDRESS' | 'OTHER'
+  fileName: string
+  mimeType: string
+  fileSize: number
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  reviewNotes?: string | null
+  reviewedAt?: string | null
+  createdAt: string
+  tenant: TenantSummary
+}
+
 export type VoucherTenantSummary = TenantSummary & {
   domain?: string | null
   supportPhone?: string | null

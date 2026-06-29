@@ -608,6 +608,64 @@ export class BillingService {
     }
   }
 
+  async exportSalesCsv(tenantId?: string, filters: BillingReportFilters = {}) {
+    const { items } = await this.getSales(tenantId, filters)
+    return {
+      filename: `sales-${Date.now()}.csv`,
+      contentType: 'text/csv',
+      buffer: Buffer.from(
+        this.toCsv(
+          ['date', 'tenant', 'type', 'channel', 'status', 'package', 'customerReference', 'grossUgx', 'feeUgx', 'netUgx', 'externalReference'],
+          items.map((item) => [
+            item.createdAt.toISOString(),
+            item.tenant.name,
+            item.type,
+            item.channel,
+            item.status,
+            item.package?.name ?? '',
+            item.customerReference ?? '',
+            item.grossAmountUgx,
+            item.feeAmountUgx,
+            item.netAmountUgx,
+            item.externalReference ?? '',
+          ]),
+        ),
+        'utf-8',
+      ),
+    }
+  }
+
+  async exportTransactionsCsv(tenantId?: string, filters: BillingReportFilters = {}) {
+    const { items } = await this.getTransactions(tenantId, filters)
+    return {
+      filename: `ledger-${Date.now()}.csv`,
+      contentType: 'text/csv',
+      buffer: Buffer.from(
+        this.toCsv(
+          ['date', 'tenant', 'type', 'channel', 'status', 'grossUgx', 'feeUgx', 'netUgx', 'paymentProvider', 'externalReference'],
+          items.map((item) => [
+            item.createdAt.toISOString(),
+            item.tenant.name,
+            item.type,
+            item.channel,
+            item.status,
+            item.grossAmountUgx,
+            item.feeAmountUgx,
+            item.netAmountUgx,
+            item.paymentProvider ?? '',
+            item.externalReference ?? '',
+          ]),
+        ),
+        'utf-8',
+      ),
+    }
+  }
+
+  private toCsv(headers: string[], rows: Array<Array<string | number>>) {
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    return [headers.map(escape).join(','), ...rows.map((row) => row.map(escape).join(','))].join('\n')
+  }
+
   private buildTenantWhere(tenantId?: string) {
     return tenantId ? { tenantId } : undefined
   }

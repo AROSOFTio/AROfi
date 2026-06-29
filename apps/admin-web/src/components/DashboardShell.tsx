@@ -3,9 +3,15 @@
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import type { AdminSessionResponse } from '@/lib/admin-types'
+import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
 import Sidebar from './Sidebar'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
+
+// The access token expires in 1h; refreshing every 45min while the tab stays
+// open means an active user never sees a forced logout, and it keeps the
+// cookie SSR reads fresh too (server components can't refresh it themselves).
+const ACCESS_TOKEN_REFRESH_INTERVAL_MS = 45 * 60 * 1000
 
 type DashboardShellProps = {
   children: React.ReactNode
@@ -28,6 +34,13 @@ export default function DashboardShell({ children, initials, session, workspaceT
     document.body.classList.toggle('mobile-nav-locked', menuOpen)
     return () => document.body.classList.remove('mobile-nav-locked')
   }, [menuOpen])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshAccessToken()
+    }, ACCESS_TOKEN_REFRESH_INTERVAL_MS)
+    return () => window.clearInterval(interval)
+  }, [])
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>

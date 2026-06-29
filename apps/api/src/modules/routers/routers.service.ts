@@ -930,6 +930,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       apiPort: router.apiPort,
       connectionMode: router.connectionMode,
       radiusHost: radiusServer.host,
+      radiusSecondaryHost: radiusServer.secondaryHost,
       radiusAuthPort: radiusServer.authPort,
       radiusAccountingPort: radiusServer.accountingPort,
       sharedSecret,
@@ -1636,6 +1637,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       '*.pesapal.com',
       'sandbox.momodeveloper.mtn.com',
       'proxy.momoapi.mtn.com',
+      'paymentsapi1.yo.co.ug',
     ].filter((value): value is string => Boolean(value))
 
     return Array.from(new Set([...configured, ...envHosts]))

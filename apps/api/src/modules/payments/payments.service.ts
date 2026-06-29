@@ -128,6 +128,50 @@ export class PaymentsService {
     private readonly whatsAppService: WhatsAppService,
   ) {}
 
+  async exportPaymentsCsv(tenantId?: string, from?: string, to?: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : {}),
+      },
+      include: this.paymentInclude,
+      orderBy: { createdAt: 'desc' },
+      take: 50_000,
+    })
+
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    const headers = ['date', 'tenant', 'phoneNumber', 'package', 'provider', 'network', 'status', 'amountUgx', 'externalReference', 'providerReference']
+    const rows = payments.map((payment) =>
+      [
+        payment.createdAt.toISOString(),
+        payment.tenant.name,
+        payment.phoneNumber,
+        payment.package?.name ?? '',
+        payment.provider,
+        payment.network,
+        payment.status,
+        payment.amountUgx,
+        payment.externalReference ?? '',
+        payment.providerReference ?? '',
+      ]
+        .map(escape)
+        .join(','),
+    )
+
+    return {
+      filename: `payments-${Date.now()}.csv`,
+      contentType: 'text/csv',
+      buffer: Buffer.from([headers.map(escape).join(','), ...rows].join('\n'), 'utf-8'),
+    }
+  }
+
   async getOverview(tenantId?: string) {
     const [payments, recentLogs, activeActivations] = await Promise.all([
       this.prisma.payment.findMany({

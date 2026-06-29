@@ -13,6 +13,7 @@ import {
   WalletOwnerType,
 } from '@prisma/client'
 import { randomUUID } from 'crypto'
+import PDFDocument = require('pdfkit')
 import { PrismaService } from '../../prisma.service'
 import { BillingPostingService } from '../billing/billing-posting.service'
 import { LEDGER_ACCOUNTS } from '../billing/billing.constants'
@@ -545,6 +546,159 @@ export class AgentsService {
         },
       })
     })
+  }
+
+  async cancelSettlement(settlementId: string, tenantId?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const settlement = await tx.settlement.findUnique({
+        where: { id: settlementId },
+        include: { disbursements: true },
+      })
+
+      if (!settlement || (tenantId && settlement.tenantId !== tenantId)) {
+        throw new NotFoundException('Settlement not found')
+      }
+
+      if (settlement.status !== SettlementStatus.DRAFT && settlement.status !== SettlementStatus.READY) {
+        throw new BadRequestException('Only draft or ready settlements can be cancelled')
+      }
+
+      const hasLiveDisbursement = settlement.disbursements.some(
+        (disbursement) =>
+          disbursement.status !== DisbursementStatus.FAILED && disbursement.status !== DisbursementStatus.CANCELLED,
+      )
+      if (hasLiveDisbursement) {
+        throw new BadRequestException('Cannot cancel a settlement that already has disbursements posted against it')
+      }
+
+      // Release the batched commissions so they can be picked up by a future settlement run.
+      await tx.agentCommission.updateMany({
+        where: { settlementId: settlement.id },
+        data: { settlementId: null },
+      })
+
+      return tx.settlement.update({
+        where: { id: settlement.id },
+        data: { status: SettlementStatus.CANCELLED },
+        include: {
+          tenant: { select: { id: true, name: true } },
+          agent: { select: { id: true, code: true, name: true, phoneNumber: true } },
+          disbursements: { orderBy: { createdAt: 'desc' } },
+        },
+      })
+    })
+  }
+
+  async renderSettlementReceipt(settlementId: string, tenantId?: string) {
+    const settlement = await this.prisma.settlement.findUnique({
+      where: { id: settlementId },
+      include: {
+        tenant: { select: { id: true, name: true } },
+        agent: { select: { id: true, code: true, name: true, phoneNumber: true } },
+        disbursements: { orderBy: { createdAt: 'asc' } },
+      },
+    })
+
+    if (!settlement || (tenantId && settlement.tenantId !== tenantId)) {
+      throw new NotFoundException('Settlement not found')
+    }
+
+    const disbursedAmountUgx = settlement.disbursements
+      .filter((disbursement) => disbursement.status === DisbursementStatus.COMPLETED)
+      .reduce((total, disbursement) => total + disbursement.amountUgx, 0)
+    const remainingUgx = settlement.payableAmountUgx - disbursedAmountUgx
+    const ugx = (value: number) => `UGX ${value.toLocaleString('en-US')}`
+    const isoDate = (value: Date) => value.toISOString().slice(0, 10)
+
+    const doc = new PDFDocument({ size: 'A4', margin: 40 })
+    const chunks: Buffer[] = []
+    doc.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))))
+
+    doc.fontSize(18).fillColor('#0F172A').text('Settlement Statement')
+    doc.fontSize(10).fillColor('#64748B').text(settlement.tenant.name)
+    doc.moveDown(1)
+
+    doc.fontSize(11).fillColor('#0F172A')
+    doc.text(`Reference: ${settlement.reference}`)
+    doc.text(`Agent: ${settlement.agent.name} (${settlement.agent.code})`)
+    doc.text(`Phone: ${settlement.agent.phoneNumber}`)
+    doc.text(`Period: ${isoDate(settlement.periodStart)} to ${isoDate(settlement.periodEnd)}`)
+    doc.text(`Status: ${settlement.status}`)
+    doc.moveDown(1)
+
+    doc.fontSize(12).fillColor('#0F172A').text('Summary')
+    doc.fontSize(10).fillColor('#334155')
+    doc.text(`Gross sales: ${ugx(settlement.grossSalesUgx)}`)
+    doc.text(`Commission earned: ${ugx(settlement.commissionsUgx)}`)
+    doc.text(`Payable amount: ${ugx(settlement.payableAmountUgx)}`)
+    doc.text(`Disbursed so far: ${ugx(disbursedAmountUgx)}`)
+    doc.text(`Remaining balance: ${ugx(remainingUgx)}`)
+    doc.moveDown(1)
+
+    doc.fontSize(12).fillColor('#0F172A').text('Disbursements')
+    doc.moveDown(0.3)
+    if (settlement.disbursements.length === 0) {
+      doc.fontSize(10).fillColor('#64748B').text('No disbursements have been posted against this settlement yet.')
+    } else {
+      for (const disbursement of settlement.disbursements) {
+        const when = isoDate(disbursement.completedAt ?? disbursement.createdAt)
+        doc
+          .fontSize(9)
+          .fillColor('#334155')
+          .text(
+            `${disbursement.reference}  |  ${disbursement.method}  |  ${ugx(disbursement.amountUgx)}  |  ${disbursement.status}  |  ${when}`,
+          )
+      }
+    }
+    doc.moveDown(1.5)
+    doc.fontSize(8).fillColor('#94A3B8').text('Generated by AROFi - arosoftlabs.com', { align: 'center' })
+
+    doc.end()
+    const buffer = await done
+
+    return {
+      filename: `${settlement.reference}-statement.pdf`,
+      contentType: 'application/pdf',
+      buffer,
+    }
+  }
+
+  async exportDisbursementsCsv(tenantId?: string) {
+    const disbursements = await this.prisma.disbursement.findMany({
+      where: tenantId ? { tenantId } : undefined,
+      include: {
+        tenant: { select: { id: true, name: true } },
+        agent: { select: { id: true, code: true, name: true } },
+        settlement: { select: { id: true, reference: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50_000,
+    })
+
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    const headers = ['date', 'tenant', 'agent', 'settlement', 'reference', 'method', 'status', 'amountUgx', 'destinationReference']
+    const rows = disbursements.map((disbursement) =>
+      [
+        (disbursement.completedAt ?? disbursement.createdAt).toISOString(),
+        disbursement.tenant.name,
+        disbursement.agent?.name ?? 'Vendor wallet',
+        disbursement.settlement?.reference ?? '',
+        disbursement.reference,
+        disbursement.method,
+        disbursement.status,
+        disbursement.amountUgx,
+        disbursement.destinationReference ?? '',
+      ]
+        .map(escape)
+        .join(','),
+    )
+
+    return {
+      filename: `disbursements-${Date.now()}.csv`,
+      contentType: 'text/csv',
+      buffer: Buffer.from([headers.map(escape).join(','), ...rows].join('\n'), 'utf-8'),
+    }
   }
 
   async createDisbursement(agentId: string, dto: CreateDisbursementDto, tenantId?: string) {

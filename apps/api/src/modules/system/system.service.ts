@@ -3,6 +3,7 @@ import {
   AgentStatus,
   AuditSeverity,
   FeatureLimit,
+  KycDocumentType,
   PaymentNetwork,
   PaymentProvider,
   PackageStatus,
@@ -883,5 +884,127 @@ export class SystemService {
 
   private toJsonValue(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue
+  }
+
+  async uploadKycDocument(
+    tenantId: string,
+    uploadedById: string,
+    documentType: string,
+    file: { originalname: string; mimetype: string; size: number; buffer: Buffer },
+  ) {
+    const allowedTypes = Object.values(KycDocumentType)
+    if (!allowedTypes.includes(documentType as KycDocumentType)) {
+      throw new BadRequestException(`documentType must be one of: ${allowedTypes.join(', ')}`)
+    }
+
+    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png']
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF, JPEG, or PNG files are accepted')
+    }
+
+    const maxBytes = 8 * 1024 * 1024
+    if (file.size > maxBytes) {
+      throw new BadRequestException('File must be 8MB or smaller')
+    }
+
+    const document = await this.prisma.kycDocument.create({
+      data: {
+        tenantId,
+        documentType: documentType as KycDocumentType,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        fileData: file.buffer,
+        uploadedById,
+      },
+      select: {
+        id: true,
+        documentType: true,
+        fileName: true,
+        mimeType: true,
+        fileSize: true,
+        status: true,
+        createdAt: true,
+      },
+    })
+
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId: uploadedById,
+        action: 'kyc.document_uploaded',
+        entity: 'KycDocument',
+        entityId: document.id,
+        details: { documentType, fileName: file.originalname },
+      },
+    })
+
+    return document
+  }
+
+  async listKycDocuments(tenantId?: string) {
+    return this.prisma.kycDocument.findMany({
+      where: tenantId ? { tenantId } : undefined,
+      select: {
+        id: true,
+        documentType: true,
+        fileName: true,
+        mimeType: true,
+        fileSize: true,
+        status: true,
+        reviewNotes: true,
+        reviewedAt: true,
+        createdAt: true,
+        tenant: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  async getKycDocumentFile(documentId: string, tenantId?: string) {
+    const document = await this.prisma.kycDocument.findUnique({ where: { id: documentId } })
+    if (!document || (tenantId && document.tenantId !== tenantId)) {
+      throw new NotFoundException('Document not found')
+    }
+    return document
+  }
+
+  async reviewKycDocument(documentId: string, reviewerId: string, approve: boolean, notes?: string) {
+    const document = await this.prisma.kycDocument.findUnique({ where: { id: documentId } })
+    if (!document) {
+      throw new NotFoundException('Document not found')
+    }
+
+    const updated = await this.prisma.kycDocument.update({
+      where: { id: documentId },
+      data: {
+        status: approve ? 'APPROVED' : 'REJECTED',
+        reviewedById: reviewerId,
+        reviewNotes: notes?.trim() || null,
+        reviewedAt: new Date(),
+      },
+      select: {
+        id: true,
+        documentType: true,
+        status: true,
+        reviewNotes: true,
+        reviewedAt: true,
+        tenantId: true,
+      },
+    })
+
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId: updated.tenantId,
+        userId: reviewerId,
+        action: approve ? 'kyc.document_approved' : 'kyc.document_rejected',
+        entity: 'KycDocument',
+        entityId: updated.id,
+        severity: approve ? 'INFO' : 'WARNING',
+        details: { notes: notes?.trim() || null },
+      },
+    })
+
+    return updated
   }
 }

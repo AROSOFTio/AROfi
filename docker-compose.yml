@@ -43,7 +43,8 @@ x-app-env: &app-env
   RADIUS_PUBLIC_HOST: ${RADIUS_PUBLIC_HOST:-167.233.68.36}
   RADIUS_AUTH_PORT: ${RADIUS_AUTH_PORT:-1812}
   RADIUS_ACCOUNTING_PORT: ${RADIUS_ACCOUNTING_PORT:-1813}
-  RADIUS_DISCONNECT_ENABLED: ${RADIUS_DISCONNECT_ENABLED:-false}
+  RADIUS_SECONDARY_HOST: ${RADIUS_SECONDARY_HOST:-}
+  RADIUS_DISCONNECT_ENABLED: ${RADIUS_DISCONNECT_ENABLED:-true}
   PAYMENT_CUSTOMER_LABEL: ${PAYMENT_CUSTOMER_LABEL:-Pay}
   PAYMENT_DEFAULT_CURRENCY: ${PAYMENT_DEFAULT_CURRENCY:-UGX}
   MTN_COLLECTION_PROVIDER: ${MTN_COLLECTION_PROVIDER:-AGGREGATOR}
@@ -56,6 +57,9 @@ x-app-env: &app-env
   PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
   PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
   PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://arofi.arosoftlabs.com/portal}
+  WHATSAPP_GATEWAY_URL: ${WHATSAPP_GATEWAY_URL:-http://whatsapp:3000}
+  WHATSAPP_GATEWAY_API_KEY: ${WHATSAPP_GATEWAY_API_KEY:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
   # SSR calls from admin-web go straight to the api container on the compose
   # network instead of 127.0.0.1 (which only worked inside the old single
   # all-in-one container).
@@ -164,5 +168,48 @@ services:
       timeout: 5s
       retries: 5
 
+  whatsapp:
+    image: devlikeapro/waha:latest
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    environment:
+      - WAHA_PRINT_QR=true
+      - WAHA_SECURITY_API_KEY=${WHATSAPP_GATEWAY_API_KEY:-}
+    volumes:
+      - wa-sessions:/app/.sessions
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backup:
+    build:
+      context: .
+      dockerfile: config/backup/Dockerfile
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-arofi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-arofi}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_PREFIX: ${BACKUP_S3_PREFIX:-arofi}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-us-east-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backup-data:/backups
+    mem_limit: 128m
+
 volumes:
   pg-data:
+  wa-sessions:
+  backup-data:

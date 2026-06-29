@@ -67,10 +67,10 @@ docker compose exec -T api npx prisma db seed
 > docker exec -i lfoov1ia8jygka7ubtjlemms env PGPASSWORD=your_postgres_password psql -U AROfi -d postgres -c "INSERT INTO \"User\" ... "
 > ```
 
-### Step 6: Configure aaPanel / Nginx Reverse Proxy
+### Step 6: Configure Nginx Reverse Proxy
 By default, Docker Compose exposes AROFi on host port `4012` (via Nginx). 
 To bind it to a domain (e.g., `arofi.yourdomain.com`):
-1. In aaPanel or your native system Nginx config, create a new site for `arofi.yourdomain.com`.
+1. In your native system Nginx config (or control panel of choice), create a new site for `arofi.yourdomain.com`.
 2. Set up an SSL Certificate (e.g., Let's Encrypt).
 3. Configure a **Reverse Proxy** routing traffic to:
    * Target URL: `http://127.0.0.1:4012`

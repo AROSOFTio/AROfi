@@ -6,6 +6,7 @@ import {
   Module,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common'
@@ -13,11 +14,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { JwtModule, JwtService } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
 import { PassportStrategy } from '@nestjs/passport'
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 import * as bcrypt from 'bcrypt'
+import { createHash, randomBytes } from 'crypto'
 import { AuthGuard } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
 import { IsEmail, IsNotEmpty, IsString } from 'class-validator'
+import { PrismaService } from '../../prisma.service'
 import { PrismaModule } from '../../prisma.module'
 import { UsersModule, UsersService } from '../users/users.module'
 import { AccessScopeService } from './access-scope.service'
@@ -25,6 +28,9 @@ import { PermissionsGuard } from './permissions.guard'
 import { RoleCatalogService } from './role-catalog.service'
 
 export { AccessScopeService, PermissionsGuard, RoleCatalogService }
+
+const REFRESH_COOKIE_NAME = 'arofi_admin_refresh'
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 class LoginDto {
   @IsEmail()
@@ -80,6 +86,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly roleCatalogService: RoleCatalogService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async login(email: string, password: string) {
@@ -106,17 +113,84 @@ export class AuthService {
       tenantName: user.tenant?.name ?? null,
     })
 
-    const payload: JwtPayload = {
-      sub: authenticatedUser.id,
-      email: authenticatedUser.email,
-      role: authenticatedUser.role,
-      tenantId: authenticatedUser.tenantId,
-    }
+    const access_token = await this.signAccessToken(authenticatedUser)
+    const refresh_token = await this.issueRefreshToken(authenticatedUser.id)
 
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      access_token,
+      refresh_token,
       user: authenticatedUser,
     }
+  }
+
+  // Rotates the refresh token on every use: the old one is revoked and a new
+  // one issued, so a stolen-but-unused refresh token becomes worthless the
+  // next time the legitimate session refreshes.
+  async refresh(rawToken: string) {
+    const tokenHash = this.hashToken(rawToken)
+    const record = await this.prisma.refreshToken.findUnique({ where: { tokenHash } })
+
+    if (!record || record.revokedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Session expired, please sign in again')
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: record.id },
+      data: { revokedAt: new Date() },
+    })
+
+    const authenticatedUser = await this.validateAccessTokenUser(record.userId)
+    const access_token = await this.signAccessToken(authenticatedUser)
+    const refresh_token = await this.issueRefreshToken(authenticatedUser.id)
+
+    return {
+      access_token,
+      refresh_token,
+      user: authenticatedUser,
+    }
+  }
+
+  async logout(rawToken: string | null) {
+    if (!rawToken) {
+      return
+    }
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash: this.hashToken(rawToken), revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+  }
+
+  private async signAccessToken(user: AuthenticatedAdminUser) {
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    }
+    return this.jwtService.signAsync(payload)
+  }
+
+  private async issueRefreshToken(userId: string): Promise<string | null> {
+    const rawToken = randomBytes(48).toString('hex')
+    try {
+      await this.prisma.refreshToken.create({
+        data: {
+          userId,
+          tokenHash: this.hashToken(rawToken),
+          expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+        },
+      })
+    } catch {
+      // If the RefreshToken migration hasn't been applied yet on this
+      // deployment, degrade to an access-token-only session instead of
+      // blocking login entirely.
+      return null
+    }
+    return rawToken
+  }
+
+  private hashToken(rawToken: string) {
+    return createHash('sha256').update(rawToken).digest('hex')
   }
 
   async validateAccessTokenUser(userId: string) {
@@ -139,15 +213,10 @@ export class AuthService {
 
   async issueSessionForUserId(userId: string) {
     const authenticatedUser = await this.validateAccessTokenUser(userId)
-    const payload: JwtPayload = {
-      sub: authenticatedUser.id,
-      email: authenticatedUser.email,
-      role: authenticatedUser.role,
-      tenantId: authenticatedUser.tenantId,
-    }
 
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      access_token: await this.signAccessToken(authenticatedUser),
+      refresh_token: await this.issueRefreshToken(authenticatedUser.id),
       user: authenticatedUser,
     }
   }
@@ -202,13 +271,63 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {}
 
+function extractRefreshCookie(request: Request) {
+  const rawCookie = request.headers.cookie
+  if (!rawCookie) {
+    return null
+  }
+
+  const cookie = rawCookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${REFRESH_COOKIE_NAME}=`))
+
+  return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : null
+}
+
+export function setRefreshCookie(response: Response, token: string | null) {
+  if (!token) {
+    return
+  }
+  response.cookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: REFRESH_TOKEN_TTL_MS,
+    path: '/api/auth',
+  })
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password)
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response) {
+    const { refresh_token, ...result } = await this.authService.login(dto.email, dto.password)
+    setRefreshCookie(response, refresh_token)
+    return result
+  }
+
+  // The browser sends the httpOnly refresh cookie automatically; the access
+  // token is short-lived on purpose, so the frontend calls this whenever a
+  // request comes back 401 instead of forcing the user to log in again.
+  @Post('refresh')
+  async refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    const token = extractRefreshCookie(request)
+    if (!token) {
+      throw new UnauthorizedException('No refresh token presented')
+    }
+    const { refresh_token, ...result } = await this.authService.refresh(token)
+    setRefreshCookie(response, refresh_token)
+    return result
+  }
+
+  @Post('logout')
+  async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    await this.authService.logout(extractRefreshCookie(request))
+    response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth' })
+    return { ok: true }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -232,7 +351,10 @@ export class AuthController {
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET') ?? '',
         signOptions: {
-          expiresIn: '8h',
+          // Short-lived on purpose: the refresh-token flow (see AuthController)
+          // re-issues this silently, so shortening it reduces the window a
+          // stolen access token stays useful without costing UX.
+          expiresIn: '1h',
         },
       }),
     }),

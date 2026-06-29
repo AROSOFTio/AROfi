@@ -1,5 +1,6 @@
+import KycDocumentsPanel from '@/components/KycDocumentsPanel'
 import SettingsManager from '@/components/SettingsManager'
-import type { AdminSessionResponse } from '@/lib/admin-types'
+import type { AdminSessionResponse, KycDocumentItem } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { isVendorWorkspace } from '@/lib/workspace'
 
@@ -10,21 +11,25 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   const resolvedSearchParams = await searchParams
   const tenantQuery = isDevAdmin && resolvedSearchParams?.tenantId ? `?tenantId=${resolvedSearchParams.tenantId}` : ''
 
-  const [platformSettings, tenantSettings, subscriptionPlans, subscriptionStatus] = await Promise.all([
+  const [platformSettings, tenantSettings, subscriptionPlans, subscriptionStatus, kycDocuments] = await Promise.all([
     isDevAdmin ? fetchApi('/system/settings') : Promise.resolve(null),
     isVendor || tenantQuery ? fetchApi(`/system/tenant-settings${tenantQuery}`) : Promise.resolve(null),
     fetchApi('/subscription/plans'),
     isVendor ? fetchApi('/subscription/status') : Promise.resolve(null),
+    fetchApi<KycDocumentItem[]>('/system/kyc/documents'),
   ])
 
   return (
-    <SettingsManager
-      user={session?.user ?? { permissions: [] }}
-      isVendor={isVendor}
-      initialPlatformSettings={platformSettings as never}
-      initialTenantSettings={tenantSettings as never}
-      initialSubscriptionPlans={subscriptionPlans as never}
-      initialSubscriptionStatus={subscriptionStatus as never}
-    />
+    <>
+      <SettingsManager
+        user={session?.user ?? { permissions: [] }}
+        isVendor={isVendor}
+        initialPlatformSettings={platformSettings as never}
+        initialTenantSettings={tenantSettings as never}
+        initialSubscriptionPlans={subscriptionPlans as never}
+        initialSubscriptionStatus={subscriptionStatus as never}
+      />
+      <KycDocumentsPanel isSuperAdmin={isDevAdmin} initialDocuments={kycDocuments ?? []} />
+    </>
   )
 }
