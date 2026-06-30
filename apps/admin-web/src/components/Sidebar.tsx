@@ -34,6 +34,7 @@ const navItems: NavGroup[] = [
     label: 'Routers',
     icon: <RouterIcon />,
     items: [
+      { href: '/admin/settings/routers', label: 'Routers', required: ['routers.read'], tenantOnly: true },
       { href: '/admin/router', label: 'Router Observability', required: ['routers.read'], tenantOnly: true },
       { href: '/admin/settings/routers?add=true', label: 'Register Router', required: ['routers.manage'], tenantOnly: true },
       { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true },
@@ -74,7 +75,6 @@ const navItems: NavGroup[] = [
     icon: <SettingsIcon />,
     items: [
       { href: '/settings?tab=Business%20Profile', label: 'General', tenantOnly: true },
-      { href: '/admin/settings/routers', label: 'Routers', tenantOnly: true },
       { href: '/admin/settings/templates', label: 'Captive Templates', tenantOnly: true },
       { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Gateways', tenantOnly: true },
       { href: '/settings?tab=Security', label: 'Advanced', tenantOnly: true },
