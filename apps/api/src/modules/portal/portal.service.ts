@@ -143,9 +143,12 @@ export class PortalService {
     const resolvedHotspot = await this.resolveHotspotContext(hotspot)
     const resolvedTenantDomain =
       'tenantDomain' in resolvedHotspot ? resolvedHotspot.tenantDomain : undefined
+    const resolvedTenantId =
+      'tenantId' in resolvedHotspot ? (resolvedHotspot as { tenantId?: string }).tenantId : undefined
     const context = await this.paymentsService.getPortalContext(
       tenantDomain ?? resolvedTenantDomain,
       phoneNumber,
+      resolvedTenantId,
     )
     const accessToken = this.extractBearerToken(authorization)
     const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot)

@@ -228,8 +228,8 @@ export class PaymentsService {
     }
   }
 
-  async getPortalContext(tenantDomain?: string, phoneNumber?: string) {
-    const tenant = await this.resolvePortalTenant(tenantDomain)
+  async getPortalContext(tenantDomain?: string, phoneNumber?: string, tenantId?: string) {
+    const tenant = await this.resolvePortalTenant(tenantDomain, tenantId)
     const normalizedPhone = phoneNumber ? this.normalizePhoneNumber(phoneNumber) : null
     const phoneVariants = normalizedPhone
       ? Array.from(new Set([normalizedPhone, `+${normalizedPhone}`, `0${normalizedPhone.slice(3)}`]))
@@ -311,6 +311,7 @@ export class PaymentsService {
         domain: tenant.domain,
         logoUrl: tenant.logoUrl,
         brandColor: tenant.brandColor,
+        portalTemplate: tenant.portalTemplate,
         supportPhone: tenant.supportPhone,
         supportEmail: tenant.supportEmail,
       },
@@ -1059,7 +1060,7 @@ export class PaymentsService {
     }
   }
 
-  private async resolvePortalTenant(tenantDomain?: string) {
+  private async resolvePortalTenant(tenantDomain?: string, tenantId?: string) {
     if (tenantDomain) {
       const tenant = await this.prisma.tenant.findUnique({
         where: { domain: tenantDomain },
@@ -1070,6 +1071,17 @@ export class PaymentsService {
       }
 
       return tenant
+    }
+
+    // Fallback: resolve by tenantId (provided when routerKey resolved the router
+    // but the tenant has no domain configured yet)
+    if (tenantId) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+      })
+      if (tenant) {
+        return tenant
+      }
     }
 
     const tenant = await this.prisma.tenant.findFirst({
