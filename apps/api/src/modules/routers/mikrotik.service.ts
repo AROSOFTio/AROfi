@@ -929,7 +929,9 @@ export class MikrotikService {
   private resolveHttpCallbackBaseUrl() {
     const configured = this.configService.get<string>('MIKROTIK_CALLBACK_HTTP_URL')
     if (configured) {
-      return configured.replace(/\/$/, '')
+      // Normalize: strip trailing slash and the internal Docker port (:4012)
+      // which is not publicly accessible. This handles stale env var values.
+      return configured.replace(/\/$/, '').replace(/:4012(\/|$)/, '$1').replace(/\/$/, '')
     }
 
     const host =

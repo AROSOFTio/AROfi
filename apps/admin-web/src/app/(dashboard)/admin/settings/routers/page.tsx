@@ -77,6 +77,7 @@ export default function SettingsRoutersPage() {
   const [adminPassword, setAdminPassword] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [scriptModal, setScriptModal] = useState<{ router: any; command: string } | null>(null)
+  const [scriptCopied, setScriptCopied] = useState(false)
   const [loadingScript, setLoadingScript] = useState<string | null>(null)
 
   const loadData = async () => {
@@ -775,10 +776,11 @@ export default function SettingsRoutersPage() {
                   className="btn btn-primary"
                   onClick={() => {
                     navigator.clipboard.writeText(scriptModal.command)
-                    alert('Command copied to clipboard!')
+                    setScriptCopied(true)
+                    setTimeout(() => setScriptCopied(false), 2000)
                   }}
                 >
-                  Copy Command
+                  {scriptCopied ? 'Copied!' : 'Copy Command'}
                 </button>
               </div>
             </div>

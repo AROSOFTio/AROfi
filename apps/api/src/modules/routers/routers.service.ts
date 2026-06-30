@@ -1835,12 +1835,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${router.name}`,
-      `/interface sstp-client remove [find name="${remoteClientName}"]`,
-      `/ppp profile remove [find name="AROFi_Profile"]`,
-      `/ppp profile add name="AROFi_Profile" on-up=":delay 5s; /tool fetch url=\\"https://${domain}/api/mikrotik/script/${router.registrationKey}\\" check-certificate=no dst-path=\\"vpn-setup.rsc\\" mode=https; :delay 2s; /import file-name=\\"vpn-setup.rsc\\"; :delay 1s; /file remove \\"vpn-setup.rsc\\""`,
-      `/interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" disabled=no keepalive-timeout=60 verify-server-certificate=no`,
-      `:do { /interface list member add interface="${remoteClientName}" list=LAN } on-error={}`,
-      `:log info "AROFi Remote Access client configured successfully."`
+      `:do { /interface sstp-client remove [find name="${remoteClientName}"] } on-error={}`,
+      `:do { /ppp profile remove [find name="AROFi_Profile"] } on-error={}`,
+      `/ppp profile add name="AROFi_Profile" on-up=":delay 5s; /tool fetch url=\\"https://${domain}/api/mikrotik/script/${router.registrationKey}\\" check-certificate=no dst-path=\\"vpn-setup.rsc\\"; :delay 2s; /import file-name=\\"vpn-setup.rsc\\"; :delay 1s; /file remove \\"vpn-setup.rsc\\""`,
+      `:local sstpOk 0`,
+      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
+      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client blocked — device-mode restricts it."; :put "Run this command then press the RESET button on the router within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." } else={ :do { /interface list member add interface="${remoteClientName}" list=LAN } on-error={}; :log info "AROFi Remote Access configured." }`,
     ].join('\n')
   }
 
