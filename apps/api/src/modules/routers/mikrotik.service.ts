@@ -107,7 +107,26 @@ export class MikrotikService {
     // any AROFi script ever runs. Bootstrap public DNS first, but only if
     // none is already set, so an operator's existing resolver is untouched.
     const dnsBootstrap = ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
-    return `${dnsBootstrap}:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc" } on-error={ :do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc" } on-error={ :put "Error: AROFi setup download failed." } }; :if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" }`
+    // Three-attempt download strategy:
+    //   1. HTTPS via hostname (normal path)
+    //   2. HTTP via IP/hostname port-80 (if TLS layer blocked on router)
+    //   3. Clear guidance if both fail so the admin knows to check WAN
+    // Using :local arofiOk to track success without triple-nesting on-error blocks,
+    // which in some RouterOS versions limits how deeply they can nest.
+    return (
+      dnsBootstrap +
+      ':local arofiOk 0; ' +
+      `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={}; ` +
+      ':if ($arofiOk = 0) do={ ' +
+        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={} ` +
+      '}; ' +
+      ':if ($arofiOk = 0) do={ ' +
+        ':put "ERROR: AROFi server unreachable."; ' +
+        ':put "Check: 1) WAN port has internet (ping 8.8.8.8). 2) No firewall blocks outbound HTTPS. 3) Re-paste this command once WAN is up." ' +
+      '} else={ ' +
+        ':if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" } ' +
+      '}'
+    )
   }
 
   getRadiusServerConfig(sharedSecret?: string) {
@@ -919,7 +938,10 @@ export class MikrotikService {
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
       'app.arofi.net'
 
-    return `http://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}:4012`
+    // Strip scheme and any port suffix — use plain HTTP port 80 which is
+    // publicly accessible via the Coolify/Traefik reverse proxy layer.
+    // Port 4012 is the internal Docker nginx port and is NOT reachable externally.
+    return `http://${host.replace(/^https?:\/\//, '').replace(/:\d+$/, '').replace(/\/$/, '')}`
   }
 
   // excludeIface MUST be skipped here: AROFi's own remote-access SSTP tunnel
