@@ -284,6 +284,9 @@ export class MikrotikService {
       ``,
       `# 4. Walled garden so the portal + payment pages load before login`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
+      // Also allow the raw HTTP-fallback IP by address so captive-portal
+      // mini-browsers can reach the API even when HTTPS or hostname DNS fails.
+      ...this.buildWalledGardenIp(this.resolveHttpCallbackBaseUrl()),
       ``,
       `# 4b. Install the AROFi captive portal redirect page`,
       ...loginHtmlInstallScript,
@@ -425,6 +428,21 @@ export class MikrotikService {
     ]
   }
 
+  // Adds raw-IP walled-garden entries (/ip hotspot walled-garden ip) for the
+  // HTTP fallback host so captive-portal mini-browsers (Android/iOS NCSI) can
+  // reach the API even when HTTPS fails or the DNS entry for the hostname is
+  // not yet resolving. Hostname-only walled-garden entries are useless when
+  // the client is asking by IP.
+  private buildWalledGardenIp(httpCallbackBaseUrl: string) {
+    const match = httpCallbackBaseUrl.match(/^https?:\/\/([\d.]+)(:\d+)?(\/|$)/)
+    if (!match) return [] // not an IP-literal URL (e.g. it's a hostname) — hostname entry covers it
+    const ip = match[1]
+    return [
+      `:do { /ip hotspot walled-garden ip remove [find comment="AROFi portal ip"] } on-error={}`,
+      `:do { /ip hotspot walled-garden ip add dst-address=${ip}/32 action=accept comment="AROFi portal ip" } on-error={}`,
+    ]
+  }
+
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
     const intervalSeconds = Math.max(
       5,
@@ -473,21 +491,41 @@ export class MikrotikService {
     fallbackStatusHtmlUrl: string,
     profileName?: string,
   ) {
+    // CRITICAL: MikroTik does NOT fall back to built-in pages when html-directory
+    // is set and a file is missing — it returns 404 to every connecting device.
+    // We must only activate html-directory=hotspot after confirming both files
+    // are on disk. We also create the directory first because /tool fetch will
+    // not auto-create parent directories on all RouterOS versions.
     const profileSet = profileName
-      ? [`/ip hotspot profile set [find name="${this.escape(profileName)}"] html-directory=hotspot`]
+      ? [
+          `:if ($arofiHtmlOk = 1) do={`,
+          `  /ip hotspot profile set [find name="${this.escape(profileName)}"] html-directory=hotspot`,
+          `  :put "AROFi: custom portal page active."`,
+          `} else={`,
+          `  :put "AROFi: keeping default MikroTik login page (html install failed)."`,
+          `}`,
+        ]
       : []
     return [
+      // Ensure the hotspot/ directory exists — /tool fetch does not create parent
+      // directories on RouterOS v6, causing a silent write failure and 404.
+      `:do { /file add name="hotspot" type=directory } on-error={}`,
+      `:local arofiHtmlOk 0`,
       `:do {`,
       `  /tool fetch url="${loginHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/login.html"`,
       `  :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
       `    :put "AROFi HotSpot login.html installed."`,
+      `    :set arofiHtmlOk 1`,
       `  } else={`,
       `    :error "login.html not found after fetch"`,
       `  }`,
       `} on-error={`,
       `  :do {`,
       `    /tool fetch url="${fallbackLoginHtmlUrl}" mode=http dst-path="hotspot/login.html"`,
-      `    :put "AROFi HotSpot login.html installed by HTTP fallback."`,
+      `    :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
+      `      :put "AROFi HotSpot login.html installed by HTTP fallback."`,
+      `      :set arofiHtmlOk 1`,
+      `    }`,
       `  } on-error={`,
       `    :put "WARNING: login.html install FAILED — portal will show MikroTik default UI."`,
       `    :put "Fix: /tool fetch url=\\"${loginHtmlUrl}\\" dst-path=\\"hotspot/login.html\\""`,
@@ -520,6 +558,9 @@ export class MikrotikService {
   // not it is currently a bridge port elsewhere (e.g. the operator's LAN).
   buildLoginHtml(registrationKey: string, portalBaseUrl?: string | null) {
     const apiBaseUrl = this.escapeHtml(this.resolveApiBaseUrl())
+    // HTTP fallback base URL (raw IP) so the page works when HTTPS fails in a
+    // captive-portal mini-browser or when DNS hasn't resolved yet.
+    const fallbackApiBaseUrl = this.escapeHtml(this.resolveHttpCallbackBaseUrl())
     const escapedKey = this.escapeHtml(registrationKey)
 
     // Self-contained white-themed static portal served directly from the router's
@@ -650,9 +691,12 @@ export class MikrotikService {
   </div>
 
   <script>
-    var API="${apiBaseUrl}",RKEY="${escapedKey}";
+    var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
     var pkgs=[],selId=null;
+    // Try HTTPS API first; if the captive-portal mini-browser blocks it (clock
+    // wrong, cert issue, CORS), retry the same path over plain HTTP fallback IP.
+    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(e)ajax(m,APIFB+p,d,cb);else cb(null,r);});}
 
     window.onload=function(){
       var search=window.location.search;
@@ -709,7 +753,7 @@ export class MikrotikService {
     }
 
     function load(){
-      ajax('GET', API+'/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo), null, function(err, d){
+      apiCall('GET', '/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo), null, function(err, d){
         if(err){
           document.getElementById('tname').textContent='AROFi Hotspot';
           document.getElementById('loading').style.display='none';
@@ -768,7 +812,7 @@ export class MikrotikService {
       b.disabled=true;b.textContent='Logging in...';
       sst('Verifying voucher...','info');
 
-      ajax('POST', API+'/api/portal/redeem-voucher', {code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
+      apiCall('POST', '/api/portal/redeem-voucher', {code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
         if(err){
           sst(err.message||'Failed','err');b.disabled=false;b.textContent='Login';
         } else {
@@ -791,7 +835,7 @@ export class MikrotikService {
       var pfx=c.substring(3,5);
       var net=(pfx==='70'||pfx==='75'||pfx==='74')?'AIRTEL':'MTN';
       
-      ajax('POST', API+'/api/payments/portal/initiate', {packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, pmt){
+      apiCall('POST', '/api/payments/portal/initiate', {packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, pmt){
         if(err){ sst(err.message||'Failed','err');b.disabled=false;return; }
         if(pmt.status==='FAILED'){ sst(pmt.statusMessage||'Failed','err');b.disabled=false;return; }
         
@@ -805,7 +849,7 @@ export class MikrotikService {
     function poll(id,tok){
       var n=0,iv=setInterval(function(){
         if(++n>120){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
-        ajax('POST', API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
+        apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
           if(err) return;
           if(p.activation){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}
           else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
@@ -819,7 +863,7 @@ export class MikrotikService {
       var b=document.getElementById('rbtn');b.disabled=true;b.textContent='Searching...';
       sst('Searching for voucher...','info');
 
-      ajax('POST', API+'/api/portal/recover-voucher', {transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
+      apiCall('POST', '/api/portal/recover-voucher', {transactionId:txn,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
         if(err){ sst(err.message||'Not found','err');b.disabled=false;b.textContent='Find Voucher'; }
         else { sst('Found! Connecting...','ok');conn(res.reconnect); }
       });
