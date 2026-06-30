@@ -30,13 +30,13 @@ x-app-env: &app-env
   ROUTER_CREDENTIAL_SECRET: ${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
   RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
   RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
-  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://arofi.arosoftlabs.com}
-  API_PUBLIC_HOST: ${API_PUBLIC_HOST:-arofi.arosoftlabs.com}
-  PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:-arofi.arosoftlabs.com}
-  APP_BASE_URL: ${APP_BASE_URL:-https://arofi.arosoftlabs.com}
-  ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.arosoftlabs.com}
-  PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.arosoftlabs.com/portal}
-  VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://arofi.arosoftlabs.com/portal}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://app.arofi.net,https://arofi.net}
+  API_PUBLIC_HOST: ${API_PUBLIC_HOST:-app.arofi.net}
+  PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:-app.arofi.net}
+  APP_BASE_URL: ${APP_BASE_URL:-https://app.arofi.net}
+  ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://app.arofi.net}
+  PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://app.arofi.net/portal}
+  VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://app.arofi.net/portal}
   ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
   ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-5000}
   RADIUS_SERVER_HOST: ${RADIUS_SERVER_HOST:-127.0.0.1}
@@ -56,7 +56,7 @@ x-app-env: &app-env
   PESAPAL_CONSUMER_KEY: ${PESAPAL_CONSUMER_KEY:-}
   PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
   PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
-  PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://arofi.arosoftlabs.com/portal}
+  PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://app.arofi.net/portal}
   SMTP_HOST: ${SMTP_HOST:-}
   SMTP_PORT: ${SMTP_PORT:-587}
   SMTP_USER: ${SMTP_USER:-}

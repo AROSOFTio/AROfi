@@ -174,7 +174,7 @@ function getVoucherQrPortalUrl(code: string, dnsName?: string) {
   // Fallback
   const base =
     process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
-    'https://arofi.arosoftlabs.com/portal'
+    'https://app.arofi.net/portal'
   const normalized = base.replace(/\/$/, '')
   const separator = normalized.includes('?') ? '&' : '?'
   return `${normalized}${separator}voucher=${encodeURIComponent(code)}`

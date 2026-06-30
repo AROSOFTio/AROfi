@@ -1284,7 +1284,7 @@ export class PaymentsService {
   }
 
   private buildPortalPaymentReturnUrl(paymentId: string, statusToken?: string | null) {
-    const base = this.configService.get<string>('PORTAL_BASE_URL') ?? this.configService.get<string>('APP_BASE_URL') ?? 'https://arofi.arosoft.io/portal'
+    const base = this.configService.get<string>('PORTAL_BASE_URL') ?? this.configService.get<string>('APP_BASE_URL') ?? 'https://app.arofi.net/portal'
     try {
       const url = new URL(base)
       url.searchParams.set('paymentId', paymentId)

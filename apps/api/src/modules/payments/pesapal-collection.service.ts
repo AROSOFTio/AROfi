@@ -173,7 +173,7 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
   private returnUrl(externalReference: string) {
     const configured = this.configService.get<string>('PESAPAL_CALLBACK_URL')?.trim()
     if (!configured) {
-      return this.configService.get<string>('PORTAL_BASE_URL') ?? 'https://arofi.arosoft.io/portal'
+      return this.configService.get<string>('PORTAL_BASE_URL') ?? 'https://app.arofi.net/portal'
     }
 
     try {

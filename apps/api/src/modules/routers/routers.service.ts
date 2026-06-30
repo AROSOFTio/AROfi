@@ -873,7 +873,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
         mode: router.lastScriptMode,
-        portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
+        portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'app.arofi.net'}/portal`,
         hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,
         dnsName: `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`,
         remoteClientName: router.remoteClientName,
@@ -940,7 +940,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
       mode: router.lastScriptMode,
-      portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
+      portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'app.arofi.net'}/portal`,
       hotspotNetworkName: router.siteLabel ?? router.name,
       dnsName: router.tenant
         ? `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
@@ -982,7 +982,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     return this.mikrotikService.buildLoginHtml(
       router.registrationKey,
-      `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.arosoft.io'}/portal`,
+      `https://${process.env.PORTAL_PUBLIC_HOST ?? 'app.arofi.net'}/portal`,
     )
   }
 
@@ -1630,7 +1630,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const envHosts = [
       process.env.PORTAL_PUBLIC_HOST,
       process.env.API_PUBLIC_HOST,
-      'arofi.arosoft.io',
+      'app.arofi.net',
+      'arofi.net',
       'pay.pesapal.com',
       'www.pesapal.com',
       'cybqa.pesapal.com',
@@ -1827,7 +1828,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       return null
     }
 
-    const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'arofi.arosoftlabs.com'
+    const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'app.arofi.net'
     const sstpPort = process.env.VPN_SERVER_PORT || '4443'
     const remoteClientName = router.remoteClientName || 'AROFI_REMOTE'
 

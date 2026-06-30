@@ -1128,13 +1128,13 @@ export class VouchersService {
       doc.switchToPage(pageIndex)
       doc.fontSize(6).fillColor('#64748B')
       doc.text(
-        `AROFi vouchers . ${template.label} . Powered by arosoftlabs.com . https://arosoftlabs.com`,
+        `AROFi vouchers . ${template.label} . Powered by arofi.net . https://arofi.net`,
         pageMargin,
         doc.page.height - 12,
         {
           width: doc.page.width - pageMargin * 2,
           align: 'center',
-          link: 'https://arosoftlabs.com',
+          link: 'https://arofi.net',
         },
       )
     }
@@ -1451,7 +1451,7 @@ export class VouchersService {
   }
 
   private getVoucherPortalBaseUrl() {
-    const host = process.env.PORTAL_PUBLIC_HOST ?? process.env.API_PUBLIC_HOST ?? 'arofi.arosoft.io'
+    const host = process.env.PORTAL_PUBLIC_HOST ?? process.env.API_PUBLIC_HOST ?? 'app.arofi.net'
     const normalizedHost = host.startsWith('http://') || host.startsWith('https://') ? host : `https://${host}`
     return normalizedHost.replace(/\/$/, '')
   }

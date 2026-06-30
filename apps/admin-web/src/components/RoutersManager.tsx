@@ -452,7 +452,7 @@ export default function RoutersManager() {
     }
 
     const router = selectedSetup.router
-    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || 'vpn2.arofi.arosoft.io'
+    const vpnHost = process.env.NEXT_PUBLIC_VPN_HOST || 'app.arofi.net'
     const portStr = router.remotePort ? `:${router.remotePort}` : ''
     const address = `${vpnHost}${portStr}`
 
@@ -754,7 +754,7 @@ export default function RoutersManager() {
                         <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 6, color: 'var(--text-secondary)', fontSize: 13 }}>
                           <span>Address</span>
                           <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>
-                            {`${process.env.NEXT_PUBLIC_VPN_HOST || 'vpn2.arofi.arosoft.io'}:${selectedSetup.router.remotePort || ''}`}
+                            {`${process.env.NEXT_PUBLIC_VPN_HOST || 'app.arofi.net'}:${selectedSetup.router.remotePort || ''}`}
                           </strong>
                           <span>Username</span>
                           <strong style={{ color: 'var(--text-primary)' }}>admin</strong>

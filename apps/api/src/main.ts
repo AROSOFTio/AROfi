@@ -36,6 +36,7 @@ async function bootstrap() {
         origin.includes('wifi.login') ||
         origin.includes('arosoftlabs.com') ||
         origin.includes('arofi.arosoft.io') ||
+        origin.includes('arofi.net') ||
         /\.wifi(:\d+)?$/i.test(origin) ||
         process.env.NODE_ENV !== 'production';
 

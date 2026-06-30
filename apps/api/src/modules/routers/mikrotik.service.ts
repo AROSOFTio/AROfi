@@ -607,7 +607,7 @@ export class MikrotikService {
   </div>
   <div class="tech">
     <span id="tip">IP: </span> | <span id="tmac">MAC: </span><br><br>
-    Powered By <a href="https://arofi.arosoftlabs.com" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
+    Powered By <a href="https://app.arofi.net" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
     Terms and Conditions Apply
   </div>
 
@@ -890,7 +890,7 @@ export class MikrotikService {
     const host =
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
-      'arofi.arosoft.io'
+      'app.arofi.net'
     return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
   }
 
@@ -902,7 +902,7 @@ export class MikrotikService {
     const host =
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
-      'arofi.arosoft.io'
+      'app.arofi.net'
 
     return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}/portal`
   }
@@ -917,7 +917,7 @@ export class MikrotikService {
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
-      'arofi.arosoft.io'
+      'app.arofi.net'
 
     return `http://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}:4012`
   }
