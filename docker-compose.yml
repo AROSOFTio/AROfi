@@ -57,6 +57,12 @@ x-app-env: &app-env
   PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
   PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
   PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://arofi.arosoftlabs.com/portal}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AROFi}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@arofi.net}
   WHATSAPP_GATEWAY_URL: ${WHATSAPP_GATEWAY_URL:-http://whatsapp:3000}
   WHATSAPP_GATEWAY_API_KEY: ${WHATSAPP_GATEWAY_API_KEY:-}
   SENTRY_DSN: ${SENTRY_DSN:-}
@@ -87,7 +93,7 @@ services:
         condition: service_healthy
     mem_limit: 64m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -99,7 +105,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "30000-30100:30000-30100"
+      - "31000-31100:31000-31100"
     environment:
       <<: *app-env
       SERVICE_NAME: api
@@ -108,7 +114,7 @@ services:
         condition: service_healthy
     mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -127,7 +133,7 @@ services:
         condition: service_healthy
     mem_limit: 384m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -146,7 +152,7 @@ services:
         condition: service_healthy
     mem_limit: 320m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/portal 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/portal 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

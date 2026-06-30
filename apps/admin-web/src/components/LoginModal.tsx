@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import {
   clearBrowserAdminSession,
+  getAppDashboardUrl,
   setBrowserAdminSession,
 } from '@/lib/admin-session'
 
@@ -34,7 +35,7 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
 
       const data = await response.json()
       setBrowserAdminSession(data.access_token as string)
-      window.location.href = '/dashboard'
+      window.location.href = getAppDashboardUrl()
     } catch {
       clearBrowserAdminSession()
       setError('Invalid email or password.')
