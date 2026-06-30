@@ -196,4 +196,37 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip dns static remove [find name="tenantname.wifi"]')
     expect(script).toContain('/ip dns static add name="tenantname.wifi" address=10.55.0.1')
   })
+
+  it('buildOneRunCommand: tries plain HTTP fallback FIRST, then HTTPS, and includes NTP sync', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        API_PUBLIC_HOST: 'app.arofi.net',
+        MIKROTIK_CALLBACK_HTTP_URL: 'http://95.111.234.34',
+      }),
+    )
+
+    const cmd = service.buildOneRunCommand('test-reg-key')
+
+    // NTP sync must appear before the fetch loop
+    expect(cmd).toContain('/system ntp client set enabled=yes servers=pool.ntp.org')
+
+    // Plain HTTP (fallback) URL must appear BEFORE the HTTPS URL in the string
+    const httpIdx = cmd.indexOf('http://95.111.234.34')
+    const httpsIdx = cmd.indexOf('https://app.arofi.net')
+    expect(httpIdx).toBeGreaterThan(-1)
+    expect(httpsIdx).toBeGreaterThan(-1)
+    expect(httpIdx).toBeLessThan(httpsIdx)
+
+    // Both URLs must include the registration key
+    expect(cmd).toContain('/api/mikrotik/script/test-reg-key')
+
+    // Retry loop, success flag, and import step must all be present
+    expect(cmd).toContain(':while ($attempts < 3)')
+    expect(cmd).toContain(':set arofiOk 1')
+    expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
+
+    // Error message must include port 80 and /system clock hints
+    expect(cmd).toContain('port 80')
+    expect(cmd).toContain('/system clock')
+  })
 })

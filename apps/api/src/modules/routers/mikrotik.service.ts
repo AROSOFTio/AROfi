@@ -103,22 +103,30 @@ export class MikrotikService {
     const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
     const fallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
     // Many self-onboarded routers (static WAN IP, factory reset) have no DNS
-    // servers configured, so this very first fetch-by-hostname fails before
-    // any AROFi script ever runs. Bootstrap public DNS first, but only if
-    // none is already set, so an operator's existing resolver is untouched.
-    const dnsBootstrap = ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
-    // Retry loop: up to 3 rounds of HTTPS-then-HTTP-fallback with a 5-second
-    // wait between rounds. This handles intermittent WAN (common in East Africa)
-    // where a single attempt fails but the connection recovers within seconds.
-    // :while exits early by setting $attempts=3 once download succeeds.
+    // servers configured AND have a wrong system clock (clock resets to epoch
+    // after power loss). Bootstrap DNS and sync NTP first so TLS handshakes
+    // succeed — a wrong clock makes every HTTPS fetch fail even with
+    // check-certificate=no on some RouterOS builds.
+    const dnsBootstrap =
+      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
+      // Sync clock so TLS certificates pass the validity-period check.
+      // :do ... on-error={} means a missing NTP client won't abort the script.
+      ':do { /system ntp client set enabled=yes servers=pool.ntp.org; :delay 2s } on-error={}; '
+    // Retry loop: up to 3 rounds with a 5-second wait between rounds.
+    // Strategy: try plain HTTP fallback FIRST (no TLS, always works when TCP
+    // port 80 is open) and HTTPS second. On fresh/rebooted routers the clock
+    // may still be off enough to kill the TLS handshake, so HTTP is the most
+    // reliable first attempt. :while exits early once a download succeeds.
     return (
       dnsBootstrap +
       ':local arofiOk 0; :local attempts 0; ' +
       ':while ($attempts < 3) do={ ' +
         ':set attempts ($attempts + 1); ' +
-        `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={}; ` +
+        // 1st attempt within each round: plain HTTP (no TLS risk)
+        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={}; ` +
+        // 2nd attempt within each round: HTTPS (if HTTP failed, e.g. port 80 blocked)
         ':if ($arofiOk = 0) do={ ' +
-          `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={} ` +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={} ` +
         '}; ' +
         ':if ($arofiOk = 1) do={ :set attempts 3 } else={ ' +
           ':if ($attempts < 3) do={ :put "Retrying..."; :delay 5s } ' +
@@ -126,7 +134,7 @@ export class MikrotikService {
       '}; ' +
       ':if ($arofiOk = 0) do={ ' +
         ':put "ERROR: AROFi server unreachable after 3 attempts."; ' +
-        ':put "Check: 1) Stable internet on WAN (ping 8.8.8.8). 2) No firewall blocks HTTPS. 3) Re-paste when WAN is stable." ' +
+        ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) AND HTTPS (port 443). 3) System clock correct (check /system clock). 4) Re-paste when WAN is stable." ' +
       '} else={ ' +
         ':if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" } ' +
       '}'
