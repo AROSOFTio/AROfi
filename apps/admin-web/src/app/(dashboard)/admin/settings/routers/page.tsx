@@ -76,6 +76,8 @@ export default function SettingsRoutersPage() {
   const [renameName, setRenameName] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [scriptModal, setScriptModal] = useState<{ router: any; command: string } | null>(null)
+  const [loadingScript, setLoadingScript] = useState<string | null>(null)
 
   const loadData = async () => {
     try {
@@ -209,6 +211,20 @@ export default function SettingsRoutersPage() {
     setCopiedId(router.id)
     setTimeout(() => setCopiedId(null), 2000)
     setActiveMenuId(null)
+  }
+
+  const handleGetScript = async (router: any) => {
+    setActiveMenuId(null)
+    setLoadingScript(router.id)
+    try {
+      const setup = await clientFetchApi<{ oneRunCommand?: string }>(`/routers/${router.id}/setup`)
+      const command = setup.oneRunCommand ?? 'Script unavailable — please contact support.'
+      setScriptModal({ router, command })
+    } catch {
+      alert('Could not load setup script. Please try again.')
+    } finally {
+      setLoadingScript(null)
+    }
   }
 
   if (loading && tenants.length === 0) {
@@ -353,9 +369,22 @@ export default function SettingsRoutersPage() {
                               padding: 6,
                               textAlign: 'left'
                             }}>
-                              <button 
-                                type="button" 
-                                className="btn btn-ghost" 
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px', margin: '0 0 4px 0' }}
+                                onClick={() => void handleGetScript(router)}
+                                disabled={loadingScript === router.id}
+                              >
+                                <FileCode size={14} style={{ marginRight: 8 }} />
+                                {loadingScript === router.id ? 'Loading...' : 'Get Setup Script'}
+                              </button>
+
+                              <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
                                 style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px' }}
                                 onClick={() => {
                                   setRenameModalOpen(router)
@@ -709,6 +738,49 @@ export default function SettingsRoutersPage() {
             <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button type="button" className="btn btn-ghost" onClick={() => setPasswordModalOpen(null)}>Cancel</button>
               <button type="button" className="btn btn-primary" onClick={() => handleUpdatePassword(passwordModalOpen)}>Save Password</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Setup Script */}
+      {scriptModal && (
+        <div className="modal-overlay" onClick={() => setScriptModal(null)}>
+          <div className="modal-card" style={{ width: 'min(720px, 100%)' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gap: 3 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Router Setup Script — {scriptModal.router.name}</h3>
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: 0 }}>
+                  Paste this command into the WinBox Terminal. It sets up the hotspot, RADIUS, and captive portal in one shot.
+                </p>
+              </div>
+              <button type="button" className="btn btn-ghost" style={{ padding: 4, flexShrink: 0 }} onClick={() => setScriptModal(null)}>×</button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ padding: 14, background: '#0b1220', borderRadius: 10, border: '1px solid var(--border)' }}>
+                <pre style={{ margin: 0, fontSize: 11.5, color: '#dbe7ff', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.6, userSelect: 'all' }}>
+                  {scriptModal.command}
+                </pre>
+              </div>
+
+              <div style={{ padding: 12, background: 'var(--amber-light)', border: '1px solid var(--amber-mid)', borderRadius: 8, fontSize: 12.5, color: 'var(--amber-dark)', lineHeight: 1.5 }}>
+                <strong>How to run:</strong> Open WinBox → click Terminal → paste the command above → press Enter. Wait for it to finish (about 30 seconds).
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setScriptModal(null)}>Close</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(scriptModal.command)
+                    alert('Command copied to clipboard!')
+                  }}
+                >
+                  Copy Command
+                </button>
+              </div>
             </div>
           </div>
         </div>
