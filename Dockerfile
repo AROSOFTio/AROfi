@@ -50,27 +50,55 @@ RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
 # Prune development dependencies to make production node_modules as small as possible
 RUN npm prune --omit=dev --legacy-peer-deps
 
-# Remove Next.js build caches and other non-production files to shrink the final layer
-RUN rm -rf apps/admin-web/.next/cache apps/portal-web/.next/cache .turbo .git .github docs
+# Remove build caches, source files, and dev tooling — only keep runtime artifacts.
+# This shrinks what the builder exposes so the selective COPY below is fast.
+RUN rm -rf \
+    apps/admin-web/.next/cache \
+    apps/portal-web/.next/cache \
+    apps/admin-web/src \
+    apps/portal-web/src \
+    apps/api/src \
+    packages \
+    .turbo .git .github docs
 
-# Runtime stage
+# Runtime stage — copy only what is needed to RUN the app, not build it.
+# Previously we did "COPY --from=builder /usr/src/app ./" which copied the entire
+# 3-5 GB builder workspace (source files + dev node_modules residue) to the
+# runtime layer, exhausting disk space on the VPS. Selective COPY copies only
+# the ~1 GB of production artifacts and avoids the OOM/disk-full crash.
 FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
+RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
-# Copy builds and node_modules from builder
-COPY --from=builder /usr/src/app ./
+# Hoisted production node_modules (shared by all three apps)
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/package.json ./package.json
 
-# nginx config for all-in-one mode + make the startup script executable
+# NestJS API
+COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
+COPY --from=builder /usr/src/app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /usr/src/app/apps/api/prisma ./apps/api/prisma
+
+# Admin web (Next.js)
+COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/admin-web/.next ./apps/admin-web/.next
+COPY --from=builder /usr/src/app/apps/admin-web/public ./apps/admin-web/public
+COPY --from=builder /usr/src/app/apps/admin-web/package.json ./apps/admin-web/package.json
+COPY --from=builder /usr/src/app/apps/admin-web/next.config.js ./apps/admin-web/next.config.js
+
+# Portal web (Next.js)
+COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/portal-web/.next ./apps/portal-web/.next
+COPY --from=builder /usr/src/app/apps/portal-web/public ./apps/portal-web/public
+COPY --from=builder /usr/src/app/apps/portal-web/package.json ./apps/portal-web/package.json
+COPY --from=builder /usr/src/app/apps/portal-web/next.config.js ./apps/portal-web/next.config.js
+
+# nginx config and startup scripts
+COPY --from=builder /usr/src/app/config ./config
+COPY --from=builder /usr/src/app/scripts ./scripts
+
 RUN cp config/nginx.coolify.conf /etc/nginx/nginx.conf \
     && mkdir -p /run/nginx \
     && chmod +x scripts/start-all.sh
-
-RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
-# chown only the runtime artifacts needed, not the whole tree
-RUN chown -R arofi:nodejs /usr/src/app/apps/api/dist \
-    && chown -R arofi:nodejs /usr/src/app/apps/admin-web/.next \
-    && chown -R arofi:nodejs /usr/src/app/apps/portal-web/.next || true
 
 EXPOSE 3000
 # Default service to run. "all" = nginx + api + admin-web + portal-web in one
