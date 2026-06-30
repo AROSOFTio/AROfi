@@ -13,6 +13,11 @@ const nextConfig = {
     experimental: {
         cpus: 1,
         memoryBasedWorkersCount: true,
+        // Skip tracing node_modules into the output — the Dockerfile copies
+        // all of node_modules directly so this step only wastes memory.
+        outputFileTracingExcludes: {
+            '*': ['**/node_modules/**'],
+        },
     },
     images: {
         formats: ['image/avif', 'image/webp'],
