@@ -107,22 +107,26 @@ export class MikrotikService {
     // any AROFi script ever runs. Bootstrap public DNS first, but only if
     // none is already set, so an operator's existing resolver is untouched.
     const dnsBootstrap = ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
-    // Three-attempt download strategy:
-    //   1. HTTPS via hostname (normal path)
-    //   2. HTTP via IP/hostname port-80 (if TLS layer blocked on router)
-    //   3. Clear guidance if both fail so the admin knows to check WAN
-    // Using :local arofiOk to track success without triple-nesting on-error blocks,
-    // which in some RouterOS versions limits how deeply they can nest.
+    // Retry loop: up to 3 rounds of HTTPS-then-HTTP-fallback with a 5-second
+    // wait between rounds. This handles intermittent WAN (common in East Africa)
+    // where a single attempt fails but the connection recovers within seconds.
+    // :while exits early by setting $attempts=3 once download succeeds.
     return (
       dnsBootstrap +
-      ':local arofiOk 0; ' +
-      `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={}; ` +
-      ':if ($arofiOk = 0) do={ ' +
-        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={} ` +
+      ':local arofiOk 0; :local attempts 0; ' +
+      ':while ($attempts < 3) do={ ' +
+        ':set attempts ($attempts + 1); ' +
+        `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={}; ` +
+        ':if ($arofiOk = 0) do={ ' +
+          `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={} ` +
+        '}; ' +
+        ':if ($arofiOk = 1) do={ :set attempts 3 } else={ ' +
+          ':if ($attempts < 3) do={ :put "Retrying..."; :delay 5s } ' +
+        '} ' +
       '}; ' +
       ':if ($arofiOk = 0) do={ ' +
-        ':put "ERROR: AROFi server unreachable."; ' +
-        ':put "Check: 1) WAN port has internet (ping 8.8.8.8). 2) No firewall blocks outbound HTTPS. 3) Re-paste this command once WAN is up." ' +
+        ':put "ERROR: AROFi server unreachable after 3 attempts."; ' +
+        ':put "Check: 1) Stable internet on WAN (ping 8.8.8.8). 2) No firewall blocks HTTPS. 3) Re-paste when WAN is stable." ' +
       '} else={ ' +
         ':if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" } ' +
       '}'
