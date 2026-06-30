@@ -62,10 +62,7 @@ const initialBatchForm: BatchFormState = {
   notes: '',
 }
 
-// Advertisement line printed at the bottom of every voucher. Override per call
-// with the adLine prop (e.g. wire to a platform/tenant setting later).
-const DEFAULT_VOUCHER_AD =
-  'Powered by AROSOFT Innovations · Custom Systems · ERP · SaaS · Software Solutions · 0787726388'
+const DEFAULT_VOUCHER_AD = 'Powered by AROFi · Professional Hotspot Management Platform'
 
 const printTemplates = [
   {
@@ -934,7 +931,7 @@ function VoucherSampleCard({
           <div><span>PACKAGE</span>{packageName}</div>
           <div><span>PRICE</span>{amount}</div>
           <div><span>DURATION</span>{duration}</div>
-          <div><span>HELP</span>{portalHost}</div>
+          <div><span>HELP</span>arofi.net</div>
         </div>
         <div className="voucher-sample-help">Help: {support}</div>
         {adLine ? <div className="voucher-sample-ad">{adLine}</div> : null}

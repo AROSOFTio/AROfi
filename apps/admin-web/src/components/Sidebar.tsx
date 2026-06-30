@@ -81,11 +81,11 @@ const navItems: NavGroup[] = [
     ]
   },
   {
-    label: 'Vendor Management',
+    label: 'Business Management',
     icon: <TenantIcon />,
     items: [
-      { href: '/tenants', label: 'Vendors', required: ['tenants.read'], platformOnly: true },
-      { href: '/sales-by-tenant', label: 'Sales by Vendor', required: ['billing.read'], platformOnly: true },
+      { href: '/tenants', label: 'Businesses', required: ['tenants.read'], platformOnly: true },
+      { href: '/sales-by-tenant', label: 'Sales by Business', required: ['billing.read'], platformOnly: true },
       { href: '/users?tab=staff', label: 'Platform Staff', required: ['users.read'], platformOnly: true },
       { href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true },
     ]
@@ -160,7 +160,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
     .filter((group) => group.items.length > 0), [user])
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
-  const workspaceLabel = isVendor ? 'Vendor Workspace' : 'Developer Admin Workspace'
+  const workspaceLabel = isVendor ? 'Business Dashboard' : 'Platform Admin'
 
   return (
     <aside className="sidebar">
@@ -170,7 +170,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>
           <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Vendor' : 'Platform'} - {user.role}</span>
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Business' : 'Platform'} - {user.role}</span>
             {isVendor && user.tenantName && (
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
             )}

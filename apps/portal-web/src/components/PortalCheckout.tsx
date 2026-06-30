@@ -516,9 +516,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       params.get('link-login-only') ?? // some MikroTik versions use this directly
       ''
 
-    // Persist loginUrl as soon as we see it — it won't be in the URL after redirect
+    // Persist loginUrl immediately — it won't be in the URL after redirect, and
+    // sessionStorage is cleared on low-memory Android when the browser kills the tab
+    // during USSD dialogs. localStorage survives tab restarts so auto-connect works
+    // even after the OS suspends the browser during PIN entry.
     if (loginUrl && typeof window !== 'undefined') {
       sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
+      localStorage.setItem('arofi.lastLoginUrl', loginUrl)
     }
 
     return {
@@ -913,16 +917,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       reconnect?.loginUrl ||
       fallbackLoginUrl ||
       hotspotParams.loginUrl ||
-      (typeof window !== 'undefined' ? sessionStorage.getItem('arofi.lastLoginUrl') : null) ||
+      (typeof window !== 'undefined'
+        ? sessionStorage.getItem('arofi.lastLoginUrl') || localStorage.getItem('arofi.lastLoginUrl')
+        : null) ||
       null
 
     if (!loginUrl || !reconnect?.username || !reconnect?.password) {
       setConnectionStatus('failed')
       if (reconnect?.username && reconnect?.password) {
-        // We have credentials but no URL — show them to the user for manual entry
+        // Have credentials but no login URL — guide user to reconnect WiFi
+        // so MikroTik can auto-authenticate via the active RADIUS session
         setErrorMessage(
-          `Connected! Enter these on the WiFi login page — ` +
-          `Username: ${reconnect.username} | Password: ${reconnect.password}`
+          `Payment confirmed! Turn WiFi off and on — your device will connect automatically.`
         )
       } else {
         setErrorMessage(
