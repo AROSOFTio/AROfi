@@ -6,9 +6,10 @@
 # starve the others — important on small (2-4GB) hosts where one shared
 # container running nginx + 3 Node servers had no per-process isolation.
 #
-# Build cost stays low: all four app services build from the identical
-# Dockerfile/context, so after the first build the other three are pure
-# BuildKit cache hits (only SERVICE_NAME differs at runtime).
+# Build: only the "api" service has a build: block. nginx, admin, and portal
+# share the same image (arofi-app:local) that api builds. This guarantees
+# exactly ONE Docker build (npm install + 3 Next.js/NestJS compilations)
+# instead of four, which was causing OOM failures on small VPS hosts.
 #
 # To switch a Coolify resource that's currently on the "Dockerfile" build
 # pack to this file: change its Build Pack to "Docker Compose" pointing at
@@ -75,9 +76,8 @@ x-app-env: &app-env
 
 services:
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: arofi-app:local
+    pull_policy: never
     restart: unless-stopped
     environment:
       # Coolify assigns the configured domain to service "nginx" on port 3000
@@ -103,6 +103,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: arofi-app:local
     restart: unless-stopped
     ports:
       - "31000-31100:31000-31100"
@@ -121,9 +122,8 @@ services:
       start_period: 60s
 
   admin:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: arofi-app:local
+    pull_policy: never
     restart: unless-stopped
     environment:
       <<: *app-env
@@ -140,9 +140,8 @@ services:
       start_period: 45s
 
   portal:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: arofi-app:local
+    pull_policy: never
     restart: unless-stopped
     environment:
       <<: *app-env
