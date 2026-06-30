@@ -9,14 +9,13 @@ const nextConfig = {
   // Force a single build worker. Next's default (cpu-count - 1) spawns
   // multiple webpack/SWC worker processes that each carry their own memory
   // budget independent of NODE_OPTIONS, which overruns small (2-4GB) hosts.
+  // Next.js 16 moved outputFileTracingExcludes out of experimental
+  outputFileTracingExcludes: {
+    '*': ['**/node_modules/**'],
+  },
   experimental: {
     cpus: 1,
     memoryBasedWorkersCount: true,
-    // Skip tracing node_modules into the output — the Dockerfile copies
-    // all of node_modules directly so this step only wastes memory.
-    outputFileTracingExcludes: {
-      '*': ['**/node_modules/**'],
-    },
   },
   images: {
     formats: ['image/avif', 'image/webp'],
