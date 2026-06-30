@@ -80,9 +80,9 @@ export default function SettingsRoutersPage() {
   const [scriptCopied, setScriptCopied] = useState(false)
   const [loadingScript, setLoadingScript] = useState<string | null>(null)
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const [overviewData, hotspotData, tenantData, sessionData] = await Promise.all([
         clientFetchApi<RouterOverviewResponse>('/routers/overview'),
         clientFetchApi<HotspotOverviewResponse>('/hotspots/overview'),
@@ -113,6 +113,10 @@ export default function SettingsRoutersPage() {
 
   useEffect(() => {
     loadData()
+    // Poll every 20s so the online/offline dot flips within one heartbeat cycle
+    // (routers heartbeat every 15s; backend marks offline after 45s)
+    const timer = setInterval(() => { void loadData(true) }, 20_000)
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {

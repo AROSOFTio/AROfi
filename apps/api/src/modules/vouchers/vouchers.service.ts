@@ -24,9 +24,7 @@ import { VoucherCodeFormat, VoucherCodeService } from './voucher-code.service'
 import PDFDocument = require('pdfkit')
 import * as QRCode from 'qrcode'
 
-// Advertisement line printed on every voucher card in the PDF sheet.
-const VOUCHER_AD_LINE =
-  'AROSOFT Innovations · Custom Systems · ERP · SaaS · Software Solutions · 0787726388'
+const VOUCHER_AD_LINE = 'Powered by AROFi · Professional Hotspot Management Platform'
 
 type VoucherPdfTemplate = 'signal' | 'wave' | 'receipt' | 'agent' | 'thermal'
 
@@ -1112,7 +1110,7 @@ export class VouchersService {
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
         support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
-        portalHost: dnsName,
+        portalHost: 'arofi.net',
         qrPng,
       })
 
@@ -1276,7 +1274,7 @@ export class VouchersService {
       .stroke()
     doc.undash()
     doc.restore()
-    doc.fillColor('#2563EB').font('Helvetica-Bold').fontSize(4.3)
+    doc.fillColor('#BBBBBB').font('Helvetica').fontSize(4.0)
       .text(VOUCHER_AD_LINE, innerX, y + height - 7, {
         width: width - railWidth - 16,
         align: 'center',
