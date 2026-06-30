@@ -109,15 +109,13 @@ export class MikrotikService {
     // check-certificate=no on some RouterOS builds.
     const dnsBootstrap =
       ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
-      // Sync clock so TLS certificates pass the validity-period check.
-      // CRITICAL: RouterOS v6 validates command parameters at PARSE TIME, not runtime.
-      // "servers=" is a v7-only parameter — on v6 it throws "expected end of command"
-      // at parse time (column 125) which aborts the ENTIRE pasted command before any
-      // on-error can help. [:parse "..."] defers compilation to runtime so the
-      // invalid-parameter error becomes a catchable runtime error. If that fails (v6),
-      // the on-error block falls back to the v6 "primary-ntp=" syntax with a known IP.
+      // RouterOS validates ALL command parameters at PARSE TIME for the outer block,
+      // so "servers=" (v7-only) kills the command on v6, and "primary-ntp=" (v6-only)
+      // kills it on v7 — both BEFORE on-error can catch anything. [:parse "..."]
+      // defers each command string to runtime compilation, converting the unknown-
+      // parameter error into a catchable runtime error instead of a fatal parse error.
       ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
-      'on-error={ :do { /system ntp client set enabled=yes primary-ntp=162.159.200.1 secondary-ntp=162.159.200.123 } on-error={} }; ' +
+      'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
       ':delay 2s; '
     // Retry loop: up to 3 rounds with a 5-second wait between rounds.
     // Strategy: try plain HTTP fallback FIRST (no TLS, always works when TCP
