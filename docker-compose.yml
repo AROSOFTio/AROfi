@@ -69,9 +69,9 @@ x-app-env: &app-env
   # SSR calls from admin-web go straight to the api container on the compose
   # network instead of 127.0.0.1 (which only worked inside the old single
   # all-in-one container).
-  API_SERVER_URL: http://api:3000/api
-  NEXT_PUBLIC_API_URL: /api
-  PORT: 3000
+  API_SERVER_URL: ${API_SERVER_URL:-http://api:3000/api}
+  NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+  PORT: ${PORT:-3000}
 
 services:
   nginx:
