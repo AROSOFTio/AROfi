@@ -207,8 +207,11 @@ describe('MikrotikService', () => {
 
     const cmd = service.buildOneRunCommand('test-reg-key')
 
-    // NTP sync must appear before the fetch loop
-    expect(cmd).toContain('/system ntp client set enabled=yes servers=pool.ntp.org')
+    // NTP sync must appear before the fetch loop.
+    // RouterOS v6 rejects "servers=" at PARSE TIME, so the command must be wrapped
+    // in [:parse "..."] to defer to runtime, with a v6 "primary-ntp=" fallback.
+    expect(cmd).toContain('[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]')
+    expect(cmd).toContain('primary-ntp=162.159.200.1')
 
     // Plain HTTP (fallback) URL must appear BEFORE the HTTPS URL in the string
     const httpIdx = cmd.indexOf('http://95.111.234.34')
