@@ -12,7 +12,7 @@
 #
 # To switch a Coolify resource that's currently on the "Dockerfile" build
 # pack to this file: change its Build Pack to "Docker Compose" pointing at
-# this docker-compose.yml. Rolling back is just switching the build pack
+# this docker-compose.yaml. Rolling back is just switching the build pack
 # back — the root Dockerfile's all-in-one path (SERVICE_NAME=all) is
 # untouched.
 #
