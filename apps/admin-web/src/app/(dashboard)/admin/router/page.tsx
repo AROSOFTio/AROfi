@@ -202,7 +202,7 @@ export default function RouterObservabilityPage() {
             <Users size={16} /> Active Users
           </div>
           <div className="stat-value green" style={{ fontSize: 20 }}>
-            {isOnline ? (selectedRouter?.activeSessionsCount ?? 0) : 0}
+            {isOnline ? (selectedRouter?.activeSessions ?? 0) : 0}
           </div>
         </div>
 

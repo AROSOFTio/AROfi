@@ -330,6 +330,30 @@ export default function RemoteAccessPage() {
               </div>
             </div>
 
+            {tunnelTest && !tunnelTest.reachable && (
+              <div style={{
+                padding: 14,
+                border: '1px solid #f59e0b',
+                borderRadius: 10,
+                background: '#fffbeb',
+                fontSize: 13,
+                color: '#92400e',
+                lineHeight: 1.5,
+                display: 'grid',
+                gap: 6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <AlertCircle size={15} style={{ color: '#d97706', flexShrink: 0 }} />
+                  <strong>SSTP tunnel is not connected</strong>
+                </div>
+                <span>
+                  If you just ran the install script and saw <code style={{ background: '#fde68a', borderRadius: 3, padding: '1px 4px', fontSize: 11 }}>SSTP client blocked</code>,
+                  go to the <button type="button" onClick={() => setActiveTab('install')} style={{ background: 'none', border: 'none', color: '#d97706', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: 13 }}>Install tab</button> for
+                  the device-mode fix — it requires pressing the physical RESET button on the router.
+                </span>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
               {!isPortOpen ? (
                 <button
@@ -380,10 +404,48 @@ export default function RemoteAccessPage() {
             <h3 style={{ fontSize: 16, fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: 10, margin: 0 }}>
               Automatic Installation Script
             </h3>
-            
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-              Paste this one-line setup command into the MikroTik WinBox Terminal. It will fetch the remote access VPN profile configuration from AROFi cloud and install it natively.
-            </p>
+
+            {/* Device-mode prerequisite — SSTP client requires enterprise mode */}
+            <div style={{
+              padding: 16,
+              border: '1px solid #f59e0b',
+              borderRadius: 10,
+              background: '#fffbeb',
+              display: 'grid',
+              gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertCircle size={16} style={{ color: '#d97706', flexShrink: 0 }} />
+                <strong style={{ fontSize: 13, color: '#92400e' }}>Step 1 — Enable SSTP (required on some routers)</strong>
+              </div>
+              <p style={{ fontSize: 12.5, color: '#78350f', lineHeight: 1.55, margin: 0 }}>
+                If the install command outputs <code style={{ background: '#fde68a', borderRadius: 3, padding: '1px 4px' }}>ERROR: SSTP client blocked — device-mode restricts it</code>,
+                your router is in the default restricted mode. Run the command below in the WinBox Terminal,
+                then press the physical <strong>RESET button</strong> on the router within 5 minutes. The router will reboot into enterprise mode.
+              </p>
+              <div style={{ position: 'relative', background: '#1e1e2e', borderRadius: 7, padding: '10px 14px' }}>
+                <code style={{ fontSize: 12, color: '#a6e3a1', fontFamily: 'monospace' }}>
+                  /system device-mode update mode=enterprise
+                </code>
+                <button
+                  type="button"
+                  onClick={() => handleCopy('/system device-mode update mode=enterprise', 'devmode')}
+                  style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 5, padding: 5, cursor: 'pointer', color: '#cdd6f4' }}
+                >
+                  {copiedText === 'devmode' ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              </div>
+              <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>
+                After the router reboots, re-run the install command below (Step 2).
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Step 2 — Run the install command</strong>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                Paste this one-line command into the MikroTik WinBox Terminal. It fetches and installs the SSTP VPN profile from AROFi cloud.
+              </p>
+            </div>
 
             <div style={{
               position: 'relative',
@@ -399,7 +461,7 @@ export default function RemoteAccessPage() {
               userSelect: 'all'
             }}>
               {installCommand}
-              
+
               <button
                 type="button"
                 onClick={() => handleCopy(installCommand, 'install')}
