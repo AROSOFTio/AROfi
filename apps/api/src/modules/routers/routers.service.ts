@@ -23,6 +23,7 @@ import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
+import { UpdateRouterDto } from './dto/update-router.dto'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RemoteProxyService } from './remote-proxy.service'
@@ -699,6 +700,42 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
 
     return this.getRouterSetup(router.id, tenantId)
+  }
+
+  async deleteRouter(routerId: string, tenantId?: string) {
+    const where = tenantId ? { id: routerId, tenantId } : { id: routerId }
+    const router = await this.prisma.router.findFirst({ where })
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+    // Cascade: health checks, radius events, and sessions are deleted by DB cascade.
+    // Explicitly remove the radius/NAS client rows first (they reference the router).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.radiusClient.deleteMany({ where: { routerId } })
+      await tx.nasClient.deleteMany({ where: { routerId } })
+      await tx.router.delete({ where: { id: routerId } })
+    })
+    return { deleted: true }
+  }
+
+  async updateRouter(routerId: string, dto: UpdateRouterDto, tenantId?: string) {
+    // Verify ownership before writing
+    const check = await this.prisma.router.findFirst({
+      where: tenantId ? { id: routerId, tenantId } : { id: routerId },
+      select: { id: true },
+    })
+    if (!check) throw new NotFoundException('Router not found')
+
+    return this.prisma.router.update({
+      where: { id: routerId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : null),
+        ...(dto.siteLabel !== undefined ? { siteLabel: dto.siteLabel } : null),
+        ...(dto.password !== undefined
+          ? { passwordCiphertext: this.routerCredentialsService.encrypt(dto.password) }
+          : null),
+      } as Parameters<typeof this.prisma.router.update>[0]['data'],
+    })
   }
 
   async markRouterProvisionedByKey(key: string, sourceIp: string) {
@@ -1449,9 +1486,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const effectiveStatus =
       live.liveState === 'LIVE'
         ? RouterStatus.HEALTHY
-        : live.liveState === 'STALE' && router.status === RouterStatus.OFFLINE
-          ? RouterStatus.DEGRADED
-          : router.status
+        : live.liveState === 'OFFLINE'
+          ? RouterStatus.OFFLINE
+          : live.liveState === 'STALE' && router.status === RouterStatus.OFFLINE
+            ? RouterStatus.DEGRADED
+            : router.status
 
     return {
       id: router.id,

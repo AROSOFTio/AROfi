@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
-import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import type { 
   RouterOverviewResponse, 
   HotspotOverviewResponse, 
@@ -79,6 +79,19 @@ export default function SettingsRoutersPage() {
   const [scriptModal, setScriptModal] = useState<{ router: any; command: string } | null>(null)
   const [scriptCopied, setScriptCopied] = useState(false)
   const [loadingScript, setLoadingScript] = useState<string | null>(null)
+  const [deleteModalRouter, setDeleteModalRouter] = useState<any | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  // Create Group modal
+  const [groupModalOpen, setGroupModalOpen] = useState(false)
+  const [groupForm, setGroupForm] = useState({ name: '', code: '', description: '', region: '' })
+  const [groupSubmitting, setGroupSubmitting] = useState(false)
+  const [groupError, setGroupError] = useState('')
+  // Rename / password actually call APIs
+  const [renameSubmitting, setRenameSubmitting] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
 
   const loadData = async (silent = false) => {
     try {
@@ -132,7 +145,7 @@ export default function SettingsRoutersPage() {
 
   const hotspotsForTenant = useMemo(() => {
     if (!hotspots || !routerForm.tenantId) return []
-    return hotspots.items.filter((h) => h.tenantId === routerForm.tenantId)
+    return hotspots.items.filter((h) => h.tenant?.id === routerForm.tenantId)
   }, [hotspots, routerForm.tenantId])
 
   // Register Router
@@ -177,10 +190,12 @@ export default function SettingsRoutersPage() {
     }
   }
 
-  // Action: Reboot router mock
-  const handleReboot = (router: any) => {
-    alert(`Reboot command sent to ${router.name} (IP: ${router.host}) successfully!`)
+  // Action: Reboot router (fire-and-forget via health-check — actual reboot needs RouterOS API)
+  const handleReboot = async (router: any) => {
     setActiveMenuId(null)
+    try {
+      await clientPostApi(`/routers/${router.id}/health-check`)
+    } catch { /* ignore */ }
   }
 
   // Action: Test connection
@@ -189,24 +204,82 @@ export default function SettingsRoutersPage() {
       setActiveMenuId(null)
       await clientPostApi(`/routers/${routerId}/health-check`)
       await loadData()
-      alert('Router connection test initiated!')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Test connection failed')
     }
   }
 
-  // Action: Update admin password mock
-  const handleUpdatePassword = (router: any) => {
-    alert(`Router admin credentials updated successfully for ${router.name}!`)
-    setPasswordModalOpen(null)
-    setAdminPassword('')
+  // Action: Rename router
+  const handleRenameSubmit = async () => {
+    if (!renameModalOpen || !renameName.trim()) return
+    setRenameError('')
+    setRenameSubmitting(true)
+    try {
+      await clientPatchApi(`/routers/${renameModalOpen.id}`, { name: renameName.trim() })
+      setRenameModalOpen(null)
+      setRenameName('')
+      await loadData()
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : 'Rename failed')
+    } finally {
+      setRenameSubmitting(false)
+    }
   }
 
-  // Action: Rename router mock
-  const handleRenameSubmit = () => {
-    alert(`Router renamed to "${renameName}" successfully!`)
-    setRenameModalOpen(null)
-    setRenameName('')
+  // Action: Update admin password
+  const handleUpdatePassword = async (router: any) => {
+    if (!adminPassword.trim()) return
+    setPasswordError('')
+    setPasswordSubmitting(true)
+    try {
+      await clientPatchApi(`/routers/${router.id}`, { password: adminPassword })
+      setPasswordModalOpen(null)
+      setAdminPassword('')
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Failed to update password')
+    } finally {
+      setPasswordSubmitting(false)
+    }
+  }
+
+  // Action: Delete router
+  const handleDeleteRouter = async () => {
+    if (!deleteModalRouter) return
+    setDeleteError('')
+    setDeleting(true)
+    try {
+      await clientDeleteApi(`/routers/${deleteModalRouter.id}`)
+      setDeleteModalRouter(null)
+      await loadData()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // Action: Create Group
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setGroupError('')
+    setGroupSubmitting(true)
+    try {
+      const tenantId = routerForm.tenantId || tenants[0]?.id
+      await clientPostApi('/routers/groups', {
+        tenantId,
+        name: groupForm.name.trim(),
+        code: groupForm.code.trim().toUpperCase(),
+        description: groupForm.description.trim() || undefined,
+        region: groupForm.region.trim() || undefined,
+      })
+      setGroupModalOpen(false)
+      setGroupForm({ name: '', code: '', description: '', region: '' })
+      await loadData()
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : 'Failed to create group')
+    } finally {
+      setGroupSubmitting(false)
+    }
   }
 
   const handleCopyAddress = (router: any) => {
@@ -258,14 +331,24 @@ export default function SettingsRoutersPage() {
           </p>
         </div>
 
-        <button 
-          type="button" 
-          className="btn btn-primary"
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => setAddModalOpen(true)}
-        >
-          <Plus size={16} /> Add Router
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => { setGroupForm({ name: '', code: '', description: '', region: '' }); setGroupError(''); setGroupModalOpen(true) }}
+          >
+            <Plus size={14} /> Add Group
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => setAddModalOpen(true)}
+          >
+            <Plus size={16} /> Add Router
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -299,7 +382,10 @@ export default function SettingsRoutersPage() {
                 </tr>
               ) : (
                 routers.map((router) => {
-                  const isOnline = router.status === 'HEALTHY' || router.status === 'VERIFIED_ONLINE'
+                  // Use isLiveNow (heartbeat-based) — status field lags because it
+                  // reflects the last management API health check result, not the
+                  // heartbeat window, so it stays HEALTHY even after power-off.
+                  const isOnline = router.isLiveNow === true
                   return (
                     <tr key={router.id} style={{ borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                       <td style={{ padding: '16px 20px' }}>
@@ -456,12 +542,13 @@ export default function SettingsRoutersPage() {
 
                               <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
 
-                              <button 
-                                type="button" 
-                                className="btn btn-ghost" 
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
                                 style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px', color: 'var(--danger-fg)' }}
                                 onClick={() => {
-                                  alert('To delete this router, please contact technical support or use the vendor overview settings.')
+                                  setDeleteModalRouter(router)
+                                  setDeleteError('')
                                   setActiveMenuId(null)
                                 }}
                               >
@@ -696,10 +783,9 @@ export default function SettingsRoutersPage() {
 
       {/* MODAL: Rename Router */}
       {renameModalOpen && (
-        <div className="modal-overlay" onClick={() => setRenameModalOpen(null)}>
+        <div className="modal-overlay" onClick={() => !renameSubmitting && setRenameModalOpen(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px 0' }}>Rename Router</h3>
-            
             <div className="form-group">
               <label className="form-label">New Router Name</label>
               <input
@@ -710,10 +796,10 @@ export default function SettingsRoutersPage() {
                 required
               />
             </div>
-
+            {renameError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, margin: '8px 0 0' }}>{renameError}</p>}
             <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setRenameModalOpen(null)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={handleRenameSubmit}>Rename</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setRenameModalOpen(null)} disabled={renameSubmitting}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={() => void handleRenameSubmit()} disabled={renameSubmitting}>{renameSubmitting ? 'Saving...' : 'Rename'}</button>
             </div>
           </div>
         </div>
@@ -721,13 +807,12 @@ export default function SettingsRoutersPage() {
 
       {/* MODAL: Update Admin Password */}
       {passwordModalOpen && (
-        <div className="modal-overlay" onClick={() => setPasswordModalOpen(null)}>
+        <div className="modal-overlay" onClick={() => !passwordSubmitting && setPasswordModalOpen(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px 0' }}>Update Admin Password</h3>
             <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 14 }}>
-              Provide the new login credentials for the MikroTik API client. AROFi uses this to communicate with your router.
+              Provide the new MikroTik admin password. AROFi uses this to connect via the RouterOS API.
             </p>
-
             <div className="form-group">
               <label className="form-label">New API Password</label>
               <input
@@ -739,11 +824,92 @@ export default function SettingsRoutersPage() {
                 required
               />
             </div>
-
+            {passwordError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, margin: '8px 0 0' }}>{passwordError}</p>}
             <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setPasswordModalOpen(null)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={() => handleUpdatePassword(passwordModalOpen)}>Save Password</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setPasswordModalOpen(null)} disabled={passwordSubmitting}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={() => void handleUpdatePassword(passwordModalOpen)} disabled={passwordSubmitting}>{passwordSubmitting ? 'Saving...' : 'Save Password'}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Delete Router */}
+      {deleteModalRouter && (
+        <div className="modal-overlay" onClick={() => !deleting && setDeleteModalRouter(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px 0', color: 'var(--danger-fg)' }}>
+              <Trash2 size={18} style={{ display: 'inline', marginRight: 8, verticalAlign: 'text-bottom' }} />
+              Delete Router
+            </h3>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              You are about to permanently delete <strong>{deleteModalRouter.name}</strong>. This removes the router, its RADIUS client, and all health-check history from AROFi.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--danger-fg)', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '10px 12px', marginBottom: 4 }}>
+              This cannot be undone. Active sessions on this router will be orphaned until they expire naturally in RADIUS.
+            </p>
+            {deleteError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginTop: 8 }}>{deleteError}</p>}
+            <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setDeleteModalRouter(null)} disabled={deleting}>Cancel</button>
+              <button
+                type="button"
+                className="btn"
+                style={{ background: 'var(--danger-fg)', color: '#fff' }}
+                onClick={() => void handleDeleteRouter()}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete Router'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Create Router Group */}
+      {groupModalOpen && (
+        <div className="modal-overlay" onClick={() => !groupSubmitting && setGroupModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px 0' }}>Create Router Group</h3>
+            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              Groups let you organize routers by site, region, or purpose and filter them together.
+            </p>
+            <form onSubmit={(e) => void handleCreateGroup(e)} style={{ display: 'grid', gap: 12 }}>
+              {session?.user.permissions.includes('ALL') && tenants.length > 1 && (
+                <div className="form-group">
+                  <label className="form-label">Tenant</label>
+                  <select
+                    className="form-input"
+                    value={routerForm.tenantId}
+                    onChange={(e) => setRouterForm(prev => ({ ...prev, tenantId: e.target.value }))}
+                    required
+                  >
+                    {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Group Name</label>
+                  <input className="form-input" value={groupForm.name} onChange={(e) => setGroupForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Kampala North" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Code</label>
+                  <input className="form-input" value={groupForm.code} onChange={(e) => setGroupForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} placeholder="KLA-N" required />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Region (optional)</label>
+                <input className="form-input" value={groupForm.region} onChange={(e) => setGroupForm(p => ({ ...p, region: e.target.value }))} placeholder="e.g. Central" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Description (optional)</label>
+                <input className="form-input" value={groupForm.description} onChange={(e) => setGroupForm(p => ({ ...p, description: e.target.value }))} placeholder="e.g. All routers in the Kampala North zone" />
+              </div>
+              {groupError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, margin: 0 }}>{groupError}</p>}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setGroupModalOpen(false)} disabled={groupSubmitting}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={groupSubmitting}>{groupSubmitting ? 'Creating...' : 'Create Group'}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

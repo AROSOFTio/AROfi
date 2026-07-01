@@ -1095,8 +1095,10 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-      const dnsName = `${batch.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
-      const qrPng = await this.generateVoucherQrPng(voucher.code, dnsName)
+      // Always use the hosted portal URL for QR codes so they work when scanned
+      // from outside the hotspot network. The local dnsName URL only resolves
+      // inside the captive portal and shows "unknown page" elsewhere.
+      const qrPng = await this.generateVoucherQrPng(voucher.code)
 
       this.drawVoucherCard(doc, {
         x,

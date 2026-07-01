@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -7,6 +7,7 @@ import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
+import { UpdateRouterDto } from './dto/update-router.dto'
 import { RoutersService } from './routers.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -97,6 +98,24 @@ export class RoutersController {
   @Post('remote-access/enable-all')
   enableAllRemotePorts(@CurrentUser() user: AuthenticatedAdminUser) {
     return this.routersService.enableAllRemotePorts()
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Patch(':routerId')
+  updateRouter(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('routerId') routerId: string,
+    @Body() dto: UpdateRouterDto,
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.updateRouter(routerId, dto, tenantId ?? undefined)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Delete(':routerId')
+  deleteRouter(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.deleteRouter(routerId, tenantId ?? undefined)
   }
 }
 

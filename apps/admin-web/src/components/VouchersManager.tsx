@@ -893,8 +893,9 @@ function VoucherSampleCard({
 
   useEffect(() => {
     let active = true
-    const dnsName = tenantName ? `${tenantName.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi` : undefined
-    const portalUrl = getVoucherQrPortalUrl(code, dnsName)
+    // Always use the hosted portal URL — dnsName-based URLs only work on the
+    // local hotspot network and show "unknown page" when scanned elsewhere.
+    const portalUrl = getVoucherQrPortalUrl(code)
 
     void QRCode.toDataURL(portalUrl, {
       errorCorrectionLevel: 'M',
