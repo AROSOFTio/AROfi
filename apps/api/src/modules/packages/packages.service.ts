@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PackageStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { CreatePackageDto } from './dto/create-package.dto'
@@ -11,7 +11,10 @@ export class PackagesService {
 
   async getCatalog(tenantId?: string) {
     const items = await this.prisma.package.findMany({
-      where: tenantId ? { tenantId } : undefined,
+      where: {
+        status: { not: PackageStatus.ARCHIVED },
+        ...(tenantId ? { tenantId } : {}),
+      },
       include: {
         tenant: {
           select: {
@@ -149,6 +152,26 @@ export class PackagesService {
         include: { tenant: { select: { id: true, name: true } }, prices: true },
       })
     })
+  }
+
+  async deletePackage(packageId: string, tenantId?: string) {
+    const pkg = await this.prisma.package.findUnique({
+      where: { id: packageId },
+      include: { _count: { select: { vouchers: true } } },
+    })
+    if (!pkg || (tenantId && pkg.tenantId !== tenantId)) {
+      throw new NotFoundException('Package not found')
+    }
+    if (pkg._count.vouchers > 0) {
+      throw new BadRequestException(
+        `Cannot delete this package — it has ${pkg._count.vouchers} voucher(s) linked to it. Archive it instead by editing its status.`,
+      )
+    }
+    await this.prisma.package.update({
+      where: { id: packageId },
+      data: { status: PackageStatus.ARCHIVED },
+    })
+    return { deleted: true }
   }
 
   async addPricing(packageId: string, dto: CreatePackagePriceDto, tenantId?: string) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -44,6 +44,13 @@ export class PackagesController {
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.packagesService.updatePackage(packageId, dto, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.packagesManage)
+  @Delete(':packageId')
+  deletePackage(@CurrentUser() user: AuthenticatedAdminUser, @Param('packageId') packageId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.packagesService.deletePackage(packageId, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.packagesManage)

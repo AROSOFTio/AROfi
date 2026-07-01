@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { PackageCatalogResponse, TenantOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { DurationInput } from '@/components/DurationInput'
-import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
+import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDuration } from '@/lib/format'
 
 type PackageFormState = {
@@ -54,6 +54,8 @@ export default function PackagesManager() {
   const [formError, setFormError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -85,6 +87,23 @@ export default function PackagesManager() {
     setProcessText('')
     setFormState((previous) => ({ ...initialFormState, tenantId: previous.tenantId }))
     setCreateOpen(true)
+  }
+
+  async function handleDelete(packageId: string) {
+    setDeleting(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await clientDeleteApi(`/packages/${packageId}`)
+      setSuccess('Package deleted successfully')
+      setDeleteConfirmId(null)
+      await loadData()
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete package')
+      setDeleteConfirmId(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const items = catalog?.items ?? []
@@ -291,6 +310,9 @@ export default function PackagesManager() {
         </div>
       )}
 
+      {error && !formError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+      {success && !submitting && <p style={{ color: 'var(--success-fg)', fontSize: 13, marginBottom: 10 }}>{success}</p>}
+
       <div className="table-toolbar">
         <input className="form-input" placeholder="Filter packages..." style={{ width: 244 }} />
         <div style={{ display: 'flex', gap: 8 }}>
@@ -354,8 +376,36 @@ export default function PackagesManager() {
                   <td>
                     <span className={`switch-pill ${item.status === 'ACTIVE' ? 'on' : ''}`} aria-label={item.status} />
                   </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Edit</button>
+                  <td style={{ textAlign: 'right' }}>
+                    {deleteConfirmId === item.id ? (
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 12, color: 'var(--danger-fg)' }}>Delete?</span>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ background: 'var(--danger-fg)', color: '#fff', border: 'none' }}
+                          onClick={() => void handleDelete(item.id)}
+                          disabled={deleting}
+                        >
+                          {deleting ? '...' : 'Yes'}
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleteConfirmId(null)} disabled={deleting}>
+                          No
+                        </button>
+                      </span>
+                    ) : (
+                      <span style={{ display: 'inline-flex', gap: 6 }}>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Edit</button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--danger-fg)' }}
+                          onClick={() => { setDeleteConfirmId(item.id); setError(null); setSuccess(null) }}
+                        >
+                          Delete
+                        </button>
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
