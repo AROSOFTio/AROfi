@@ -666,16 +666,39 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     // 30 minutes was too long — ghost ACTIVE sessions caused the captive portal
     // to report existingActiveAccess=true and skip the package selection screen.
     const staleBefore = new Date(Date.now() - 5 * 60 * 1000)
+    const staleWhere = {
+      status: SessionStatus.ACTIVE,
+      OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
+    } as const
+
+    // Capture affected router IDs before the bulk update so we can sync the
+    // cached activeSessionCount column. Without this, the column stays at the
+    // pre-cleanup value and mapRouter sees activeSessions > 0 indefinitely,
+    // causing offline routers to appear permanently LIVE.
+    const affected = await this.prisma.networkSession.findMany({
+      where: staleWhere,
+      select: { routerId: true },
+      distinct: ['routerId'],
+    })
+
     await this.prisma.networkSession.updateMany({
-      where: {
-        status: SessionStatus.ACTIVE,
-        OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
-      },
+      where: staleWhere,
       data: {
         status: SessionStatus.STALE,
         endedAt: new Date(),
       },
     })
+
+    for (const { routerId } of affected) {
+      if (!routerId) continue
+      const count = await this.prisma.networkSession.count({
+        where: { routerId, status: SessionStatus.ACTIVE },
+      })
+      await this.prisma.router.update({
+        where: { id: routerId },
+        data: { activeSessionCount: count },
+      })
+    }
   }
 
   // Safety net for a webhook-processing bug: a customer paid (status COMPLETED)

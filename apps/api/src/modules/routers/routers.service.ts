@@ -1425,6 +1425,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     remoteToken?: string | null
     remoteClientName?: string | null
     remoteAccessEnabled?: boolean
+    remoteWgPubKey?: string | null
     verificationStatus?: string
     onboardingStatus?: string
     registrationKey?: string
@@ -1480,7 +1481,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       checkedAt: Date
     }>
   }) {
-    const activeSessions = router.sessions.length || router.activeSessionCount
+    // router.sessions is always loaded with status:ACTIVE filter — it is the
+    // authoritative count. The cached router.activeSessionCount can lag behind
+    // after stale-session cleanup and must not override a zero live count.
+    const activeSessions = router.sessions.length
     const live = this.resolveRouterLiveState(router, activeSessions)
     const effectiveStatus =
       live.liveState === 'LIVE'
