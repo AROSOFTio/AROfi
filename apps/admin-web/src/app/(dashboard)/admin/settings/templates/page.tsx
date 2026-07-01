@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, Wifi, Loader2, AlertCircle } from 'lucide-react'
+import { Check, Loader2, AlertCircle } from 'lucide-react'
 import { clientFetchApi, clientPatchApi } from '@/lib/client-api'
 
 type PortalTemplateId = 'classic' | 'fresh' | 'midnight' | 'sunrise' | 'minimal'
@@ -11,134 +11,116 @@ type TemplateDefinition = {
   name: string
   description: string
   isPro: boolean
-  // These values mirror the Tailwind classes in PortalCheckout.tsx exactly
+  // Page / card colors — mirror what login.html / PortalCheckout.tsx renders
   pageBg: string
-  shellBg: string
-  shellBorder: string
-  shellShadow: string
-  shellRadius: number
   cardBg: string
   cardBorder: string
+  cardShadow: string
+  tabsBg: string
+  accentColor: string
   titleColor: string
   subtitleColor: string
   inputBg: string
   inputBorder: string
-  inputText: string
   buttonBg: string
   buttonText: string
-  accentColor: string
 }
 
 const TEMPLATES: TemplateDefinition[] = [
   {
     id: 'classic',
-    name: 'Classic',
-    description: 'Clean green-and-white. Works on any device, loads fast. Default for all plans.',
+    name: 'AROFi Blue',
+    description: 'The default portal — bright blue on white, exactly as seen at the captive portal. Loads fast on any device.',
     isPro: false,
-    pageBg: '#f1f5f9',
-    shellBg: '#f8fafc',
-    shellBorder: '#cbd5e1',
-    shellShadow: '0 1px 3px rgba(0,0,0,0.08)',
-    shellRadius: 8,
+    pageBg: '#eff6ff',
     cardBg: '#ffffff',
-    cardBorder: '#cbd5e1',
-    titleColor: '#059669',
+    cardBorder: '#bfdbfe',
+    cardShadow: '0 8px 32px rgba(37,99,235,.10)',
+    tabsBg: '#f1f5f9',
+    accentColor: '#2563EB',
+    titleColor: '#2563EB',
     subtitleColor: '#64748b',
-    inputBg: '#ffffff',
-    inputBorder: '#cbd5e1',
-    inputText: '#0f172a',
-    buttonBg: '#10b981',
+    inputBg: '#f8fafc',
+    inputBorder: '#e2e8f0',
+    buttonBg: '#2563EB',
     buttonText: '#ffffff',
-    accentColor: '#10b981',
-  },
-  {
-    id: 'fresh',
-    name: 'Fresh',
-    description: 'Crisp white with emerald accents and a soft green glow — modern and welcoming.',
-    isPro: true,
-    pageBg: '#ecfdf5',
-    shellBg: '#ffffff',
-    shellBorder: '#a7f3d0',
-    shellShadow: '0 18px 60px rgba(16,185,129,0.12)',
-    shellRadius: 16,
-    cardBg: '#ffffff',
-    cardBorder: '#a7f3d0',
-    titleColor: '#047857',
-    subtitleColor: '#6b7280',
-    inputBg: '#ffffff',
-    inputBorder: '#a7f3d0',
-    inputText: '#0f172a',
-    buttonBg: '#059669',
-    buttonText: '#ffffff',
-    accentColor: '#059669',
   },
   {
     id: 'midnight',
     name: 'Midnight',
-    description: 'Dark background with sky-blue accents — sleek look for evening and night venues.',
+    description: 'Dark mode — deep navy background with electric blue accents. Great for evening and night venues.',
     isPro: true,
-    pageBg: '#020617',
-    shellBg: '#020617',
-    shellBorder: '#0c4a6e',
-    shellShadow: '0 22px 70px rgba(2,6,23,0.4)',
-    shellRadius: 16,
+    pageBg: '#0a0f1e',
     cardBg: '#0f172a',
-    cardBorder: '#075985',
-    titleColor: '#7dd3fc',
+    cardBorder: '#1e3a5f',
+    cardShadow: '0 8px 32px rgba(0,0,0,.5)',
+    tabsBg: '#162033',
+    accentColor: '#3b82f6',
+    titleColor: '#60a5fa',
     subtitleColor: '#94a3b8',
-    inputBg: '#0f172a',
-    inputBorder: '#075985',
-    inputText: '#f1f5f9',
-    buttonBg: '#0ea5e9',
-    buttonText: '#020617',
-    accentColor: '#0ea5e9',
+    inputBg: '#1e293b',
+    inputBorder: '#334155',
+    buttonBg: '#2563EB',
+    buttonText: '#ffffff',
+  },
+  {
+    id: 'fresh',
+    name: 'Forest',
+    description: 'Calm green tones — natural and trustworthy feel, popular for community and rural hotspots.',
+    isPro: true,
+    pageBg: '#ecfdf5',
+    cardBg: '#ffffff',
+    cardBorder: '#a7f3d0',
+    cardShadow: '0 8px 32px rgba(5,150,105,.10)',
+    tabsBg: '#f0fdf4',
+    accentColor: '#059669',
+    titleColor: '#059669',
+    subtitleColor: '#64748b',
+    inputBg: '#f8fafc',
+    inputBorder: '#d1fae5',
+    buttonBg: '#059669',
+    buttonText: '#ffffff',
   },
   {
     id: 'sunrise',
     name: 'Sunrise',
-    description: 'Warm amber and orange tones — energetic feel, great for cafés and outdoor spots.',
+    description: 'Warm amber and orange tones — energetic feel, great for cafés and outdoor hotspots.',
     isPro: true,
-    pageBg: '#fef3c7',
-    shellBg: '#fff7ed',
-    shellBorder: '#fde68a',
-    shellShadow: '0 18px 60px rgba(245,158,11,0.14)',
-    shellRadius: 16,
+    pageBg: '#fffbeb',
     cardBg: '#ffffff',
     cardBorder: '#fde68a',
-    titleColor: '#92400e',
+    cardShadow: '0 8px 32px rgba(245,158,11,.10)',
+    tabsBg: '#fef3c7',
+    accentColor: '#d97706',
+    titleColor: '#d97706',
     subtitleColor: '#78350f',
-    inputBg: '#ffffff',
+    inputBg: '#fffbeb',
     inputBorder: '#fde68a',
-    inputText: '#0f172a',
     buttonBg: '#f59e0b',
     buttonText: '#ffffff',
-    accentColor: '#f59e0b',
   },
   {
     id: 'minimal',
     name: 'Minimal',
-    description: 'Pure black-and-white, no decorative colors — maximum readability, zero distraction.',
+    description: 'Pure black and white — maximum readability, zero distraction.',
     isPro: true,
     pageBg: '#f8fafc',
-    shellBg: '#ffffff',
-    shellBorder: '#e2e8f0',
-    shellShadow: '0 1px 3px rgba(0,0,0,0.08)',
-    shellRadius: 0,
     cardBg: '#ffffff',
     cardBorder: '#e2e8f0',
-    titleColor: '#020617',
+    cardShadow: '0 2px 8px rgba(0,0,0,.08)',
+    tabsBg: '#f1f5f9',
+    accentColor: '#0f172a',
+    titleColor: '#0f172a',
     subtitleColor: '#64748b',
-    inputBg: '#ffffff',
-    inputBorder: '#cbd5e1',
-    inputText: '#0f172a',
-    buttonBg: '#020617',
+    inputBg: '#f8fafc',
+    inputBorder: '#e2e8f0',
+    buttonBg: '#0f172a',
     buttonText: '#ffffff',
-    accentColor: '#020617',
   },
 ]
 
+// Faithfully recreates the login.html captive portal structure at miniature scale
 function PortalMockup({ t }: { t: TemplateDefinition }) {
-  const r = Math.min(6, t.shellRadius)
   return (
     <div style={{
       background: '#0d1117',
@@ -155,15 +137,8 @@ function PortalMockup({ t }: { t: TemplateDefinition }) {
     }}>
       {/* Notch */}
       <div style={{
-        position: 'absolute',
-        top: 0,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 72,
-        height: 14,
-        background: '#1e293b',
-        borderRadius: '0 0 10px 10px',
-        zIndex: 10,
+        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+        width: 72, height: 14, background: '#1e293b', borderRadius: '0 0 10px 10px', zIndex: 10,
       }} />
       {/* Screen */}
       <div style={{
@@ -173,98 +148,85 @@ function PortalMockup({ t }: { t: TemplateDefinition }) {
         height: '100%',
         overflow: 'hidden',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '18px 8px 8px',
+        padding: '16px 8px 8px',
+        gap: 0,
       }}>
-        {/* Portal card — mirrors the shell + inner layout from PortalCheckout */}
+        {/* Card — same structure as login.html .card */}
         <div style={{
-          background: t.shellBg,
-          borderRadius: t.shellRadius,
-          border: `1px solid ${t.shellBorder}`,
-          boxShadow: t.shellShadow,
-          padding: '10px 9px',
+          background: t.cardBg,
+          border: `1px solid ${t.cardBorder}`,
+          borderRadius: 10,
+          padding: '8px 7px',
           width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
+          boxShadow: t.cardShadow,
         }}>
-          {/* Header: WiFi icon + tenant name */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 1 }}>
-            <Wifi size={11} color={t.titleColor} strokeWidth={2.5} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: t.titleColor, letterSpacing: '-0.01em' }}>
+          {/* Logo: wifi icon + hotspot name + tagline */}
+          <div style={{ textAlign: 'center', marginBottom: 5 }}>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke={t.accentColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ display: 'inline-block' }}
+            >
+              <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+              <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+              <line x1="12" y1="20" x2="12.01" y2="20" strokeWidth="3"/>
+            </svg>
+            <div style={{ fontSize: 7, fontWeight: 800, color: t.titleColor, letterSpacing: '0.06em', marginTop: 2 }}>
               BRENDA WiFi
-            </span>
+            </div>
+            <div style={{ fontSize: 5, color: t.subtitleColor, marginTop: 1 }}>
+              Instant high-speed internet access
+            </div>
           </div>
 
-          {/* Subtitle */}
-          <p style={{ fontSize: 7.5, color: t.subtitleColor, margin: 0, lineHeight: 1.3 }}>
-            Enter voucher or pay to get online
-          </p>
-
-          {/* Input: phone */}
+          {/* Tabs: Buy Package | Voucher */}
           <div style={{
-            background: t.inputBg,
-            border: `1px solid ${t.inputBorder}`,
-            borderRadius: r,
-            padding: '4px 7px',
-            fontSize: 8,
-            color: t.inputText === '#f1f5f9' ? t.subtitleColor : '#94a3b8',
+            display: 'flex', background: t.tabsBg, borderRadius: 5, padding: '1px',
+            marginBottom: 5, gap: 2,
           }}>
-            07XX XXX XXX
+            <div style={{
+              flex: 1, textAlign: 'center', background: t.cardBg, borderRadius: 4,
+              padding: '2px 0', fontSize: 5.5, fontWeight: 700, color: t.titleColor,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+            }}>Buy Package</div>
+            <div style={{
+              flex: 1, textAlign: 'center', padding: '2px 0',
+              fontSize: 5.5, color: t.subtitleColor,
+            }}>Voucher</div>
           </div>
 
-          {/* Input: voucher */}
+          {/* Package row */}
           <div style={{
-            background: t.inputBg,
-            border: `1px solid ${t.inputBorder}`,
-            borderRadius: r,
-            padding: '4px 7px',
-            fontSize: 8,
-            color: t.inputText === '#f1f5f9' ? t.subtitleColor : '#94a3b8',
-          }}>
-            Voucher code...
-          </div>
-
-          {/* Connect button */}
-          <div style={{
-            background: t.buttonBg,
-            color: t.buttonText,
-            borderRadius: r,
-            padding: '5px 8px',
-            fontSize: 9,
-            fontWeight: 600,
-            textAlign: 'center',
-          }}>
-            Pay &amp; Connect
-          </div>
-
-          {/* Package card */}
-          <div style={{
-            background: t.cardBg,
-            border: `1px solid ${t.cardBorder}`,
-            borderRadius: r,
-            padding: '5px 7px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: 2,
+            border: `1px solid ${t.cardBorder}`, borderRadius: 6, padding: '3px 5px',
+            marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <div>
-              <div style={{ fontSize: 7, color: t.subtitleColor, fontWeight: 500 }}>1 HOUR</div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: t.titleColor }}>UGX 1,000</div>
+              <div style={{ fontSize: 6.5, fontWeight: 700, color: t.titleColor }}>1 Hour</div>
+              <div style={{ fontSize: 5, color: t.subtitleColor }}>Unlimited data</div>
             </div>
-            <div style={{
-              background: t.buttonBg,
-              color: t.buttonText,
-              borderRadius: 4,
-              padding: '2px 8px',
-              fontSize: 8,
-              fontWeight: 700,
-            }}>
-              BUY
-            </div>
+            <div style={{ fontSize: 6.5, fontWeight: 800, color: t.accentColor }}>UGX 1,000</div>
           </div>
+
+          {/* Phone input */}
+          <div style={{
+            background: t.inputBg, border: `1px solid ${t.inputBorder}`, borderRadius: 5,
+            padding: '3px 5px', fontSize: 5.5, color: t.subtitleColor, marginBottom: 4,
+          }}>07XX XXX XXX</div>
+
+          {/* Pay button */}
+          <div style={{
+            background: t.buttonBg, color: t.buttonText, borderRadius: 5,
+            padding: '4px 0', fontSize: 6.5, fontWeight: 700, textAlign: 'center',
+          }}>Pay and Connect</div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop: 5, fontSize: 5, color: t.subtitleColor, textAlign: 'center' }}>
+          Powered By <span style={{ color: t.accentColor, fontWeight: 600 }}>AROFi</span>
         </div>
       </div>
     </div>
@@ -325,7 +287,7 @@ export default function HotspotTemplatesPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px' }}>Portal Templates</h1>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
-          Choose the design your customers see when they connect to your WiFi.
+          Choose the colour theme your customers see when they connect to your WiFi.
           Preview updates in real time — click Activate to apply.
         </p>
       </div>
@@ -363,24 +325,19 @@ export default function HotspotTemplatesPage() {
                 }}
                 onClick={() => setSelectedId(t.id)}
               >
-                {/* Color swatch — shows the real portal colors */}
+                {/* Colour swatch */}
                 <div style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 10,
-                  background: t.shellBg,
-                  border: `2px solid ${t.accentColor}`,
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  position: 'relative',
+                  width: 44, height: 44, borderRadius: 10,
+                  background: t.pageBg, border: `2px solid ${t.cardBorder}`,
+                  flexShrink: 0, overflow: 'hidden', position: 'relative',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <div style={{ width: '100%', height: '100%', background: t.pageBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: 28, height: 28, borderRadius: t.shellRadius === 0 ? 2 : 6, background: t.shellBg, border: `1px solid ${t.shellBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div style={{ width: 18, height: 7, borderRadius: t.shellRadius === 0 ? 0 : 3, background: t.buttonBg }} />
-                    </div>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 6,
+                    background: t.cardBg, border: `1px solid ${t.cardBorder}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <div style={{ width: 18, height: 7, borderRadius: 3, background: t.buttonBg }} />
                   </div>
                 </div>
 

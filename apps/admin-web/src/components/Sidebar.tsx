@@ -22,15 +22,6 @@ type NavGroup = {
 
 const navItems: NavGroup[] = [
   {
-    label: 'Overview',
-    icon: <HomeIcon />,
-    items: [
-      { href: '/dashboard', label: 'Dashboard' },
-      { href: '/support', label: 'Support Hub', required: ['support.read'], tenantOnly: true },
-      { href: '/docs', label: 'Docs' },
-    ]
-  },
-  {
     label: 'Routers',
     icon: <RouterIcon />,
     items: [
@@ -78,6 +69,8 @@ const navItems: NavGroup[] = [
       { href: '/admin/settings/templates', label: 'Captive Templates', tenantOnly: true },
       { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Gateways', tenantOnly: true },
       { href: '/settings?tab=Security', label: 'Advanced', tenantOnly: true },
+      { href: '/support', label: 'Support Hub', required: ['support.read'], tenantOnly: true },
+      { href: '/docs', label: 'Docs', tenantOnly: true },
     ]
   },
   {
@@ -88,6 +81,8 @@ const navItems: NavGroup[] = [
       { href: '/sales-by-tenant', label: 'Sales by Business', required: ['billing.read'], platformOnly: true },
       { href: '/users?tab=staff', label: 'Platform Staff', required: ['users.read'], platformOnly: true },
       { href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true },
+      { href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true },
+      { href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true },
     ]
   },
   {
@@ -108,19 +103,6 @@ const navItems: NavGroup[] = [
       { href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true },
       { href: '/disbursements', label: 'Phone Approvals', required: ['disbursements.read'], platformOnly: true },
       { href: '/transactions', label: 'All Transactions', required: ['billing.read'], platformOnly: true },
-    ]
-  },
-  {
-    label: 'Platform Settings',
-    icon: <SettingsIcon />,
-    items: [
-      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payments', required: ['settings.manage'], platformOnly: true },
-      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Commission', required: ['settings.manage'], platformOnly: true },
-      { href: '/admin/settings/routers', label: 'Routers', required: ['settings.manage'], platformOnly: true },
-      { href: '/admin/settings/templates', label: 'Captive Templates', required: ['settings.manage'], platformOnly: true },
-      { href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true },
-      { href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true },
-      { href: '/docs', label: 'Docs' },
     ]
   },
 ]
@@ -177,9 +159,21 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           </div>
         </div>
       </div>
+      {isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
+      <div className="sidebar-section">
+        <Link
+          href="/dashboard"
+          className={`sidebar-group-toggle ${isActiveHref(currentHref, '/dashboard') ? 'active' : ''}`}
+        >
+          <span className="sidebar-group-label">
+            <HomeIcon />
+            Dashboard
+          </span>
+        </Link>
+      </div>
       {visibleGroups.map((group) => (
         <div key={group.label} className="sidebar-section">
-          {group.label === 'Overview' && isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
+          {false && null}
           <button
             type="button"
             className={`sidebar-group-toggle ${group.items.some((item) => isActiveHref(currentHref, item.href)) ? 'active' : ''}`}
