@@ -604,63 +604,6 @@ export default function VouchersManager() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Voucher Templates</span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Template</th>
-                <th>Tenant</th>
-                <th>Package</th>
-                <th>Default Qty</th>
-                <th>Face Value</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="empty-state">
-                      <p>Loading templates...</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {!loading && templateItems.length === 0 && (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="empty-state">
-                      <p>No voucher templates created yet.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {templateItems.map((template) => (
-                <tr key={template.id}>
-                  <td>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{template.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{template.code}</div>
-                  </td>
-                  <td>{template.tenant.name}</td>
-                  <td>{template.package?.name ?? 'Any package'}</td>
-                  <td>{template.defaultQuantity}</td>
-                  <td>{formatCurrency(template.faceValueUgx ?? 0)}</td>
-                  <td>
-                    <span className={getStatusBadgeClass(template.isActive ? 'ACTIVE' : 'DISABLED')}>
-                      {template.isActive ? (template.isDefault ? 'default' : 'active') : 'disabled'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-header">
           <span className="card-title">Voucher Batches</span>
         </div>
         <div className="table-wrap">
