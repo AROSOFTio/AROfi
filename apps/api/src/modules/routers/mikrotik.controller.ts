@@ -70,6 +70,16 @@ export class MikrotikController {
     return this.getRemoteAccessInstall(token, request);
   }
 
+  @Get('deploy-wireguard.sh')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  getDeployWireguardScript() {
+    const script = this.routersService.getDeployWireguardScript()
+    if (!script) {
+      throw new NotFoundException('deploy-wireguard.sh not found in container')
+    }
+    return script
+  }
+
   @Get('provisioned/:key')
   async markProvisioned(
     @Param('key') key: string,

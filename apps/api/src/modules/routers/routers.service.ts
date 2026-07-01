@@ -1919,6 +1919,18 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return { success: true }
   }
 
+  getDeployWireguardScript(): string | null {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs') as typeof import('fs')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path') as typeof import('path')
+      return fs.readFileSync(path.join(process.cwd(), 'scripts', 'deploy-wireguard.sh'), 'utf8')
+    } catch {
+      return null
+    }
+  }
+
   async getRemoteAccessInstallScript(token: string) {
     const router = await this.prisma.router.findFirst({
       where: { remoteToken: token },
@@ -1967,7 +1979,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       return [
         `# AROFi Remote Access — WireGuard Setup`,
         `# SETUP REQUIRED: The VPS WireGuard server has not been deployed yet.`,
-        `# Ask your AROFi administrator to run:  sh scripts/deploy-wireguard.sh  on the VPS`,
+        `# Ask your AROFi administrator to run the deploy script shown in Admin → Remote Access → Install`,
         `# then set VPN_WG_SERVER_PUBKEY in Coolify and redeploy the app.`,
         `# After that, run this install script again from the AROFi panel.`,
       ].join('\n')

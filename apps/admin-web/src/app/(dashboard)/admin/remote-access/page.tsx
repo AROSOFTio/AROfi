@@ -157,6 +157,13 @@ export default function RemoteAccessPage() {
     return `${vpnHost}:${selectedRouter.remotePort || ''}`
   }, [selectedRouter])
 
+  const deployWireguardCmd = useMemo(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.arofi.net'
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? `${origin}/api`
+    const base = apiBase.startsWith('http') ? apiBase : `${origin}${apiBase}`
+    return `curl -fsSL ${base}/mikrotik/deploy-wireguard.sh | sh`
+  }, [])
+
   if (loading && routers.length === 0) {
     return (
       <div className="card" style={{ padding: 40, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -425,11 +432,11 @@ export default function RemoteAccessPage() {
                 </p>
                 <div style={{ position: 'relative', background: '#1e1e2e', borderRadius: 7, padding: '10px 14px' }}>
                   <code style={{ fontSize: 11.5, color: '#a6e3a1', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                    sh scripts/deploy-wireguard.sh
+                    {deployWireguardCmd}
                   </code>
                   <button
                     type="button"
-                    onClick={() => handleCopy('sh scripts/deploy-wireguard.sh', 'vps-deploy')}
+                    onClick={() => handleCopy(deployWireguardCmd, 'vps-deploy')}
                     style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 5, padding: 5, cursor: 'pointer', color: '#cdd6f4' }}
                   >
                     {copiedText === 'vps-deploy' ? <Check size={13} /> : <Copy size={13} />}
