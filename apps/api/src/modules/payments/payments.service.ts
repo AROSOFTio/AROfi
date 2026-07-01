@@ -315,23 +315,28 @@ export class PaymentsService {
         supportPhone: tenant.supportPhone,
         supportEmail: tenant.supportEmail,
       },
-      packages: packages.map((pkg) => {
-        const activePrice = pkg.prices.find((price) => price.endsAt === null) ?? pkg.prices[0]
-
-        return {
-          id: pkg.id,
-          name: pkg.name,
-          code: pkg.code,
-          description: pkg.description,
-          durationMinutes: pkg.durationMinutes,
-          dataLimitMb: pkg.dataLimitMb,
-          deviceLimit: pkg.deviceLimit,
-          downloadSpeedKbps: pkg.downloadSpeedKbps,
-          uploadSpeedKbps: pkg.uploadSpeedKbps,
-          isFeatured: pkg.isFeatured,
-          amountUgx: activePrice?.amountUgx ?? 0,
-        }
-      }),
+      packages: packages
+        .map((pkg) => {
+          const activePrice = pkg.prices.find((price) => price.endsAt === null) ?? pkg.prices[0]
+          return {
+            id: pkg.id,
+            name: pkg.name,
+            code: pkg.code,
+            description: pkg.description,
+            durationMinutes: pkg.durationMinutes,
+            dataLimitMb: pkg.dataLimitMb,
+            deviceLimit: pkg.deviceLimit,
+            downloadSpeedKbps: pkg.downloadSpeedKbps,
+            uploadSpeedKbps: pkg.uploadSpeedKbps,
+            isFeatured: pkg.isFeatured,
+            amountUgx: activePrice?.amountUgx ?? 0,
+          }
+        })
+        .sort((a, b) => {
+          // Featured packages always come first, then sort by price ascending
+          if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1
+          return a.amountUgx - b.amountUgx
+        }),
       paymentNetworks: availablePaymentNetworks,
       activeActivation,
       latestPayment,

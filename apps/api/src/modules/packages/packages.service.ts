@@ -56,6 +56,8 @@ export class PackagesService {
       }
     })
 
+    const sortedItems = [...mappedItems].sort((a, b) => a.activePriceUgx - b.activePriceUgx)
+
     return {
       summary: {
         totalPackages: mappedItems.length,
@@ -66,7 +68,7 @@ export class PackagesService {
             ? Math.round(mappedItems.reduce((total, item) => total + item.activePriceUgx, 0) / mappedItems.length)
             : 0,
       },
-      items: mappedItems,
+      items: sortedItems,
     }
   }
 

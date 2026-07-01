@@ -67,6 +67,11 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
     const server = net.createServer((clientSocket) => {
       this.logger.log(`New remote WinBox connection request for ${routerName} on port ${localPort}`)
 
+      // Disable Nagle on the incoming side immediately — WinBox sends many
+      // small packets during auth; buffering them delays the handshake and
+      // causes the "Authenticating..." hang.
+      clientSocket.setNoDelay(true)
+
       const remoteSocket = net.connect(remotePort, remoteHost)
       // Without this, a down/unreachable SSTP tunnel leaves the OS-level TCP
       // connect attempt to hang for minutes with no 'error' event, so WinBox
@@ -75,6 +80,11 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
 
       remoteSocket.once('connect', () => {
         remoteSocket.setTimeout(0)
+        // Disable Nagle on the router-side socket too so responses flow back
+        // immediately; keepalive detects silently-dead VPN sessions.
+        remoteSocket.setNoDelay(true)
+        remoteSocket.setKeepAlive(true, 15000)
+        clientSocket.setKeepAlive(true, 15000)
         this.logger.log(`Established tunnel connection to ${routerName} (${remoteHost}:${remotePort})`)
         clientSocket.pipe(remoteSocket)
         remoteSocket.pipe(clientSocket)

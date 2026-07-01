@@ -101,6 +101,10 @@ RUN cp config/nginx.coolify.conf /etc/nginx/nginx.conf \
     && chmod +x scripts/start-all.sh
 
 EXPOSE 3000
+# Remote WinBox proxy ports — one port per registered router (31000–31099).
+# In Coolify: add "31000-31099:31000-31099" in the service port-mappings UI
+# so that WinBox clients can reach app.arofi.net:310XX directly.
+EXPOSE 31000-31099
 # Default service to run. "all" = nginx + api + admin-web + portal-web in one
 # container (single domain). Set SERVICE_NAME=api|admin|portal to run just one.
 ENV SERVICE_NAME=all
