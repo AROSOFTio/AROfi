@@ -620,6 +620,8 @@ model Router {
   remoteToken           String?              @unique
   remoteClientName      String?              @default("AROFI_REMOTE")
   remoteAccessEnabled   Boolean              @default(false)
+  remoteWgPrivKey       String?
+  remoteWgPubKey        String?
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   radiusClient          RadiusClient?

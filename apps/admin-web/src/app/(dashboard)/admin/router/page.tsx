@@ -57,6 +57,9 @@ export default function RouterObservabilityPage() {
 
   useEffect(() => {
     loadRouters()
+    // Poll at 15s — matches router heartbeat cycle so status flips within one interval
+    const interval = setInterval(() => { void loadRouters() }, 15_000)
+    return () => clearInterval(interval)
   }, [])
 
   // Ticking effect for metrics

@@ -32,10 +32,9 @@ import { RemoteProxyService } from './remote-proxy.service'
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutersService.name)
   // The router heartbeats every 15s. A LIVE router must have signalled within
-  // ~3 missed beats so the dashboard flips to offline within ~45s of the box
-  // going down (and back to live within one beat of it returning), instead of
-  // the old 15-minute window that showed routers "live" long after they died.
-  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '45', 10)
+  // ~2 missed beats so the dashboard flips to offline within ~30s of the box
+  // going down (and back to live within one beat of it returning).
+  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '30', 10)
   private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '120', 10)
   private readonly routerProbeIntervalMs = Number.parseInt(process.env.ROUTER_PROBE_INTERVAL_MS ?? '8000', 10)
   private probeTimer?: ReturnType<typeof setInterval>
@@ -472,11 +471,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           ? platformSettings.proRouterLimit
           : platformSettings.freeRouterLimit
 
-    if (limit !== null && routerCount >= limit) {
-      throw new BadRequestException(
-        `Router limit reached (${limit} on the ${effectiveTier} plan). Upgrade your plan to add more routers.`,
-      )
-    }
+    // Plan caps are disabled for now — every plan gets unlimited routers.
+    // Re-enable this block when plan enforcement is ready.
+    void limit
+    void effectiveTier
+    void routerCount
   }
 
   async createRouter(dto: CreateRouterDto) {
@@ -1753,7 +1752,20 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const remotePort = (router.remotePort && router.remotePort >= 31000 && router.remotePort <= 31100)
       ? router.remotePort
       : Math.floor(Math.random() * 100) + 31000
-    const remoteSstpIp = router.remoteSstpIp || `10.8.0.${Math.floor(Math.random() * 250) + 2}`
+
+    // Generate WireGuard keys if not already set
+    let remoteWgPrivKey = router.remoteWgPrivKey
+    let remoteWgPubKey = router.remoteWgPubKey
+    if (!remoteWgPrivKey || !remoteWgPubKey) {
+      const wgKeys = this.generateWireGuardKeyPair()
+      remoteWgPrivKey = wgKeys.privateKey
+      remoteWgPubKey = wgKeys.publicKey
+    }
+
+    // WireGuard IP is deterministic: port 31000 → 10.8.1.2, 31001 → 10.8.1.3, …
+    // This avoids conflicts and lets the VPS sync without per-router RADIUS entries.
+    const wgIp = `10.8.1.${remotePort - 31000 + 2}`
+    const remoteSstpIp = wgIp
 
     const updatedRouter = await this.prisma.router.update({
       where: { id: routerId },
@@ -1763,17 +1775,58 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         remoteToken,
         remotePort,
         remoteSstpIp,
+        remoteWgPrivKey,
+        remoteWgPubKey,
       },
       include: this.routerInclude,
     })
 
-    // Sync to FreeRADIUS
-    await this.syncRadiusVpnCredentials(routerId, remoteToken, remoteSstpIp)
-
-    // Start TCP proxy forwarding to the router's SSTP tunnel IP
+    // Start TCP proxy forwarding to the router's WireGuard tunnel IP
     this.remoteProxyService.startProxy(remotePort, remoteSstpIp, 8291, updatedRouter.name)
 
     return this.mapRouter(updatedRouter)
+  }
+
+  private generateWireGuardKeyPair(): { privateKey: string; publicKey: string } {
+    // Use require to avoid TypeScript's crypto namespace resolution issue
+    // (KeyObject type) on this project's tsconfig that lacks "types": ["node"].
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cryptoMod = require('crypto') as {
+      generateKeyPairSync: (type: string) => {
+        privateKey: { export: (opts: object) => Buffer }
+        publicKey: { export: (opts: object) => Buffer }
+      }
+    }
+    const pair = cryptoMod.generateKeyPairSync('x25519')
+    // The last 32 bytes of PKCS8/SPKI DER for X25519 are the raw key bytes.
+    const privDer = pair.privateKey.export({ type: 'pkcs8', format: 'der' })
+    const pubDer = pair.publicKey.export({ type: 'spki', format: 'der' })
+    return {
+      privateKey: privDer.subarray(-32).toString('base64'),
+      publicKey: pubDer.subarray(-32).toString('base64'),
+    }
+  }
+
+  async getWireGuardServerPeersConfig(): Promise<string> {
+    const routers = await this.prisma.router.findMany({
+      where: {
+        remoteWgPubKey: { not: null },
+        remoteSstpIp: { not: null },
+        remoteAccessEnabled: true,
+      },
+      select: { id: true, name: true, remoteWgPubKey: true, remoteSstpIp: true },
+    })
+
+    return routers
+      .filter((r) => r.remoteWgPubKey && r.remoteSstpIp)
+      .map((r) => [
+        `# Router: ${r.name}`,
+        `[Peer]`,
+        `PublicKey = ${r.remoteWgPubKey}`,
+        `AllowedIPs = ${r.remoteSstpIp}/32`,
+        '',
+      ].join('\n'))
+      .join('\n')
   }
 
   async closeRemotePort(routerId: string, tenantId?: string) {
@@ -1868,18 +1921,49 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'app.arofi.net'
-    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
-    const remoteClientName = router.remoteClientName || 'AROFI_REMOTE'
+    const wgPort = process.env.VPN_WG_PORT || '51820'
+    const serverWgPubKey = process.env.VPN_WG_SERVER_PUBKEY || ''
+    const wgInterfaceName = 'arofi-wg'
+
+    // Ensure WireGuard keys are allocated for this router
+    const wgPrivKey = router.remoteWgPrivKey
+    const wgIp = router.remoteSstpIp || `10.8.1.${(router.remotePort || 31000) - 31000 + 2}`
+
+    if (!wgPrivKey || !serverWgPubKey) {
+      return [
+        `# AROFi Remote Access — WireGuard Setup`,
+        `# ERROR: WireGuard keys not yet provisioned for this router.`,
+        `# Close and re-open the remote port from the AROFi admin panel, then run this script again.`,
+        serverWgPubKey ? '' : `# Also set the VPN_WG_SERVER_PUBKEY environment variable on the server.`,
+      ].join('\n')
+    }
 
     return [
-      `# AROFi Remote Access WinBox Tunnel Setup`,
-      `# Generated dynamically for ${router.name}`,
-      `:do { /interface sstp-client remove [find name="${remoteClientName}"] } on-error={}`,
-      `:do { /ppp profile remove [find name="AROFi_Profile"] } on-error={}`,
-      `/ppp profile add name="AROFi_Profile" on-up=":delay 5s; /tool fetch url=\\"https://${domain}/api/mikrotik/script/${router.registrationKey}\\" check-certificate=no dst-path=\\"vpn-setup.rsc\\"; :delay 2s; /import file-name=\\"vpn-setup.rsc\\"; :delay 1s; /file remove \\"vpn-setup.rsc\\""`,
-      `:local sstpOk 0`,
-      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
-      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client blocked — device-mode restricts it."; :put "Run this command then press the RESET button on the router within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." } else={ :do { /interface list member add interface="${remoteClientName}" list=LAN } on-error={}; :log info "AROFi Remote Access configured." }`,
+      `# AROFi Remote Access WinBox Tunnel (WireGuard)`,
+      `# Generated for router: ${router.name}`,
+      `# WireGuard works on all RouterOS 7 devices — no device-mode change needed.`,
+      ``,
+      `# Remove any previous AROFi remote-access tunnel`,
+      `:do { /interface wireguard remove [find name="${wgInterfaceName}"] } on-error={}`,
+      `:do { /ip address remove [find interface="${wgInterfaceName}"] } on-error={}`,
+      `:do { /interface list member remove [find interface="${wgInterfaceName}"] } on-error={}`,
+      `# Remove legacy SSTP client if present`,
+      `:do { /interface sstp-client remove [find name="${router.remoteClientName || 'AROFI_REMOTE'}"] } on-error={}`,
+      ``,
+      `# Create WireGuard interface with pre-allocated keys`,
+      `/interface wireguard add name="${wgInterfaceName}" private-key="${wgPrivKey}" listen-port=0 comment="AROFi Remote Access"`,
+      `/ip address add address="${wgIp}/24" interface="${wgInterfaceName}" comment="AROFi Remote Access"`,
+      ``,
+      `# Add AROFi VPS as the WireGuard peer`,
+      `/interface wireguard peers add interface="${wgInterfaceName}" public-key="${serverWgPubKey}" endpoint-address="${domain}" endpoint-port="${wgPort}" allowed-ips="10.8.1.0/24" persistent-keepalive=25 comment="AROFi VPS"`,
+      ``,
+      `# Allow WinBox (and API) through the WireGuard interface`,
+      `:do { /interface list member add interface="${wgInterfaceName}" list=LAN } on-error={}`,
+      ``,
+      `:put "AROFi WireGuard remote access configured."`,
+      `:put "  Router WireGuard IP: ${wgIp}"`,
+      `:put "  VPS endpoint: ${domain}:${wgPort}"`,
+      `:log info "AROFi WireGuard Remote Access configured for ${router.name}"`,
     ].join('\n')
   }
 

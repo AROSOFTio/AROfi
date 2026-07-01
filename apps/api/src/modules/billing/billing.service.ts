@@ -722,22 +722,10 @@ export class BillingService {
       ? resolveEffectiveSubscriptionTier(tenantSettings.subscriptionPlan, tenantSettings.subscriptionPlanExpiresAt)
       : 'FREE'
 
-    const historyDays =
-      effectiveTier === 'ENTERPRISE'
-        ? platformSettings.enterpriseAnalyticsHistoryDays
-        : effectiveTier === 'PRO'
-          ? platformSettings.proAnalyticsHistoryDays
-          : platformSettings.freeAnalyticsHistoryDays
-
-    if (historyDays === null) {
-      return filters
-    }
-
-    const earliestAllowed = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
-    const requestedFrom = filters.from ? new Date(filters.from) : null
-    if (!requestedFrom || Number.isNaN(requestedFrom.getTime()) || requestedFrom < earliestAllowed) {
-      return { ...filters, from: earliestAllowed.toISOString() }
-    }
+    // Analytics history cap disabled for now — all plans get full history.
+    // Re-enable tier checks here when plan enforcement is ready.
+    void effectiveTier
+    void platformSettings
 
     return filters
   }
