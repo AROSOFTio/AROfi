@@ -157,13 +157,6 @@ export default function RemoteAccessPage() {
     return `${vpnHost}:${selectedRouter.remotePort || ''}`
   }, [selectedRouter])
 
-  const deployWireguardCmd = useMemo(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.arofi.net'
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? `${origin}/api`
-    const base = apiBase.startsWith('http') ? apiBase : `${origin}${apiBase}`
-    return `curl -fsSL ${base}/mikrotik/deploy-wireguard.sh | sh`
-  }, [])
-
   if (loading && routers.length === 0) {
     return (
       <div className="card" style={{ padding: 40, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -412,43 +405,6 @@ export default function RemoteAccessPage() {
               Automatic Installation Script
             </h3>
 
-            {/* Step 1 — VPS WireGuard prerequisite (shown only when not yet deployed) */}
-            {selectedRouter && selectedRouter.wgServerConfigured === false && (
-              <div style={{
-                padding: 14,
-                border: '1px solid #fca5a5',
-                borderRadius: 10,
-                background: '#fff1f2',
-                display: 'grid',
-                gap: 10,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AlertCircle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
-                  <strong style={{ fontSize: 13, color: '#991b1b' }}>Step 1 — Deploy WireGuard server on the VPS (one-time setup)</strong>
-                </div>
-                <p style={{ fontSize: 12.5, color: '#7f1d1d', lineHeight: 1.55, margin: 0 }}>
-                  The VPS WireGuard server is not set up yet. SSH into your VPS as root and run the command below.
-                  It installs WireGuard, generates server keys, and prints a public key you must copy into Coolify.
-                </p>
-                <div style={{ position: 'relative', background: '#1e1e2e', borderRadius: 7, padding: '10px 14px' }}>
-                  <code style={{ fontSize: 11.5, color: '#a6e3a1', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                    {deployWireguardCmd}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(deployWireguardCmd, 'vps-deploy')}
-                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 5, padding: 5, cursor: 'pointer', color: '#cdd6f4' }}
-                  >
-                    {copiedText === 'vps-deploy' ? <Check size={13} /> : <Copy size={13} />}
-                  </button>
-                </div>
-                <p style={{ fontSize: 12, color: '#991b1b', margin: 0 }}>
-                  After running it, copy the <strong>SERVER PUBLIC KEY</strong> printed at the end, add it as{' '}
-                  <code style={{ background: '#fecaca', borderRadius: 3, padding: '1px 4px' }}>VPN_WG_SERVER_PUBKEY=&lt;key&gt;</code>{' '}
-                  in Coolify environment variables, then redeploy the app. The step below will unlock automatically.
-                </p>
-              </div>
-            )}
 
             {/* WireGuard info banner — shown once VPS is configured */}
             {selectedRouter?.wgServerConfigured !== false && (

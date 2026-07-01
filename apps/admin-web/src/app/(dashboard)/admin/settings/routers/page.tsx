@@ -10,9 +10,8 @@ import type {
   TenantOverviewResponse,
   AdminSessionResponse 
 } from '@/lib/admin-types'
-import { 
-  Cpu, 
-  Settings, 
+import {
+  Settings,
   Plus, 
   MoreVertical, 
   RefreshCw, 
@@ -26,6 +25,7 @@ import {
   Check
 } from 'lucide-react'
 import FormProcessStatus from '@/components/FormProcessStatus'
+import { formatDate } from '@/lib/format'
 
 export default function SettingsRoutersPage() {
   const [loading, setLoading] = useState(true)
@@ -368,8 +368,8 @@ export default function SettingsRoutersPage() {
                 <th style={{ padding: '16px 20px' }}>Router</th>
                 <th style={{ padding: '16px 20px' }}>Model / Version</th>
                 <th style={{ padding: '16px 20px' }}>Status</th>
-                <th style={{ padding: '16px 20px' }}>CPU Load</th>
-                <th style={{ padding: '16px 20px' }}>Uptime</th>
+                <th style={{ padding: '16px 20px' }}>Active Users</th>
+                <th style={{ padding: '16px 20px' }}>Last Signal</th>
                 <th style={{ padding: '16px 20px', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -414,10 +414,14 @@ export default function SettingsRoutersPage() {
                         </span>
                       </td>
                       <td style={{ padding: '16px 20px', color: 'var(--text-secondary)' }}>
-                        {isOnline ? '12%' : '0%'}
+                        {router.activeSessions ?? 0}
                       </td>
-                      <td style={{ padding: '16px 20px', color: 'var(--text-secondary)' }}>
-                        {isOnline ? (router.uptime || '2d 14h 5m') : 'Offline'}
+                      <td style={{ padding: '16px 20px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                        {router.lastSignalAt
+                          ? formatDate(router.lastSignalAt)
+                          : router.lastSeenAt
+                            ? formatDate(router.lastSeenAt)
+                            : '—'}
                       </td>
                       <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                         <button
