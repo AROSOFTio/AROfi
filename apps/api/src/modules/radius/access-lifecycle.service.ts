@@ -669,7 +669,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     const staleWhere = {
       status: SessionStatus.ACTIVE,
       OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
-    } as const
+    }
 
     // Capture affected router IDs before the bulk update so we can sync the
     // cached activeSessionCount column. Without this, the column stays at the
