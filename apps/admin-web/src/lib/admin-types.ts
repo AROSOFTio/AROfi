@@ -839,6 +839,8 @@ export type RouterItem = {
   remoteToken?: string | null
   remoteClientName?: string | null
   remoteAccessEnabled?: boolean
+  remoteWgPubKey?: string | null
+  wgServerConfigured?: boolean
   status: string
   healthMessage?: string | null
   lastSeenAt?: string | null
@@ -975,6 +977,7 @@ export type SessionItem = {
   macAddress?: string | null
   ipAddress?: string | null
   nasIpAddress?: string | null
+  deviceLabel?: string | null
   packageName: string
   startedAt: string
   endedAt?: string | null

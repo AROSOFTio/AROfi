@@ -193,7 +193,7 @@ export default function RemoteAccessPage() {
           </div>
           <div style={{ display: 'grid', gap: 2 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Remote Winbox Access</h1>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Configure outbound SSTP client for CGNAT traversal</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>WireGuard VPN tunnel for CGNAT traversal — works on all RouterOS 7 routers</span>
           </div>
         </div>
 
@@ -303,7 +303,7 @@ export default function RemoteAccessPage() {
                 <span style={{ color: 'var(--text-secondary)' }}>
                   Tunnel Reachability
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Live check of the router's SSTP tunnel - separate from port mapping above
+                    Live check of the router's WireGuard tunnel - separate from port mapping above
                   </div>
                 </span>
                 <strong style={{ display: 'flex', alignItems: 'center', gap: 6, textAlign: 'right' }}>
@@ -344,7 +344,7 @@ export default function RemoteAccessPage() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertCircle size={15} style={{ color: '#d97706', flexShrink: 0 }} />
-                  <strong>SSTP tunnel is not connected</strong>
+                  <strong>WireGuard tunnel is not connected</strong>
                 </div>
                 <span>
                   The SSTP tunnel is not connected. Go to the{' '}
@@ -405,30 +405,74 @@ export default function RemoteAccessPage() {
               Automatic Installation Script
             </h3>
 
-            {/* WireGuard info banner */}
-            <div style={{
-              padding: 14,
-              border: '1px solid #bbf7d0',
-              borderRadius: 10,
-              background: '#f0fdf4',
-              display: 'flex',
-              gap: 10,
-              alignItems: 'flex-start',
-            }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
-              <div style={{ display: 'grid', gap: 4 }}>
-                <strong style={{ fontSize: 13, color: '#166534' }}>WireGuard — works on all RouterOS 7 routers, no device-mode change needed</strong>
-                <span style={{ fontSize: 12.5, color: '#15803d', lineHeight: 1.5 }}>
-                  AROFi now uses WireGuard for remote access. It is built into RouterOS 7 and does not require enterprise mode.
-                  If you previously saw "SSTP client blocked", this script fixes that permanently.
-                </span>
+            {/* Step 1 — VPS WireGuard prerequisite (shown only when not yet deployed) */}
+            {selectedRouter && selectedRouter.wgServerConfigured === false && (
+              <div style={{
+                padding: 14,
+                border: '1px solid #fca5a5',
+                borderRadius: 10,
+                background: '#fff1f2',
+                display: 'grid',
+                gap: 10,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AlertCircle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                  <strong style={{ fontSize: 13, color: '#991b1b' }}>Step 1 — Deploy WireGuard server on the VPS (one-time setup)</strong>
+                </div>
+                <p style={{ fontSize: 12.5, color: '#7f1d1d', lineHeight: 1.55, margin: 0 }}>
+                  The VPS WireGuard server is not set up yet. SSH into your VPS as root and run the command below.
+                  It installs WireGuard, generates server keys, and prints a public key you must copy into Coolify.
+                </p>
+                <div style={{ position: 'relative', background: '#1e1e2e', borderRadius: 7, padding: '10px 14px' }}>
+                  <code style={{ fontSize: 11.5, color: '#a6e3a1', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    sh scripts/deploy-wireguard.sh
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('sh scripts/deploy-wireguard.sh', 'vps-deploy')}
+                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 5, padding: 5, cursor: 'pointer', color: '#cdd6f4' }}
+                  >
+                    {copiedText === 'vps-deploy' ? <Check size={13} /> : <Copy size={13} />}
+                  </button>
+                </div>
+                <p style={{ fontSize: 12, color: '#991b1b', margin: 0 }}>
+                  After running it, copy the <strong>SERVER PUBLIC KEY</strong> printed at the end, add it as{' '}
+                  <code style={{ background: '#fecaca', borderRadius: 3, padding: '1px 4px' }}>VPN_WG_SERVER_PUBKEY=&lt;key&gt;</code>{' '}
+                  in Coolify environment variables, then redeploy the app. The step below will unlock automatically.
+                </p>
               </div>
-            </div>
+            )}
+
+            {/* WireGuard info banner — shown once VPS is configured */}
+            {selectedRouter?.wgServerConfigured !== false && (
+              <div style={{
+                padding: 14,
+                border: '1px solid #bbf7d0',
+                borderRadius: 10,
+                background: '#f0fdf4',
+                display: 'flex',
+                gap: 10,
+                alignItems: 'flex-start',
+              }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <strong style={{ fontSize: 13, color: '#166534' }}>WireGuard — works on all RouterOS 7 routers, no device-mode change needed</strong>
+                  <span style={{ fontSize: 12.5, color: '#15803d', lineHeight: 1.5 }}>
+                    AROFi uses WireGuard for remote access. It is built into RouterOS 7 and does not require enterprise mode.
+                    If you previously saw "SSTP client blocked", this script fixes that permanently.
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gap: 6 }}>
-              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Run this command in the WinBox Terminal</strong>
+              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                {selectedRouter?.wgServerConfigured === false ? 'Step 2 — ' : ''}Run this command in the WinBox Terminal
+              </strong>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                Paste the command below into the MikroTik WinBox Terminal. It sets up a WireGuard VPN tunnel to AROFi cloud — no button presses or reboots required.
+                {selectedRouter?.wgServerConfigured === false
+                  ? 'After completing Step 1 and redeploying, paste this command into the MikroTik WinBox Terminal to set up the WireGuard tunnel.'
+                  : 'Paste the command below into the MikroTik WinBox Terminal. It sets up a WireGuard VPN tunnel to AROFi cloud — no button presses or reboots required.'}
               </p>
             </div>
 

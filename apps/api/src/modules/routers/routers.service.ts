@@ -1517,6 +1517,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       remoteToken: router.remoteToken ?? null,
       remoteClientName: router.remoteClientName ?? 'AROFI_REMOTE',
       remoteAccessEnabled: router.remoteAccessEnabled ?? false,
+      remoteWgPubKey: router.remoteWgPubKey ?? null,
+      wgServerConfigured: Boolean(process.env.VPN_WG_SERVER_PUBKEY),
       lastRadiusSignalAt: router.lastRadiusSignalAt,
       lastAccountingSignalAt: router.lastAccountingSignalAt,
       lastAuthSignalAt: router.lastAuthSignalAt,
@@ -1708,7 +1710,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updated = true
     }
     if (!router.remoteSstpIp) {
-      updateData.remoteSstpIp = `10.8.0.${Math.floor(Math.random() * 250) + 2}`
+      // Always use deterministic WireGuard IP based on port (10.8.1.x), not random SSTP range
+      const port = updateData.remotePort ?? router.remotePort ?? 31000
+      updateData.remoteSstpIp = `10.8.1.${port - 31000 + 2}`
       updated = true
     }
     if (!router.remoteClientName) {
@@ -1925,16 +1929,43 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const serverWgPubKey = process.env.VPN_WG_SERVER_PUBKEY || ''
     const wgInterfaceName = 'arofi-wg'
 
-    // Ensure WireGuard keys are allocated for this router
-    const wgPrivKey = router.remoteWgPrivKey
-    const wgIp = router.remoteSstpIp || `10.8.1.${(router.remotePort || 31000) - 31000 + 2}`
+    // Generate WireGuard keys lazily if not yet provisioned (e.g. port was opened before this feature)
+    let wgPrivKey = router.remoteWgPrivKey
+    let wgIp = router.remoteSstpIp
 
-    if (!wgPrivKey || !serverWgPubKey) {
+    // Always use deterministic WireGuard IP based on port, even if remoteSstpIp was
+    // previously set to a legacy SSTP 10.8.0.x address.
+    const assignedPort = router.remotePort ?? 31000
+    const deterministicWgIp = `10.8.1.${assignedPort - 31000 + 2}`
+
+    if (!wgPrivKey || !router.remoteWgPubKey) {
+      const wgKeys = this.generateWireGuardKeyPair()
+      await this.prisma.router.update({
+        where: { id: router.id },
+        data: {
+          remoteWgPrivKey: wgKeys.privateKey,
+          remoteWgPubKey: wgKeys.publicKey,
+          remoteSstpIp: deterministicWgIp,
+        },
+      })
+      wgPrivKey = wgKeys.privateKey
+    } else if (wgIp && !wgIp.startsWith('10.8.1.')) {
+      // Migrate legacy 10.8.0.x IP to deterministic WireGuard IP
+      await this.prisma.router.update({
+        where: { id: router.id },
+        data: { remoteSstpIp: deterministicWgIp },
+      })
+    }
+
+    wgIp = deterministicWgIp
+
+    if (!serverWgPubKey) {
       return [
         `# AROFi Remote Access — WireGuard Setup`,
-        `# ERROR: WireGuard keys not yet provisioned for this router.`,
-        `# Close and re-open the remote port from the AROFi admin panel, then run this script again.`,
-        serverWgPubKey ? '' : `# Also set the VPN_WG_SERVER_PUBKEY environment variable on the server.`,
+        `# SETUP REQUIRED: The VPS WireGuard server has not been deployed yet.`,
+        `# Ask your AROFi administrator to run:  sh scripts/deploy-wireguard.sh  on the VPS`,
+        `# then set VPN_WG_SERVER_PUBKEY in Coolify and redeploy the app.`,
+        `# After that, run this install script again from the AROFi panel.`,
       ].join('\n')
     }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { RadiusEventType, SessionStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { parseDeviceLabel } from './device-label'
 
 @Injectable()
 export class SessionsService {
@@ -46,6 +47,7 @@ export class SessionsService {
           },
         },
       },
+      // userAgent captured at portal login — used for device label display
     },
   }
 
@@ -247,6 +249,7 @@ export class SessionsService {
     } | null
     voucherRedemption: {
       id: string
+      userAgent?: string | null
       voucher: {
         id: string
         code: string
@@ -254,6 +257,7 @@ export class SessionsService {
     } | null
   }) {
     const totalOctets = session.inputOctets + session.outputOctets
+    const deviceLabel = parseDeviceLabel(session.voucherRedemption?.userAgent)
 
     return {
       id: session.id,
@@ -265,6 +269,7 @@ export class SessionsService {
       macAddress: session.macAddress,
       ipAddress: session.ipAddress,
       nasIpAddress: session.nasIpAddress,
+      deviceLabel,
       packageName:
         session.activation?.package.name ?? session.packageName ?? session.voucherRedemption?.voucher.code ?? 'Unmapped access',
       startedAt: session.startedAt,

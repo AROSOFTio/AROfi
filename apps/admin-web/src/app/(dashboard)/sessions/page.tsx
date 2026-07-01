@@ -146,7 +146,12 @@ export default async function SessionsPage() {
                 <tr key={session.id}>
                   <td>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{session.username}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {session.deviceLabel && (
+                      <div style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, marginTop: 1 }}>
+                        {session.deviceLabel}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
                       {session.macAddress ?? session.customerReference ?? session.phoneNumber ?? 'Unknown identity'}
                     </div>
                   </td>
