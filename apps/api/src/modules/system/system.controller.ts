@@ -57,6 +57,15 @@ export class SystemController {
   }
 
   @RequirePermissions(PERMISSIONS.settingsManage)
+  @Get('commission-rates')
+  getCommissionRates(@CurrentUser() user: AuthenticatedAdminUser) {
+    if (!this.accessScope.isSuperAdmin(user)) {
+      throw new ForbiddenException('Only Dev Admin can view commission rates')
+    }
+    return this.systemService.getCommissionRates()
+  }
+
+  @RequirePermissions(PERMISSIONS.settingsManage)
   @Get('tenant-settings')
   getMyTenantSettings(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.requireTenantScope(user, tenantId)

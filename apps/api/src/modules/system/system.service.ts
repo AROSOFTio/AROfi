@@ -124,6 +124,72 @@ export class SystemService {
     return this.presentPlatformSettings(settings)
   }
 
+  async getCommissionRates() {
+    const [settings, tenants] = await Promise.all([
+      this.prisma.platformSetting.upsert({
+        where: { id: PLATFORM_SETTINGS_ID },
+        update: {},
+        create: { id: PLATFORM_SETTINGS_ID },
+      }),
+      this.prisma.tenant.findMany({
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          tenantSettings: {
+            select: {
+              tenantMobileMoneyFeeBps: true,
+              tenantVoucherFeeBps: true,
+              subscriptionPlan: true,
+              subscriptionPlanExpiresAt: true,
+            },
+          },
+        },
+      }),
+    ])
+
+    const globalRates = {
+      freeMobileMoneyFeePercent: this.bpsToPercent(settings.mobileMoneyFeeBps),
+      freeVoucherFeePercent: this.bpsToPercent(settings.voucherFeeBps),
+      proMobileMoneyFeePercent: this.bpsToPercent(settings.proMobileMoneyFeeBps),
+      proVoucherFeePercent: this.bpsToPercent(settings.proVoucherFeeBps),
+      enterpriseMobileMoneyFeePercent: this.bpsToPercent(settings.enterpriseMobileMoneyFeeBps),
+      enterpriseVoucherFeePercent: this.bpsToPercent(settings.enterpriseVoucherFeeBps),
+    }
+
+    const tenantRates = tenants.map((tenant) => {
+      const s = tenant.tenantSettings
+      const tier = s
+        ? resolveEffectiveSubscriptionTier(s.subscriptionPlan, s.subscriptionPlanExpiresAt)
+        : SubscriptionPlanTier.FREE
+      const overrideMm = this.bpsToPercent(s?.tenantMobileMoneyFeeBps)
+      const overrideVoucher = this.bpsToPercent(s?.tenantVoucherFeeBps)
+      const defaultMm =
+        tier === SubscriptionPlanTier.ENTERPRISE
+          ? globalRates.enterpriseMobileMoneyFeePercent
+          : tier === SubscriptionPlanTier.PRO
+          ? globalRates.proMobileMoneyFeePercent
+          : globalRates.freeMobileMoneyFeePercent
+      const defaultVoucher =
+        tier === SubscriptionPlanTier.ENTERPRISE
+          ? globalRates.enterpriseVoucherFeePercent
+          : tier === SubscriptionPlanTier.PRO
+          ? globalRates.proVoucherFeePercent
+          : globalRates.freeVoucherFeePercent
+      return {
+        id: tenant.id,
+        name: tenant.name,
+        subscriptionPlan: tier,
+        overrideMobileMoneyFeePercent: overrideMm,
+        overrideVoucherFeePercent: overrideVoucher,
+        effectiveMobileMoneyFeePercent: overrideMm ?? defaultMm,
+        effectiveVoucherFeePercent: overrideVoucher ?? defaultVoucher,
+      }
+    })
+
+    return { globalRates, tenants: tenantRates }
+  }
+
   async getTenantSettings(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },

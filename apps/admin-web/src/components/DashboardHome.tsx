@@ -1,10 +1,8 @@
 import {
   AdminSessionResponse,
   BillingOverviewResponse,
-  PaymentOverviewResponse,
   RouterOverviewResponse,
   SessionOverviewResponse,
-  SystemOverviewResponse,
   TenantOverviewResponse,
   VouchersOverviewResponse,
   PackageCatalogResponse,
@@ -17,7 +15,7 @@ import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
-import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, Lock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -34,20 +32,19 @@ export default async function DashboardHome({ searchParams }: { searchParams?: D
 }
 
 async function PlatformDashboard() {
-  const [tenants, routers, system, payments, payoutProfile] = await Promise.all([
+  const [tenants, routers, payoutProfile] = await Promise.all([
     fetchApi<TenantOverviewResponse>('/tenants'),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
-    fetchApi<SystemOverviewResponse>('/system/overview'),
-    fetchApi<PaymentOverviewResponse>('/payments/overview'),
     fetchApi<any>('/wallets/payouts/profile/me'),
   ])
 
-  const supportTickets = system?.support.items ?? []
-  const recentRouterChecks = routers?.recentHealthChecks ?? []
   const tenantItems = tenants?.items ?? []
-  const routersNeedingHelp = (routers?.summary.offlineRouters ?? 0) + (routers?.summary.degradedRouters ?? 0) + (routers?.summary.pendingRouters ?? 0)
+  const routerItems = routers?.routers ?? []
+  const recentHealthChecks = routers?.recentHealthChecks ?? []
+  const totalActiveSessions = routerItems.reduce((sum, r) => sum + (r.activeSessions ?? 0), 0)
+  const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((r) => r.liveState === 'LIVE').length
+  const totalRouters = routers?.summary.totalRouters ?? routerItems.length
 
-  // Platform Wallet calculations
   const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []
   const primaryNumber = verifiedNumbers.find((item: any) => item.isPrimary) ?? verifiedNumbers[0] ?? null
   const availableUgx = payoutProfile?.wallet?.balanceUgx ?? 0
@@ -58,7 +55,7 @@ async function PlatformDashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Developer Admin Dashboard</h1>
-          <p className="page-subtitle">Manage vendors, troubleshoot router onboarding, monitor support tickets, and keep platform services healthy.</p>
+          <p className="page-subtitle">Platform overview — all live data.</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <a href="/support" className="btn btn-ghost">Support Queue</a>
@@ -66,7 +63,15 @@ async function PlatformDashboard() {
         </div>
       </div>
 
-      {/* Premium Platform Wallet Panel */}
+      {/* KPI Strip */}
+      <div className="stats-grid" style={{ marginBottom: 24 }}>
+        <Stat label="Live Routers" value={`${liveRouters} / ${totalRouters}`} color="green" note="Currently sending signals" />
+        <Stat label="Active Sessions" value={`${totalActiveSessions}`} color="blue" note="Users online right now" />
+        <Stat label="Vendors" value={`${tenants?.summary.totalTenants ?? 0}`} color="purple" note="Business workspaces" />
+        <Stat label="Platform Balance" value={formatCurrency(availableUgx)} color="amber" note="Available to withdraw" />
+      </div>
+
+      {/* Platform Wallet Panel */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 20, marginBottom: 24 }}>
         {/* Visual Credit Card Style Wallet Card */}
         <div style={{
@@ -82,29 +87,8 @@ async function PlatformDashboard() {
           minHeight: 228,
           boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.35), 0 8px 10px -6px rgba(16, 185, 129, 0.35)',
         }}>
-          {/* Card background shape accents */}
-          <div style={{
-            position: 'absolute',
-            top: -24,
-            right: -24,
-            width: 148,
-            height: 148,
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.08)',
-            pointerEvents: 'none'
-          }} />
-          <div style={{
-            position: 'absolute',
-            bottom: -44,
-            left: -24,
-            width: 168,
-            height: 168,
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.04)',
-            pointerEvents: 'none'
-          }} />
-
-          {/* Top Header */}
+          <div style={{ position: 'absolute', top: -24, right: -24, width: 148, height: 148, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -44, left: -24, width: 168, height: 168, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Wallet size={18} />
@@ -115,16 +99,10 @@ async function PlatformDashboard() {
               <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.45)', marginLeft: -9, mixBlendMode: 'overlay' }} />
             </div>
           </div>
-
-          {/* Balance */}
           <div style={{ zIndex: 2, marginTop: 10 }}>
             <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 500 }}>Platform Revenue Balance</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, letterSpacing: '-0.02em' }}>
-              {formatCurrency(availableUgx)}
-            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, letterSpacing: '-0.02em' }}>{formatCurrency(availableUgx)}</div>
           </div>
-
-          {/* Footer Details */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 2, marginTop: 10 }}>
             <div>
               <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Owner</div>
@@ -139,14 +117,13 @@ async function PlatformDashboard() {
           </div>
         </div>
 
-        {/* Disbursement settings & actions */}
+        {/* Withdrawal Settings */}
         <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Platform Withdrawal Settings</span>
               <a href="/earnings" style={{ color: 'var(--green)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>Manage</a>
             </div>
-
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
                 <span style={{ color: 'var(--text-2)' }}>Primary payout number</span>
@@ -158,21 +135,15 @@ async function PlatformDashboard() {
                 <span style={{ color: 'var(--text-2)' }}>Secret key verification</span>
                 <span>
                   {payoutProfile?.profile?.secretConfigured ? (
-                    <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
-                      <CheckCircle2 size={14} /> Set
-                    </span>
+                    <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}><CheckCircle2 size={14} /> Set</span>
                   ) : (
-                    <span style={{ color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
-                      <AlertCircle size={14} /> Setup needed
-                    </span>
+                    <span style={{ color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}><AlertCircle size={14} /> Setup needed</span>
                   )}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--text-2)' }}>Minimum withdrawable</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>
-                  {minimumPayoutUgx > 0 ? formatCurrency(minimumPayoutUgx) : 'None'}
-                </span>
+                <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>{minimumPayoutUgx > 0 ? formatCurrency(minimumPayoutUgx) : 'None'}</span>
               </div>
             </div>
           </div>
@@ -197,9 +168,7 @@ async function PlatformDashboard() {
                     <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(item.amountUgx)}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(item.createdAt)}</div>
                   </div>
-                  <span className={getStatusBadgeClass(item.status)} style={{ fontSize: 11 }}>
-                    {item.status.toLowerCase()}
-                  </span>
+                  <span className={getStatusBadgeClass(item.status)} style={{ fontSize: 11 }}>{item.status.toLowerCase()}</span>
                 </div>
               ))
             )}
@@ -207,15 +176,56 @@ async function PlatformDashboard() {
         </div>
       </div>
 
-      <div className="stats-grid">
-        <Stat label="Vendors" value={`${tenants?.summary.totalTenants ?? 0}`} color="green" note="Tenant workspaces managed" />
-        <Stat label="Router Help Needed" value={`${routersNeedingHelp}`} color="amber" note="Offline, degraded, or pending" />
-        <Stat label="Open Tickets" value={`${system?.summary.openSupportTickets ?? 0}`} color="purple" note="Vendor support workload" />
-        <Stat label="Critical Audits" value={`${system?.summary.criticalAudits ?? 0}`} color="amber" note="Platform events to review" />
-        <Stat label="Router Groups" value={`${routers?.summary.routerGroups ?? 0}`} color="blue" note="Configured vendor networks" />
-        <Stat label="Payment Requests" value={`${payments?.summary.mobileMoneyRequests ?? 0}`} color="green" note="Provider activity visible" />
+      {/* Router Network Live Grid */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-header">
+          <span className="card-title">Router Network</span>
+          <a href="/admin/router" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Observability</a>
+        </div>
+        {routerItems.length === 0 ? (
+          <div className="empty-state" style={{ padding: 32 }}><p>No routers registered yet.</p></div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, padding: '0 20px 20px' }}>
+            {routerItems.map((router) => {
+              const stateColor = router.liveState === 'LIVE' ? '#16a34a' : router.liveState === 'STALE' ? '#f59e0b' : router.liveState === 'OFFLINE' ? '#ef4444' : '#9aa3b2'
+              const stateBg = router.liveState === 'LIVE' ? 'rgba(22,163,74,0.1)' : router.liveState === 'STALE' ? 'rgba(245,158,11,0.1)' : router.liveState === 'OFFLINE' ? 'rgba(239,68,68,0.1)' : 'rgba(156,163,175,0.1)'
+              return (
+                <a key={router.id} href="/admin/router" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)', lineHeight: 1.3, flex: 1, marginRight: 8 }}>{router.name}</div>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: stateBg, color: stateColor, flexShrink: 0 }}>
+                        {router.liveState ?? 'PENDING'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }}>{router.tenant?.name ?? '—'}</div>
+                    <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
+                      <div>
+                        <div style={{ color: 'var(--text-3)', fontSize: 10, textTransform: 'uppercase' }}>Users</div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-1)' }}>{router.activeSessions ?? 0}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--text-3)', fontSize: 10, textTransform: 'uppercase' }}>Latency</div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-1)' }}>
+                          {router.latestHealthCheck?.latencyMs != null ? `${router.latestHealthCheck.latencyMs}ms` : '—'}
+                        </div>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: 'var(--text-3)', fontSize: 10, textTransform: 'uppercase' }}>Last Signal</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-2)', fontSize: 11 }}>
+                          {router.lastSignalAt ? formatDate(router.lastSignalAt) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              )
+            })}
+          </div>
+        )}
       </div>
 
+      {/* Bottom Tables */}
       <div className="charts-grid">
         <div className="card">
           <div className="card-header">
@@ -227,20 +237,21 @@ async function PlatformDashboard() {
               <thead>
                 <tr>
                   <th>Vendor</th>
-                  <th>Domain</th>
                   <th>Routers</th>
-                  <th>Hotspots</th>
+                  <th>Users</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {tenantItems.length === 0 && <EmptyRow colSpan={5} text="No vendors have been onboarded yet." />}
+                {tenantItems.length === 0 && <EmptyRow colSpan={4} text="No vendors have been onboarded yet." />}
                 {tenantItems.slice(0, 8).map((tenant) => (
                   <tr key={tenant.id}>
-                    <td>{tenant.name}</td>
-                    <td>{tenant.domain ?? 'Not configured'}</td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{tenant.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{tenant.domain ?? 'No domain'}</div>
+                    </td>
                     <td>{tenant.counts.routers}</td>
-                    <td>{tenant.counts.hotspots}</td>
+                    <td>{tenant.counts.users}</td>
                     <td><span className={getStatusBadgeClass(tenant.domain ? 'success' : 'pending')}>{tenant.domain ? 'ready' : 'setup needed'}</span></td>
                   </tr>
                 ))}
@@ -251,8 +262,8 @@ async function PlatformDashboard() {
 
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Router Support Queue</span>
-            <a href="/routers" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Open Routers</a>
+            <span className="card-title">Recent Health Checks</span>
+            <a href="/admin/router" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>All Routers</a>
           </div>
           <div className="table-wrap">
             <table>
@@ -261,56 +272,24 @@ async function PlatformDashboard() {
                   <th>Router</th>
                   <th>Vendor</th>
                   <th>Status</th>
-                  <th>Last Check</th>
+                  <th>Latency</th>
+                  <th>Checked</th>
                 </tr>
               </thead>
               <tbody>
-                {recentRouterChecks.length === 0 && <EmptyRow colSpan={4} text="No router health checks yet." />}
-                {recentRouterChecks.slice(0, 8).map((check) => (
+                {recentHealthChecks.length === 0 && <EmptyRow colSpan={5} text="No router health checks yet." />}
+                {recentHealthChecks.slice(0, 8).map((check) => (
                   <tr key={check.id}>
                     <td>{check.router.name}</td>
-                    <td>{check.tenant.name}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{check.tenant.name}</td>
                     <td><span className={getStatusBadgeClass(check.status)}>{check.status.toLowerCase()}</span></td>
+                    <td style={{ fontSize: 12 }}>{check.latencyMs != null ? `${check.latencyMs}ms` : '—'}</td>
                     <td style={{ fontSize: 12 }}>{formatDate(check.checkedAt)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Vendor Support Tickets</span>
-          <a href="/support" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>View All</a>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Vendor</th>
-                <th>Subject</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Opened</th>
-              </tr>
-            </thead>
-            <tbody>
-              {supportTickets.length === 0 && <EmptyRow colSpan={6} text="No support tickets are open." />}
-              {supportTickets.slice(0, 10).map((ticket) => (
-                <tr key={ticket.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{ticket.reference}</td>
-                  <td>{ticket.tenant?.name ?? 'Vendor'}</td>
-                  <td>{ticket.subject}</td>
-                  <td>{ticket.priority.toLowerCase()}</td>
-                  <td><span className={getStatusBadgeClass(ticket.status)}>{ticket.status.toLowerCase()}</span></td>
-                  <td style={{ fontSize: 12 }}>{formatDate(ticket.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </>

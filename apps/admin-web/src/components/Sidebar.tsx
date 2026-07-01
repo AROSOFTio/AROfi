@@ -82,6 +82,7 @@ const navItems: NavGroup[] = [
       { href: '/users?tab=staff', label: 'Platform Staff', required: ['users.read'], platformOnly: true },
       { href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true },
       { href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true },
+      { href: '/admin/settings/commission', label: 'Commission Rates', required: ['settings.manage'], platformOnly: true },
       { href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true },
     ]
   },
