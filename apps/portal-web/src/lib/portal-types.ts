@@ -8,6 +8,8 @@ export type PortalContextResponse = {
     portalTemplate?: string | null
     supportPhone?: string | null
     supportEmail?: string | null
+    platformSupportPhone?: string | null
+    platformSupportEmail?: string | null
   }
   packages: PortalPackage[]
   paymentNetworks?: Array<'MTN' | 'AIRTEL'>

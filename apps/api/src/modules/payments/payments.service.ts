@@ -314,6 +314,10 @@ export class PaymentsService {
         portalTemplate: tenant.portalTemplate,
         supportPhone: tenant.supportPhone,
         supportEmail: tenant.supportEmail,
+        // Platform-level fallback so tenants who haven't set their own contact
+        // still show a WhatsApp button pointing to AROFi support.
+        platformSupportPhone: tenant.supportPhone ? null : (platformSettings.supportPhone ?? null),
+        platformSupportEmail: tenant.supportEmail ? null : (platformSettings.supportEmail ?? null),
       },
       packages: packages
         .map((pkg) => {

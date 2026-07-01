@@ -182,9 +182,10 @@ export class SystemService {
     const canCustomizeBranding = canManageFees || effectiveTier !== SubscriptionPlanTier.FREE
     const wantsCustomLogo = dto.logoUrl !== undefined && this.nullableTrim(dto.logoUrl) !== null
     const wantsCustomBrandColor = dto.brandColor !== undefined && this.nullableTrim(dto.brandColor) !== null
-    const wantsCustomTemplate = dto.portalTemplate !== undefined && dto.portalTemplate.trim() !== 'classic'
-    if (!canCustomizeBranding && (wantsCustomLogo || wantsCustomBrandColor || wantsCustomTemplate)) {
-      throw new BadRequestException('Custom branding (logo, brand color, portal template) requires a Pro or Enterprise plan')
+    // Portal template selection is available to all tenants; only custom logo
+    // and brand colour are reserved for Pro/Enterprise branding.
+    if (!canCustomizeBranding && (wantsCustomLogo || wantsCustomBrandColor)) {
+      throw new BadRequestException('Custom logo and brand colour require a Pro or Enterprise plan')
     }
 
     if (dto.businessName !== undefined) {
