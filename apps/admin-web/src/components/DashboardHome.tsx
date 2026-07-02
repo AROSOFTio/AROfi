@@ -16,7 +16,7 @@ import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
 import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
 
@@ -361,24 +361,24 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       )}
       <DashboardAutoRefresh />
       <div className="dashboard-header">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <DateRangeFilter from={range.from} to={range.to} />
-        </div>
+        <h1 className="page-title">Dashboard</h1>
+      </div>
+
+      {/* System Insights (with the date filter at its top) and the money KPI
+          boxes sit in one row. Platform Fees is intentionally omitted here —
+          it's a platform-level number, not something tenants need on their
+          own dashboard. Active / Online / Data live in the System Insights
+          card only, so they are not repeated in the KPI boxes. */}
+      <div className="dashboard-insights-row">
         <SystemInsightsCompact
           live={liveRouters > 0}
           activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
           onlineRouters={liveRouters}
           dataUsedLabel={formatMegabytes(billing?.summary.dataUsedMb ?? totalDataUsedMb)}
           statusColor={routerStatusColor}
+          filter={<DateRangeFilter from={range.from} to={range.to} />}
         />
-      </div>
-
-      {/* Money cards only. Active / Online / Data live in the System Insights
-          card above, so they are intentionally not repeated here. */}
-      <div className="tenant-stats-compact">
         <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} />
-        <DashboardStatCompact title="Platform Fees" value={formatCurrency(billing?.summary.platformFeesUgx ?? 0)} />
         <DashboardStatCompact
           title="Net Earnings"
           value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)}
@@ -712,15 +712,18 @@ function SystemInsightsCompact({
   onlineRouters,
   dataUsedLabel,
   statusColor,
+  filter,
 }: {
   live: boolean
   activeUsers: number
   onlineRouters: number
   dataUsedLabel: string
   statusColor: string
+  filter?: ReactNode
 }) {
   return (
     <div className="system-insights-card">
+      {filter && <div className="system-insights-card-filter">{filter}</div>}
       <div className="system-insights-card-head">
         <span className="system-insights-card-title">System Insights</span>
         <span className={`live-pill-mini ${live ? 'is-live' : 'is-offline'}`}>

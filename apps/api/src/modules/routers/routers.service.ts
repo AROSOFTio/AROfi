@@ -1426,6 +1426,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     remoteClientName?: string | null
     remoteAccessEnabled?: boolean
     remoteWgPubKey?: string | null
+    lastOfflineAt?: Date | null
+    lastReconnectedAt?: Date | null
     verificationStatus?: string
     onboardingStatus?: string
     registrationKey?: string
@@ -1526,6 +1528,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       lastRadiusSignalAt: router.lastRadiusSignalAt,
       lastAccountingSignalAt: router.lastAccountingSignalAt,
       lastAuthSignalAt: router.lastAuthSignalAt,
+      lastOfflineAt: router.lastOfflineAt ?? null,
+      lastReconnectedAt: router.lastReconnectedAt ?? null,
       provisioningCallbackReceived: Boolean(router.lastProvisionedAt),
       radiusAuthSeen: Boolean(router.lastAuthSignalAt),
       accountingSeen: Boolean(router.lastAccountingSignalAt),
@@ -1616,15 +1620,15 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     const latest = signals.sort((left, right) => right.at.getTime() - left.at.getTime())[0]
 
-    if (activeSessions > 0) {
-      return {
-        liveState: 'LIVE' as const,
-        lastSignalAt: latest?.at ?? new Date(),
-        lastSignalSource: latest?.source ?? 'active-session',
-        secondsSinceLastSignal: latest ? Math.max(0, Math.round((Date.now() - latest.at.getTime()) / 1000)) : 0,
-        message: 'Active sessions are present on this router',
-      }
-    }
+    // `activeSessions` (still passed by both call sites below) intentionally
+    // no longer short-circuits this to LIVE. It previously did regardless of
+    // signal age — a genuinely active session already keeps
+    // lastAccountingSignalAt fresh (MikroTik sends interim updates every
+    // 60s), so that's covered by the recency check below. The override only
+    // fired when accounting signals had gone stale but the NetworkSession
+    // row hadn't been cleaned up yet, i.e. it made offline routers with
+    // ghost ACTIVE sessions report as LIVE forever — the root cause of the
+    // wrong active/online dashboard counts.
 
     if (!latest) {
       return {
@@ -1761,12 +1765,15 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       ? router.remotePort
       : Math.floor(Math.random() * 100) + 31000
 
-    // Generate WireGuard keys if not already set
+    // Generate WireGuard keys if not already set. The private key is stored
+    // encrypted (same AES-256-GCM scheme as router passwords / RADIUS
+    // secrets below) — it's live VPN key material, not something that
+    // should sit in plaintext in a DB backup.
     let remoteWgPrivKey = router.remoteWgPrivKey
     let remoteWgPubKey = router.remoteWgPubKey
     if (!remoteWgPrivKey || !remoteWgPubKey) {
       const wgKeys = this.generateWireGuardKeyPair()
-      remoteWgPrivKey = wgKeys.privateKey
+      remoteWgPrivKey = this.routerCredentialsService.encrypt(wgKeys.privateKey)
       remoteWgPubKey = wgKeys.publicKey
     }
 
@@ -1812,6 +1819,18 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return {
       privateKey: privDer.subarray(-32).toString('base64'),
       publicKey: pubDer.subarray(-32).toString('base64'),
+    }
+  }
+
+  // Rows written before encryption was added here store the raw private key
+  // (not the "v1:iv:authTag:cipher" format RouterCredentialsService
+  // produces) — fall back to treating decrypt failure as "already
+  // plaintext" so existing routers keep working without a data migration.
+  private decryptWgPrivKey(stored: string): string {
+    try {
+      return this.routerCredentialsService.decrypt(stored)
+    } catch {
+      return stored
     }
   }
 
@@ -1946,7 +1965,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const wgInterfaceName = 'arofi-wg'
 
     // Generate WireGuard keys lazily if not yet provisioned (e.g. port was opened before this feature)
-    let wgPrivKey = router.remoteWgPrivKey
+    const storedWgPrivKey = router.remoteWgPrivKey
     let wgIp = router.remoteSstpIp
 
     // Always use deterministic WireGuard IP based on port, even if remoteSstpIp was
@@ -1954,23 +1973,27 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const assignedPort = router.remotePort ?? 31000
     const deterministicWgIp = `10.8.1.${assignedPort - 31000 + 2}`
 
-    if (!wgPrivKey || !router.remoteWgPubKey) {
+    let wgPrivKey: string
+    if (!storedWgPrivKey || !router.remoteWgPubKey) {
       const wgKeys = this.generateWireGuardKeyPair()
       await this.prisma.router.update({
         where: { id: router.id },
         data: {
-          remoteWgPrivKey: wgKeys.privateKey,
+          remoteWgPrivKey: this.routerCredentialsService.encrypt(wgKeys.privateKey),
           remoteWgPubKey: wgKeys.publicKey,
           remoteSstpIp: deterministicWgIp,
         },
       })
       wgPrivKey = wgKeys.privateKey
-    } else if (wgIp && !wgIp.startsWith('10.8.1.')) {
-      // Migrate legacy 10.8.0.x IP to deterministic WireGuard IP
-      await this.prisma.router.update({
-        where: { id: router.id },
-        data: { remoteSstpIp: deterministicWgIp },
-      })
+    } else {
+      wgPrivKey = this.decryptWgPrivKey(storedWgPrivKey)
+      if (wgIp && !wgIp.startsWith('10.8.1.')) {
+        // Migrate legacy 10.8.0.x IP to deterministic WireGuard IP
+        await this.prisma.router.update({
+          where: { id: router.id },
+          data: { remoteSstpIp: deterministicWgIp },
+        })
+      }
     }
 
     wgIp = deterministicWgIp
@@ -2101,9 +2124,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
         if (isOffline && !hasAlerted) {
           this.alertedRouters.add(router.id)
+          await this.prisma.router.update({
+            where: { id: router.id },
+            data: { lastOfflineAt: new Date() },
+          })
           await this.sendRouterAlert(router, 'OFFLINE', live.secondsSinceLastSignal)
         } else if (!isOffline && hasAlerted) {
           this.alertedRouters.delete(router.id)
+          await this.prisma.router.update({
+            where: { id: router.id },
+            data: { lastReconnectedAt: new Date() },
+          })
           await this.sendRouterAlert(router, 'ONLINE', 0)
         }
       }

@@ -1110,7 +1110,15 @@ function RouterInventoryTable({
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{formatLatency(router.lastLatencyMs)}</div>
                   </td>
                   <td>{router.activeSessions}</td>
-                  <td style={{ fontSize: 12 }}>{formatDate(router.lastSeenAt)}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {formatDate(router.lastSeenAt)}
+                    {router.lastReconnectedAt &&
+                      (!router.lastOfflineAt || new Date(router.lastReconnectedAt) > new Date(router.lastOfflineAt)) && (
+                        <div style={{ color: 'var(--success-fg)', marginTop: 4 }}>
+                          Back online {formatDate(router.lastReconnectedAt)}
+                        </div>
+                      )}
+                  </td>
                   <td><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button type="button" className="btn btn-ghost" onClick={() => onLoadSetup(router.id)}>View Setup</button><button type="button" className="btn btn-ghost" onClick={() => onHealthCheck(router.id)} disabled={runningHealthCheckId === router.id}>{runningHealthCheckId === router.id ? 'Checking...' : 'Health Check'}</button></div></td>
                 </tr>
               ))}
