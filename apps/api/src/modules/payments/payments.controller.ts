@@ -61,28 +61,45 @@ export class PaymentsController {
   handleMtnCollectionWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, payload, headers, 'collection')
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, { ...payload, secret }, headers, 'collection')
   }
 
   @Post('webhooks/mtn/disbursement')
-  handleMtnDisbursementWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, payload, headers, 'disbursement')
+  handleMtnDisbursementWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
+  ) {
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, { ...payload, secret }, headers, 'disbursement')
   }
 
   @Post('webhooks/airtel/collection')
-  handleAirtelCollectionWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, payload, headers, 'collection')
+  handleAirtelCollectionWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
+  ) {
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, { ...payload, secret }, headers, 'collection')
   }
 
   @Post('webhooks/airtel/disbursement')
-  handleAirtelDisbursementWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, payload, headers, 'disbursement')
+  handleAirtelDisbursementWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
+  ) {
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, { ...payload, secret }, headers, 'disbursement')
   }
 
   @Post('webhooks/aggregator/collection')
-  handleAggregatorCollectionWebhook(@Body() payload: Record<string, unknown>, @Headers() headers: Record<string, string | string[] | undefined>) {
-    return this.paymentsService.handleAggregatorCollectionWebhook(payload, headers)
+  handleAggregatorCollectionWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
+  ) {
+    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers)
   }
 
   @Get('webhooks/aggregator/collection')
@@ -97,8 +114,9 @@ export class PaymentsController {
   handlePesapalWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleAggregatorCollectionWebhook(payload, headers)
+    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers)
   }
 
   @Get('webhooks/pesapal')
@@ -113,8 +131,9 @@ export class PaymentsController {
   handleYoUgandaWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleAggregatorCollectionWebhook(payload, headers)
+    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers)
   }
 
   @Get('webhooks/yo-uganda')

@@ -557,6 +557,44 @@ export class PaymentsService {
     })
   }
 
+  // Shared-secret verification for provider webhooks, matching the pattern
+  // already used for Yo Uganda disbursement IPNs below. MTN/Airtel/Pesapal
+  // callback URLs are registered directly with the provider (see
+  // *_CALLBACK_URL in .env.example) — appending ?secret=<value> there, and
+  // setting the matching env var, is what closes the endpoint to spoofed
+  // "payment succeeded" POSTs from anyone who guesses a payment reference.
+  // Warn-but-allow when unset, same as Yo Uganda, so existing deployments
+  // that haven't rotated their callback URLs yet don't silently break.
+  private resolveWebhookSecretEnvVar(provider: PaymentProvider, direction: 'collection' | 'disbursement') {
+    if (provider === PaymentProvider.MTN_MOMO_DIRECT) {
+      return direction === 'disbursement' ? 'MTN_MOMO_DISBURSEMENT_WEBHOOK_SECRET' : 'MTN_MOMO_COLLECTION_WEBHOOK_SECRET'
+    }
+    if (provider === PaymentProvider.AIRTEL_MONEY_DIRECT) {
+      return direction === 'disbursement' ? 'AIRTEL_MONEY_DISBURSEMENT_WEBHOOK_SECRET' : 'AIRTEL_MONEY_COLLECTION_WEBHOOK_SECRET'
+    }
+    return 'AGGREGATOR_WEBHOOK_SECRET'
+  }
+
+  private assertWebhookSecret(
+    envVarName: string,
+    payload: Record<string, unknown>,
+    headers: Record<string, string | string[] | undefined>,
+  ) {
+    const configuredSecret = process.env[envVarName] || this.configService.get<string>(envVarName)
+    if (!configuredSecret) {
+      this.logger.warn(`WARNING: ${envVarName} is not configured. This webhook endpoint is open to spoofing!`)
+      return
+    }
+
+    const headerSecret = headers['x-webhook-secret'] ?? headers['X-Webhook-Secret']
+    const incomingSecret = payload.secret ?? (Array.isArray(headerSecret) ? headerSecret[0] : headerSecret)
+
+    if (incomingSecret !== configuredSecret) {
+      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid or missing secret`)
+      throw new ForbiddenException('Invalid webhook authorization secret')
+    }
+  }
+
   async handleProviderWebhook(
     provider: PaymentProvider,
     network: PaymentNetwork,
@@ -564,6 +602,8 @@ export class PaymentsService {
     headers: Record<string, string | string[] | undefined>,
     direction: 'collection' | 'disbursement',
   ) {
+    this.assertWebhookSecret(this.resolveWebhookSecretEnvVar(provider, direction), payload, headers)
+
     const extracted = this.extractWebhookReferences(payload)
     const payment = await this.findPaymentByReferences(extracted.externalReference, extracted.providerReference)
     const idempotencyKey = this.buildWebhookIdempotencyKey(provider, extracted.externalReference, extracted.providerReference, payload)

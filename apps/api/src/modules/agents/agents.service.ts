@@ -279,10 +279,6 @@ export class AgentsService {
       const tenantWallet = await this.findOrCreateTenantWallet(tx, agent.tenantId)
       const agentWallet = await this.findOrCreateAgentWallet(tx, agent)
 
-      if (tenantWallet.balanceUgx < dto.amountUgx) {
-        throw new BadRequestException('Tenant wallet does not have enough float for this top-up')
-      }
-
       if (agent.floatLimitUgx > 0 && agentWallet.balanceUgx + dto.amountUgx > agent.floatLimitUgx) {
         throw new BadRequestException('Float top-up exceeds the configured agent float limit')
       }
@@ -322,11 +318,20 @@ export class AgentsService {
         },
       })
 
+      // Atomic guard: re-verify the tenant wallet balance at the moment of
+      // debit (not the pre-transaction read above) so two concurrent
+      // top-ups can't both pass the check and drive the tenant wallet
+      // negative — mirrors the pattern in wallets.service.ts.
+      const debited = await tx.wallet.updateMany({
+        where: { id: tenantWallet.id, balanceUgx: { gte: dto.amountUgx } },
+        data: { balanceUgx: { increment: posting.sourceWalletDeltaUgx } },
+      })
+      if (debited.count !== 1) {
+        throw new BadRequestException('Tenant wallet does not have enough float for this top-up')
+      }
+
       const [updatedTenantWallet, updatedAgentWallet, billingTransaction] = await Promise.all([
-        tx.wallet.update({
-          where: { id: tenantWallet.id },
-          data: { balanceUgx: { increment: posting.sourceWalletDeltaUgx } },
-        }),
+        tx.wallet.findUniqueOrThrow({ where: { id: tenantWallet.id } }),
         tx.wallet.update({
           where: { id: agentWallet.id },
           data: { balanceUgx: { increment: posting.destinationWalletDeltaUgx } },
@@ -418,11 +423,19 @@ export class AgentsService {
         },
       })
 
+      // Atomic guard: re-verify the agent wallet balance at the moment of
+      // debit so two concurrent float returns can't both pass the earlier
+      // read-based check and drive the agent wallet negative.
+      const debited = await tx.wallet.updateMany({
+        where: { id: agentWallet.id, balanceUgx: { gte: dto.amountUgx } },
+        data: { balanceUgx: { increment: posting.sourceWalletDeltaUgx } },
+      })
+      if (debited.count !== 1) {
+        throw new BadRequestException('The requested float return would consume accrued commission funds')
+      }
+
       const [updatedAgentWallet, updatedTenantWallet, billingTransaction] = await Promise.all([
-        tx.wallet.update({
-          where: { id: agentWallet.id },
-          data: { balanceUgx: { increment: posting.sourceWalletDeltaUgx } },
-        }),
+        tx.wallet.findUniqueOrThrow({ where: { id: agentWallet.id } }),
         tx.wallet.update({
           where: { id: tenantWallet.id },
           data: { balanceUgx: { increment: posting.destinationWalletDeltaUgx } },
@@ -809,14 +822,24 @@ export class AgentsService {
         },
       })
 
-      const updatedWallet = await tx.wallet.update({
-        where: { id: wallet.id },
+      // Atomic guard against the same wallet being debited twice by
+      // concurrent disbursement requests: the balanceUgx check above ran
+      // against a pre-transaction read, so re-verify here with a
+      // conditional update (matches the pattern in wallets.service.ts) —
+      // if another request already spent the balance, this update touches
+      // zero rows instead of driving the wallet negative.
+      const debited = await tx.wallet.updateMany({
+        where: { id: wallet.id, balanceUgx: { gte: dto.amountUgx } },
         data: {
           balanceUgx: {
             increment: posting.walletDeltaUgx,
           },
         },
       })
+      if (debited.count !== 1) {
+        throw new BadRequestException('Agent wallet does not have enough balance to cover this disbursement')
+      }
+      const updatedWallet = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id } })
 
       const updatedDisbursedAmountUgx = disbursedSoFar + dto.amountUgx
       const settlementStatus =

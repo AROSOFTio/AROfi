@@ -29,18 +29,7 @@ async function bootstrap() {
         callback(null, true);
         return;
       }
-      const isLocalOrHotspot =
-        origin.startsWith('http://10.') ||
-        origin.startsWith('http://192.168.') ||
-        origin.startsWith('http://172.') ||
-        origin.includes('wifi.login') ||
-        origin.includes('arosoftlabs.com') ||
-        origin.includes('arofi.arosoft.io') ||
-        origin.includes('arofi.net') ||
-        /\.wifi(:\d+)?$/i.test(origin) ||
-        process.env.NODE_ENV !== 'production';
-
-      if (isLocalOrHotspot) {
+      if (isLocalOrHotspotOrigin(origin)) {
         callback(null, true);
         return;
       }
@@ -65,10 +54,52 @@ async function bootstrap() {
 }
 bootstrap();
 
+// Trusted host suffixes for AROFi's own domains. Must be checked against the
+// parsed hostname (exact match or a real subdomain), never via
+// origin.includes(suffix) — a substring check lets an attacker register
+// e.g. "evil-arofi.net.attacker.com" and pass CORS with credentials.
+const TRUSTED_HOST_SUFFIXES = ['arosoftlabs.com', 'arofi.arosoft.io', 'arofi.net'];
+
+function isLocalOrHotspotOrigin(origin: string) {
+  // Private-network / on-device hotspot origins. startsWith is safe here —
+  // a remote attacker's page can't be served from a private IP the victim's
+  // browser would treat as same-origin, so this can't be spoofed by suffixing.
+  if (
+    origin.startsWith('http://10.') ||
+    origin.startsWith('http://192.168.') ||
+    origin.startsWith('http://172.')
+  ) {
+    return true;
+  }
+
+  // Explicit local-dev bypass — NODE_ENV must literally be "development",
+  // not merely "not production" (unset/typo'd/staging NODE_ENV must still
+  // enforce the allowlist below).
+  if (process.env.NODE_ENV === 'development') {
+    return true;
+  }
+
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  if (hostname === 'wifi.login' || hostname.endsWith('.wifi.login') || /\.wifi$/i.test(hostname)) {
+    return true;
+  }
+
+  return TRUSTED_HOST_SUFFIXES.some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
+}
+
 function resolveAllowedOrigins() {
   const configured = process.env.CORS_ALLOWED_ORIGINS
   if (!configured) {
-    return process.env.NODE_ENV === 'production' ? [] : true
+    // Same explicit-dev-only rule as isLocalOrHotspotOrigin above — an unset
+    // or mistyped NODE_ENV (staging, undefined, etc.) must not silently
+    // reflect every Origin back with credentials: true.
+    return process.env.NODE_ENV === 'development' ? true : []
   }
 
   return configured
