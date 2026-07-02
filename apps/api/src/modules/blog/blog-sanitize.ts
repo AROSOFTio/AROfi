@@ -1,10 +1,20 @@
-import sanitizeHtml from 'sanitize-html'
+import type { IOptions } from 'sanitize-html'
+
+// sanitize-html is CommonJS-only and this project's tsconfig has no
+// esModuleInterop, so `import sanitizeHtml from 'sanitize-html'` compiles to
+// code that reads a nonexistent `.default` property and crashes at module
+// load — same interop issue already documented in routers.service.ts for
+// the `crypto` import. require() sidesteps it.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sanitizeHtml = require('sanitize-html') as ((dirty: string, options?: IOptions) => string) & {
+  simpleTransform: (tagName: string, attribs: Record<string, string>) => (tagName: string, attribs: Record<string, string>) => { tagName: string; attribs: Record<string, string> }
+}
 
 // Allowlist mirrors the Tiptap extension set enabled in the admin editor —
 // headings, marks, lists, blockquote/code, links, images, tables, and the
 // inline `text-align` style produced by the TextAlign extension. No script,
 // iframe, event handlers, or arbitrary styles pass through.
-const options: sanitizeHtml.IOptions = {
+const options: IOptions = {
   allowedTags: [
     'h1', 'h2', 'h3', 'h4', 'p', 'br', 'hr',
     'strong', 'em', 'u', 's', 'code', 'pre', 'blockquote',
