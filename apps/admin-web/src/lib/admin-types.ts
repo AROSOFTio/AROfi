@@ -846,6 +846,8 @@ export type RouterItem = {
   lastSeenAt?: string | null
   lastHealthCheckAt?: string | null
   lastLatencyMs?: number | null
+  lastOfflineAt?: string | null
+  lastReconnectedAt?: string | null
   activeSessions: number
   tags: string[]
   tenant: TenantSummary & {
@@ -1172,4 +1174,33 @@ export type SupportTicketResponse = {
       createdAt: string
     }>
   }>
+}
+
+export type BlogPostStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+
+export type BlogPostSummary = {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  status: BlogPostStatus
+  metaTitle: string | null
+  metaDescription: string | null
+  tags: string[]
+  coverImageId: string | null
+  viewCount: number
+  publishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type BlogPostDetail = BlogPostSummary & {
+  contentHtml: string
+}
+
+export type BlogPostListResponse = {
+  items: BlogPostSummary[]
+  total: number
+  page: number
+  pageSize: number
 }

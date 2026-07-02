@@ -10,7 +10,7 @@ type DocPage = {
   sections: Array<{ heading: string; body: string[]; commandBlocks?: Array<{ title: string; commands: string[] }> }>
 }
 
-const docs: Record<string, DocPage> = {
+export const docs: Record<string, DocPage> = {
   'getting-started': {
     title: 'Getting started',
     intro: 'Use this checklist to move from AROFi router registration to a working MikroTik captive portal. The normal flow is: register router, copy the one-run command, paste it in WinBox Terminal, then apply the final RouterOS 6 verification block when the router is behind an upstream/Savana router.',

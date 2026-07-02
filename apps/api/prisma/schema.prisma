@@ -499,6 +499,7 @@ model User {
   generatedVoucherBatches VoucherBatch[]   @relation("VoucherBatchGenerator")
   voucherRedemptions     VoucherRedemption[] @relation("VoucherRedemptionActor")
   refreshTokens          RefreshToken[]
+  blogPosts              BlogPost[]
 }
 
 model RefreshToken {
@@ -622,6 +623,8 @@ model Router {
   remoteAccessEnabled   Boolean              @default(false)
   remoteWgPrivKey       String?
   remoteWgPubKey        String?
+  lastOfflineAt         DateTime?
+  lastReconnectedAt     DateTime?
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   radiusClient          RadiusClient?
@@ -1620,4 +1623,47 @@ model AuditLog {
   @@index([tenantId, createdAt])
   @@index([entity, createdAt])
   @@index([severity, createdAt])
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model BlogPost {
+  id              String         @id @default(uuid())
+  slug            String         @unique
+  title           String
+  excerpt         String?
+  contentHtml     String
+  status          BlogPostStatus @default(DRAFT)
+  metaTitle       String?
+  metaDescription String?
+  tags            String[]       @default([])
+  coverImageId    String?        @unique
+  coverImage      BlogImage?     @relation("BlogPostCover", fields: [coverImageId], references: [id])
+  authorId        String?
+  author          User?          @relation(fields: [authorId], references: [id])
+  viewCount       Int            @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  images          BlogImage[]    @relation("BlogPostInline")
+
+  @@index([status, publishedAt])
+}
+
+model BlogImage {
+  id           String    @id @default(uuid())
+  fileName     String
+  mimeType     String
+  fileSize     Int
+  fileData     Bytes
+  createdAt    DateTime  @default(now())
+  coverOfPost  BlogPost? @relation("BlogPostCover")
+  inlinePostId String?
+  inlinePost   BlogPost? @relation("BlogPostInline", fields: [inlinePostId], references: [id])
+
+  @@index([inlinePostId])
 }

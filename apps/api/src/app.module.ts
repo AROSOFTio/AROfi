@@ -6,6 +6,7 @@ import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { AgentsModule } from './modules/agents/agents.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { BlogModule } from './modules/blog/blog.module';
 import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { HotspotsModule } from './modules/hotspots/hotspots.module';
@@ -62,6 +63,7 @@ export class HealthController {
     ChatModule,
     SubscriptionModule,
     MailModule,
+    BlogModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -2880,6 +2880,53 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   .tenant-stats-compact { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* System Insights + money KPI boxes in one row. The KPI boxes are slightly
+   smaller here than the old standalone .tenant-stats-compact grid so the
+   whole row stays on one line at typical widths. */
+.dashboard-insights-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.dashboard-insights-row .system-insights-card {
+  flex: 1 1 300px;
+  min-width: 260px;
+  margin-bottom: 0;
+}
+.dashboard-insights-row .tenant-stat-compact {
+  flex: 1 1 120px;
+  min-width: 110px;
+  padding: 10px 12px;
+}
+.dashboard-insights-row .tenant-stat-compact-title { font-size: 10px; }
+.dashboard-insights-row .tenant-stat-compact-value { font-size: 16px; }
+@media (max-width: 900px) {
+  .dashboard-insights-row .tenant-stat-compact { flex: 1 1 45%; }
+}
+
+/* Date filter pinned to the top of the System Insights card, compact so it
+   doesn't dominate the card. */
+.system-insights-card-filter {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+[data-theme="dark"] .system-insights-card-filter {
+  border-color: rgba(255, 255, 255, 0.07);
+}
+.system-insights-card-filter .date-filter-input {
+  min-height: 32px;
+  min-width: 110px;
+  font-size: 12px;
+}
+.system-insights-card-filter .date-filter-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 /* System Insights bordered card with icons (matches reference design) */
 .system-insights-card {
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -3579,6 +3626,155 @@ pre, code.block {
     accent-color: var(--brand);
     flex-shrink: 0;
   }
+}
+
+.blog-editor-content {
+  outline: none;
+  min-height: 280px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+.blog-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.blog-editor-content h1,
+.blog-editor-content h2,
+.blog-editor-content h3,
+.blog-editor-content h4 {
+  font-weight: 700;
+  margin: 20px 0 10px;
+  line-height: 1.3;
+}
+.blog-editor-content h1 { font-size: 26px; }
+.blog-editor-content h2 { font-size: 22px; }
+.blog-editor-content h3 { font-size: 18px; }
+.blog-editor-content p { margin: 10px 0; }
+.blog-editor-content ul,
+.blog-editor-content ol {
+  padding-left: 24px;
+  margin: 10px 0;
+}
+.blog-editor-content blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 14px;
+  margin: 12px 0;
+  color: var(--text-2);
+}
+.blog-editor-content pre {
+  background: #1e1e1e;
+  color: #eee;
+  padding: 12px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.blog-editor-content code {
+  background: rgba(0,0,0,0.06);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.blog-editor-content pre code {
+  background: none;
+  padding: 0;
+}
+.blog-editor-content img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.blog-editor-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.blog-editor-content th,
+.blog-editor-content td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.blog-editor-content th {
+  background: var(--surface-2, #f7f7f8);
+  font-weight: 600;
+}
+.blog-editor-content a {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.blog-post-content {
+  font-size: 17px;
+  line-height: 1.75;
+  color: #1e293b;
+}
+.blog-post-content h1,
+.blog-post-content h2,
+.blog-post-content h3,
+.blog-post-content h4 {
+  font-weight: 800;
+  margin: 32px 0 14px;
+  line-height: 1.3;
+  color: #0f172a;
+}
+.blog-post-content h1 { font-size: 30px; }
+.blog-post-content h2 { font-size: 24px; }
+.blog-post-content h3 { font-size: 20px; }
+.blog-post-content p { margin: 16px 0; }
+.blog-post-content ul,
+.blog-post-content ol {
+  padding-left: 26px;
+  margin: 16px 0;
+}
+.blog-post-content li { margin: 6px 0; }
+.blog-post-content blockquote {
+  border-left: 3px solid #2563eb;
+  padding-left: 18px;
+  margin: 20px 0;
+  color: #475569;
+  font-style: italic;
+}
+.blog-post-content pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 16px 18px;
+  border-radius: 10px;
+  overflow-x: auto;
+  margin: 20px 0;
+}
+.blog-post-content code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.blog-post-content pre code {
+  background: none;
+  padding: 0;
+}
+.blog-post-content img {
+  max-width: 100%;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+.blog-post-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+}
+.blog-post-content th,
+.blog-post-content td {
+  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
+}
+.blog-post-content th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+.blog-post-content a {
+  color: #2563eb;
+  text-decoration: underline;
 }
 
 
