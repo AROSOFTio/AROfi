@@ -106,7 +106,11 @@ services:
     image: arofi-app:local
     restart: unless-stopped
     ports:
-      - "31000-31100:31000-31100"
+      # Overridable so a second stack (e.g. dev.arofi.net) on the same host
+      # doesn't collide with this port range — set WINBOX_PROXY_HOST_PORT_RANGE
+      # to a different block (container side stays 31000-31100 either way,
+      # since that's what the app allocates routers.remotePort from).
+      - "${WINBOX_PROXY_HOST_PORT_RANGE:-31000-31100}:31000-31100"
     environment:
       <<: *app-env
       SERVICE_NAME: api
@@ -177,7 +181,8 @@ services:
     image: devlikeapro/waha:latest
     restart: unless-stopped
     ports:
-      - "3005:3000"
+      # Overridable for the same reason as the api service's WinBox range above.
+      - "${WHATSAPP_HOST_PORT:-3005}:3000"
     environment:
       - WAHA_PRINT_QR=true
       - WAHA_SECURITY_API_KEY=${WHATSAPP_GATEWAY_API_KEY:-}
