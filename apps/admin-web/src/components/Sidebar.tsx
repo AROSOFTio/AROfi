@@ -83,7 +83,7 @@ const navItems: NavGroup[] = [
       { href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true },
       { href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true },
       { href: '/admin/settings/commission', label: 'Commission Rates', required: ['settings.manage'], platformOnly: true },
-      { href: '/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true },
+      { href: '/admin/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true },
       { href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true },
     ]
   },
