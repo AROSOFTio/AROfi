@@ -1,6 +1,5 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
-import PwaInstallPrompt from '../components/PwaInstallPrompt'
 
 const SITE_URL = 'https://arofi.arosoftlabs.com/portal'
 const TITLE = 'AROFi WiFi Portal – Buy Internet Access | MTN MoMo & Airtel Money Uganda'
@@ -113,7 +112,7 @@ export default function RootLayout({
         <main className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eefdf3)]">
           <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 sm:py-6">
             {children}
-            <p className="pb-20 pt-10 text-center sm:pb-6">
+            <p className="pb-6 pt-10 text-center">
               <a
                 href="https://arosoftlabs.com"
                 target="_blank"
@@ -125,7 +124,6 @@ export default function RootLayout({
               </a>
             </p>
           </div>
-          <PwaInstallPrompt appName="AROFi Portal" />
         </main>
       </body>
     </html>

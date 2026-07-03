@@ -420,6 +420,10 @@ export type BillingOverviewResponse = {
     platformFeesUgx: number
     netEarningsUgx?: number
     vendorNetUgx: number
+    todayGrossSalesUgx?: number
+    todayNetEarningsUgx?: number
+    monthGrossSalesUgx?: number
+    monthNetEarningsUgx?: number
     walletBalanceUgx: number
     withdrawableBalanceUgx?: number
     pendingWithdrawalUgx?: number

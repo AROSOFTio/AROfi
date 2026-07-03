@@ -370,6 +370,17 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           own dashboard. Active / Online / Data live in the System Insights
           card only, so they are not repeated in the KPI boxes. */}
       <div className="dashboard-insights-row">
+        <DashboardStatTodayMonth
+          title="Gross Sales"
+          todayUgx={billing?.summary.todayGrossSalesUgx ?? 0}
+          monthUgx={billing?.summary.monthGrossSalesUgx ?? billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0}
+        />
+        <DashboardStatTodayMonth
+          title="Net Earnings"
+          todayUgx={billing?.summary.todayNetEarningsUgx ?? 0}
+          monthUgx={billing?.summary.monthNetEarningsUgx ?? billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0}
+        />
+        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
         <SystemInsightsCompact
           live={liveRouters > 0}
           activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
@@ -378,15 +389,6 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           statusColor={routerStatusColor}
           filter={<DateRangeFilter from={range.from} to={range.to} />}
         />
-        <DashboardStatCompact title="Gross Sales" value={formatCurrency(billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0)} />
-        <DashboardStatCompact
-          title="Net Earnings"
-          value={formatCurrency(billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0)}
-          mmUgx={billing?.summary.mobileMoneyNetUgx}
-          voucherUgx={billing?.summary.voucherNetUgx}
-        />
-        <DashboardStatCompact title="Withdrawable Balance" value={formatCurrency(billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0)} />
-        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
       </div>
 
       {/* Modern Wallet Card & Disbursement Settings Panel */}
@@ -770,6 +772,21 @@ function DashboardStatCompact({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function DashboardStatTodayMonth({ title, todayUgx, monthUgx }: { title: string; todayUgx: number; monthUgx: number }) {
+  return (
+    <div className="tenant-stat-compact">
+      <div className="tenant-stat-compact-title">{title}</div>
+      <div className="tenant-stat-compact-value">{formatCurrency(todayUgx)}</div>
+      <div className="tenant-stat-compact-split">
+        <span><span className="split-label">Today</span></span>
+        <span style={{ marginLeft: 'auto' }}>
+          <span className="split-label">This month</span> {formatCurrency(monthUgx)}
+        </span>
+      </div>
     </div>
   )
 }

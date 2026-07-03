@@ -1065,7 +1065,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           )}
 
           {initialView === 'home' && (
-            <section className={`mx-auto w-full max-w-[430px] ${portalStyle.shell}`}>
+            <section className={`mx-auto w-full max-w-[540px] ${portalStyle.shell}`}>
               <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
               <div className="text-center flex flex-col items-center justify-center">
               <div className="mb-2 text-emerald-500 animate-pulse flex justify-center items-center">
@@ -1100,7 +1100,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
               <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
 
-              <div className="mt-6 grid gap-3">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {isContextLoading && packages.length === 0 && (
                   <>
                     <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />

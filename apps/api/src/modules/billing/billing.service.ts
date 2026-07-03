@@ -330,7 +330,24 @@ export class BillingService {
     const dateWhere = this.buildDateWhere(filters)
     const staleSessionCutoff = new Date(Date.now() - 5 * 60 * 1000)
     const routerLiveCutoff = new Date(Date.now() - this.routerStaleWindowSeconds * 1000)
-    const [transactions, wallets, ledgerEntries, disbursements, activeUsers, onlineRouters, dataUsage] = await Promise.all([
+    // Today / month-to-date figures are computed independently of the selected
+    // filter range so the dashboard can always surface "Today" and "This month"
+    // headline numbers regardless of what date window the vendor is viewing.
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const saleWhereBase = {
+      ...(tenantId ? { tenantId } : {}),
+      status: BillingTransactionStatus.COMPLETED,
+      type: {
+        in: [
+          BillingTransactionType.MOBILE_MONEY_SALE,
+          BillingTransactionType.VOUCHER_SALE,
+          BillingTransactionType.VOUCHER_REDEMPTION,
+        ],
+      },
+    } satisfies Prisma.BillingTransactionWhereInput
+    const [transactions, wallets, ledgerEntries, disbursements, activeUsers, onlineRouters, dataUsage, todaySales, monthSales] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: transactionWhere,
         include: this.transactionInclude,
@@ -428,6 +445,14 @@ export class BillingService {
           outputOctets: true,
         },
       }),
+      this.prisma.billingTransaction.aggregate({
+        where: { ...saleWhereBase, createdAt: { gte: startOfToday } },
+        _sum: { grossAmountUgx: true, netAmountUgx: true },
+      }),
+      this.prisma.billingTransaction.aggregate({
+        where: { ...saleWhereBase, createdAt: { gte: startOfMonth } },
+        _sum: { grossAmountUgx: true, netAmountUgx: true },
+      }),
     ])
 
     const completedSales = transactions.filter(
@@ -487,6 +512,10 @@ export class BillingService {
         platformFeesUgx,
         netEarningsUgx: vendorNetUgx,
         vendorNetUgx,
+        todayGrossSalesUgx: todaySales._sum.grossAmountUgx ?? 0,
+        todayNetEarningsUgx: todaySales._sum.netAmountUgx ?? 0,
+        monthGrossSalesUgx: monthSales._sum.grossAmountUgx ?? 0,
+        monthNetEarningsUgx: monthSales._sum.netAmountUgx ?? 0,
         walletBalanceUgx,
         withdrawableBalanceUgx: walletBalanceUgx,
         pendingWithdrawalUgx,
