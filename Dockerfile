@@ -15,9 +15,11 @@ COPY apps/portal-web/package.json ./apps/portal-web/package.json
 COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
 
 
-# Install dependencies in development mode to ensure compilers are available
+# Install dependencies in development mode to ensure compilers are available.
+# --no-audit/--no-fund skip registry round-trips that add ~15s; --prefer-offline
+# reuses the mounted npm cache so warm builds barely touch the network.
 RUN --mount=type=cache,target=/root/.npm \
-    NODE_ENV=development npm install --legacy-peer-deps
+    NODE_ENV=development npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
 # Copy source code
 COPY . .
@@ -33,13 +35,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 ENV GENERATE_SOURCEMAP=false
 
-# Build portal-web first (smaller app)
-RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
+# Build portal-web first (smaller app). The .next/cache BuildKit cache mount
+# persists Next.js's compilation cache across deploys, so unchanged code is not
+# recompiled — this is the single biggest repeat-build speedup. It's a cache
+# mount (not an image layer), so the rm -rf of .next/cache below still applies.
+RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
+    export NODE_OPTIONS='--max-old-space-size=1024' && \
     export NEXT_CPU_LIMIT=1 && \
     npm run build --workspace=arofi-portal
 
 # Build admin-web second (largest app — own dedicated step for memory isolation)
-RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
+RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
+    export NODE_OPTIONS='--max-old-space-size=1024' && \
     export NEXT_CPU_LIMIT=1 && \
     npm run build --workspace=arofi-admin
 
@@ -47,8 +54,10 @@ RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
 RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
     npm run build --workspace=arofi-api
 
-# Prune development dependencies to make production node_modules as small as possible
-RUN npm prune --omit=dev --legacy-peer-deps
+# Prune development dependencies to make production node_modules as small as
+# possible. --no-audit/--no-fund drop the registry audit that made this step
+# take ~90s; the prune itself is local and fast.
+RUN npm prune --omit=dev --legacy-peer-deps --no-audit --no-fund
 
 # Remove build caches, source files, and dev tooling — only keep runtime artifacts.
 # This shrinks what the builder exposes so the selective COPY below is fast.
