@@ -24,7 +24,7 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client'
-import { createHash, randomBytes, randomUUID } from 'crypto'
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
 import { MailService } from '../mail/mail.service'
@@ -57,6 +57,11 @@ export class PaymentsService {
     PaymentStatus.CANCELLED,
     PaymentStatus.EXPIRED,
   ])
+
+  // Tolerance (UGX) when reconciling a provider-reported paid amount against the
+  // billed amount, to absorb minor gateway rounding. UGX has no minor units so
+  // this is deliberately tiny — real underpayments are always well beyond it.
+  private readonly paymentAmountToleranceUgx = 1
 
   private readonly paymentInclude = {
     tenant: {
@@ -575,24 +580,51 @@ export class PaymentsService {
     return 'AGGREGATOR_WEBHOOK_SECRET'
   }
 
+  // Constant-time secret comparison so an attacker cannot recover the secret
+  // byte-by-byte via response timing.
+  private secretMatches(incoming: unknown, configured: string): boolean {
+    if (incoming == null) {
+      return false
+    }
+    const incomingBuffer = Buffer.from(String(incoming))
+    const configuredBuffer = Buffer.from(configured)
+    if (incomingBuffer.length !== configuredBuffer.length) {
+      return false
+    }
+    return timingSafeEqual(incomingBuffer, configuredBuffer)
+  }
+
+  // Shared fail-closed secret gate for every webhook handler. In production a
+  // missing secret is a hard reject (never fail-open — an unconfigured secret
+  // must not leave the "payment succeeded" endpoint spoofable). Outside
+  // production it warns and allows so local/dev stacks work without secrets.
+  private ensureWebhookSecret(envVarName: string, incomingSecret: unknown) {
+    const configuredSecret = process.env[envVarName] || this.configService.get<string>(envVarName)
+    if (!configuredSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(
+          `${envVarName} is not configured — rejecting webhook (production fail-closed). Set ${envVarName} to accept provider callbacks.`,
+        )
+        throw new ForbiddenException('Webhook authorization is not configured')
+      }
+      this.logger.warn(`WARNING: ${envVarName} is not configured; accepting webhook (non-production only).`)
+      return
+    }
+
+    if (!this.secretMatches(incomingSecret, configuredSecret)) {
+      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid or missing secret`)
+      throw new ForbiddenException('Invalid webhook authorization secret')
+    }
+  }
+
   private assertWebhookSecret(
     envVarName: string,
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
   ) {
-    const configuredSecret = process.env[envVarName] || this.configService.get<string>(envVarName)
-    if (!configuredSecret) {
-      this.logger.warn(`WARNING: ${envVarName} is not configured. This webhook endpoint is open to spoofing!`)
-      return
-    }
-
     const headerSecret = headers['x-webhook-secret'] ?? headers['X-Webhook-Secret']
     const incomingSecret = payload.secret ?? (Array.isArray(headerSecret) ? headerSecret[0] : headerSecret)
-
-    if (incomingSecret !== configuredSecret) {
-      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid or missing secret`)
-      throw new ForbiddenException('Invalid webhook authorization secret')
-    }
+    this.ensureWebhookSecret(envVarName, incomingSecret)
   }
 
   async handleProviderWebhook(
@@ -606,7 +638,14 @@ export class PaymentsService {
 
     const extracted = this.extractWebhookReferences(payload)
     const payment = await this.findPaymentByReferences(extracted.externalReference, extracted.providerReference)
-    const idempotencyKey = this.buildWebhookIdempotencyKey(provider, extracted.externalReference, extracted.providerReference, payload)
+    const mappedStatus = this.mapProviderStatus(this.mapWebhookToGatewayResponse(payload))
+    const idempotencyKey = this.buildWebhookIdempotencyKey(
+      provider,
+      extracted.externalReference,
+      extracted.providerReference,
+      mappedStatus,
+      payload,
+    )
     const duplicateWebhook = await this.prisma.paymentWebhook.findUnique({ where: { idempotencyKey } })
 
     if (duplicateWebhook) {
@@ -643,7 +682,20 @@ export class PaymentsService {
         })
         if (txRecord) {
           const gatewayResponse = this.mapWebhookToGatewayResponse(payload)
-          const nextStatus = this.mapProviderStatus(gatewayResponse)
+          let nextStatus = this.mapProviderStatus(gatewayResponse)
+
+          // Reconcile the amount the provider says was actually paid against the
+          // top-up we expected. An underpaid (or spoofed low) callback must not
+          // credit the wallet the full requested amount.
+          if (nextStatus === PaymentStatus.COMPLETED) {
+            const paidUgx = this.parseGatewayAmountUgx(gatewayResponse.amount)
+            if (paidUgx != null && paidUgx + this.paymentAmountToleranceUgx < txRecord.grossAmountUgx) {
+              this.logger.error(
+                `Top-up ${txRecord.externalReference} rejected: provider reported ${paidUgx} UGX for a ${txRecord.grossAmountUgx} UGX top-up.`,
+              )
+              nextStatus = PaymentStatus.FAILED
+            }
+          }
 
           if (nextStatus === PaymentStatus.COMPLETED && txRecord.status !== BillingTransactionStatus.COMPLETED) {
             await this.prisma.$transaction(async (tx) => {
@@ -757,13 +809,29 @@ export class PaymentsService {
         throw new NotFoundException('Payment not found')
       }
 
-      const nextStatus = this.mapProviderStatus(gatewayResponse)
+      let nextStatus = this.mapProviderStatus(gatewayResponse)
       if (payment.status === PaymentStatus.COMPLETED && nextStatus === PaymentStatus.COMPLETED) {
         const completedPayment = await tx.payment.findUnique({
           where: { id: payment.id },
           include: this.paymentDetailInclude,
         })
         return this.attachReconnectPayload(completedPayment)
+      }
+
+      // Reconcile the amount the provider says was actually paid against the
+      // amount we billed for this order. A "SUCCESSFUL" callback that paid less
+      // than the package price (partial payment, or a spoofed low amount) must
+      // NOT activate the package. When the provider omits the amount we cannot
+      // verify, so we fall through — the shared secret already gates the caller
+      // and the check-status path re-queries the provider as source of truth.
+      let amountMismatchMessage: string | undefined
+      if (nextStatus === PaymentStatus.COMPLETED) {
+        const paidUgx = this.parseGatewayAmountUgx(gatewayResponse.amount)
+        if (paidUgx != null && paidUgx + this.paymentAmountToleranceUgx < payment.amountUgx) {
+          amountMismatchMessage = `Amount mismatch: provider reported ${paidUgx} ${gatewayResponse.currencyCode ?? 'UGX'} for a ${payment.amountUgx} UGX order. Activation withheld.`
+          this.logger.error(`Payment ${payment.id} rejected — ${amountMismatchMessage}`)
+          nextStatus = PaymentStatus.FAILED
+        }
       }
       const now = new Date()
       const providerReference =
@@ -778,6 +846,7 @@ export class PaymentsService {
           customerReference: updatedCustomerRef,
           providerStatus: gatewayResponse.transactionStatus ?? payment.providerStatus,
           statusMessage:
+            amountMismatchMessage ??
             gatewayResponse.statusMessage ??
             gatewayResponse.errorMessage ??
             payment.statusMessage,
@@ -1202,15 +1271,38 @@ export class PaymentsService {
     provider: PaymentProvider,
     externalReference?: string,
     providerReference?: string,
+    mappedStatus?: string,
     payload?: unknown,
   ) {
+    // Key on the stable identity of the event: provider + references + the
+    // mapped status. This dedups replays (including ones with a tweaked payload)
+    // while still letting a genuine PENDING → SUCCESSFUL transition through,
+    // because the mapped status differs. Only when both references are missing
+    // (unmatched webhooks we merely log) do we fall back to the raw payload so
+    // distinct unmatched events don't collide.
+    const hasReference = Boolean(externalReference || providerReference)
     const raw = JSON.stringify({
       provider,
       externalReference,
       providerReference,
-      payload,
+      mappedStatus,
+      payload: hasReference ? undefined : payload,
     })
     return createHash('sha256').update(raw).digest('hex')
+  }
+
+  // Parse a provider-reported amount ("5000", "5000.00", "5,000") into whole
+  // UGX. Returns null when absent or unparseable so callers can distinguish
+  // "underpaid" from "amount not reported".
+  private parseGatewayAmountUgx(amount?: string | number | null): number | null {
+    if (amount == null) {
+      return null
+    }
+    const parsed = Number.parseFloat(String(amount).replace(/,/g, '').trim())
+    if (!Number.isFinite(parsed)) {
+      return null
+    }
+    return Math.round(parsed)
   }
 
   private mapProviderStatus(gatewayResponse: ProviderGatewayResponse) {
@@ -1447,16 +1539,9 @@ export class PaymentsService {
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
   ) {
-    const configuredSecret = process.env.YO_UGANDA_WEBHOOK_SECRET || this.configService.get<string>('YO_UGANDA_WEBHOOK_SECRET')
-    if (configuredSecret) {
-      const incomingSecret = payload.secret || headers['x-yo-webhook-secret'] || headers['X-Yo-Webhook-Secret']
-      if (incomingSecret !== configuredSecret) {
-        this.logger.warn('Yo Uganda disbursement webhook authorization failed: invalid secret')
-        throw new ForbiddenException('Invalid webhook authorization secret')
-      }
-    } else {
-      this.logger.warn('WARNING: YO_UGANDA_WEBHOOK_SECRET is not configured. Webhook endpoints are open to spoofing!')
-    }
+    const incomingSecret =
+      payload.secret ?? headers['x-yo-webhook-secret'] ?? headers['X-Yo-Webhook-Secret'] ?? headers['x-webhook-secret']
+    this.ensureWebhookSecret('YO_UGANDA_WEBHOOK_SECRET', Array.isArray(incomingSecret) ? incomingSecret[0] : incomingSecret)
 
     const externalRef = this.readPayloadValue(payload, [
       'ExternalReference', 'external_ref', 'reference', 'PrivateTransactionReference',
