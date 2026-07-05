@@ -612,73 +612,83 @@ export class MikrotikService {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AROFi Hotspot</title>
   <style>
+    /* Replicates app.arofi.net/portal (classic template) so the captive page
+       and the hosted portal look identical. */
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#eff6ff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
-    .card{width:100%;max-width:420px;background:#fff;border:1px solid #bfdbfe;border-radius:20px;padding:26px 22px;box-shadow:0 8px 32px rgba(37,99,235,.10)}
-    .logo{text-align:center;margin-bottom:18px}
-    .wifi-icon{color:#2563EB;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-block}
-    @keyframes pulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:1;transform:scale(1.05)}}
-    .logo h1{font-size:16px;font-weight:800;letter-spacing:.08em;color:#2563EB;margin-top:4px;text-transform:uppercase}
-    .logo p{font-size:11px;color:#64748b;margin-top:2px}
+    body{background:linear-gradient(180deg,#f0f9ff 0%,#f0fdf4 100%);color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:24px 16px 40px}
+    .card{width:100%;max-width:540px;margin:0 auto;background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:20px;box-shadow:0 8px 32px rgba(37,99,235,.10)}
+    .hdr{text-align:center;display:flex;flex-direction:column;align-items:center}
+    .wifi-icon{color:#10b981;margin-bottom:8px;animation:pulse 2.2s infinite ease-in-out;display:inline-flex}
+    @keyframes pulse{0%,100%{opacity:.5;transform:scale(.94)}50%{opacity:1;transform:scale(1.04)}}
+    .tlogo{height:40px;width:auto;margin:0 auto 8px;display:block}
+    .title{font-size:14px;font-weight:600;letter-spacing:.08em;color:#2563EB;text-transform:uppercase;opacity:.6;margin-top:2px}
+    .idline{margin-top:8px;font-size:12px;font-weight:500;color:#475569;opacity:.85}
     .spin-wrap{text-align:center;padding:28px 0}
     .spinner{width:30px;height:30px;border:3px solid #bfdbfe;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
     .spin-wrap p{color:#64748b;font-size:13px;margin-top:10px}
-    .quick-row{display:flex;gap:8px;margin-bottom:10px}
-    .quick-row input{flex:1}
-    .quick-row button{width:auto;padding:11px 18px;white-space:nowrap}
-    .find-link{display:block;width:100%;text-align:center;background:#eff6ff;border:1px solid #bfdbfe;color:#2563EB;font-size:12.5px;font-weight:700;padding:9px;border-radius:9px;cursor:pointer;margin-bottom:16px}
-    .find-panel{display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:16px}
+    .quick-row{display:flex;gap:8px;margin-top:20px}
+    .quick-row input{flex:1;min-width:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;font-size:14px}
+    .connect-btn{background:#2563EB;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-size:14px;font-weight:700;white-space:nowrap;cursor:pointer}
+    .connect-btn:disabled{background:#cbd5e1;cursor:not-allowed}
+    .find-link{display:inline-flex;align-items:center;gap:6px;margin:16px auto 0;text-align:center;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;cursor:pointer;width:fit-content}
+    .find-wrap{display:flex;justify-content:center}
+    .find-panel{display:none;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-top:12px}
     .find-panel.on{display:block}
-    .section-label{text-align:center;font-size:12.5px;color:#64748b;margin-bottom:12px}
-    .pkgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:360px;overflow-y:auto;margin-bottom:14px}
-    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color .18s}
-    .pkg.sel{border-color:#2563EB;background:#eff6ff}
-    .pkg-info{flex:1}
-    .pkg h3{font-size:14px;font-weight:700;color:#0f172a;line-height:1.2}
-    .pkg p{font-size:11.5px;color:#64748b;margin-top:2px}
-    .price{font-size:14px;font-weight:800;color:#2563EB;white-space:nowrap}
-    .buy-btn{width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:9px;font-size:13px;font-weight:800;border-radius:9px;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.22)}
-    .wa-btn{position:fixed;bottom:18px;right:18px;width:54px;height:54px;border-radius:50%;background:#25D366;display:none;align-items:center;justify-content:center;box-shadow:0 5px 16px rgba(37,211,102,.45);z-index:60;text-decoration:none}
-    .wa-btn svg{width:30px;height:30px;fill:#fff}
+    .section-label{text-align:center;font-size:14px;color:#334155;margin-top:20px}
+    .pkgs{display:grid;grid-template-columns:1fr;gap:12px;margin-top:24px}
+    @media(min-width:520px){.pkgs{grid-template-columns:1fr 1fr}}
+    .pkg{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;text-align:left;box-shadow:0 1px 2px rgba(15,23,42,.05);cursor:pointer;transition:border-color .15s}
+    .pkg.sel{border-color:#2563EB}
+    .pkg .pk-name{display:block;font-size:16px;font-weight:700;color:#334155;line-height:1.2}
+    .pkg .pk-dur{display:block;font-size:12px;color:#64748b;margin-top:2px}
+    .pkg .pk-price{font-size:14px;font-weight:800;color:#2563EB;white-space:nowrap}
+    .pkg .pk-buy{border:1px solid rgba(29,78,216,.5);background:#2563EB;color:#fff;border-radius:12px;padding:8px 16px;font-size:14px;font-weight:800;white-space:nowrap;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+    .accept{margin-top:24px;text-align:center;background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:16px}
+    .accept-label{font-size:14px;font-weight:700;color:#334155;margin-bottom:12px}
+    .accept-logos{display:flex;flex-wrap:wrap;justify-content:center;gap:12px}
+    .net{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;padding:6px 12px;min-width:72px;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+    .net-mtn{background:#ffcc00}
+    .net-mtn b{font-size:15px;font-weight:900;color:#001e62;line-height:1.1}
+    .net-mtn i{font-size:10px;font-weight:700;color:#001e62;font-style:normal}
+    .net-airtel{background:#fff;box-shadow:0 0 0 1px rgba(228,6,19,.3),0 1px 2px rgba(15,23,42,.06)}
+    .net-airtel b{font-size:13px;font-weight:900;color:#e40613;line-height:1.1}
+    .net-airtel i{font-size:10px;font-weight:700;color:#e40613;font-style:normal}
+    .support{margin-top:24px;border-top:1px solid #cbd5e1;padding-top:20px;text-align:center;font-size:12px;color:#334155;display:none;flex-direction:column;align-items:center;gap:8px}
+    .support-phone{font-weight:700;color:#2563EB}
+    .wa-inline{display:inline-flex;align-items:center;gap:8px;margin-top:4px;background:#25D366;color:#fff;border-radius:12px;padding:8px 16px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 1px 3px rgba(37,211,102,.4)}
+    .wa-inline svg{width:16px;height:16px;fill:#fff}
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
     .modal-overlay.on{display:flex}
-    .pay-box{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 50px rgba(15,23,42,.25);position:relative}
-    .pay-box .pclose{position:absolute;top:12px;right:14px;background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;line-height:1}
-    .pay-box .pname{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:14px;padding-right:20px}
-    lbl{display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+    .pay-box{background:#fff;border-radius:12px;padding:20px;width:100%;max-width:384px;box-shadow:0 20px 50px rgba(15,23,42,.25);position:relative}
+    .pay-box .pclose{position:absolute;top:12px;right:14px;background:none;border:1px solid #e2e8f0;border-radius:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:2px 7px}
+    .pay-box .pname{font-size:18px;font-weight:800;color:#020617;margin-bottom:4px;padding-right:28px}
+    .pay-box .psub{font-size:13px;color:#64748b;margin-bottom:14px}
     .iw{position:relative;margin-bottom:13px}
-    input[type=text],input[type=tel]{width:100%;background:#f8fafc;border:1px solid #e2e8f0;padding:11px 13px;border-radius:10px;color:#0f172a;font-size:15px;outline:none;transition:border-color .18s}
-    input:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-    .btn{width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:13px;font-size:15px;font-weight:700;border-radius:10px;cursor:pointer;box-shadow:0 3px 10px rgba(37,99,235,.22);transition:all .18s}
-    .btn:hover{opacity:.92;transform:translateY(-1px)}
-    .btn:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none;box-shadow:none}
+    input[type=text],input[type=tel]{width:100%;background:#fff;border:1px solid #cbd5e1;padding:12px 14px;border-radius:10px;color:#020617;font-size:15px;outline:none;transition:border-color .18s}
+    input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+    .btn{width:100%;background:#059669;color:#fff;border:none;padding:14px;font-size:14px;font-weight:800;border-radius:10px;cursor:pointer;transition:background .18s}
+    .btn:hover{background:#047857}
+    .btn:disabled{background:#cbd5e1;color:#64748b;cursor:not-allowed}
     .st{margin-top:13px;padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.4;display:none}
     .st.err{background:#fff1f2;border:1px solid #fecdd3;color:#be123c;display:block}
-    .st.ok{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;display:block}
+    .st.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;display:block}
     .st.info{background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:block}
-    .accept{text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-top:6px}
-    .accept-label{font-size:12px;font-weight:700;color:#475569;margin-bottom:8px}
-    .accept-logos{display:flex;justify-content:center;gap:8px}
-    .net-badge{font-size:11px;font-weight:800;padding:5px 12px;border-radius:999px;color:#fff}
-    .net-mtn{background:#ffcc00;color:#0b1f3a}
-    .net-airtel{background:#e60012}
-    .footer{text-align:center;margin-top:18px;font-size:12px;color:#64748b;display:none}
     .tech{margin-top:20px;text-align:center;font-size:11px;color:#94a3b8}
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">
+    <div class="hdr">
       <div class="wifi-icon">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/>
         </svg>
       </div>
-      <img id="tlogo" alt="" style="display:none;max-height:46px;width:auto;margin:2px auto 8px">
-      <h1 id="tname">AROFi Hotspot</h1>
-      <p id="ttag">Instant high-speed internet access</p>
+      <img id="tlogo" class="tlogo" src="https://app.arofi.net/logo.png" alt="AROFi" onerror="this.style.display='none'">
+      <h1 id="tname" class="title">AROFi Hotspot</h1>
+      <div id="idline" class="idline"></div>
     </div>
 
     <div id="loading" class="spin-wrap"><div class="spinner"></div><p>Loading packages...</p></div>
@@ -686,9 +696,14 @@ export class MikrotikService {
     <div id="content" style="display:none">
       <div class="quick-row">
         <input type="text" id="vcode" placeholder="Enter your voucher code">
-        <button class="btn" id="vbtn" onclick="login()">Connect</button>
+        <button class="connect-btn" id="vbtn" onclick="login()">Connect</button>
       </div>
-      <div class="find-link" onclick="toggleFind()">Already bought? Find My Voucher</div>
+      <div class="find-wrap">
+        <div class="find-link" onclick="toggleFind()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Already bought? Find My Voucher
+        </div>
+      </div>
       <div class="find-panel" id="findPanel">
         <div class="iw" style="margin-bottom:9px">
           <input type="text" id="rtxn" placeholder="Phone number or Transaction ID">
@@ -699,12 +714,21 @@ export class MikrotikService {
       <p class="section-label">Select a package and pay with Mobile Money</p>
       <div class="pkgs" id="plist"></div>
 
-      <div class="accept">
+      <div class="accept" id="acceptBox">
         <div class="accept-label">We accept:</div>
         <div class="accept-logos">
-          <span class="net-badge net-mtn">MTN MoMo</span>
-          <span class="net-badge net-airtel">Airtel Money</span>
+          <span class="net net-mtn"><b>MTN</b><i>MoMo</i></span>
+          <span class="net net-airtel"><b>airtel</b><i>Money</i></span>
         </div>
+      </div>
+
+      <div class="support" id="support">
+        <div>Need help? Contact support:</div>
+        <div class="support-phone" id="sph"></div>
+        <a class="wa-inline" id="waBtn" href="#" target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.706 1.458h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Chat on WhatsApp
+        </a>
       </div>
 
       <div class="st" id="st"></div>
@@ -715,25 +739,19 @@ export class MikrotikService {
     <div class="pay-box">
       <button type="button" class="pclose" onclick="closePay()">&times;</button>
       <div class="pname" id="payPkgName"></div>
-      <div class="iw" style="margin-bottom:9px">
-        <input type="tel" id="phone" placeholder="e.g. 0771234567">
+      <div class="psub" id="paySub"></div>
+      <div class="iw">
+        <input type="tel" id="phone" placeholder="07XX XXX XXX">
       </div>
-      <button class="btn" id="pbtn" onclick="pay()">Pay Now</button>
+      <button class="btn" id="pbtn" onclick="pay()">Pay with Mobile Money</button>
     </div>
   </div>
 
-  <div class="footer" id="footer">
-    <div>Need help? Contact support: <span id="sph" style="color:#2563EB;font-weight:700"></span></div>
-  </div>
   <div class="tech">
     <span id="tip">IP: </span> | <span id="tmac">MAC: </span><br><br>
     Powered By <a href="https://app.arofi.net" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
     Terms and Conditions Apply
   </div>
-
-  <a id="waBtn" class="wa-btn" href="#" target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp">
-    <svg viewBox="0 0 24 24"><path d="M17.47 14.38c-.29-.15-1.7-.84-1.96-.94-.26-.1-.45-.14-.64.15-.19.29-.74.94-.9 1.13-.17.19-.33.22-.62.07-.29-.15-1.22-.45-2.33-1.44-.86-.77-1.44-1.72-1.61-2.01-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.07-.15-.64-1.55-.88-2.12-.23-.56-.47-.48-.64-.49-.17-.01-.36-.01-.55-.01-.19 0-.51.07-.77.36-.26.29-1.01.99-1.01 2.42s1.04 2.81 1.18 3c.14.19 2.03 3.1 4.92 4.35.69.3 1.22.47 1.64.6.69.22 1.32.19 1.81.12.55-.08 1.7-.69 1.94-1.37.24-.67.24-1.24.17-1.37-.07-.13-.26-.2-.55-.34zM12.04 21.5h-.01c-1.75 0-3.46-.47-4.95-1.36l-.35-.21-3.68.96.98-3.59-.23-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.89 9.9-9.89 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.44 9.89-9.89 9.89zm8.42-18.3A11.8 11.8 0 0 0 12.04.02C5.5.02.18 5.34.18 11.88c0 2.09.55 4.14 1.59 5.94L.08 24l6.33-1.66a11.86 11.86 0 0 0 5.63 1.43h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.15-3.47-8.39z"/></svg>
-  </a>
 
   <script>
     var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
@@ -775,6 +793,11 @@ export class MikrotikService {
 
       if(ip)document.getElementById('tip').textContent='IP: '+ip;
       if(mac)document.getElementById('tmac').textContent='MAC: '+mac.toUpperCase();
+      var idl='';
+      if(ip)idl='IP: '+ip;
+      if(ip&&mac)idl+='  |  ';
+      if(mac)idl+='MAC: '+mac.toUpperCase();
+      if(idl)document.getElementById('idline').textContent=idl;
       load();
     };
 
@@ -811,26 +834,26 @@ export class MikrotikService {
 
         pkgs=d.packages||[];
         document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';
-        if(d.tenant&&d.tenant.logoUrl){var lg=document.getElementById('tlogo');lg.onload=function(){lg.style.display='block';};lg.src=d.tenant.logoUrl;}
-        if(d.tenant&&d.tenant.supportPhone){
-          document.getElementById('sph').textContent=d.tenant.supportPhone;
-          document.getElementById('footer').style.display='block';
+        // Prefer the operator's own logo; the default AROFi logo is already in
+        // the src attribute (with onerror hide) so there's always a logo.
+        if(d.tenant&&d.tenant.logoUrl){document.getElementById('tlogo').src=d.tenant.logoUrl;}
+        // Support footer + inline WhatsApp button — mirrors app.arofi.net/portal.
+        // Uses the operator's support number, or the AROFi platform number.
+        var supPhone=(d.tenant&&(d.tenant.supportPhone||d.tenant.platformSupportPhone))||'';
+        if(supPhone){
+          document.getElementById('sph').textContent=supPhone;
+          var waDigits=supPhone.replace(/\\D/g,'');
+          if(waDigits.indexOf('0')===0)waDigits='256'+waDigits.substring(1);
+          else if(waDigits&&waDigits.indexOf('256')!==0&&waDigits.length===9)waDigits='256'+waDigits;
+          if(waDigits.length>=11){document.getElementById('waBtn').href='https://wa.me/'+waDigits;}
+          document.getElementById('support').style.display='flex';
         }
-        // WhatsApp chat button — uses the operator's own support number, or the
-        // AROFi platform number when the operator hasn't set one. Matches the
-        // green WhatsApp button on app.arofi.net/portal.
-        var waPhone=(d.tenant&&(d.tenant.supportPhone||d.tenant.platformSupportPhone))||'';
-        var waDigits=waPhone.replace(/\\D/g,'');
-        if(waDigits.indexOf('0')===0)waDigits='256'+waDigits.substring(1);
-        else if(waDigits&&waDigits.indexOf('256')!==0&&waDigits.length===9)waDigits='256'+waDigits;
-        if(waDigits.length>=11){var wa=document.getElementById('waBtn');wa.href='https://wa.me/'+waDigits;wa.style.display='flex';}
 
         var el=document.getElementById('plist');el.innerHTML='';
         pkgs.forEach(function(p){
-          var d2=p.description||(fdur(p.durationMinutes)+(p.dataLimitMb?' · '+fmb(p.dataLimitMb):' · Unlimited data'));
           var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;
-          c.innerHTML='<div class="pkg-info"><h3>'+esc(p.name)+'</h3><p>'+esc(d2)+'</p></div><div class="price">UGX '+fn(p.amountUgx)+'</div><button type="button" class="buy-btn" data-id="'+esc(p.id)+'">BUY</button>';
-          c.querySelector('.buy-btn').onclick=function(){selPkg(p.id);};
+          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(fdur(p.durationMinutes))+'</span></span><span class="pk-price">UGX '+fn(p.amountUgx)+'</span><span class="pk-buy">BUY</span>';
+          c.onclick=function(){selPkg(p.id);};
           el.appendChild(c);
         });
         document.getElementById('loading').style.display='none';
@@ -849,7 +872,8 @@ export class MikrotikService {
 
       var pkg=null;
       for(var j=0;j<pkgs.length;j++){if(pkgs[j].id===id){pkg=pkgs[j];break;}}
-      document.getElementById('payPkgName').textContent=pkg?(pkg.name+' · UGX '+fn(pkg.amountUgx)):'';
+      document.getElementById('payPkgName').textContent=pkg?('Pay UGX '+fn(pkg.amountUgx)):'';
+      document.getElementById('paySub').textContent=pkg?(pkg.name+' · '+fdur(pkg.durationMinutes)):'';
       document.getElementById('pbtn').disabled=false;
       document.getElementById('payOverlay').classList.add('on');
       document.getElementById('phone').focus();
