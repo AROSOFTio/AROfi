@@ -29,11 +29,11 @@ describe('VouchersService voucher QR URLs', () => {
   })
 
   it('uses the configured public portal URL for printed voucher QR codes', () => {
-    process.env.VOUCHER_QR_BASE_URL = 'https://app.arofi.net/portal'
+    process.env.VOUCHER_QR_BASE_URL = 'https://arofi.net/portal'
 
     const service = buildService()
 
-    expect((service as any).buildVoucherPortalUrl('ABC123')).toBe('https://app.arofi.net/portal?voucher=ABC123')
+    expect((service as any).buildVoucherPortalUrl('ABC123')).toBe('https://arofi.net/portal?voucher=ABC123')
   })
 
   it('falls back to the public portal host and appends /portal when needed', () => {

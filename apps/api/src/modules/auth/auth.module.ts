@@ -621,14 +621,14 @@ function extractRefreshCookie(request: Request) {
   return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : null
 }
 
-// Marketing (arofi.net) and product (app.arofi.net) are different hosts.
+// Marketing (arofi.net) and product (arofi.net) are different hosts.
 // Registration can complete on arofi.net and then hard-redirect to
-// app.arofi.net/dashboard (see getAppDashboardUrl in admin-web) — without a
-// shared parent-domain cookie, that cookie never reaches app.arofi.net and
+// arofi.net/dashboard (see getAppDashboardUrl in admin-web) — without a
+// shared parent-domain cookie, that cookie never reaches arofi.net and
 // the dashboard's SSR auth check bounces the new user straight to /login.
 //
 // The cookie domain is resolved automatically from the request host so this
-// works with zero configuration: a request to app.arofi.net (or arofi.net)
+// works with zero configuration: a request to arofi.net (or arofi.net)
 // yields ".arofi.net", which both hosts share. Set AUTH_COOKIE_DOMAIN to
 // force a specific value (e.g. for a multi-part TLD the auto-derivation
 // below can't handle, like ".example.co.uk").
@@ -659,7 +659,7 @@ export function resolveCookieDomain(request?: Request): string | undefined {
     return undefined
   }
   // Share across subdomains of the registrable domain (last two labels).
-  // Good for app.arofi.net <-> arofi.net. Multi-part TLDs (co.uk) need the
+  // Good for arofi.net <-> arofi.net. Multi-part TLDs (co.uk) need the
   // explicit AUTH_COOKIE_DOMAIN override above.
   return `.${labels.slice(-2).join('.')}`
 }

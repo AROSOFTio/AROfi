@@ -31,13 +31,13 @@ x-app-env: &app-env
   ROUTER_CREDENTIAL_SECRET: ${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
   RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
   RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
-  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://app.arofi.net,https://arofi.net}
-  API_PUBLIC_HOST: ${API_PUBLIC_HOST:-app.arofi.net}
-  PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:-app.arofi.net}
-  APP_BASE_URL: ${APP_BASE_URL:-https://app.arofi.net}
-  ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://app.arofi.net}
-  PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://app.arofi.net/portal}
-  VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://app.arofi.net/portal}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://arofi.net,https://arofi.net}
+  API_PUBLIC_HOST: ${API_PUBLIC_HOST:-arofi.net}
+  PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:-arofi.net}
+  APP_BASE_URL: ${APP_BASE_URL:-https://arofi.net}
+  ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.net}
+  PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.net/portal}
+  VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://arofi.net/portal}
   ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
   # 2s fallback sweep; realtime state is primarily pushed by the Postgres
   # LISTEN/NOTIFY bridge (RADIUS_DB_LISTEN_ENABLED) and the SSE event stream.
@@ -82,7 +82,7 @@ x-app-env: &app-env
   PESAPAL_CONSUMER_KEY: ${PESAPAL_CONSUMER_KEY:-}
   PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
   PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
-  PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://app.arofi.net/portal}
+  PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://arofi.net/portal}
   SMTP_HOST: ${SMTP_HOST:-}
   SMTP_PORT: ${SMTP_PORT:-587}
   SMTP_USER: ${SMTP_USER:-}
