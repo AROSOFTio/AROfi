@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { PortalService } from './portal.service'
 
 function buildActivation(overrides: Record<string, unknown> = {}) {
@@ -177,20 +177,8 @@ describe('PortalService returning-device auto-reconnect', () => {
   })
 })
 
-describe('PortalService voucher redemption captive requirements', () => {
-  it('rejects redemption without a device MAC as a hard captive-portal error', async () => {
-    const { service } = buildReconnectHarness(buildActivation())
-
-    await expect(
-      service.redeemVoucher({ code: 'ABCD-1234', routerKey: 'router-key' } as never),
-    ).rejects.toThrow(BadRequestException)
-  })
-
-  it('rejects redemption without a router identity as a hard captive-portal error', async () => {
-    const { service } = buildReconnectHarness(buildActivation())
-
-    await expect(
-      service.redeemVoucher({ code: 'ABCD-1234', macAddress: 'AA:BB:CC:DD:EE:FF' } as never),
-    ).rejects.toThrow(BadRequestException)
-  })
-})
+// A missing device MAC / router identity used to hard-reject voucher
+// redemption (BadRequestException) here. That broke real customers reaching
+// the portal via a path that can't supply those params (e.g. a QR-code scan
+// opening the portal directly). Redemption now proceeds without
+// device-binding in that case; see portal.service.ts.

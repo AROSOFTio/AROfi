@@ -388,21 +388,13 @@ export class PaymentsService {
     const method = PaymentMethod.MOBILE_MONEY
     const phoneNumber = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, network)
     const normalizedMac = this.normalizeMac(dto.macAddress)
-    // Captive-portal purchases MUST carry the device MAC and a router
-    // identity. Without them the resulting credential cannot be device-bound
-    // and auto-connect after payment is impossible — a hard error the customer
-    // can fix (reconnect to the WiFi and reopen the portal) beats silently
-    // taking money for access that won't work.
-    if (!normalizedMac) {
-      throw new BadRequestException(
-        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the login screen, then try again.',
-      )
-    }
-    if (!dto.routerKey && !dto.routerId) {
-      throw new BadRequestException(
-        'The WiFi router could not be identified. Reconnect to the WiFi network and open this page from the login screen, then try again.',
-      )
-    }
+    // Captive-portal purchases ideally carry the device MAC and a router
+    // identity so the resulting credential can be device-bound for
+    // auto-connect. Some valid entry paths (QR-code scans opening the portal
+    // directly, or a captive portal that hasn't yet redirected with these
+    // params) can't supply them — payment must still succeed in that case;
+    // the customer just falls back to logging in with their voucher/phone
+    // number instead of getting auto-connected.
 
     const idempotencyKey = dto.idempotencyKey?.trim() || randomUUID()
     const existingPayment = await this.prisma.payment.findUnique({

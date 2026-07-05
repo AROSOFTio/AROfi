@@ -89,57 +89,13 @@ describe('PaymentsService', () => {
   })
 })
 
-describe('PaymentsService captive-portal purchase requirements', () => {
-  function buildInitiateHarness() {
-    const pkg = {
-      id: 'pkg-1',
-      status: 'ACTIVE',
-      tenantId: 'tenant-1',
-      tenant: { domain: 'demo.arofi.net' },
-      prices: [{ amountUgx: 2000, currency: 'UGX', endsAt: null }],
-      name: '1 Hour',
-      code: 'H1',
-    }
-    const prisma = {
-      package: { findUnique: jest.fn().mockResolvedValue(pkg) },
-      payment: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
-    }
-    const paymentRouter = {
-      providerFor: jest.fn().mockReturnValue('AGGREGATOR'),
-      resolveCollection: jest.fn(),
-    }
-    const phoneNumbers = {
-      normalizeForNetwork: jest.fn().mockReturnValue('256772000000'),
-    }
-    return buildService({ prisma, paymentRouter, phoneNumbers })
-  }
-
-  it('rejects a payment initiated without a device MAC address', async () => {
-    const { service } = buildInitiateHarness()
-
-    await expect(
-      service.initiatePortalPayment({
-        packageId: 'pkg-1',
-        phoneNumber: '0772000000',
-        network: PaymentNetwork.MTN,
-        routerKey: 'router-key',
-      } as never),
-    ).rejects.toThrow(BadRequestException)
-  })
-
-  it('rejects a payment initiated without a router identity', async () => {
-    const { service } = buildInitiateHarness()
-
-    await expect(
-      service.initiatePortalPayment({
-        packageId: 'pkg-1',
-        phoneNumber: '0772000000',
-        network: PaymentNetwork.MTN,
-        macAddress: 'AA:BB:CC:DD:EE:FF',
-      } as never),
-    ).rejects.toThrow(BadRequestException)
-  })
-})
+// A missing device MAC / router identity used to hard-reject the payment
+// (BadRequestException) before it ever reached Yo! Uganda. In production
+// this blocked real customers who reach the portal via a path that can't
+// supply those params (e.g. scanning a QR code directly rather than being
+// redirected through the router's captive portal) — their Mobile Money PIN
+// prompt never fired because the request never left the API. Payments now
+// proceed without device-binding in that case; see payments.service.ts.
 
 describe('PaymentsService status-token protection', () => {
   it('rejects an unauthenticated status check with a wrong token', async () => {

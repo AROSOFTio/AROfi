@@ -382,16 +382,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Hard captive-portal requirement (also enforced server-side): without
-    // the device MAC and router identity the credential cannot be
-    // device-bound and auto-connect cannot work.
-    if (!hotspotParams.macAddress || (!hotspotParams.routerKey && !hotspotParams.routerId)) {
-      setErrorMessage(
-        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the WiFi login screen, then redeem again.',
-      )
-      return
-    }
-
     setIsVoucherLoading(true)
 
     try {
@@ -775,16 +765,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     if (!availableNetworks.includes(selectedNetwork)) {
       setErrorMessage(`${selectedNetwork === 'AIRTEL' ? 'Airtel' : 'MTN'} is not available for this portal right now.`)
-      return
-    }
-
-    // Hard captive-portal requirement (also enforced server-side): a payment
-    // without the device MAC + router identity cannot be device-bound or
-    // auto-connected. Fail before taking money, with instructions to fix it.
-    if (!hotspotParams.macAddress || (!hotspotParams.routerKey && !hotspotParams.routerId)) {
-      setErrorMessage(
-        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the WiFi login screen, then pay again.',
-      )
       return
     }
 

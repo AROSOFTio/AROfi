@@ -218,20 +218,11 @@ export class PortalService {
       this.tryNormalizePhoneNumber(dto.customerReference)
     const customerReference = dto.customerReference?.trim() || phoneNumber || 'portal-customer'
 
-    // Captive-portal voucher redemption MUST carry the device MAC and a
-    // router identity — otherwise the credential cannot be device-bound and
-    // auto-connect cannot work. Hard error, not a warning: the customer can
-    // fix it by reopening the portal from the WiFi login page.
-    if (!this.normalizeMac(dto.macAddress)) {
-      throw new BadRequestException(
-        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the login screen, then redeem again.',
-      )
-    }
-    if (!dto.routerKey && !dto.routerId) {
-      throw new BadRequestException(
-        'The WiFi router could not be identified. Reconnect to the WiFi network and open this page from the login screen, then redeem again.',
-      )
-    }
+    // Captive-portal voucher redemption ideally carries the device MAC and a
+    // router identity so the credential can be device-bound for auto-connect.
+    // Some valid entry paths (QR-code scans opening the portal directly)
+    // can't supply them — redemption must still succeed; the customer falls
+    // back to logging in with their voucher/phone number manually.
 
     let result: Awaited<ReturnType<VouchersService['redeemVoucher']>>
     try {
