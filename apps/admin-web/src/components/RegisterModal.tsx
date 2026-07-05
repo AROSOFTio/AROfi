@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
 import { getAppDashboardUrl } from '@/lib/admin-session'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { COUNTRY_CODES, DEFAULT_COUNTRY, isPlausibleNationalNumber, toE164 } from '@/lib/country-codes'
 
 // Plan/payment picker is hidden from public signup for now — everyone lands
 // on the Free plan and goes straight to the dashboard. Flip this back on
@@ -76,6 +77,7 @@ type CheckoutStatus = {
 
 export function RegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [formState, setFormState] = useState(initialFormState)
+  const [phoneCountryIso2, setPhoneCountryIso2] = useState(DEFAULT_COUNTRY.iso2)
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -112,6 +114,11 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
     event.preventDefault()
     setError('')
 
+    if (step === 2 && !isPlausibleNationalNumber(formState.phoneNumber)) {
+      setError('Enter a valid phone number for the selected country.')
+      return
+    }
+
     if (step < 3) {
       setStep((current) => current + 1)
       return
@@ -121,6 +128,9 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       setError('Passwords do not match.')
       return
     }
+
+    const phoneCountry = COUNTRY_CODES.find((c) => c.iso2 === phoneCountryIso2) ?? DEFAULT_COUNTRY
+    const fullPhoneNumber = toE164(phoneCountry, formState.phoneNumber)
 
     setLoading(true)
 
@@ -135,7 +145,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
           firstName: formState.firstName.trim(),
           lastName: formState.lastName.trim(),
           email: formState.email.trim(),
-          phoneNumber: formState.phoneNumber.trim(),
+          phoneNumber: fullPhoneNumber,
           supportPhone: formState.supportPhone.trim() || undefined,
           supportEmail: formState.supportEmail.trim() || undefined,
           brandColor: formState.brandColor.trim() || undefined,
@@ -354,7 +364,33 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
                 <Field label="First Name" value={formState.firstName} onChange={(value) => setFormState((previous) => ({ ...previous, firstName: value }))} required />
                 <Field label="Last Name" value={formState.lastName} onChange={(value) => setFormState((previous) => ({ ...previous, lastName: value }))} required />
                 <Field label="Login Email" type="email" value={formState.email} onChange={(value) => setFormState((previous) => ({ ...previous, email: value }))} required />
-                <Field label="Phone Number" value={formState.phoneNumber} onChange={(value) => setFormState((previous) => ({ ...previous, phoneNumber: value }))} required />
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select
+                      className="form-input"
+                      style={{ flex: '0 0 auto', width: 120 }}
+                      value={phoneCountryIso2}
+                      onChange={(event) => setPhoneCountryIso2(event.target.value)}
+                      aria-label="Country code"
+                    >
+                      {COUNTRY_CODES.map((country) => (
+                        <option key={country.iso2} value={country.iso2}>
+                          {country.iso2} +{country.dialCode}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="form-input"
+                      style={{ flex: 1 }}
+                      type="tel"
+                      value={formState.phoneNumber}
+                      onChange={(event) => setFormState((previous) => ({ ...previous, phoneNumber: event.target.value }))}
+                      placeholder="771234567"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
             )}
             {step === 3 && (
