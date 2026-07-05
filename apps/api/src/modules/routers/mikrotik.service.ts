@@ -781,13 +781,21 @@ export class MikrotikService {
         }
       }
       
-      // Auto-login for voucher
-      if(search&&search.indexOf('voucher=')!==-1){
-        var parts=search.split('voucher=');
-        if(parts.length>1)v=parts[1].split('&')[0];
-      }
+      // Auto-login for voucher. The code can arrive two ways:
+      //   1. Directly:  /login?voucher=HT2KUQ
+      //   2. Buried in the MikroTik captive-portal redirect: when a customer on
+      //      the hotspot scans a voucher QR (which points at the portal URL),
+      //      the router intercepts it and redirects to
+      //      /login?dst=<original-url-URL-ENCODED>, so the code shows up as
+      //      ...%3Fvoucher%3DHT2KUQ. Decoding the whole query string first lets
+      //      us recover it and auto-redeem instead of stranding the customer.
+      var hay=search||'';
+      try{hay=decodeURIComponent(search);}catch(e){}
+      try{hay=decodeURIComponent(hay);}catch(e){}
+      var vm=hay.match(/voucher=([A-Za-z0-9\\-]+)/i);
+      if(vm&&vm[1])v=vm[1];
       if(v){
-        document.getElementById('vcode').value=decodeURIComponent(v);
+        document.getElementById('vcode').value=v.toUpperCase();
         setTimeout(login, 200);
       }
 

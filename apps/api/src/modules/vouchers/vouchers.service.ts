@@ -1089,16 +1089,24 @@ export class VouchersService {
     let x = pageMargin
     let y = pageMargin
 
+    // The router answers for <tenantname>.wifi (see routers.service — the
+    // hotspot dns-name is derived from the tenant name). Encoding the QR as
+    // http://<tenantname>.wifi/login?voucher=CODE is what actually makes a
+    // scan AUTO-CONNECT: it's plain HTTP (so the MikroTik captive portal can
+    // intercept it — HTTPS cannot be intercepted) and resolves to the gateway
+    // on ANY of the tenant's routers. The customer is on the hotspot WiFi when
+    // they redeem, so a URL that only resolves on-network is exactly right.
+    // The login.html then auto-fills and redeems the code (directly, or from
+    // the captive dst= redirect) and connects the device.
+    const tenantDnsName = `${batch.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
+
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
         doc.addPage()
         x = pageMargin
         y = pageMargin
       }
-      // Always use the hosted portal URL for QR codes so they work when scanned
-      // from outside the hotspot network. The local dnsName URL only resolves
-      // inside the captive portal and shows "unknown page" elsewhere.
-      const qrPng = await this.generateVoucherQrPng(voucher.code)
+      const qrPng = await this.generateVoucherQrPng(voucher.code, tenantDnsName)
 
       this.drawVoucherCard(doc, {
         x,
