@@ -17,6 +17,7 @@ import {
 } from '@prisma/client'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 import { PaymentsService } from '../payments/payments.service'
 import { VouchersService } from '../vouchers/vouchers.service'
 import { PortalLoginDto } from './dto/portal-login.dto'
@@ -125,6 +126,7 @@ export class PortalService {
     private readonly configService: ConfigService,
     private readonly paymentsService: PaymentsService,
     private readonly vouchersService: VouchersService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async getContext(
@@ -216,6 +218,21 @@ export class PortalService {
       this.tryNormalizePhoneNumber(dto.customerReference)
     const customerReference = dto.customerReference?.trim() || phoneNumber || 'portal-customer'
 
+    // Captive-portal voucher redemption MUST carry the device MAC and a
+    // router identity — otherwise the credential cannot be device-bound and
+    // auto-connect cannot work. Hard error, not a warning: the customer can
+    // fix it by reopening the portal from the WiFi login page.
+    if (!this.normalizeMac(dto.macAddress)) {
+      throw new BadRequestException(
+        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the login screen, then redeem again.',
+      )
+    }
+    if (!dto.routerKey && !dto.routerId) {
+      throw new BadRequestException(
+        'The WiFi router could not be identified. Reconnect to the WiFi network and open this page from the login screen, then redeem again.',
+      )
+    }
+
     let result: Awaited<ReturnType<VouchersService['redeemVoucher']>>
     try {
       // resolveHotspotContext used to run OUTSIDE this try, so any failure there
@@ -253,6 +270,26 @@ export class PortalService {
       )
       throw new InternalServerErrorException(`Voucher could not be redeemed: ${message}`)
     }
+    this.realtimeEvents.publish('voucher.redeemed', {
+      tenantId: result.redemption.tenantId,
+      routerId: result.activation?.routerId ?? null,
+      data: {
+        redemptionId: result.redemption.id,
+        activationId: result.activation?.id ?? null,
+        voucherCode: this.maskVoucherCode(dto.code),
+      },
+    })
+    if (result.activation) {
+      this.realtimeEvents.publish('activation.created', {
+        tenantId: result.redemption.tenantId,
+        routerId: result.activation.routerId ?? null,
+        data: {
+          activationId: result.activation.id,
+          source: 'VOUCHER',
+        },
+      })
+    }
+
     // The voucher is already redeemed and committed at this point. Everything
     // below is best-effort convenience (auto-connect payload + session token):
     // a failure here must NOT turn a successful redemption into a 500, or the
@@ -359,11 +396,21 @@ export class PortalService {
       loginUrl: input.loginUrl,
     })
 
+    // Recovery must be tenant-scoped. Without a resolved router/tenant the
+    // lookup would search EVERY tenant's payments, letting anyone probe for
+    // other operators' transaction references from an arbitrary origin.
+    const resolvedTenantId = (resolvedHotspot as { tenantId?: string }).tenantId
+    if (!resolvedTenantId) {
+      throw new BadRequestException(
+        'Recovery must be started from the WiFi login page so your network operator can be identified.',
+      )
+    }
+
     const normalizedPhone = this.tryNormalizePhoneNumber(transactionId)
 
     const payment = await this.prisma.payment.findFirst({
       where: {
-        tenantId: (resolvedHotspot as any).tenantId,
+        tenantId: resolvedTenantId,
         status: PaymentStatus.COMPLETED,
         OR: [
           { providerReference: transactionId },
@@ -388,7 +435,7 @@ export class PortalService {
     if (!activationId) {
       const redemption = await this.prisma.voucherRedemption.findFirst({
         where: {
-          tenantId: (resolvedHotspot as any).tenantId,
+          tenantId: resolvedTenantId,
           OR: [
             { customerReference: transactionId },
             ...(normalizedPhone ? [{ customerReference: normalizedPhone }] : []),
@@ -406,16 +453,24 @@ export class PortalService {
       }
     }
 
+    // One uniform message for "nothing found" and "found but inactive":
+    // responses must not confirm to a guesser whether a phone number or
+    // transaction reference exists on this network.
+    const recoveryNotPossible = () =>
+      new NotFoundException(
+        'No active access could be recovered with those details. Check the phone number or transaction ID, or contact support.',
+      )
+
     if (!activationId) {
-      throw new NotFoundException('Could not find a valid voucher for that phone number or transaction ID')
+      throw recoveryNotPossible()
     }
 
     const activation = await this.prisma.packageActivation.findUnique({
       where: { id: activationId },
     })
 
-    if (!activation || activation.status !== 'ACTIVE') {
-      throw new BadRequestException('The found voucher has already expired or is inactive')
+    if (!activation || activation.status !== 'ACTIVE' || activation.endsAt <= new Date()) {
+      throw recoveryNotPossible()
     }
 
     // Since they are explicitly recovering from the portal, they might be on a new device.
@@ -605,40 +660,14 @@ export class PortalService {
       }
     }
 
-    // Verify router is online and active
-    if (activation.routerId) {
-      const router = await this.prisma.router.findUnique({
-        where: { id: activation.routerId },
-        select: { status: true, lastSeenAt: true },
-      })
-      if (router && (router.status === 'OFFLINE' || !router.lastSeenAt || router.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000)) {
-        return {
-          existingActiveAccess: false,
-          reason: 'Router is offline. Bypassing automatic reconnection.',
-        }
-      }
-    }
-
+    // Source of truth for reconnect is the activation itself: ACTIVE, not
+    // expired, MAC/router bound (already checked by
+    // findActiveAccessByMacAndRouter above). Deliberately NOT gated on router
+    // heartbeat freshness — the customer is physically connected to the
+    // router right now (they are loading this portal through it), so a stale
+    // backend heartbeat means the backend is behind, not that the customer
+    // is offline. Blocking reconnect on it stranded paying users.
     await this.clearStaleSessionIfNeeded(activation.id)
-
-    // Verify that any active network session is fresh (seen within the last 3 minutes)
-    const activeSession = await this.prisma.networkSession.findFirst({
-      where: {
-        activationId: activation.id,
-        status: 'ACTIVE',
-      },
-      select: { lastAccountingAt: true, startedAt: true },
-    })
-    if (activeSession) {
-      const lastSeen = activeSession.lastAccountingAt ?? activeSession.startedAt
-      const ageMs = Date.now() - lastSeen.getTime()
-      if (ageMs > 3 * 60 * 1000) {
-        return {
-          existingActiveAccess: false,
-          reason: 'Active session is stale (no accounting updates in last 3 minutes). Bypassing auto-login.',
-        }
-      }
-    }
 
     await this.markReconnectionAttempt({
       tenantId: activation.tenantId,

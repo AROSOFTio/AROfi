@@ -37,6 +37,34 @@ const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const COMPANION_VOUCHER_EXPIRY_LABEL = 'within 60 hours'
 const portalStorageKey = 'arofi.portal.access_token'
 const paymentReturnStorageKey = 'arofi.portal.payment_return'
+// Companion voucher codes survive the auto-connect page navigation here: the
+// device connects FIRST (top-level redirect through the MikroTik login), then
+// the router sends the browser back to the portal with ?connected=1 and the
+// codes are re-shown from this key. Showing them BEFORE connecting used to
+// block the buyer's own device from getting online.
+const pendingCompanionCodesKey = 'arofi.portal.pending_companion_codes'
+
+function stashCompanionCodes(codes: string[]) {
+  if (typeof window === 'undefined' || codes.length === 0) return
+  try {
+    localStorage.setItem(pendingCompanionCodesKey, JSON.stringify(codes))
+  } catch {
+    // storage full — codes are also delivered by WhatsApp, not critical
+  }
+}
+
+function takeStashedCompanionCodes(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(pendingCompanionCodesKey)
+    if (!raw) return []
+    localStorage.removeItem(pendingCompanionCodesKey)
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((code): code is string => typeof code === 'string') : []
+  } catch {
+    return []
+  }
+}
 const portalTemplateStyles: Record<
   PortalTemplateId,
   {
@@ -296,11 +324,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [companionVoucherCodes, setCompanionVoucherCodes] = useState<string[]>([])
   const [copiedVoucherCode, setCopiedVoucherCode] = useState('')
   const autoConnectAttemptedRef = useRef(false)
-  // Auto-connect navigates the whole page away (see autoSubmitHotspotLogin),
-  // which would yank the companion-voucher popup off screen before the buyer
-  // can read it. When there are codes to show, hold the navigation here and
-  // fire it once the popup is dismissed instead of running it immediately.
-  const pendingAutoConnectRef = useRef<(() => void) | null>(null)
   const [qrVoucherCode, setQrVoucherCode] = useState('')
   const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
@@ -321,6 +344,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode(code)
       setQrVoucherCode(code)
       setQrVoucherRedeemAttempted(false)
+    }
+    // Back from a successful MikroTik login (dst pointed here). The device is
+    // online — NOW is the time to show any companion voucher codes that were
+    // stashed before the connect navigation.
+    if (searchParams?.get('connected') === '1') {
+      setStatusMessage('You are connected to the internet. Enjoy!')
+      const stashed = takeStashedCompanionCodes()
+      if (stashed.length > 0) {
+        setCompanionVoucherCodes(stashed)
+      }
     }
     void bootstrap()
   }, [])
@@ -346,6 +379,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const codeToRedeem = normalizeVoucherCode(overrideCode ?? voucherCode)
     if (!codeToRedeem) {
       setErrorMessage('Enter your voucher code before redeeming.')
+      return
+    }
+
+    // Hard captive-portal requirement (also enforced server-side): without
+    // the device MAC and router identity the credential cannot be
+    // device-bound and auto-connect cannot work.
+    if (!hotspotParams.macAddress || (!hotspotParams.routerKey && !hotspotParams.routerId)) {
+      setErrorMessage(
+        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the WiFi login screen, then redeem again.',
+      )
       return
     }
 
@@ -380,10 +423,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode('')
       setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
 
-      const hasCompanionCodes = Boolean(redemption.companionVoucherCodes?.length)
-      if (redemption.companionVoucherCodes?.length) {
-        setCompanionVoucherCodes(redemption.companionVoucherCodes)
-      }
+      const companionCodes = redemption.companionVoucherCodes ?? []
 
       if (redemption.reconnect?.username && redemption.reconnect?.password) {
         const effectiveLoginUrl =
@@ -393,20 +433,23 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           null
         if (effectiveLoginUrl) {
           if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-          const runAutoConnect = () => {
-            setConnectionStatus('reconnecting')
-            setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
-            autoSubmitHotspotLogin({ ...redemption.reconnect, loginUrl: effectiveLoginUrl })
-          }
-
-          if (hasCompanionCodes) {
-            // Hold off the page navigation until the buyer dismisses the voucher popup.
-            pendingAutoConnectRef.current = runAutoConnect
-          } else {
-            window.setTimeout(runAutoConnect, 100)
-          }
+          // Connect FIRST. Companion codes are stashed and re-shown when the
+          // router redirects back here (?connected=1) — the popup must never
+          // stand between the buyer's device and its internet access.
+          stashCompanionCodes(companionCodes)
+          setConnectionStatus('reconnecting')
+          setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
+          window.setTimeout(
+            () => autoSubmitHotspotLogin({ ...redemption.reconnect, loginUrl: effectiveLoginUrl }),
+            100,
+          )
           return
         }
+      }
+
+      // No auto-connect possible on this path — show the codes right away.
+      if (companionCodes.length > 0) {
+        setCompanionVoucherCodes(companionCodes)
       }
 
       if (redemption.accessToken && redemption.session) {
@@ -735,6 +778,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
+    // Hard captive-portal requirement (also enforced server-side): a payment
+    // without the device MAC + router identity cannot be device-bound or
+    // auto-connected. Fail before taking money, with instructions to fix it.
+    if (!hotspotParams.macAddress || (!hotspotParams.routerKey && !hotspotParams.routerId)) {
+      setErrorMessage(
+        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the WiFi login screen, then pay again.',
+      )
+      return
+    }
+
     setIsPaymentLoading(true)
 
     try {
@@ -793,10 +846,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
 
   async function handleCompletedPayment(payment: PortalPayment) {
-    const hasCompanionCodes = Boolean(payment.companionVoucherCodes?.length)
-    if (payment.companionVoucherCodes?.length) {
-      setCompanionVoucherCodes(payment.companionVoucherCodes)
-    }
+    const companionCodes = payment.companionVoucherCodes ?? []
 
     // Build best possible loginUrl from all sources
     const effectiveLoginUrl =
@@ -809,22 +859,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     if (effectiveLoginUrl && hasCredentials) {
       if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-      const runAutoConnect = () => {
-        setConnectionStatus('reconnecting')
-        setStatusMessage('')
-        autoSubmitHotspotLogin(
-          { ...payment.reconnect, loginUrl: effectiveLoginUrl },
-          effectiveLoginUrl,
-        )
-      }
-
-      if (hasCompanionCodes) {
-        // Hold off the page navigation until the buyer dismisses the voucher popup.
-        pendingAutoConnectRef.current = runAutoConnect
-      } else {
-        runAutoConnect()
-      }
+      // Connect FIRST, show companion codes after the router redirects back
+      // here (?connected=1). The popup must never delay the paid device's
+      // internet access.
+      stashCompanionCodes(companionCodes)
+      setConnectionStatus('reconnecting')
+      setStatusMessage('')
+      autoSubmitHotspotLogin(
+        { ...payment.reconnect, loginUrl: effectiveLoginUrl },
+        effectiveLoginUrl,
+      )
       return
+    }
+
+    // No auto-connect possible — show the codes right away.
+    if (companionCodes.length > 0) {
+      setCompanionVoucherCodes(companionCodes)
     }
 
     if (hasCredentials && !effectiveLoginUrl) {
@@ -846,9 +896,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   function dismissCompanionVoucherPopup() {
     setCompanionVoucherCodes([])
-    const runAutoConnect = pendingAutoConnectRef.current
-    pendingAutoConnectRef.current = null
-    runAutoConnect?.()
   }
 
   function handleCopyVoucherCode(code: string) {
@@ -956,7 +1003,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       const target = new URL(loginUrl, window.location.href)
       target.searchParams.set('username', reconnect.username)
       target.searchParams.set('password', reconnect.password)
-      target.searchParams.set('dst', 'http://neverssl.com/')
+      // After a successful hotspot login the router redirects the browser to
+      // dst. Landing back on the portal with ?connected=1 confirms the
+      // connection to the customer and re-shows any stashed companion codes.
+      target.searchParams.set('dst', `${window.location.origin}${window.location.pathname}?connected=1`)
       target.searchParams.set('popup', 'false')
       window.location.href = target.toString()
     } catch {

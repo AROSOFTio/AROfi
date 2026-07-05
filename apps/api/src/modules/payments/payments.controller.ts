@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Param, Post, Query, RawBodyRequest, Req, Res, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
-import type { Response } from 'express'
+import type { Request, Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -61,45 +61,50 @@ export class PaymentsController {
   handleMtnCollectionWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, { ...payload, secret }, headers, 'collection')
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, { ...payload, secret }, headers, 'collection', request.rawBody)
   }
 
   @Post('webhooks/mtn/disbursement')
   handleMtnDisbursementWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, { ...payload, secret }, headers, 'disbursement')
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.MTN_MOMO_DIRECT, PaymentNetwork.MTN, { ...payload, secret }, headers, 'disbursement', request.rawBody)
   }
 
   @Post('webhooks/airtel/collection')
   handleAirtelCollectionWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, { ...payload, secret }, headers, 'collection')
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, { ...payload, secret }, headers, 'collection', request.rawBody)
   }
 
   @Post('webhooks/airtel/disbursement')
   handleAirtelDisbursementWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, { ...payload, secret }, headers, 'disbursement')
+    return this.paymentsService.handleProviderWebhook(PaymentProvider.AIRTEL_MONEY_DIRECT, PaymentNetwork.AIRTEL, { ...payload, secret }, headers, 'disbursement', request.rawBody)
   }
 
   @Post('webhooks/aggregator/collection')
   handleAggregatorCollectionWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers)
+    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers, request.rawBody)
   }
 
   @Get('webhooks/aggregator/collection')
@@ -114,9 +119,10 @@ export class PaymentsController {
   handlePesapalWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers)
+    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers, request.rawBody)
   }
 
   @Get('webhooks/pesapal')
@@ -131,9 +137,10 @@ export class PaymentsController {
   handleYoUgandaWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers)
+    return this.paymentsService.handleAggregatorCollectionWebhook({ ...payload, secret }, headers, request.rawBody)
   }
 
   @Get('webhooks/yo-uganda')
@@ -148,9 +155,10 @@ export class PaymentsController {
   handleYoUgandaDisbursementWebhook(
     @Body() payload: Record<string, unknown>,
     @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: RawBodyRequest<Request>,
     @Query('secret') secret?: string,
   ) {
-    return this.paymentsService.handleYoDisbursementWebhook({ ...payload, secret }, headers)
+    return this.paymentsService.handleYoDisbursementWebhook({ ...payload, secret }, headers, request.rawBody)
   }
 
   @Get('webhooks/yo-uganda/disbursement')
@@ -169,9 +177,13 @@ export class PaymentsController {
     return this.paymentsService.getPayment(paymentId, tenantId)
   }
 
+  // Unauthenticated portal polling — the per-payment status token is the
+  // authorization (checked in service; wrong/missing token → 403). Throttled
+  // per IP to keep token brute-forcing impractical on top of the 24-byte
+  // random token space.
+  @Throttle({ default: { ttl: 1_000, limit: 5 } })
   @Post(':paymentId/check-status')
   checkPaymentStatus(@Param('paymentId') paymentId: string, @Query('token') token?: string) {
     return this.paymentsService.checkPaymentStatus(paymentId, undefined, token)
   }
 }
-

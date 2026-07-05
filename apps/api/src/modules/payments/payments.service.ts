@@ -24,10 +24,11 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client'
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { BillingService } from '../billing/billing.service'
 import { MailService } from '../mail/mail.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 import { WhatsAppService } from '../whatsapp/whatsapp.service'
 import { InitiatePortalPaymentDto } from './dto/initiate-portal-payment.dto'
 import { PackageActivationService } from './package-activation.service'
@@ -131,6 +132,7 @@ export class PaymentsService {
     private readonly packageActivationService: PackageActivationService,
     private readonly mailService: MailService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async exportPaymentsCsv(tenantId?: string, from?: string, to?: string) {
@@ -386,8 +388,20 @@ export class PaymentsService {
     const method = PaymentMethod.MOBILE_MONEY
     const phoneNumber = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, network)
     const normalizedMac = this.normalizeMac(dto.macAddress)
+    // Captive-portal purchases MUST carry the device MAC and a router
+    // identity. Without them the resulting credential cannot be device-bound
+    // and auto-connect after payment is impossible — a hard error the customer
+    // can fix (reconnect to the WiFi and reopen the portal) beats silently
+    // taking money for access that won't work.
     if (!normalizedMac) {
-      console.warn(`[payments] Payment initiated without MAC address — credentials will not be device-bound. package=${dto.packageId} phone=****${dto.phoneNumber?.slice(-4)}`)
+      throw new BadRequestException(
+        'Your device could not be identified by the WiFi. Reconnect to the WiFi network and open this page from the login screen, then try again.',
+      )
+    }
+    if (!dto.routerKey && !dto.routerId) {
+      throw new BadRequestException(
+        'The WiFi router could not be identified. Reconnect to the WiFi network and open this page from the login screen, then try again.',
+      )
     }
 
     const idempotencyKey = dto.idempotencyKey?.trim() || randomUUID()
@@ -598,7 +612,19 @@ export class PaymentsService {
   // missing secret is a hard reject (never fail-open — an unconfigured secret
   // must not leave the "payment succeeded" endpoint spoofable). Outside
   // production it warns and allows so local/dev stacks work without secrets.
-  private ensureWebhookSecret(envVarName: string, incomingSecret: unknown) {
+  //
+  // Accepted proofs, strongest first:
+  //   1. x-webhook-signature: hex HMAC-SHA256 of the raw request body keyed
+  //      with the configured secret (nothing secret ever crosses the wire).
+  //   2. x-webhook-secret header: constant-time compared shared secret.
+  //   3. ?secret= query string — ONLY when WEBHOOK_ALLOW_QUERY_SECRET=true.
+  //      Query strings leak through proxy/access logs, so this is a
+  //      deliberately opt-in migration path for providers that cannot send
+  //      headers, not the default.
+  private ensureWebhookSecret(
+    envVarName: string,
+    incoming: { headerSecret?: unknown; querySecret?: unknown; signature?: unknown; rawBody?: Buffer | null },
+  ) {
     const configuredSecret = process.env[envVarName] || this.configService.get<string>(envVarName)
     if (!configuredSecret) {
       if (process.env.NODE_ENV === 'production') {
@@ -611,20 +637,55 @@ export class PaymentsService {
       return
     }
 
-    if (!this.secretMatches(incomingSecret, configuredSecret)) {
-      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid or missing secret`)
+    if (incoming.signature != null && incoming.rawBody) {
+      const expected = createHmac('sha256', configuredSecret).update(incoming.rawBody).digest('hex')
+      if (this.secretMatches(String(incoming.signature).toLowerCase(), expected)) {
+        return
+      }
+      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid HMAC signature`)
+      throw new ForbiddenException('Invalid webhook signature')
+    }
+
+    if (incoming.headerSecret != null) {
+      if (this.secretMatches(incoming.headerSecret, configuredSecret)) {
+        return
+      }
+      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid header secret`)
       throw new ForbiddenException('Invalid webhook authorization secret')
     }
+
+    const allowQuerySecret = (process.env.WEBHOOK_ALLOW_QUERY_SECRET ?? 'false') === 'true'
+    if (incoming.querySecret != null && allowQuerySecret) {
+      if (this.secretMatches(incoming.querySecret, configuredSecret)) {
+        return
+      }
+      this.logger.warn(`Webhook authorization failed for ${envVarName}: invalid query-string secret`)
+      throw new ForbiddenException('Invalid webhook authorization secret')
+    }
+
+    this.logger.warn(
+      `Webhook authorization failed for ${envVarName}: no signature or secret presented` +
+        (incoming.querySecret != null && !allowQuerySecret
+          ? ' (query-string secret ignored; set WEBHOOK_ALLOW_QUERY_SECRET=true only as a migration path)'
+          : ''),
+    )
+    throw new ForbiddenException('Webhook authorization is required')
   }
 
   private assertWebhookSecret(
     envVarName: string,
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
+    rawBody?: Buffer | null,
   ) {
-    const headerSecret = headers['x-webhook-secret'] ?? headers['X-Webhook-Secret']
-    const incomingSecret = payload.secret ?? (Array.isArray(headerSecret) ? headerSecret[0] : headerSecret)
-    this.ensureWebhookSecret(envVarName, incomingSecret)
+    const headerSecretRaw = headers['x-webhook-secret'] ?? headers['X-Webhook-Secret']
+    const signatureRaw = headers['x-webhook-signature'] ?? headers['X-Webhook-Signature']
+    this.ensureWebhookSecret(envVarName, {
+      headerSecret: Array.isArray(headerSecretRaw) ? headerSecretRaw[0] : headerSecretRaw,
+      querySecret: payload.secret,
+      signature: Array.isArray(signatureRaw) ? signatureRaw[0] : signatureRaw,
+      rawBody: rawBody ?? null,
+    })
   }
 
   async handleProviderWebhook(
@@ -633,8 +694,9 @@ export class PaymentsService {
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
     direction: 'collection' | 'disbursement',
+    rawBody?: Buffer | null,
   ) {
-    this.assertWebhookSecret(this.resolveWebhookSecretEnvVar(provider, direction), payload, headers)
+    this.assertWebhookSecret(this.resolveWebhookSecretEnvVar(provider, direction), payload, headers, rawBody)
 
     const extracted = this.extractWebhookReferences(payload)
     const payment = await this.findPaymentByReferences(extracted.externalReference, extracted.providerReference)
@@ -799,6 +861,19 @@ export class PaymentsService {
       companionVoucherCodes: string[]
     } | null = null
 
+    // Populated inside the transaction, published on the realtime bus only
+    // after the commit succeeds (subscribers must never see uncommitted state).
+    let realtimeOutcome: {
+      type: 'completed' | 'failed' | 'amount_mismatch'
+      tenantId: string
+      routerId: string | null
+      paymentId: string
+      activationId?: string
+      amountUgx: number
+      externalReference: string
+      message?: string
+    } | null = null
+
     const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
@@ -831,6 +906,15 @@ export class PaymentsService {
           amountMismatchMessage = `Amount mismatch: provider reported ${paidUgx} ${gatewayResponse.currencyCode ?? 'UGX'} for a ${payment.amountUgx} UGX order. Activation withheld.`
           this.logger.error(`Payment ${payment.id} rejected — ${amountMismatchMessage}`)
           nextStatus = PaymentStatus.FAILED
+          realtimeOutcome = {
+            type: 'amount_mismatch',
+            tenantId: payment.tenantId,
+            routerId: this.readMetadataString(payment.metadata, 'routerId') ?? null,
+            paymentId: payment.id,
+            amountUgx: payment.amountUgx,
+            externalReference: payment.externalReference,
+            message: amountMismatchMessage,
+          }
         }
       }
       const now = new Date()
@@ -982,6 +1066,16 @@ export class PaymentsService {
           }),
         })
 
+        realtimeOutcome = {
+          type: 'completed',
+          tenantId: payment.tenantId,
+          routerId: activation.routerId ?? this.readMetadataString(payment.metadata, 'routerId') ?? null,
+          paymentId: payment.id,
+          activationId: activation.id,
+          amountUgx: payment.amountUgx,
+          externalReference: payment.externalReference,
+        }
+
         const companionVoucherCodes = await this.packageActivationService.generateCompanionVouchersForPackage(tx, {
           tenantId: payment.tenantId,
           packageId: payment.packageId,
@@ -1030,12 +1124,28 @@ export class PaymentsService {
         })
       }
 
+      if (nextStatus === PaymentStatus.FAILED && !realtimeOutcome) {
+        realtimeOutcome = {
+          type: 'failed',
+          tenantId: payment.tenantId,
+          routerId: this.readMetadataString(payment.metadata, 'routerId') ?? null,
+          paymentId: payment.id,
+          amountUgx: payment.amountUgx,
+          externalReference: payment.externalReference,
+          message: amountMismatchMessage ?? gatewayResponse.statusMessage ?? gatewayResponse.errorMessage ?? undefined,
+        }
+      }
+
       const refreshedPayment = await tx.payment.findUnique({
         where: { id: payment.id },
         include: this.paymentDetailInclude,
       })
       return this.attachReconnectPayload(refreshedPayment)
     })
+
+    if (realtimeOutcome) {
+      this.publishPaymentOutcome(realtimeOutcome)
+    }
 
     if (receiptInfo) {
       // Best-effort, fire-and-forget: a slow/broken mail server must never
@@ -1048,6 +1158,53 @@ export class PaymentsService {
     }
 
     return result
+  }
+
+  private publishPaymentOutcome(outcome: {
+    type: 'completed' | 'failed' | 'amount_mismatch'
+    tenantId: string
+    routerId: string | null
+    paymentId: string
+    activationId?: string
+    amountUgx: number
+    externalReference: string
+    message?: string
+  }) {
+    const base = {
+      tenantId: outcome.tenantId,
+      routerId: outcome.routerId,
+      data: {
+        paymentId: outcome.paymentId,
+        activationId: outcome.activationId ?? null,
+        amountUgx: outcome.amountUgx,
+        externalReference: outcome.externalReference,
+        message: outcome.message ?? null,
+      },
+    }
+
+    if (outcome.type === 'completed') {
+      this.realtimeEvents.publish('payment.completed', base)
+      this.realtimeEvents.publish('activation.created', base)
+      return
+    }
+
+    if (outcome.type === 'amount_mismatch') {
+      this.realtimeEvents.publish('payment.amount_mismatch', base)
+      // Underpaid/spoofed callbacks are an operational incident, not routine
+      // payment noise — alert the platform operator.
+      void this.mailService.sendOperationalAlertEmail({
+        subject: `Payment amount mismatch on ${outcome.externalReference}`,
+        lines: [
+          `Payment: ${outcome.paymentId}`,
+          `Tenant: ${outcome.tenantId}`,
+          `Billed amount: ${outcome.amountUgx} UGX`,
+          outcome.message ?? 'Provider reported a lower paid amount than billed.',
+        ],
+      })
+      return
+    }
+
+    this.realtimeEvents.publish('payment.failed', base)
   }
 
   private async sendCustomerWhatsAppConfirmation(input: {
@@ -1141,10 +1298,15 @@ export class PaymentsService {
       return payment
     }
 
+    // Always return a usable MikroTik login target. The captured captive
+    // link-login URL is best; otherwise fall back to the AROFi hotspot
+    // gateway address the provisioning script configures
+    // (hotspot-address=10.55.0.1), same as PortalService reconnect payloads.
     const loginUrl =
       this.readMetadataString(payment.metadata, 'loginUrl') ||
       this.readMetadataString(payment.activation.metadata, 'loginUrl') ||
-      null   // keep null if not found — frontend will try sessionStorage fallback
+      process.env.HOTSPOT_LOGIN_URL ||
+      'http://10.55.0.1/login'
 
     const username = payment.activation.radiusCredential?.username ?? payment.activation.radiusUsername
     const password = payment.activation.radiusCredential?.password ?? payment.activation.radiusPassword
@@ -1202,22 +1364,23 @@ export class PaymentsService {
       }
     }
 
-    const tenant = await this.prisma.tenant.findFirst({
-      where: {
-        packages: {
-          some: {
-            status: PackageStatus.ACTIVE,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    if (!tenant) {
-      throw new NotFoundException('No tenant with an active package catalog was found')
+    // Optional explicit single-tenant mapping for dedicated deployments. The
+    // old "newest tenant with an active package" guess is gone — it could
+    // load the WRONG tenant's package catalog on a multi-tenant platform and
+    // sell another operator's packages.
+    const defaultDomain = process.env.PORTAL_DEFAULT_TENANT_DOMAIN?.trim()
+    if (defaultDomain) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { domain: defaultDomain },
+      })
+      if (tenant) {
+        return tenant
+      }
     }
 
-    return tenant
+    throw new NotFoundException(
+      'This portal must be opened from the WiFi login page so the correct operator can be identified.',
+    )
   }
 
   private async resolveRouterContext(tenantId: string, routerId?: string, routerKey?: string) {
@@ -1255,6 +1418,7 @@ export class PaymentsService {
   async handleAggregatorCollectionWebhook(
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
+    rawBody?: Buffer | null,
   ) {
     const extracted = this.extractWebhookReferences(payload)
     const payment = await this.findPaymentByReferences(extracted.externalReference, extracted.providerReference)
@@ -1264,6 +1428,7 @@ export class PaymentsService {
       payload,
       headers,
       'collection',
+      rawBody,
     )
   }
 
@@ -1538,10 +1703,17 @@ export class PaymentsService {
   async handleYoDisbursementWebhook(
     payload: Record<string, unknown>,
     headers: Record<string, string | string[] | undefined>,
+    rawBody?: Buffer | null,
   ) {
-    const incomingSecret =
-      payload.secret ?? headers['x-yo-webhook-secret'] ?? headers['X-Yo-Webhook-Secret'] ?? headers['x-webhook-secret']
-    this.ensureWebhookSecret('YO_UGANDA_WEBHOOK_SECRET', Array.isArray(incomingSecret) ? incomingSecret[0] : incomingSecret)
+    const headerSecretRaw =
+      headers['x-yo-webhook-secret'] ?? headers['X-Yo-Webhook-Secret'] ?? headers['x-webhook-secret']
+    const signatureRaw = headers['x-webhook-signature'] ?? headers['X-Webhook-Signature']
+    this.ensureWebhookSecret('YO_UGANDA_WEBHOOK_SECRET', {
+      headerSecret: Array.isArray(headerSecretRaw) ? headerSecretRaw[0] : headerSecretRaw,
+      querySecret: payload.secret,
+      signature: Array.isArray(signatureRaw) ? signatureRaw[0] : signatureRaw,
+      rawBody: rawBody ?? null,
+    })
 
     const externalRef = this.readPayloadValue(payload, [
       'ExternalReference', 'external_ref', 'reference', 'PrivateTransactionReference',
