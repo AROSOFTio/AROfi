@@ -25,7 +25,7 @@ describe('RoutersService', () => {
       encrypt: jest.fn((value: string) => `encrypted:${value}`),
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never)
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
     jest.spyOn(service, 'getRouterSetup').mockResolvedValue({ id: 'router-1' } as never)
 
@@ -108,7 +108,7 @@ describe('RoutersService', () => {
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
       maskCiphertext: jest.fn(() => '********'),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never)
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
 
     return { service, prisma, tx, credentials }
@@ -264,6 +264,57 @@ describe('RoutersService', () => {
       expect(tx.radiusClient.update).not.toHaveBeenCalled()
       expect(tx.nasClient.update).not.toHaveBeenCalled()
       expect(service.reloadFreeradiusNasClients).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('sendRouterAlert email notifications', () => {
+    function buildAlertHarness() {
+      const mailService = {
+        sendMail: jest.fn().mockResolvedValue(true),
+        sendOperationalAlertEmail: jest.fn().mockResolvedValue(true),
+      }
+      const service = new RoutersService(
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        { publish: jest.fn() } as never,
+        mailService as never,
+      )
+      return { service, mailService }
+    }
+
+    it('emails the platform operator and the tenant support address on router offline', async () => {
+      const { service, mailService } = buildAlertHarness()
+      const router = {
+        name: 'Shop Router',
+        tenant: { name: 'Kampala Cafe', supportEmail: 'support@kampalacafe.example' },
+        lastSeenAt: new Date('2026-01-01T00:00:00Z'),
+      }
+
+      await (service as any).sendRouterAlert(router, 'OFFLINE', 90)
+
+      expect(mailService.sendOperationalAlertEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: expect.stringContaining('Router offline') }),
+      )
+      expect(mailService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'support@kampalacafe.example',
+          subject: expect.stringContaining('gone offline'),
+        }),
+      )
+    })
+
+    it('skips the tenant email when no support address is configured, but still alerts the operator', async () => {
+      const { service, mailService } = buildAlertHarness()
+      const router = { name: 'Shop Router', tenant: { name: 'Kampala Cafe' }, lastSeenAt: null }
+
+      await (service as any).sendRouterAlert(router, 'ONLINE', 0)
+
+      expect(mailService.sendOperationalAlertEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: expect.stringContaining('back online') }),
+      )
+      expect(mailService.sendMail).not.toHaveBeenCalled()
     })
   })
 })

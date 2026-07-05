@@ -1,8 +1,8 @@
 import { AdminSessionResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { isVendorWorkspace } from '@/lib/workspace'
-import { redirect } from 'next/navigation'
 import DashboardShell from '../../components/DashboardShell'
+import SessionRecoveryGate from '../../components/SessionRecoveryGate'
 
 export const metadata = {
   title: 'AROFi Admin - Hotspot Billing & Network Management',
@@ -14,7 +14,10 @@ export const dynamic = 'force-dynamic'
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
   if (!session?.user) {
-    redirect('/login')
+    // Don't hard-redirect on the first failure — attempt a silent client-side
+    // refresh first (see SessionRecoveryGate). Only genuinely dead sessions
+    // end up at /login.
+    return <SessionRecoveryGate />
   }
 
   const initials = session.user.displayName

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { getAppDashboardUrl } from '@/lib/admin-session'
 
 async function readErrorMessage(response: Response, fallback: string) {
@@ -50,8 +50,7 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
     }
   }
 
-  async function handleOtpSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function verifyOtp(code: string) {
     setLoading(true)
     setError('')
 
@@ -60,7 +59,7 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otp.trim() }),
+        body: JSON.stringify({ email, otp: code }),
       })
 
       if (!response.ok) {
@@ -76,6 +75,20 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
       setLoading(false)
     }
   }
+
+  function handleOtpSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void verifyOtp(otp.trim())
+  }
+
+  // Auto-submit the instant a valid 6-digit code is entered — no need to
+  // also tap "Verify & Sign In".
+  useEffect(() => {
+    if (step === 'otp' && otp.length === 6 && !loading && !error) {
+      void verifyOtp(otp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp, step])
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -109,7 +122,10 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
                 inputMode="numeric"
                 maxLength={6}
                 value={otp}
-                onChange={(event) => setOtp(event.target.value.replace(/\D/g, ''))}
+                onChange={(event) => {
+                  setOtp(event.target.value.replace(/\D/g, ''))
+                  setError('')
+                }}
                 required
                 autoFocus
                 autoComplete="one-time-code"

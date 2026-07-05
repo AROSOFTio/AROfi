@@ -106,8 +106,7 @@ export default function LoginPage() {
     }
   }
 
-  async function handleOtpSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function verifyOtp(code: string) {
     setLoading(true)
     setError('')
 
@@ -116,7 +115,7 @@ export default function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otp.trim() }),
+        body: JSON.stringify({ email, otp: code }),
       })
 
       if (!res.ok) {
@@ -132,6 +131,21 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
+  function handleOtpSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    void verifyOtp(otp.trim())
+  }
+
+  // Auto-submit the instant a valid 6-digit code is entered (typed, pasted,
+  // or auto-filled from the phone's SMS/email suggestion bar) — no need to
+  // also tap "Verify & Sign In".
+  useEffect(() => {
+    if (step === 'otp' && otp.length === 6 && !loading && !error) {
+      void verifyOtp(otp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp, step])
 
   async function handleResend() {
     if (resendCountdown > 0 || loading) {
@@ -252,7 +266,10 @@ export default function LoginPage() {
                 maxLength={6}
                 placeholder="123456"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => {
+                  setOtp(e.target.value.replace(/\D/g, ''))
+                  setError('')
+                }}
                 required
                 autoFocus
                 autoComplete="one-time-code"

@@ -20,6 +20,7 @@ import {
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { RealtimeEventsService } from '../events/realtime-events.service'
+import { MailService } from '../mail/mail.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { CreateRouterDto } from './dto/create-router.dto'
@@ -113,6 +114,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     private readonly routerCredentialsService: RouterCredentialsService,
     private readonly remoteProxyService: RemoteProxyService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly mailService: MailService,
   ) {}
 
   onModuleInit() {
@@ -2226,6 +2228,42 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       : `✅ [RECOVERY] Router "${router.name}" (Tenant: ${router.tenant.name}) is back ONLINE.\nTime: ${timeString}`
 
     this.logger.warn(`[ROUTER ALERT] ${message}`)
+
+    // Email the platform operator (ALERT_EMAIL) and, separately, the
+    // specific tenant's own support inbox if they have one configured —
+    // mirrors the platform-admin + tenant split already used for WhatsApp
+    // recipients below.
+    void this.mailService.sendOperationalAlertEmail({
+      subject: state === 'OFFLINE' ? `Router offline: ${router.name}` : `Router back online: ${router.name}`,
+      lines: [
+        `Tenant: ${router.tenant?.name ?? 'unknown'}`,
+        `Router: ${router.name}`,
+        `Status: ${state}`,
+        state === 'OFFLINE'
+          ? `Last seen: ${router.lastSeenAt ? router.lastSeenAt.toLocaleString() : 'Never'}`
+          : `Recovered at: ${timeString}`,
+      ],
+    })
+
+    if (router.tenant?.supportEmail) {
+      const escapeHtml = (value: string) =>
+        value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      void this.mailService
+        .sendMail({
+          to: router.tenant.supportEmail,
+          subject:
+            state === 'OFFLINE'
+              ? `⚠️ Router "${router.name}" has gone offline`
+              : `✅ Router "${router.name}" is back online`,
+          html: `<p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>`,
+          text: message,
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Failed to send router alert email to tenant support address: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        })
+    }
 
     // Send Telegram alert if configured
     const tgToken = process.env.ROUTER_ALERTS_TELEGRAM_BOT_TOKEN
