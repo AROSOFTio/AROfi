@@ -30,6 +30,7 @@ type HotspotParams = {
   routerId: string
   routerKey: string
   hotspotServerName: string
+  tenantDomain: string
 }
 
 const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
@@ -315,6 +316,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [customerReference, setCustomerReference] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
   const [isContextLoading, setIsContextLoading] = useState(!cachedCtx)
+  const [contextUnresolved, setContextUnresolved] = useState(false)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
   const [isVoucherLoading, setIsVoucherLoading] = useState(false)
   const [isLoginLoading, setIsLoginLoading] = useState(false)
@@ -333,6 +335,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     routerId: '',
     routerKey: '',
     hotspotServerName: '',
+    tenantDomain: '',
   })
   const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
 
@@ -539,6 +542,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         routerId: '',
         routerKey: '',
         hotspotServerName: '',
+        tenantDomain: '',
       }
     }
     const params = new URLSearchParams(window.location.search)
@@ -558,6 +562,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       localStorage.setItem('arofi.lastLoginUrl', loginUrl)
     }
 
+    // An explicit ?tenant=/?portal= lets the hosted portal resolve an operator
+    // WITHOUT a router redirect — e.g. a direct link or a printed QR code that
+    // opens app.arofi.net/portal. Persisted so it survives the payment-return
+    // round trip like the other hotspot params.
+    const tenantDomain =
+      params.get('tenant') ?? params.get('tenantDomain') ?? params.get('portal') ?? ''
+    if (tenantDomain && typeof window !== 'undefined') {
+      localStorage.setItem('arofi.tenantDomain', tenantDomain)
+    }
+
     return {
       macAddress: params.get('mac') ?? params.get('client_mac') ?? params.get('mac-address') ?? '',
       clientIp: params.get('ip') ?? params.get('client_ip') ?? '',
@@ -565,6 +579,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       routerId: params.get('routerId') ?? '',
       routerKey: params.get('routerKey') ?? '',
       hotspotServerName: params.get('server') ?? params.get('hotspot') ?? '',
+      tenantDomain: tenantDomain || (typeof window !== 'undefined' ? localStorage.getItem('arofi.tenantDomain') ?? '' : ''),
     }
   }
 
@@ -576,6 +591,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       routerId: '',
       routerKey: '',
       hotspotServerName: '',
+      tenantDomain: '',
     }
 
     return {
@@ -585,6 +601,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       routerId: fallback.routerId || stored?.routerId || '',
       routerKey: fallback.routerKey || stored?.routerKey || '',
       hotspotServerName: fallback.hotspotServerName || stored?.hotspotServerName || '',
+      tenantDomain: fallback.tenantDomain || stored?.tenantDomain || '',
     }
   }
 
@@ -621,6 +638,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     if (detectedParams.routerKey) params.set('routerKey', detectedParams.routerKey)
     if (detectedParams.hotspotServerName) params.set('server', detectedParams.hotspotServerName)
     if (detectedParams.loginUrl) params.set('loginUrl', detectedParams.loginUrl)
+    if (detectedParams.tenantDomain) params.set('tenantDomain', detectedParams.tenantDomain)
 
     const response = await fetch(`/api/portal/context${params.toString() ? `?${params}` : ''}`, {
       cache: 'no-store',
@@ -628,9 +646,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     })
 
     if (!response.ok) {
+      // A 404 here means no operator could be identified for this portal (no
+      // router redirect and no ?tenant= link). Flag it so the UI shows an
+      // accurate "open from your WiFi login page" message instead of the
+      // misleading "no packages published yet".
+      if (response.status === 404) {
+        setContextUnresolved(true)
+      }
       return
     }
 
+    setContextUnresolved(false)
     const data = await readJson<PortalContextResponse>(response)
     writeCachedContext(data)
     setContext(data)
@@ -1137,7 +1163,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
                   </>
                 )}
-                {!isContextLoading && packages.length === 0 && <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>No packages are published for this portal yet.</div>}
+                {!isContextLoading && packages.length === 0 && (
+                  <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>
+                    {contextUnresolved
+                      ? 'Open this page from your WiFi login screen so we can load the right operator and packages. If you scanned a code, reconnect to the WiFi and try again.'
+                      : 'No packages are published for this portal yet.'}
+                  </div>
+                )}
                 {packages.map((pkg) => (
                   <button
                     key={pkg.id}
