@@ -1996,92 +1996,24 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'app.arofi.net'
-    const wgPort = process.env.VPN_WG_PORT || '51820'
-    const serverWgPubKey = process.env.VPN_WG_SERVER_PUBKEY || ''
-    const wgInterfaceName = 'arofi-wg'
+    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
+    const remoteClientName = router.remoteClientName || 'AROFI_REMOTE'
 
-    // Generate WireGuard keys lazily if not yet provisioned (e.g. port was opened before this feature)
-    const storedWgPrivKey = router.remoteWgPrivKey
-    let wgIp = router.remoteSstpIp
-
-    // Always use deterministic WireGuard IP based on port, even if remoteSstpIp was
-    // previously set to a legacy SSTP 10.8.0.x address.
-    const assignedPort = router.remotePort ?? 31000
-    const deterministicWgIp = `10.8.1.${assignedPort - 31000 + 2}`
-
-    let wgPrivKey: string
-    if (!storedWgPrivKey || !router.remoteWgPubKey) {
-      const wgKeys = this.generateWireGuardKeyPair()
-      await this.prisma.router.update({
-        where: { id: router.id },
-        data: {
-          remoteWgPrivKey: this.routerCredentialsService.encrypt(wgKeys.privateKey),
-          remoteWgPubKey: wgKeys.publicKey,
-          remoteSstpIp: deterministicWgIp,
-        },
-      })
-      wgPrivKey = wgKeys.privateKey
-    } else {
-      wgPrivKey = this.decryptWgPrivKey(storedWgPrivKey)
-      if (wgIp && !wgIp.startsWith('10.8.1.')) {
-        // Migrate legacy 10.8.0.x IP to deterministic WireGuard IP
-        await this.prisma.router.update({
-          where: { id: router.id },
-          data: { remoteSstpIp: deterministicWgIp },
-        })
-      }
-    }
-
-    wgIp = deterministicWgIp
-
-    if (!serverWgPubKey) {
-      return [
-        `# AROFi Remote Access - WireGuard Setup`,
-        `# SETUP REQUIRED: The VPS WireGuard server has not been deployed yet.`,
-        `# Ask your AROFi administrator to run the deploy script shown in Admin -> Remote Access -> Install`,
-        `# then set VPN_WG_SERVER_PUBKEY in Coolify and redeploy the app.`,
-        `# After that, run this install script again from the AROFi panel.`,
-      ].join('\n')
-    }
-
+    // SSTP-based remote-access tunnel. Works on RouterOS 6 natively; on
+    // RouterOS 7 consumer boards where device-mode blocks SSTP, the script
+    // detects the block and prints the one-time enterprise-mode step. All
+    // strings are plain ASCII on purpose — RouterOS's parser rejects em-dashes
+    // and other non-ASCII punctuation inside an imported .rsc with a cryptic
+    // "expected end of command".
     return [
-      `# AROFi Remote Access WinBox Tunnel (WireGuard)`,
-      `# Generated for router: ${router.name}`,
-      `# WireGuard requires RouterOS 7+ - there is no WireGuard support on`,
-      `# RouterOS 6 at all. Detect the version FIRST and abort cleanly, before`,
-      `# touching anything, if this router is still on v6 - otherwise a v6`,
-      `# router would have its existing (working) SSTP tunnel removed below,`,
-      `# then fail to create WireGuard, ending up with LESS remote access than`,
-      `# before this script ran.`,
-      `:local arofiRosVersion [/system resource get version]`,
-      `:if ([:pick $arofiRosVersion 0 2] = "6.") do={`,
-      `  :put "AROFi: WireGuard remote access requires RouterOS 7 or later."`,
-      `  :put "This router is on RouterOS $arofiRosVersion - remote access was NOT changed."`,
-      `  :put "Your existing setup (if any) is untouched. Upgrade to RouterOS 7 to enable AROFi remote WinBox access."`,
-      `  :error "AROFi: RouterOS 6 detected - WireGuard remote access is not available on this version."`,
-      `}`,
-      ``,
-      `# Remove any previous AROFi remote-access tunnel`,
-      `:do { /interface wireguard remove [find name="${wgInterfaceName}"] } on-error={}`,
-      `:do { /ip address remove [find interface="${wgInterfaceName}"] } on-error={}`,
-      `:do { /interface list member remove [find interface="${wgInterfaceName}"] } on-error={}`,
-      `# Remove legacy SSTP client if present`,
-      `:do { /interface sstp-client remove [find name="${router.remoteClientName || 'AROFI_REMOTE'}"] } on-error={}`,
-      ``,
-      `# Create WireGuard interface with pre-allocated keys`,
-      `/interface wireguard add name="${wgInterfaceName}" private-key="${wgPrivKey}" listen-port=0 comment="AROFi Remote Access"`,
-      `/ip address add address="${wgIp}/24" interface="${wgInterfaceName}" comment="AROFi Remote Access"`,
-      ``,
-      `# Add AROFi VPS as the WireGuard peer`,
-      `/interface wireguard peers add interface="${wgInterfaceName}" public-key="${serverWgPubKey}" endpoint-address="${domain}" endpoint-port="${wgPort}" allowed-ips="10.8.1.0/24" persistent-keepalive=25 comment="AROFi VPS"`,
-      ``,
-      `# Allow WinBox (and API) through the WireGuard interface`,
-      `:do { /interface list member add interface="${wgInterfaceName}" list=LAN } on-error={}`,
-      ``,
-      `:put "AROFi WireGuard remote access configured."`,
-      `:put "  Router WireGuard IP: ${wgIp}"`,
-      `:put "  VPS endpoint: ${domain}:${wgPort}"`,
-      `:log info "AROFi WireGuard Remote Access configured for ${router.name}"`,
+      `# AROFi Remote Access WinBox Tunnel Setup`,
+      `# Generated dynamically for ${router.name}`,
+      `:do { /interface sstp-client remove [find name="${remoteClientName}"] } on-error={}`,
+      `:do { /ppp profile remove [find name="AROFi_Profile"] } on-error={}`,
+      `/ppp profile add name="AROFi_Profile" on-up=":delay 5s; /tool fetch url=\\"https://${domain}/api/mikrotik/script/${router.registrationKey}\\" check-certificate=no dst-path=\\"vpn-setup.rsc\\"; :delay 2s; /import file-name=\\"vpn-setup.rsc\\"; :delay 1s; /file remove \\"vpn-setup.rsc\\""`,
+      `:local sstpOk 0`,
+      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
+      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client blocked - device-mode restricts it."; :put "Run this command then press the RESET button on the router within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." } else={ :do { /interface list member add interface="${remoteClientName}" list=LAN } on-error={}; :log info "AROFi Remote Access configured." }`,
     ].join('\n')
   }
 
