@@ -1,5 +1,6 @@
 import { SessionOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
+import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import {
   formatDate,
   formatMegabytes,
@@ -14,6 +15,21 @@ export default async function SessionsPage() {
 
   return (
     <>
+      {/* Realtime: session connect/disconnect/expiry events re-render this
+          server component within ~0.5s; the interval is only a fallback. */}
+      <DashboardAutoRefresh
+        eventTypes={[
+          'session.started',
+          'session.updated',
+          'session.stopped',
+          'activation.created',
+          'activation.expired',
+          'activation.quota_exhausted',
+          'radius.auth',
+          'disconnect.succeeded',
+          'disconnect.failed',
+        ]}
+      />
       <div className="page-header">
         <div>
           <h1 className="page-title">Usage Analytics</h1>

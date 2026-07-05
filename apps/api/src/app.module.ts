@@ -24,6 +24,7 @@ import { PrismaModule } from './prisma.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { MailModule } from './modules/mail/mail.module';
+import { EventsModule } from './modules/events/events.module';
 
 @Controller('health')
 export class HealthController {
@@ -44,6 +45,7 @@ export class HealthController {
       },
     ]),
     PrismaModule,
+    EventsModule,
     AgentsModule,
     AuthModule,
     UsersModule,

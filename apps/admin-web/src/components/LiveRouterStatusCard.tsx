@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { RouterItem, RouterOverviewResponse } from '@/lib/admin-types'
 import { clientFetchApi } from '@/lib/client-api'
+import { useRealtimeRefresh } from '@/lib/realtime'
 import { RouterOnboardingSteps } from '@/components/RouterOnboardingSteps'
 
 function formatRouterSignal(router?: RouterItem | null) {
@@ -21,16 +22,28 @@ function formatRouterSignal(router?: RouterItem | null) {
 export default function LiveRouterStatusCard({ initialRouters }: { initialRouters: RouterItem[] }) {
   const [routers, setRouters] = useState(initialRouters)
 
-  useEffect(() => {
-    const interval = window.setInterval(async () => {
-      try {
-        const overview = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
-        setRouters(overview.routers)
-      } catch {
-        // Keep the last visible router state until the next poll succeeds.
-      }
-    }, 2000)
+  async function refetch() {
+    try {
+      const overview = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
+      setRouters(overview.routers)
+    } catch {
+      // Keep the last visible router state until the next refresh succeeds.
+    }
+  }
 
+  // Primary update path: router/session realtime events. The interval is a
+  // fallback only — 10s instead of the old hammering 2s poll.
+  useRealtimeRefresh(() => void refetch(), [
+    'router.heartbeat',
+    'router.online',
+    'router.stale',
+    'router.offline',
+    'session.started',
+    'session.stopped',
+  ])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => void refetch(), 10_000)
     return () => window.clearInterval(interval)
   }, [])
 

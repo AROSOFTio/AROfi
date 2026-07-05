@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
+import { useRealtimeRefresh } from '@/lib/realtime'
 import type { 
   RouterOverviewResponse, 
   HotspotOverviewResponse, 
@@ -124,10 +125,19 @@ export default function SettingsRoutersPage() {
 
   const searchParams = useSearchParams()
 
+  // Primary update path: realtime router/session events flip the
+  // online/offline dot within ~0.5s. The 20s interval is only a fallback.
+  useRealtimeRefresh(() => void loadData(true), [
+    'router.heartbeat',
+    'router.online',
+    'router.stale',
+    'router.offline',
+    'session.started',
+    'session.stopped',
+  ])
+
   useEffect(() => {
     loadData()
-    // Poll every 20s so the online/offline dot flips within one heartbeat cycle
-    // (routers heartbeat every 15s; backend marks offline after 45s)
     const timer = setInterval(() => { void loadData(true) }, 20_000)
     return () => clearInterval(timer)
   }, [])

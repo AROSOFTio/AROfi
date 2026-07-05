@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { clientFetchApi } from '@/lib/client-api'
+import { useRealtimeRefresh } from '@/lib/realtime'
 import type { RouterOverviewResponse } from '@/lib/admin-types'
 import {
   Activity,
@@ -35,6 +36,21 @@ export default function RouterObservabilityPage() {
       setLoading(false)
     }
   }
+
+  // Primary update path: the realtime event stream (router heartbeats,
+  // session accounting, disconnects) — refreshes within ~0.5s of a change.
+  // The interval below is only the fallback when the stream is unavailable.
+  useRealtimeRefresh(() => void loadRouters(), [
+    'router.heartbeat',
+    'router.online',
+    'router.stale',
+    'router.offline',
+    'session.started',
+    'session.updated',
+    'session.stopped',
+    'radius.auth',
+    'disconnect.failed',
+  ])
 
   useEffect(() => {
     void loadRouters()
