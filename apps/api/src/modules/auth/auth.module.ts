@@ -621,6 +621,15 @@ function extractRefreshCookie(request: Request) {
   return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : null
 }
 
+// Marketing (arofi.net) and product (app.arofi.net) are different hosts.
+// Registration can complete on arofi.net and then hard-redirect to
+// app.arofi.net/dashboard (see getAppDashboardUrl in admin-web) — without a
+// shared parent-domain cookie, that cookie never reaches app.arofi.net and
+// the dashboard's SSR auth check bounces the new user straight to /login.
+// Set AUTH_COOKIE_DOMAIN=.arofi.net in production to share the session
+// across both hosts; leave unset for single-host/local deployments.
+const COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || undefined
+
 export function setRefreshCookie(response: Response, token: string | null) {
   if (!token) {
     return
@@ -631,6 +640,7 @@ export function setRefreshCookie(response: Response, token: string | null) {
     secure: process.env.NODE_ENV === 'production',
     maxAge: REFRESH_TOKEN_TTL_MS,
     path: '/api/auth',
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
   })
 }
 
@@ -645,12 +655,13 @@ export function setAdminAccessCookie(response: Response, token: string) {
     secure: process.env.NODE_ENV === 'production',
     maxAge: ACCESS_TOKEN_TTL_MS,
     path: '/',
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
   })
 }
 
 export function clearAdminSessionCookies(response: Response) {
-  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/' })
-  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth' })
+  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) })
+  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) })
 }
 
 // Shared by auth + onboarding: apply both session cookies and strip the raw
