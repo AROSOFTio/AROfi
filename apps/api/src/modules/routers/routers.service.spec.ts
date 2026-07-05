@@ -51,6 +51,94 @@ describe('RoutersService', () => {
       enabled: true,
     })
     expect(createArgs.data.nasClient.create.shortname).toBe(createArgs.data.radiusClient.create.shortName)
+    expect(createArgs.data.remoteSstpIp).toBe(`10.8.0.${createArgs.data.remotePort - 31000 + 2}`)
+  })
+
+  describe('remote access tunnel allocation', () => {
+    it('repairs legacy remote tunnel IPs on the remote-access endpoint and resyncs RADIUS', async () => {
+      const router = {
+        id: 'router-1',
+        tenantId: 'tenant-1',
+        name: 'Main Branch',
+        remoteToken: 'remote-token',
+        remotePort: 31003,
+        remoteSstpIp: '10.8.1.5',
+        remoteClientName: 'AROFI_REMOTE',
+      }
+      const prisma = {
+        router: {
+          findUnique: jest.fn().mockResolvedValue(router),
+          update: jest.fn().mockResolvedValue({ ...router, remoteSstpIp: '10.8.0.5' }),
+        },
+      }
+      const service = new RoutersService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        { publish: jest.fn() } as never,
+        { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never,
+      )
+      jest.spyOn(service as any, 'mapRouter').mockReturnValue({ id: 'router-1', remoteSstpIp: '10.8.0.5' })
+      jest.spyOn(service, 'syncRadiusVpnCredentials').mockResolvedValue(undefined)
+
+      const result = await service.getRemoteAccess('router-1', 'tenant-1')
+
+      expect(prisma.router.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'router-1' },
+          data: expect.objectContaining({ remoteSstpIp: '10.8.0.5' }),
+        }),
+      )
+      expect(service.syncRadiusVpnCredentials).toHaveBeenCalledWith('router-1', 'remote-token', '10.8.0.5')
+      expect(result).toEqual({ id: 'router-1', remoteSstpIp: '10.8.0.5' })
+    })
+
+    it('syncs RADIUS credentials before opening the remote proxy', async () => {
+      const router = {
+        id: 'router-1',
+        tenantId: 'tenant-1',
+        name: 'Main Branch',
+        remoteToken: 'remote-token',
+        remotePort: 31003,
+        remoteWgPrivKey: 'encrypted-private-key',
+        remoteWgPubKey: 'public-key',
+      }
+      const prisma = {
+        router: {
+          findUnique: jest.fn().mockResolvedValue(router),
+          update: jest.fn().mockResolvedValue({ ...router, remoteSstpIp: '10.8.0.5' }),
+        },
+      }
+      const remoteProxyService = {
+        startProxy: jest.fn(),
+      }
+      const service = new RoutersService(
+        prisma as never,
+        {} as never,
+        { encrypt: jest.fn((value: string) => `encrypted:${value}`) } as never,
+        remoteProxyService as never,
+        { publish: jest.fn() } as never,
+        { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never,
+      )
+      jest.spyOn(service as any, 'mapRouter').mockReturnValue({ id: 'router-1', remoteSstpIp: '10.8.0.5' })
+      jest.spyOn(service, 'syncRadiusVpnCredentials').mockResolvedValue(undefined)
+
+      await service.openRemotePort('router-1', 'tenant-1')
+
+      expect(prisma.router.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'router-1' },
+          data: expect.objectContaining({
+            remoteToken: 'remote-token',
+            remotePort: 31003,
+            remoteSstpIp: '10.8.0.5',
+          }),
+        }),
+      )
+      expect(service.syncRadiusVpnCredentials).toHaveBeenCalledWith('router-1', 'remote-token', '10.8.0.5')
+      expect(remoteProxyService.startProxy).toHaveBeenCalledWith(31003, '10.8.0.5', 8291, 'Main Branch')
+    })
   })
 
   function buildCallbackRouter(overrides: Record<string, unknown> = {}) {

@@ -1107,15 +1107,14 @@ export class VouchersService {
     let x = pageMargin
     let y = pageMargin
 
-    // Encode the QR as http://10.55.0.1/login?voucher=CODE — the AROFi hotspot
-    // gateway is always 10.55.0.1 (see the MikroTik onboarding script). Using
-    // the IP is critical: a made-up hostname like <tenant>.wifi FAILS to
-    // resolve on modern phones (private DNS / DNS-over-HTTPS, or cellular data
-    // active bypass the router's DNS) → ERR_NAME_NOT_RESOLVED, which is what
-    // was happening. An IP needs no DNS at all: the gateway is reachable the
-    // instant the device associates to the WiFi, and it serves login.html
-    // directly, which auto-fills and redeems the voucher to connect the device.
-    const hotspotLoginHost = '10.55.0.1'
+    // Printed voucher QRs must always open a universally reachable page.
+    // Pointing them at a hotspot-local IP/hostname only works on one specific
+    // captive network and fails everywhere else with "page could not be
+    // reached". The public portal URL is the reliable target:
+    //   - Off-network scans open the portal directly and still prefill the code.
+    //   - On-network scans are intercepted by MikroTik; login.html recovers the
+    //     nested voucher code from dst/link-orig and auto-redeems it there.
+    const portalHost = this.getVoucherPortalHost()
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
@@ -1123,7 +1122,7 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-      const qrPng = await this.generateVoucherQrPng(voucher.code, hotspotLoginHost)
+      const qrPng = await this.generateVoucherQrPng(voucher.code)
 
       this.drawVoucherCard(doc, {
         x,
@@ -1137,7 +1136,7 @@ export class VouchersService {
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
         support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
-        portalHost: 'arofi.net',
+        portalHost,
         qrPng,
       })
 
@@ -1453,8 +1452,8 @@ export class VouchersService {
     doc.restore()
   }
 
-  private async generateVoucherQrPng(voucherCode: string, dnsName?: string) {
-    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode, dnsName), {
+  private async generateVoucherQrPng(voucherCode: string) {
+    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode), {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 112,
@@ -1466,10 +1465,7 @@ export class VouchersService {
     return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64')
   }
 
-  private buildVoucherPortalUrl(voucherCode: string, dnsName?: string) {
-    if (dnsName) {
-      return `http://${dnsName}/login?voucher=${encodeURIComponent(voucherCode)}`
-    }
+  private buildVoucherPortalUrl(voucherCode: string) {
     const baseUrl = this.getVoucherQrBaseUrl()
     const separator = baseUrl.includes('?') ? '&' : '?'
     return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`

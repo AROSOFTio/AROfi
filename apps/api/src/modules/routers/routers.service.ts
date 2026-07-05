@@ -542,7 +542,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const registrationKey = randomUUID()
     const remoteToken = randomUUID()
     const remotePort = Math.floor(Math.random() * 100) + 31000
-    const remoteSstpIp = `10.8.0.${Math.floor(Math.random() * 250) + 2}`
+    const remoteSstpIp = this.buildRemoteTunnelIp(remotePort)
     const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
@@ -1560,7 +1560,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       remoteClientName: router.remoteClientName ?? 'AROFI_REMOTE',
       remoteAccessEnabled: router.remoteAccessEnabled ?? false,
       remoteWgPubKey: router.remoteWgPubKey ?? null,
-      wgServerConfigured: Boolean(process.env.VPN_WG_SERVER_PUBKEY),
+      // Remote access is currently SSTP-based. Keep this flag true whenever
+      // the public app/API host is configured so the UI does not incorrectly
+      // gate SSTP behind the unrelated WireGuard server public key.
+      wgServerConfigured: Boolean(
+        process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || process.env.APP_BASE_URL,
+      ),
       lastRadiusSignalAt: router.lastRadiusSignalAt,
       lastAccountingSignalAt: router.lastAccountingSignalAt,
       lastAuthSignalAt: router.lastAuthSignalAt,
@@ -1728,6 +1733,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return Array.from(new Set([...configured, ...envHosts]))
   }
 
+  private buildRemoteTunnelIp(remotePort: number) {
+    return `10.8.0.${remotePort - 31000 + 2}`
+  }
+
   async getRemoteAccess(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
@@ -1753,10 +1762,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updateData.remotePort = Math.floor(Math.random() * 100) + 31000
       updated = true
     }
-    if (!router.remoteSstpIp) {
-      // Always use deterministic WireGuard IP based on port (10.8.1.x), not random SSTP range
-      const port = updateData.remotePort ?? router.remotePort ?? 31000
-      updateData.remoteSstpIp = `10.8.1.${port - 31000 + 2}`
+    const port = updateData.remotePort ?? router.remotePort ?? 31000
+    const expectedRemoteTunnelIp = this.buildRemoteTunnelIp(port)
+    if (router.remoteSstpIp !== expectedRemoteTunnelIp) {
+      // Keep every router on the SSTP server's routed 10.8.0.x subnet so the
+      // host firewall/NAT rules and the DB-stored tunnel target always agree.
+      updateData.remoteSstpIp = expectedRemoteTunnelIp
       updated = true
     }
     if (!router.remoteClientName) {
@@ -1813,10 +1824,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       remoteWgPubKey = wgKeys.publicKey
     }
 
-    // WireGuard IP is deterministic: port 31000 → 10.8.1.2, 31001 → 10.8.1.3, …
-    // This avoids conflicts and lets the VPS sync without per-router RADIUS entries.
-    const wgIp = `10.8.1.${remotePort - 31000 + 2}`
-    const remoteSstpIp = wgIp
+    // Keep SSTP tunnel IPs deterministic per proxy port so a router is always
+    // assigned the same routed address after reopen/redeploy.
+    const remoteSstpIp = this.buildRemoteTunnelIp(remotePort)
 
     const updatedRouter = await this.prisma.router.update({
       where: { id: routerId },
@@ -1832,7 +1842,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       include: this.routerInclude,
     })
 
-    // Start TCP proxy forwarding to the router's WireGuard tunnel IP
+    await this.syncRadiusVpnCredentials(updatedRouter.id, remoteToken, remoteSstpIp)
+
+    // Start TCP proxy forwarding to the router's SSTP tunnel IP.
     this.remoteProxyService.startProxy(remotePort, remoteSstpIp, 8291, updatedRouter.name)
 
     return this.mapRouter(updatedRouter)
