@@ -11,3 +11,4 @@ next-env.d.ts
 .app.env
 dev.env
 market.env
+prod.env

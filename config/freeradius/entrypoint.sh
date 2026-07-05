@@ -8,12 +8,20 @@ if [ -z "${RADIUS_SHARED_SECRET:-}" ]; then
   exit 1
 fi
 
-# Optional hardening knobs (see clients.conf for what they gate).
+# RADIUS_CLIENT_CIDR default is 0.0.0.0/0 (accept a NAS client from any
+# source IP) — this is CORRECT and INTENDED for a self-service, nationwide
+# SaaS where routers self-register from unknown IPs with zero server-side
+# action. Security comes from the shared secret plus per-request SQL
+# credential validation (see clients.conf), not from an IP allowlist.
+#
+# Optional: operators who deliberately run a closed/private deployment can
+# still narrow this to a comma-separated list of IPs/CIDRs, e.g.
+#   RADIUS_CLIENT_CIDR=102.134.5.9/32,41.210.3.20/32
+# One `client` block is generated per entry. Do not set this for a normal
+# public self-service platform — it would reject every router whose IP
+# isn't already listed, breaking self-service onboarding.
 RADIUS_CLIENT_CIDR="${RADIUS_CLIENT_CIDR:-0.0.0.0/0}"
 RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR="${RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR:-no}"
-if [ "$RADIUS_CLIENT_CIDR" = "0.0.0.0/0" ]; then
-  echo "WARNING: RADIUS_CLIENT_CIDR=0.0.0.0/0 — restrict UDP 1812/1813 at the host firewall or set a VPN subnet CIDR." >&2
-fi
 
 if ! find / -name libpq.so.5 -print -quit 2>/dev/null | grep -q .; then
   if command -v apk >/dev/null 2>&1; then
@@ -29,8 +37,32 @@ if [ -d /arofi-freeradius ]; then
 
     cp /arofi-freeradius/clients.conf "$raddb_dir/clients.conf"
     sed -i "s/\$ENV{RADIUS_SHARED_SECRET}/$RADIUS_SHARED_SECRET/g" "$raddb_dir/clients.conf"
-    sed -i "s|\$ENV{RADIUS_CLIENT_CIDR}|$RADIUS_CLIENT_CIDR|g" "$raddb_dir/clients.conf"
-    sed -i "s/\$ENV{RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR}/$RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR/g" "$raddb_dir/clients.conf"
+
+    # Append one `client` block per comma-separated RADIUS_CLIENT_CIDR entry.
+    # Re-run on every container start, so clients.conf always matches the
+    # current env var — nothing to hand-edit or keep in sync manually.
+    n=0
+    old_ifs="$IFS"
+    IFS=','
+    for cidr in $RADIUS_CLIENT_CIDR; do
+      IFS="$old_ifs"
+      cidr_trimmed=$(echo "$cidr" | sed 's/^ *//; s/ *$//')
+      [ -n "$cidr_trimmed" ] || continue
+      n=$((n + 1))
+      {
+        echo ""
+        echo "client arofi-nas-$n {"
+        echo "	ipaddr = $cidr_trimmed"
+        echo "	secret = $RADIUS_SHARED_SECRET"
+        echo "	shortname = arofi-nas-$n"
+        echo "	nas_type = other"
+        echo "	require_message_authenticator = $RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR"
+        echo "}"
+      } >> "$raddb_dir/clients.conf"
+      IFS=','
+    done
+    IFS="$old_ifs"
+    echo "[radius] configured $n NAS client CIDR(s) from RADIUS_CLIENT_CIDR"
     mkdir -p "$raddb_dir/mods-config/files" "$raddb_dir/mods-available" "$raddb_dir/sites-enabled" "$raddb_dir/mods-enabled"
     cp /arofi-freeradius/mods-config/files/authorize "$raddb_dir/mods-config/files/authorize"
     cp /arofi-freeradius/mods-available/sql "$raddb_dir/mods-available/sql"

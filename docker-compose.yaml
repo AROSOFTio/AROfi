@@ -192,10 +192,13 @@ services:
   # Postgres the API writes, and the API receives realtime accounting/auth
   # events via Postgres LISTEN/NOTIFY triggers on radacct/radpostauth.
   #
-  # SECURITY: UDP 1812/1813 are published on the host. Restrict them at the
-  # host firewall (ufw/cloud security group) to the CIDRs your routers egress
-  # from, or run routers over the AROFi VPN and set RADIUS_CLIENT_CIDR to the
-  # VPN subnet. Do not leave RADIUS fully open to the internet.
+  # SECURITY: UDP 1812/1813 are published on the host and left OPEN
+  # (RADIUS_CLIENT_CIDR defaults to 0.0.0.0/0) on purpose — AROFi is a
+  # self-service, nationwide SaaS where operators register routers at
+  # unknown IPs with zero server-side action required. Security is the
+  # shared secret plus live per-request DB credential validation, not an IP
+  # allowlist. Only narrow RADIUS_CLIENT_CIDR if you deliberately run a
+  # closed/private deployment — see config/freeradius/README.md.
   freeradius:
     build:
       context: .
