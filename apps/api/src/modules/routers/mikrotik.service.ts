@@ -673,6 +673,7 @@ export class MikrotikService {
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/>
         </svg>
       </div>
+      <img id="tlogo" alt="" style="display:none;max-height:46px;width:auto;margin:2px auto 8px">
       <h1 id="tname">AROFi Hotspot</h1>
       <p id="ttag">Instant high-speed internet access</p>
     </div>
@@ -682,7 +683,7 @@ export class MikrotikService {
     <div id="content" style="display:none">
       <div class="quick-row">
         <input type="text" id="vcode" placeholder="Enter your voucher code">
-        <button class="btn" id="vbtn" onclick="login()">Login</button>
+        <button class="btn" id="vbtn" onclick="login()">Connect</button>
       </div>
       <div class="find-link" onclick="toggleFind()">Already bought? Find My Voucher</div>
       <div class="find-panel" id="findPanel">
@@ -803,6 +804,7 @@ export class MikrotikService {
 
         pkgs=d.packages||[];
         document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';
+        if(d.tenant&&d.tenant.logoUrl){var lg=document.getElementById('tlogo');lg.onload=function(){lg.style.display='block';};lg.src=d.tenant.logoUrl;}
         if(d.tenant&&d.tenant.supportPhone){
           document.getElementById('sph').textContent=d.tenant.supportPhone;
           document.getElementById('footer').style.display='block';
