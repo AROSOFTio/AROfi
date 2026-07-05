@@ -225,7 +225,12 @@ services:
     # SQL pool headroom while staying small on a 7.8GB host.
     mem_limit: 384m
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -x radiusd || pgrep -x freeradius || exit 1"]
+      # pgrep -x is unreliable in this Alpine/BusyBox image — it returned "not
+      # found" even with radiusd running as PID 1, so the container flapped
+      # "unhealthy" while RADIUS was actually fine. That falsely-unhealthy
+      # state made Coolify keep routing traffic to the previous deployment.
+      # pidof is a BusyBox builtin and matches reliably.
+      test: ["CMD-SHELL", "pidof radiusd >/dev/null 2>&1 || pidof freeradius >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
