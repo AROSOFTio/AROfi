@@ -674,10 +674,19 @@ export class MikrotikService {
     .st.err{background:#fff1f2;border:1px solid #fecdd3;color:#be123c;display:block}
     .st.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;display:block}
     .st.info{background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:block}
+    /* Fixed top banner so status/errors (e.g. "Network err") are seen without
+       scrolling. Sits above the card and the payment modal (z above 50). */
+    .sttop{position:fixed;top:0;left:0;right:0;z-index:60;padding:13px 16px;font-size:14px;font-weight:700;line-height:1.35;text-align:center;box-shadow:0 2px 10px rgba(15,23,42,.18);display:none;transform:translateY(-100%);transition:transform .22s ease}
+    .sttop.show{display:block;transform:translateY(0)}
+    .sttop.err{background:#be123c;color:#fff}
+    .sttop.ok{background:#047857;color:#fff}
+    .sttop.info{background:#1e293b;color:#fff}
+    body.has-banner .card{margin-top:52px}
     .tech{margin-top:20px;text-align:center;font-size:11px;color:#94a3b8}
   </style>
 </head>
 <body>
+  <div class="sttop" id="sttop" role="alert" aria-live="assertive"></div>
   <div class="card">
     <div class="hdr">
       <div class="wifi-icon">
@@ -956,7 +965,30 @@ export class MikrotikService {
     }
 
     function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
-    function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
+    var _sttmr=null;
+    function sst(m,t){
+      t=t||'info';
+      var s=document.getElementById('st');
+      var top=document.getElementById('sttop');
+      if(_sttmr){clearTimeout(_sttmr);_sttmr=null;}
+      if(m){
+        // Inline box (kept for context near the form).
+        if(s){s.className='st '+t;s.textContent=m;}
+        // Fixed top banner — always visible without scrolling.
+        if(top){
+          top.className='sttop '+t+' show';
+          top.textContent=m;
+          document.body.className=(document.body.className.replace(/\\bhas-banner\\b/,'').trim()+' has-banner').trim();
+          try{window.scrollTo(0,0);}catch(e){}
+          // Success/info self-dismiss; errors stay until the next action.
+          if(t!=='err'){_sttmr=setTimeout(function(){sst('');},t==='ok'?6000:9000);}
+        }
+      }else{
+        if(s){s.style.display='none';}
+        if(top){top.className='sttop';}
+        document.body.className=document.body.className.replace(/\\bhas-banner\\b/,'').trim();
+      }
+    }
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
     function fn(v){var n=v.toString(),r='';for(var i=n.length-1,c=0;i>=0;i--,c++){if(c>0&&c%3===0)r=','+r;r=n[i]+r;}return r;}
