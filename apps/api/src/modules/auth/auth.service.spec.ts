@@ -6,7 +6,7 @@ describe('resolveCookieDomain', () => {
   const req = (host?: string) => ({ headers: host ? { host } : {} }) as never
 
   it('shares the registrable parent domain across subdomains', () => {
-    expect(resolveCookieDomain(req('app.arofi.net'))).toBe('.arofi.net')
+    expect(resolveCookieDomain(req('arofi.net'))).toBe('.arofi.net')
     expect(resolveCookieDomain(req('arofi.net'))).toBe('.arofi.net')
     expect(resolveCookieDomain(req('portal.arofi.net:443'))).toBe('.arofi.net')
   })

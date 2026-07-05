@@ -564,7 +564,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
     // An explicit ?tenant=/?portal= lets the hosted portal resolve an operator
     // WITHOUT a router redirect — e.g. a direct link or a printed QR code that
-    // opens app.arofi.net/portal. Persisted so it survives the payment-return
+    // opens arofi.net/portal. Persisted so it survives the payment-return
     // round trip like the other hotspot params.
     const tenantDomain =
       params.get('tenant') ?? params.get('tenantDomain') ?? params.get('portal') ?? ''

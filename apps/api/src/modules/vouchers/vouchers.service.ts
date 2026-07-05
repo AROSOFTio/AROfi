@@ -1472,7 +1472,7 @@ export class VouchersService {
   }
 
   private getVoucherPortalBaseUrl() {
-    const host = process.env.PORTAL_PUBLIC_HOST ?? process.env.API_PUBLIC_HOST ?? 'app.arofi.net'
+    const host = process.env.PORTAL_PUBLIC_HOST ?? process.env.API_PUBLIC_HOST ?? 'arofi.net'
     const normalizedHost = host.startsWith('http://') || host.startsWith('https://') ? host : `https://${host}`
     return normalizedHost.replace(/\/$/, '')
   }

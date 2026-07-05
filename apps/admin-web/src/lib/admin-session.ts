@@ -21,19 +21,13 @@ export async function endAdminSession() {
   }
 }
 
-// Where signup/login should land the user. On the marketing domain this
-// crosses over to the product subdomain; everywhere else (local dev,
-// staging, the legacy arosoftlabs.com domain) it stays same-origin.
+// Single-domain: marketing, app, portal and docs all live on arofi.net now
+// (the old app.arofi.net subdomain is retired and 301s here), so these are
+// always same-origin relative paths — no cross-domain jump.
 export function getAppDashboardUrl() {
-  if (typeof window !== 'undefined' && window.location.hostname === 'arofi.net') {
-    return 'https://app.arofi.net/dashboard'
-  }
   return '/dashboard'
 }
 
 export function getAppLoginUrl() {
-  if (typeof window !== 'undefined' && window.location.hostname === 'arofi.net') {
-    return 'https://app.arofi.net/login'
-  }
   return '/login'
 }

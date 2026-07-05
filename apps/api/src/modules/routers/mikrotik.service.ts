@@ -612,7 +612,7 @@ export class MikrotikService {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AROFi Hotspot</title>
   <style>
-    /* Replicates app.arofi.net/portal (classic template) so the captive page
+    /* Replicates arofi.net/portal (classic template) so the captive page
        and the hosted portal look identical. */
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:linear-gradient(180deg,#f0f9ff 0%,#f0fdf4 100%);color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:24px 16px 40px}
@@ -686,7 +686,7 @@ export class MikrotikService {
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/>
         </svg>
       </div>
-      <img id="tlogo" class="tlogo" src="https://app.arofi.net/logo.png" alt="AROFi" onerror="this.style.display='none'">
+      <img id="tlogo" class="tlogo" src="https://arofi.net/logo.png" alt="AROFi" onerror="this.style.display='none'">
       <h1 id="tname" class="title">AROFi Hotspot</h1>
       <div id="idline" class="idline"></div>
     </div>
@@ -749,7 +749,7 @@ export class MikrotikService {
 
   <div class="tech">
     <span id="tip">IP: </span> | <span id="tmac">MAC: </span><br><br>
-    Powered By <a href="https://app.arofi.net" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
+    Powered By <a href="https://arofi.net" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
     Terms and Conditions Apply
   </div>
 
@@ -845,7 +845,7 @@ export class MikrotikService {
         // Prefer the operator's own logo; the default AROFi logo is already in
         // the src attribute (with onerror hide) so there's always a logo.
         if(d.tenant&&d.tenant.logoUrl){document.getElementById('tlogo').src=d.tenant.logoUrl;}
-        // Support footer + inline WhatsApp button — mirrors app.arofi.net/portal.
+        // Support footer + inline WhatsApp button — mirrors arofi.net/portal.
         // Uses the operator's support number, or the AROFi platform number.
         var supPhone=(d.tenant&&(d.tenant.supportPhone||d.tenant.platformSupportPhone))||'';
         if(supPhone){
@@ -1058,7 +1058,7 @@ export class MikrotikService {
     const host =
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
-      'app.arofi.net'
+      'arofi.net'
     return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
   }
 
@@ -1070,7 +1070,7 @@ export class MikrotikService {
     const host =
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
-      'app.arofi.net'
+      'arofi.net'
 
     return `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}/portal`
   }
@@ -1087,7 +1087,7 @@ export class MikrotikService {
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
-      'app.arofi.net'
+      'arofi.net'
 
     // Strip scheme and any port suffix — use plain HTTP port 80 which is
     // publicly accessible via the Coolify/Traefik reverse proxy layer.

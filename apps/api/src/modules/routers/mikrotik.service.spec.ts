@@ -200,7 +200,7 @@ describe('MikrotikService', () => {
   it('buildOneRunCommand: tries plain HTTP fallback FIRST, then HTTPS, and includes NTP sync', () => {
     const service = new MikrotikService(
       new ConfigService({
-        API_PUBLIC_HOST: 'app.arofi.net',
+        API_PUBLIC_HOST: 'arofi.net',
         MIKROTIK_CALLBACK_HTTP_URL: 'http://95.111.234.34',
       }),
     )
@@ -215,7 +215,7 @@ describe('MikrotikService', () => {
 
     // Plain HTTP (fallback) URL must appear BEFORE the HTTPS URL in the string
     const httpIdx = cmd.indexOf('http://95.111.234.34')
-    const httpsIdx = cmd.indexOf('https://app.arofi.net')
+    const httpsIdx = cmd.indexOf('https://arofi.net')
     expect(httpIdx).toBeGreaterThan(-1)
     expect(httpsIdx).toBeGreaterThan(-1)
     expect(httpIdx).toBeLessThan(httpsIdx)
