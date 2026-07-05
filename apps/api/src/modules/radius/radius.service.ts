@@ -14,6 +14,7 @@ import {
   SessionStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 import { RecordRadiusAccountingEventDto } from './dto/record-radius-accounting-event.dto'
 import { RecordRadiusAuthEventDto } from './dto/record-radius-auth-event.dto'
 import { RadiusAuthorizationPolicyService } from './radius-authorization-policy.service'
@@ -37,6 +38,7 @@ export class RadiusService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authorizationPolicy: RadiusAuthorizationPolicyService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async getOverview(tenantId?: string) {
@@ -219,6 +221,16 @@ export class RadiusService {
         },
       })
     }
+
+    this.realtimeEvents.publish('radius.auth', {
+      tenantId: dto.tenantId,
+      routerId: router?.id ?? dto.routerId ?? null,
+      data: {
+        username: dto.username,
+        accepted: dto.accepted,
+        macAddress: dto.macAddress ?? null,
+      },
+    })
 
     return {
       recorded: true,
@@ -404,6 +416,26 @@ export class RadiusService {
         event,
         session,
       }
+    }).then((result) => {
+      // Publish only after the transaction committed — dashboard subscribers
+      // must never observe state that could still roll back.
+      const sessionEventType =
+        dto.eventType === RadiusEventType.ACCOUNTING_STOP
+          ? 'session.stopped'
+          : dto.eventType === RadiusEventType.ACCOUNTING_START
+            ? 'session.started'
+            : 'session.updated'
+      this.realtimeEvents.publish(sessionEventType, {
+        tenantId: dto.tenantId,
+        routerId: result.session.routerId ?? null,
+        data: {
+          radiusSessionId: dto.radiusSessionId,
+          username: dto.username,
+          macAddress: dto.macAddress ?? null,
+          activationId: result.session.activationId ?? null,
+        },
+      })
+      return result
     })
   }
 

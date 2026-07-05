@@ -6,6 +6,8 @@ import { RadiusAuthorizationPolicyService } from './radius-authorization-policy.
 import { RadiusCredentialService } from './radius-credential.service'
 import { RadiusService } from './radius.service'
 import { AccessLifecycleService } from './access-lifecycle.service'
+import { RadiusDbListenerService } from './radius-db-listener.service'
+import { RadiusSignalSyncService } from './radius-signal-sync.service'
 import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
 
 @Module({
@@ -15,6 +17,8 @@ import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.
     RadiusService,
     RadiusCredentialService,
     RadiusAuthorizationPolicyService,
+    RadiusSignalSyncService,
+    RadiusDbListenerService,
     AccessLifecycleService,
     YoUgandaDisbursementService,
   ],

@@ -106,12 +106,6 @@ export class RadiusCredentialService {
           op: '=',
           value: remainingSeconds.toString(),
         },
-        {
-          username,
-          attribute: 'Idle-Timeout',
-          op: '=',
-          value: '600',
-        },
       ]
 
       if (activation.downloadSpeedKbps || activation.uploadSpeedKbps) {

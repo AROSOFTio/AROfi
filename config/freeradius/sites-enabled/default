@@ -12,18 +12,28 @@ server default {
 	}
 
 	authorize {
-		# Strip Message-Authenticator (attr 80) from incoming Access-Requests.
-		# pppd 2.5.2's radius.so adds MA to requests, causing FreeRADIUS to
-		# mirror it in responses. The old libfreeradius-client in pppd cannot
-		# validate MA in responses, causing "invalid reply digest" and auth failure.
-		# Stripping it from requests prevents FreeRADIUS from adding it to replies.
-		update request {
-			Message-Authenticator !* ANY
+		# Strip Message-Authenticator (attr 80) ONLY from localhost requests
+		# (the SSTP host authenticating via pppd). pppd 2.5.2's radius.so adds
+		# MA to requests, causing FreeRADIUS to mirror it in responses, and
+		# pppd's old libfreeradius-client cannot validate MA in responses
+		# ("invalid reply digest"). MikroTik hotspot traffic keeps its
+		# Message-Authenticator intact (BlastRADIUS mitigation) — enforcement
+		# for those clients is controlled per-client in clients.conf via
+		# RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR.
+		if (Packet-Src-IP-Address == 127.0.0.1) {
+			update request {
+				Message-Authenticator !* ANY
+			}
 		}
 		preprocess
 		chap
 		files
 		sql
+		# SQL-injection note: expansions inside %{sql:...} (User-Name,
+		# Calling-Station-Id) are escaped by rlm_sql using the module's
+		# safe_characters list (mods-available/sql), which excludes quotes —
+		# attacker-controlled attribute values cannot break out of the string
+		# literals below.
 		if ("%{sql:SELECT ch.value FROM radcheck ch JOIN \"RadiusCredential\" rc ON rc.username = ch.username JOIN \"PackageActivation\" pa ON pa.id = rc.\"activationId\" WHERE ch.username = '%{User-Name}' AND ch.attribute = 'Cleartext-Password' AND rc.status = 'ACTIVE' AND pa.status = 'ACTIVE' AND rc.\"expiresAt\" > timezone('utc', now()) AND pa.\"endsAt\" > timezone('utc', now()) AND (rc.\"boundMacAddress\" IS NULL OR rc.\"boundMacAddress\" = '' OR UPPER(REPLACE('%{Calling-Station-Id}', '-', ':')) = '' OR rc.\"boundMacAddress\" = UPPER(REPLACE('%{Calling-Station-Id}', '-', ':'))) ORDER BY ch.id LIMIT 1}" != "") {
 			update control {
 				Cleartext-Password := "%{sql:SELECT ch.value FROM radcheck ch JOIN \"RadiusCredential\" rc ON rc.username = ch.username JOIN \"PackageActivation\" pa ON pa.id = rc.\"activationId\" WHERE ch.username = '%{User-Name}' AND ch.attribute = 'Cleartext-Password' AND rc.status = 'ACTIVE' AND pa.status = 'ACTIVE' AND rc.\"expiresAt\" > timezone('utc', now()) AND pa.\"endsAt\" > timezone('utc', now()) AND (rc.\"boundMacAddress\" IS NULL OR rc.\"boundMacAddress\" = '' OR UPPER(REPLACE('%{Calling-Station-Id}', '-', ':')) = '' OR rc.\"boundMacAddress\" = UPPER(REPLACE('%{Calling-Station-Id}', '-', ':'))) ORDER BY ch.id LIMIT 1}"
@@ -48,6 +58,11 @@ server default {
 		acct_unique
 	}
 
+	# Accounting writes to radacct via rlm_sql. Database triggers
+	# (arofi_radacct_notify / arofi_radpostauth_notify, created by the API's
+	# Prisma migrations) pg_notify the AROFi API on every insert/update, so
+	# session state and the admin dashboard update in realtime without
+	# FreeRADIUS needing rlm_rest or any outbound HTTP.
 	accounting {
 		sql
 	}
@@ -58,20 +73,20 @@ server default {
 
 	post-auth {
 		sql
-		# Strip Message-Authenticator (attr 80) from all replies.
-		# FreeRADIUS 3.2.5 adds it automatically as a BlastRADIUS security
-		# measure, but pppd's old libfreeradius-client (radius.so) cannot
-		# validate it and reports "invalid reply digest from RADIUS server",
-		# causing PAP authentication to fail for all SSTP VPN connections.
-		update reply {
-			Message-Authenticator !* ANY
-		}
-		Post-Auth-Type Reject {
-			sql
+		# Strip Message-Authenticator from replies ONLY toward localhost
+		# (pppd/SSTP; see the authorize note above). MikroTik replies keep it.
+		if (Packet-Src-IP-Address == 127.0.0.1) {
 			update reply {
 				Message-Authenticator !* ANY
 			}
 		}
+		Post-Auth-Type Reject {
+			sql
+			if (Packet-Src-IP-Address == 127.0.0.1) {
+				update reply {
+					Message-Authenticator !* ANY
+				}
+			}
+		}
 	}
 }
-

@@ -5,9 +5,6 @@ import {
   PackageActivationStatus,
   PaymentStatus,
   RadiusCredentialStatus,
-  RadiusEventType,
-  RouterOnboardingStatus,
-  RouterStatus,
   SessionStatus,
   Prisma,
   DisbursementStatus,
@@ -17,8 +14,17 @@ import { execSync, spawn } from 'child_process'
 import * as Sentry from '@sentry/node'
 import { PrismaService } from '../../prisma.service'
 import { MailService } from '../mail/mail.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 import { RadiusCredentialService } from './radius-credential.service'
+import { RadiusSignalSyncService } from './radius-signal-sync.service'
 import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
+
+// Failed CoA/Disconnect-Requests retry with exponential backoff before being
+// declared FAILED (which raises an operator alert). Base delay doubles per
+// retry: 5s, 10s, 20s, 40s, 80s.
+const DISCONNECT_RETRY_BASE_MS = 5_000
+const disconnectMaxRetries = () =>
+  Math.min(10, Math.max(1, Number.parseInt(process.env.RADIUS_DISCONNECT_MAX_RETRIES ?? '5', 10) || 5))
 
 @Injectable()
 export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
@@ -30,6 +36,8 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     private readonly radiusCredentialService: RadiusCredentialService,
     private readonly yoDisbursementService: YoUgandaDisbursementService,
     private readonly mailService: MailService,
+    private readonly signalSync: RadiusSignalSyncService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) { }
 
   // Best-effort, fire-and-forget: a slow/broken mail server must never delay
@@ -130,287 +138,11 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // Polling fallback for the FreeRADIUS→Postgres realtime bridge. The
+  // LISTEN/NOTIFY listener (RadiusDbListenerService) is the primary path;
+  // this sweep only catches rows missed while that connection was down.
   private async syncRadiusSqlSignals() {
-    const recentSince = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const now = new Date()
-
-    // ── 1. Load radAcct rows (FreeRADIUS accounting, written directly to SQL) ──
-    const acctRows = await this.prisma.radAcct.findMany({
-      where: {
-        OR: [
-          { acctstarttime: { gte: recentSince } },
-          { acctupdatetime: { gte: recentSince } },
-          { acctstoptime: { gte: recentSince } },
-        ],
-      },
-      orderBy: { radacctid: 'desc' },
-      take: 500,
-    })
-
-    // ── 2. Build NAS IP → router map using BOTH registered IP AND real WAN IP ──
-    // radiusClient.ipAddress = registered placeholder
-    // router.radiusNasIpAddress = real WAN IP learned from provisioning callback
-    const routers = await this.prisma.router.findMany({
-      include: { radiusClient: true },
-    })
-    const routerByNasIp = new Map<string, typeof routers[0]>()
-    for (const router of routers) {
-      if (router.radiusClient?.ipAddress) routerByNasIp.set(router.radiusClient.ipAddress, router)
-      if (router.radiusNasIpAddress) routerByNasIp.set(router.radiusNasIpAddress, router)
-    }
-
-    // ── 3. Pre-fetch activations by radiusUsername for session linking ──
-    const acctUsernames = [...new Set(acctRows.map((r) => r.username).filter(Boolean))] as string[]
-    const activationsByUsername = acctUsernames.length
-      ? await this.prisma.packageActivation.findMany({
-          where: {
-            radiusUsername: {
-              in: acctUsernames,
-              mode: 'insensitive',
-            },
-          },
-          include: { voucherRedemption: true },
-        })
-      : []
-    const activationByUsername = new Map(
-      activationsByUsername.map((a) => [a.radiusUsername.toLowerCase(), a])
-    )
-
-    // ── 4. Process each radAcct row: upsert networkSession + radiusEvent ──
-    for (const row of acctRows) {
-      const nasIp = row.nasipaddress?.toString()
-      let router = nasIp ? routerByNasIp.get(nasIp) : undefined
-
-      // FALLBACK: NAS IP didn't match any known router.
-      // This happens when the router is behind CGNAT (private WAN IP ≠ public callback IP),
-      // or the hotspot bridge IP (10.55.0.1) is used as NAS-IP-Address instead of WAN IP.
-      // Resolve via username → RadiusCredential → routerId as a guaranteed fallback.
-      if (!router && row.username) {
-        const cred = await this.prisma.radiusCredential.findFirst({
-          where: { username: row.username },
-          select: { routerId: true },
-        })
-        if (cred?.routerId) {
-          router = routers.find((r) => r.id === cred.routerId)
-          // Auto-learn the real NAS IP from this accounting packet so future
-          // lookups hit the fast NAS IP map path instead of this fallback.
-          if (router && nasIp && !router.radiusNasIpAddress) {
-            try {
-              await this.prisma.router.update({
-                where: { id: router.id },
-                data: { radiusNasIpAddress: nasIp },
-              })
-              router = { ...router, radiusNasIpAddress: nasIp }
-              routerByNasIp.set(nasIp, router)
-            } catch {
-              // Non-fatal
-            }
-          }
-        }
-      }
-
-      if (!router) continue
-
-      const tenantId = router.tenantId
-      const radiusSessionId = row.acctsessionid
-      if (!radiusSessionId) continue
-
-      const username = row.username ?? ''
-      const macAddress = row.callingstationid
-        ? row.callingstationid.trim().toUpperCase().replace(/-/g, ':')
-        : null
-      const ipAddress = row.framedipaddress?.toString() ?? null
-      const inputOctets = row.acctinputoctets ?? BigInt(0)
-      const outputOctets = row.acctoutputoctets ?? BigInt(0)
-      const sessionTimeSeconds = row.acctsessiontime ?? 0
-      const isStopped = row.acctstoptime != null
-      const sessionStatus = isStopped ? SessionStatus.CLOSED : SessionStatus.ACTIVE
-      const startedAt = row.acctstarttime ?? now
-      const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
-      const activation = username ? activationByUsername.get(username.toLowerCase()) : undefined
-
-      // 4a. Upsert networkSession — this powers activeUsers count and CoA disconnect
-      try {
-        await this.prisma.networkSession.upsert({
-          where: { tenantId_radiusSessionId: { tenantId, radiusSessionId } },
-          update: {
-            status: sessionStatus,
-            inputOctets,
-            outputOctets,
-            sessionTimeSeconds,
-            lastAccountingAt,
-            ...(macAddress ? { macAddress } : {}),
-            ...(ipAddress ? { ipAddress } : {}),
-            nasIpAddress: nasIp ?? undefined,
-            endedAt: isStopped ? (row.acctstoptime ?? now) : null,
-            ...(activation ? { activationId: activation.id } : {}),
-            ...(activation?.voucherRedemptionId ? { voucherRedemptionId: activation.voucherRedemptionId } : {}),
-            routerId: router.id,
-          },
-          create: {
-            tenantId,
-            routerId: router.id,
-            radiusSessionId,
-            status: sessionStatus,
-            username,
-            macAddress,
-            ipAddress,
-            nasIpAddress: nasIp ?? null,
-            inputOctets,
-            outputOctets,
-            sessionTimeSeconds,
-            startedAt,
-            lastAccountingAt,
-            endedAt: isStopped ? (row.acctstoptime ?? now) : null,
-            activationId: activation?.id ?? null,
-            voucherRedemptionId: activation?.voucherRedemptionId ?? null,
-          },
-        })
-      } catch (err) {
-        this.logger.warn(
-          `syncRadiusSqlSignals: session upsert failed for ${radiusSessionId}: ${err instanceof Error ? err.message : err}`,
-        )
-      }
-
-      // 4b. Synthesise a radiusEvent for this accounting row (powers live checks)
-      // Use acctuniqueid as idempotency key stored in message field.
-      const acctEventType = isStopped
-        ? RadiusEventType.ACCOUNTING_STOP
-        : row.acctupdatetime
-          ? RadiusEventType.ACCOUNTING_INTERIM
-          : RadiusEventType.ACCOUNTING_START
-      const acctMarker = `syn-acct:${row.acctuniqueid}`
-      const existingAcctEvent = await this.prisma.radiusEvent.findFirst({
-        where: { tenantId, message: acctMarker },
-        select: { id: true },
-      })
-      if (!existingAcctEvent) {
-        try {
-          await this.prisma.radiusEvent.create({
-            data: {
-              tenantId,
-              routerId: router.id,
-              eventType: acctEventType,
-              username: username || null,
-              macAddress,
-              ipAddress,
-              nasIpAddress: nasIp ?? null,
-              message: acctMarker,
-            },
-          })
-        } catch (err) {
-          this.logger.warn(
-            `syncRadiusSqlSignals: acct radiusEvent create failed for ${row.acctuniqueid}: ${err instanceof Error ? err.message : err}`,
-          )
-        }
-      }
-
-      // 4c. Update router health and NAS IP from this accounting signal
-      await this.prisma.router.update({
-        where: { id: router.id },
-        data: {
-          status: RouterStatus.HEALTHY,
-          onboardingStatus: RouterOnboardingStatus.VERIFIED_ONLINE,
-          verificationStatus: 'VERIFIED',
-          lastSeenAt: now,
-          lastRadiusSignalAt: now,
-          lastAccountingSignalAt: row.acctupdatetime ?? row.acctstarttime ?? row.acctstoptime ?? now,
-          verifiedAt: now,
-          // Learn real NAS IP from the packet if not already set
-          ...(nasIp && !router.radiusNasIpAddress ? { radiusNasIpAddress: nasIp } : {}),
-        },
-      })
-    }
-
-    // ── 5. Re-aggregate usedBytes on all activations touched this cycle ──
-    // enforceDataQuotas() reads this — must stay in sync with real byte counts.
-    const touchedIds = [...new Set(
-      acctRows
-        .map((r) => r.username ? activationByUsername.get(r.username)?.id : undefined)
-        .filter((id): id is string => Boolean(id)),
-    )]
-    for (const activationId of touchedIds) {
-      const agg = await this.prisma.networkSession.aggregate({
-        where: { activationId },
-        _sum: { inputOctets: true, outputOctets: true },
-      })
-      const usedBytes =
-        (agg._sum.inputOctets ?? BigInt(0)) + (agg._sum.outputOctets ?? BigInt(0))
-      await this.prisma.packageActivation.update({
-        where: { id: activationId },
-        data: { usedBytes },
-      })
-    }
-
-    // ── 6. Synthesise radiusEvent records from radPostAuth ──
-    // FreeRADIUS post-auth { sql } writes every auth attempt to radpostauth.
-    // reply = 'Access-Accept' or 'Access-Reject'. This powers the
-    // "Router has not contacted RADIUS yet" and "No successful test authentication"
-    // live checks without needing rlm_rest.
-    const recentPostAuth = await this.prisma.radPostAuth.findMany({
-      where: { authdate: { gte: recentSince } },
-      orderBy: { id: 'desc' },
-      take: 500,
-    })
-
-    // Pre-fetch credentials to map username → tenantId + routerId
-    const postAuthUsernames = [...new Set(recentPostAuth.map((r) => r.username).filter(Boolean))]
-    const credentials = postAuthUsernames.length
-      ? await this.prisma.radiusCredential.findMany({
-          where: { username: { in: postAuthUsernames } },
-          select: {
-            username: true,
-            tenantId: true,
-            routerId: true,
-          },
-        })
-      : []
-    const credByUsername = new Map(credentials.map((c) => [c.username, c]))
-
-    for (const row of recentPostAuth) {
-      if (!row.username) continue
-
-      const cred = credByUsername.get(row.username)
-      if (!cred?.tenantId) continue // Cannot attribute to a tenant — skip
-
-      const isAccept = (row.reply ?? '').toLowerCase().includes('accept')
-      const eventType = isAccept ? RadiusEventType.ACCESS_ACCEPT : RadiusEventType.ACCESS_REJECT
-
-      // Idempotency: one radiusEvent per radPostAuth row, keyed by row id
-      const authMarker = `syn-auth:${row.id}`
-      const existingAuthEvent = await this.prisma.radiusEvent.findFirst({
-        where: { tenantId: cred.tenantId, message: authMarker },
-        select: { id: true },
-      })
-      if (existingAuthEvent) continue
-
-      try {
-        await this.prisma.radiusEvent.create({
-          data: {
-            tenantId: cred.tenantId,
-            routerId: cred.routerId ?? null,
-            eventType,
-            username: row.username,
-            authMethod: 'PAP',
-            responseCode: isAccept ? '2' : '3',
-            message: authMarker,
-            createdAt: row.authdate,
-          },
-        })
-      } catch (err) {
-        this.logger.warn(
-          `syncRadiusSqlSignals: auth radiusEvent create failed for radpostauth.id=${row.id}: ${err instanceof Error ? err.message : err}`,
-        )
-      }
-
-      // If accepted, also update router lastRadiusSignalAt
-      if (isAccept && cred.routerId) {
-        await this.prisma.router.updateMany({
-          where: { id: cred.routerId },
-          data: { lastRadiusSignalAt: row.authdate },
-        })
-      }
-    }
+    await this.signalSync.syncRecent()
   }
 
   private async expireActivations() {
@@ -448,6 +180,23 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           },
         })
       })
+
+      this.realtimeEvents.publish('activation.expired', {
+        tenantId: activation.tenantId,
+        routerId: activation.routerId ?? null,
+        data: {
+          activationId: activation.id,
+          endsAt: activation.endsAt.toISOString(),
+        },
+      })
+    }
+
+    // Push the CoA Disconnect-Requests out in the SAME worker cycle the
+    // expiry happened in — the RADIUS Session-Timeout already cut access at
+    // the router, this makes the API-side disconnect immediate too instead
+    // of waiting for the next cycle.
+    if (expired.length > 0) {
+      await this.processPendingDisconnects()
     }
   }
 
@@ -509,6 +258,16 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
             },
           })
         })
+
+        this.realtimeEvents.publish('activation.quota_exhausted', {
+          tenantId: activation.tenantId,
+          routerId: activation.routerId ?? null,
+          data: {
+            activationId: activation.id,
+            usedBytes: usedBytes.toString(),
+            limitBytes: limitBytes.toString(),
+          },
+        })
       }
     }
   }
@@ -552,6 +311,18 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           },
         })
       }
+
+      this.realtimeEvents.publish('disconnect.requested', {
+        tenantId: session.tenantId,
+        routerId: session.routerId ?? null,
+        data: {
+          attemptId: attempt.id,
+          activationId,
+          sessionId: session.id,
+          username: session.username,
+          reason,
+        },
+      })
     }
   }
 
@@ -560,10 +331,12 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       return
     }
 
+    const now = new Date()
     const attempts = await this.prisma.disconnectionAttempt.findMany({
       where: {
         method: DisconnectionMethod.RADIUS_DISCONNECT,
         status: DisconnectionStatus.REQUESTED,
+        OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }],
       },
       take: 25,
     })
@@ -584,16 +357,9 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           }
         }
         if (!host) {
-          this.logger.warn(`CoA disconnect skipped for attempt ${attempt.id}: router NAS IP unknown. Re-run the provisioning script so the router reports its WAN IP.`)
-          await this.prisma.disconnectionAttempt.update({
-            where: { id: attempt.id },
-            data: {
-              status: DisconnectionStatus.FAILED,
-              completedAt: new Date(),
-              message: 'CoA target unresolvable — router.radiusNasIpAddress is null. Re-provision the router.',
-            },
-          })
-          continue
+          throw new Error(
+            'CoA target unresolvable — router.radiusNasIpAddress is null. Re-provision the router so it reports its WAN IP.',
+          )
         }
         const port = process.env.RADIUS_DISCONNECT_PORT ?? '3799'
         if (!secret) {
@@ -616,17 +382,127 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
             message: 'RADIUS Disconnect-Request sent successfully',
           },
         })
-      } catch (error) {
-        await this.prisma.disconnectionAttempt.update({
-          where: { id: attempt.id },
+        this.realtimeEvents.publish('disconnect.succeeded', {
+          tenantId: attempt.tenantId,
+          routerId: attempt.routerId ?? null,
           data: {
-            status: DisconnectionStatus.FAILED,
-            completedAt: new Date(),
-            message: error instanceof Error ? error.message : 'RADIUS Disconnect-Request failed',
+            attemptId: attempt.id,
+            activationId: attempt.activationId,
+            username: attempt.username,
+            retryCount: attempt.retryCount,
           },
         })
+      } catch (error) {
+        await this.handleDisconnectFailure(attempt, error)
       }
     }
+  }
+
+  // A failed CoA retries with exponential backoff; only after the retry
+  // budget is exhausted is it marked FAILED, audited as CRITICAL, alerted to
+  // the operator by email, and pushed to the dashboard event stream. Access
+  // is already cut at the RADIUS layer either way (credentials removed +
+  // Session-Timeout) — this is about kicking the live session off the router.
+  private async handleDisconnectFailure(
+    attempt: {
+      id: string
+      tenantId: string
+      routerId: string | null
+      activationId: string | null
+      username: string | null
+      retryCount: number
+    },
+    error: unknown,
+  ) {
+    const message = error instanceof Error ? error.message : 'RADIUS Disconnect-Request failed'
+    const nextRetryCount = attempt.retryCount + 1
+
+    if (nextRetryCount < disconnectMaxRetries()) {
+      const backoffMs = DISCONNECT_RETRY_BASE_MS * 2 ** attempt.retryCount
+      await this.prisma.disconnectionAttempt.update({
+        where: { id: attempt.id },
+        data: {
+          retryCount: nextRetryCount,
+          nextRetryAt: new Date(Date.now() + backoffMs),
+          message: `${message} (retry ${nextRetryCount}/${disconnectMaxRetries()} in ${Math.round(backoffMs / 1000)}s)`,
+        },
+      })
+      return
+    }
+
+    await this.prisma.disconnectionAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        status: DisconnectionStatus.FAILED,
+        retryCount: nextRetryCount,
+        completedAt: new Date(),
+        message: `${message} (gave up after ${nextRetryCount} attempts)`,
+      },
+    })
+
+    this.logger.error(
+      `Disconnect FAILED after ${nextRetryCount} attempts for user ${attempt.username ?? 'unknown'} (attempt ${attempt.id}): ${message}`,
+    )
+    Sentry.captureMessage(`RADIUS disconnect failed after retries: ${attempt.username ?? attempt.id}`, {
+      level: 'error',
+      extra: { attemptId: attempt.id, tenantId: attempt.tenantId, message },
+    })
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          tenantId: attempt.tenantId,
+          action: 'radius.disconnect_failed',
+          entity: 'DisconnectionAttempt',
+          entityId: attempt.id,
+          severity: 'CRITICAL',
+          details: {
+            username: attempt.username,
+            activationId: attempt.activationId,
+            routerId: attempt.routerId,
+            message,
+          },
+        },
+      })
+    } catch (auditError) {
+      this.logger.warn(
+        `Failed to write disconnect-failure audit log: ${auditError instanceof Error ? auditError.message : auditError}`,
+      )
+    }
+
+    this.realtimeEvents.publish('disconnect.failed', {
+      tenantId: attempt.tenantId,
+      routerId: attempt.routerId ?? null,
+      data: {
+        attemptId: attempt.id,
+        activationId: attempt.activationId,
+        username: attempt.username,
+        retryCount: nextRetryCount,
+        message,
+      },
+    })
+    this.realtimeEvents.publish('alert', {
+      tenantId: attempt.tenantId,
+      routerId: attempt.routerId ?? null,
+      data: {
+        kind: 'disconnect_failed',
+        attemptId: attempt.id,
+        username: attempt.username,
+        message,
+      },
+    })
+
+    void this.mailService.sendOperationalAlertEmail({
+      subject: `RADIUS disconnect failed for ${attempt.username ?? 'unknown user'}`,
+      lines: [
+        `Attempt: ${attempt.id}`,
+        `Tenant: ${attempt.tenantId}`,
+        `Router: ${attempt.routerId ?? 'unknown'}`,
+        `Retries exhausted: ${nextRetryCount}`,
+        `Last error: ${message}`,
+        'RADIUS credentials are already removed and Session-Timeout applies, but the live session could not be kicked. Check router CoA (port 3799) reachability and the incoming RADIUS secret.',
+      ],
+    })
   }
 
   private runRadclientDisconnect(host: string, port: string, secret: string, packet: string) {

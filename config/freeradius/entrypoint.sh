@@ -1,6 +1,20 @@
 #!/bin/sh
 set -eu
 
+# Required environment — fail fast instead of starting an unauthenticatable
+# (or worse, empty-secret) RADIUS server.
+if [ -z "${RADIUS_SHARED_SECRET:-}" ]; then
+  echo "FATAL: RADIUS_SHARED_SECRET is not set. Refusing to start FreeRADIUS." >&2
+  exit 1
+fi
+
+# Optional hardening knobs (see clients.conf for what they gate).
+RADIUS_CLIENT_CIDR="${RADIUS_CLIENT_CIDR:-0.0.0.0/0}"
+RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR="${RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR:-no}"
+if [ "$RADIUS_CLIENT_CIDR" = "0.0.0.0/0" ]; then
+  echo "WARNING: RADIUS_CLIENT_CIDR=0.0.0.0/0 — restrict UDP 1812/1813 at the host firewall or set a VPN subnet CIDR." >&2
+fi
+
 if ! find / -name libpq.so.5 -print -quit 2>/dev/null | grep -q .; then
   if command -v apk >/dev/null 2>&1; then
     apk add --no-cache postgresql-libs
@@ -14,9 +28,9 @@ if [ -d /arofi-freeradius ]; then
     fi
 
     cp /arofi-freeradius/clients.conf "$raddb_dir/clients.conf"
-    if [ -n "${RADIUS_SHARED_SECRET:-}" ]; then
-      sed -i "s/\$ENV{RADIUS_SHARED_SECRET}/$RADIUS_SHARED_SECRET/g" "$raddb_dir/clients.conf"
-    fi
+    sed -i "s/\$ENV{RADIUS_SHARED_SECRET}/$RADIUS_SHARED_SECRET/g" "$raddb_dir/clients.conf"
+    sed -i "s|\$ENV{RADIUS_CLIENT_CIDR}|$RADIUS_CLIENT_CIDR|g" "$raddb_dir/clients.conf"
+    sed -i "s/\$ENV{RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR}/$RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR/g" "$raddb_dir/clients.conf"
     mkdir -p "$raddb_dir/mods-config/files" "$raddb_dir/mods-available" "$raddb_dir/sites-enabled" "$raddb_dir/mods-enabled"
     cp /arofi-freeradius/mods-config/files/authorize "$raddb_dir/mods-config/files/authorize"
     cp /arofi-freeradius/mods-available/sql "$raddb_dir/mods-available/sql"

@@ -499,6 +499,7 @@ model User {
   generatedVoucherBatches VoucherBatch[]   @relation("VoucherBatchGenerator")
   voucherRedemptions     VoucherRedemption[] @relation("VoucherRedemptionActor")
   refreshTokens          RefreshToken[]
+  adminLoginOtps         AdminLoginOtp[]
   blogPosts              BlogPost[]
 }
 
@@ -512,6 +513,24 @@ model RefreshToken {
   createdAt DateTime  @default(now())
 
   @@index([userId, revokedAt])
+}
+
+model AdminLoginOtp {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash           String
+  expiresAt         DateTime
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(5)
+  verifiedAt        DateTime?
+  resendAvailableAt DateTime
+  requestIp         String?
+  userAgent         String?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, verifiedAt, expiresAt])
+  @@index([createdAt])
 }
 
 model Agent {
@@ -1169,6 +1188,8 @@ model DisconnectionAttempt {
   radiusSessionId String?
   message        String?
   payload        Json?
+  retryCount     Int                 @default(0)
+  nextRetryAt    DateTime?
   attemptedAt    DateTime            @default(now())
   completedAt    DateTime?
 

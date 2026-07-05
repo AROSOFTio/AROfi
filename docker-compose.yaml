@@ -39,7 +39,32 @@ x-app-env: &app-env
   PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://app.arofi.net/portal}
   VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://app.arofi.net/portal}
   ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
-  ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-5000}
+  # 2s fallback sweep; realtime state is primarily pushed by the Postgres
+  # LISTEN/NOTIFY bridge (RADIUS_DB_LISTEN_ENABLED) and the SSE event stream.
+  ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-2000}
+  RADIUS_DB_LISTEN_ENABLED: ${RADIUS_DB_LISTEN_ENABLED:-true}
+  RADIUS_DISCONNECT_MAX_RETRIES: ${RADIUS_DISCONNECT_MAX_RETRIES:-5}
+  # Router liveness: 5s heartbeat, LIVE within 12s, STALE (suspected offline)
+  # within 30s, OFFLINE after that.
+  ROUTER_HEARTBEAT_SECONDS: ${ROUTER_HEARTBEAT_SECONDS:-5}
+  ROUTER_LIVE_WINDOW_SECONDS: ${ROUTER_LIVE_WINDOW_SECONDS:-12}
+  ROUTER_STALE_WINDOW_SECONDS: ${ROUTER_STALE_WINDOW_SECONDS:-30}
+  # Admin login OTP + lockout policy (defaults are production-safe).
+  ADMIN_OTP_TTL_MINUTES: ${ADMIN_OTP_TTL_MINUTES:-10}
+  ADMIN_OTP_MAX_ATTEMPTS: ${ADMIN_OTP_MAX_ATTEMPTS:-5}
+  ADMIN_OTP_RESEND_COOLDOWN_SECONDS: ${ADMIN_OTP_RESEND_COOLDOWN_SECONDS:-60}
+  ADMIN_LOGIN_MAX_FAILURES: ${ADMIN_LOGIN_MAX_FAILURES:-8}
+  ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES: ${ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES:-15}
+  # Operational alert recipient (disconnect failures, payment mismatches).
+  ALERT_EMAIL: ${ALERT_EMAIL:-}
+  # Webhook auth: header secret or HMAC signature preferred; query-string
+  # secrets are ignored unless this migration flag is explicitly enabled.
+  WEBHOOK_ALLOW_QUERY_SECRET: ${WEBHOOK_ALLOW_QUERY_SECRET:-false}
+  # Guaranteed captive-portal login fallback target (MikroTik hotspot address).
+  HOTSPOT_LOGIN_URL: ${HOTSPOT_LOGIN_URL:-http://10.55.0.1/login}
+  # Optional single-tenant portal mapping used when no router key/domain is
+  # present; leave empty on multi-tenant platforms.
+  PORTAL_DEFAULT_TENANT_DOMAIN: ${PORTAL_DEFAULT_TENANT_DOMAIN:-}
   RADIUS_SERVER_HOST: ${RADIUS_SERVER_HOST:-127.0.0.1}
   RADIUS_PUBLIC_HOST: ${RADIUS_PUBLIC_HOST:-167.233.68.36}
   RADIUS_AUTH_PORT: ${RADIUS_AUTH_PORT:-1812}
@@ -160,6 +185,44 @@ services:
       timeout: 5s
       retries: 10
       start_period: 45s
+
+  # FreeRADIUS is a first-class part of the stack: without it nothing answers
+  # MikroTik Access-Requests on UDP 1812 and paying customers never get
+  # online. It reads radcheck/radreply/radacct/nas straight from the same
+  # Postgres the API writes, and the API receives realtime accounting/auth
+  # events via Postgres LISTEN/NOTIFY triggers on radacct/radpostauth.
+  #
+  # SECURITY: UDP 1812/1813 are published on the host. Restrict them at the
+  # host firewall (ufw/cloud security group) to the CIDRs your routers egress
+  # from, or run routers over the AROFi VPN and set RADIUS_CLIENT_CIDR to the
+  # VPN subnet. Do not leave RADIUS fully open to the internet.
+  freeradius:
+    build:
+      context: .
+      dockerfile: config/freeradius/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    environment:
+      RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+      RADIUS_CLIENT_CIDR: ${RADIUS_CLIENT_CIDR:-0.0.0.0/0}
+      RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR: ${RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR:-no}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-arofi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-arofi}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x radiusd || pgrep -x freeradius || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   postgres:
     image: postgres:15-alpine
