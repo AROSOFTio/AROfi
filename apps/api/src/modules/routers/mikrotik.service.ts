@@ -631,13 +631,16 @@ export class MikrotikService {
     .find-panel{display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:16px}
     .find-panel.on{display:block}
     .section-label{text-align:center;font-size:12.5px;color:#64748b;margin-bottom:12px}
-    .pkgs{max-height:280px;overflow-y:auto;margin-bottom:14px}
-    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:border-color .18s}
+    .pkgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:360px;overflow-y:auto;margin-bottom:14px}
+    .pkg{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color .18s}
     .pkg.sel{border-color:#2563EB;background:#eff6ff}
-    .pkg h3{font-size:14px;font-weight:700;color:#0f172a}
-    .pkg p{font-size:12px;color:#64748b;margin-top:1px}
-    .price{font-size:13px;font-weight:800;color:#2563EB;white-space:nowrap}
-    .buy-btn{background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:9px 16px;font-size:13px;font-weight:800;border-radius:9px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.22)}
+    .pkg-info{flex:1}
+    .pkg h3{font-size:14px;font-weight:700;color:#0f172a;line-height:1.2}
+    .pkg p{font-size:11.5px;color:#64748b;margin-top:2px}
+    .price{font-size:14px;font-weight:800;color:#2563EB;white-space:nowrap}
+    .buy-btn{width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border:none;padding:9px;font-size:13px;font-weight:800;border-radius:9px;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.22)}
+    .wa-btn{position:fixed;bottom:18px;right:18px;width:54px;height:54px;border-radius:50%;background:#25D366;display:none;align-items:center;justify-content:center;box-shadow:0 5px 16px rgba(37,211,102,.45);z-index:60;text-decoration:none}
+    .wa-btn svg{width:30px;height:30px;fill:#fff}
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
     .modal-overlay.on{display:flex}
     .pay-box{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 50px rgba(15,23,42,.25);position:relative}
@@ -728,6 +731,10 @@ export class MikrotikService {
     Terms and Conditions Apply
   </div>
 
+  <a id="waBtn" class="wa-btn" href="#" target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp">
+    <svg viewBox="0 0 24 24"><path d="M17.47 14.38c-.29-.15-1.7-.84-1.96-.94-.26-.1-.45-.14-.64.15-.19.29-.74.94-.9 1.13-.17.19-.33.22-.62.07-.29-.15-1.22-.45-2.33-1.44-.86-.77-1.44-1.72-1.61-2.01-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.07-.15-.64-1.55-.88-2.12-.23-.56-.47-.48-.64-.49-.17-.01-.36-.01-.55-.01-.19 0-.51.07-.77.36-.26.29-1.01.99-1.01 2.42s1.04 2.81 1.18 3c.14.19 2.03 3.1 4.92 4.35.69.3 1.22.47 1.64.6.69.22 1.32.19 1.81.12.55-.08 1.7-.69 1.94-1.37.24-.67.24-1.24.17-1.37-.07-.13-.26-.2-.55-.34zM12.04 21.5h-.01c-1.75 0-3.46-.47-4.95-1.36l-.35-.21-3.68.96.98-3.59-.23-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.89 9.9-9.89 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.44 9.89-9.89 9.89zm8.42-18.3A11.8 11.8 0 0 0 12.04.02C5.5.02.18 5.34.18 11.88c0 2.09.55 4.14 1.59 5.94L.08 24l6.33-1.66a11.86 11.86 0 0 0 5.63 1.43h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.15-3.47-8.39z"/></svg>
+  </a>
+
   <script>
     var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
@@ -809,6 +816,14 @@ export class MikrotikService {
           document.getElementById('sph').textContent=d.tenant.supportPhone;
           document.getElementById('footer').style.display='block';
         }
+        // WhatsApp chat button — uses the operator's own support number, or the
+        // AROFi platform number when the operator hasn't set one. Matches the
+        // green WhatsApp button on app.arofi.net/portal.
+        var waPhone=(d.tenant&&(d.tenant.supportPhone||d.tenant.platformSupportPhone))||'';
+        var waDigits=waPhone.replace(/\\D/g,'');
+        if(waDigits.indexOf('0')===0)waDigits='256'+waDigits.substring(1);
+        else if(waDigits&&waDigits.indexOf('256')!==0&&waDigits.length===9)waDigits='256'+waDigits;
+        if(waDigits.length>=11){var wa=document.getElementById('waBtn');wa.href='https://wa.me/'+waDigits;wa.style.display='flex';}
 
         var el=document.getElementById('plist');el.innerHTML='';
         pkgs.forEach(function(p){
