@@ -233,8 +233,13 @@ export class MikrotikService {
       // re-entry point for field agents without a laptop. Force it on the
       // same way winbox is, since some operators harden it off by default.
       `:do { /ip service set www disabled=no } on-error={}`,
-      `:do { /tool mac-server set allowed-interface-list=all } on-error={}`,
-      `:do { /tool mac-server mac-winbox set allowed-interface-list=all } on-error={}`,
+      // Deliberately NOT touching /tool mac-server allowed-interface-list here.
+      // Forcing it to "all" would expose MAC-Telnet/MAC-WinBox discovery (a
+      // layer-2 protocol that bypasses IP firewall rules entirely) to the new
+      // customer-facing hotspot bridge created below — an operator who had
+      // already restricted this for security would have that protection
+      // silently undone. IP-based WinBox/API access from the hotspot subnet
+      // is blocked explicitly further down instead (see "hotspot mgmt block").
       ``,
       `# 2. AROFi RADIUS server for HotSpot auth + accounting`,
       `/radius remove [find where comment="AROFi ${this.escape(registrationKey)}"]`,
@@ -383,9 +388,32 @@ export class MikrotikService {
       `/ip firewall filter add chain=input action=accept src-address=${subnet} dst-address=${gatewayIp} comment="AROFi hotspot input"`,
       `:foreach r in=[/ip firewall filter find comment="AROFi hotspot input"] do={ /ip firewall filter move $r destination=0 }`,
       ``,
-      `# Firewall: allow hotspot clients forward (must be before any DROP rule)`,
+      // The broad "allow gateway access" rule just above is needed for the
+      // hotspot's own captive-portal page serving (login/status pages are
+      // served from the gateway IP), so we can't simply narrow it by port
+      // without risking breaking the portal itself. Instead, block the
+      // specific management ports explicitly and move this block ABOVE the
+      // broader accept rule (added second = moved to destination=0 last =
+      // ends up on top, so it is evaluated first). This closes off WinBox
+      // and the RouterOS API to the untrusted customer network while leaving
+      // HTTP/HTTPS (captive portal) and DNS untouched.
+      `# Block WinBox/API management ports from the untrusted hotspot subnet`,
+      `/ip firewall filter remove [find comment="AROFi hotspot mgmt block"]`,
+      `/ip firewall filter add chain=input action=drop src-address=${subnet} dst-address=${gatewayIp} protocol=tcp dst-port=8291 comment="AROFi hotspot mgmt block"`,
+      `/ip firewall filter add chain=input action=drop src-address=${subnet} dst-address=${gatewayIp} protocol=tcp dst-port=8728 comment="AROFi hotspot mgmt block"`,
+      `/ip firewall filter add chain=input action=drop src-address=${subnet} dst-address=${gatewayIp} protocol=tcp dst-port=8729 comment="AROFi hotspot mgmt block"`,
+      `:foreach r in=[/ip firewall filter find comment="AROFi hotspot mgmt block"] do={ /ip firewall filter move $r destination=0 }`,
+      ``,
+      // out-interface=$wanIface (not a bare accept-from-subnet) so hotspot
+      // customers can only ever reach the internet via the detected WAN —
+      // never the operator's other internal networks, if the router happens
+      // to route to any (e.g. an existing LAN). Without this scoping, a
+      // customer on the "isolated" hotspot bridge could reach anything the
+      // router itself can route to, defeating the isolation this bridge is
+      // meant to provide.
+      `# Firewall: allow hotspot clients forward, WAN-bound only (must be before any DROP rule)`,
       `/ip firewall filter remove [find comment="AROFi hotspot forward"]`,
-      `/ip firewall filter add chain=forward action=accept src-address=${subnet} comment="AROFi hotspot forward"`,
+      `/ip firewall filter add chain=forward action=accept src-address=${subnet} out-interface=$wanIface comment="AROFi hotspot forward"`,
       `/ip firewall filter add chain=forward action=accept dst-address=${subnet} connection-state=established,related comment="AROFi hotspot forward"`,
       `:foreach r in=[/ip firewall filter find comment="AROFi hotspot forward"] do={ /ip firewall filter move $r destination=0 }`,
       ``,
@@ -408,6 +436,7 @@ export class MikrotikService {
       'On a phone, look for the new OPEN Wi-Fi network (your site/SSID name) and connect. The AROFi portal should pop up automatically.',
       'If no SSID appears, the board has no /interface wireless (v6) or /interface wifi (v7) radio - use an external AP on the arofi-hotspot bridge instead.',
       'Run one real voucher/payment test so MikroTik sends Access-Request + Accounting-Start to RADIUS and the router turns live here.',
+      'Supported: any RouterOS 6.45+ or RouterOS 7.x MikroTik with a HotSpot license (all hAP/RB/CCR/CRS boards ship with one). WireGuard remote access requires RouterOS 7 — RouterOS 6 routers can still take payments/vouchers normally, they just cannot use AROFi remote WinBox access yet.',
     ]
   }
 
@@ -493,16 +522,19 @@ export class MikrotikService {
   ) {
     // CRITICAL: MikroTik does NOT fall back to built-in pages when html-directory
     // is set and a file is missing — it returns 404 to every connecting device.
-    // We must only activate html-directory=hotspot after confirming both files
-    // are on disk. We also create the directory first because /tool fetch will
-    // not auto-create parent directories on all RouterOS versions.
+    // We must only activate html-directory=hotspot after confirming BOTH
+    // login.html AND status.html are on disk — activating on login.html alone
+    // (the previous bug here) would 404 every post-login redirect if only
+    // status.html failed to install, leaving the router in a broken captive
+    // portal state. We also create the directory first because /tool fetch
+    // will not auto-create parent directories on all RouterOS versions.
     const profileSet = profileName
       ? [
-          `:if ($arofiHtmlOk = 1) do={`,
+          `:if ($arofiHtmlOk = 1 && $arofiStatusOk = 1) do={`,
           `  /ip hotspot profile set [find name="${this.escape(profileName)}"] html-directory=hotspot`,
           `  :put "AROFi: custom portal page active."`,
           `} else={`,
-          `  :put "AROFi: keeping default MikroTik login page (html install failed)."`,
+          `  :put "AROFi: keeping default MikroTik login page (html install incomplete)."`,
           `}`,
         ]
       : []
@@ -511,6 +543,7 @@ export class MikrotikService {
       // directories on RouterOS v6, causing a silent write failure and 404.
       `:do { /file add name="hotspot" type=directory } on-error={}`,
       `:local arofiHtmlOk 0`,
+      `:local arofiStatusOk 0`,
       `:do {`,
       `  /tool fetch url="${loginHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/login.html"`,
       `  :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
@@ -539,13 +572,17 @@ export class MikrotikService {
       `  /tool fetch url="${statusHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/status.html"`,
       `  :if ([:len [/file find name="hotspot/status.html"]] > 0) do={`,
       `    :put "AROFi HotSpot status.html installed."`,
+      `    :set arofiStatusOk 1`,
       `  } else={`,
       `    :error "status.html not found after fetch"`,
       `  }`,
       `} on-error={`,
       `  :do {`,
       `    /tool fetch url="${fallbackStatusHtmlUrl}" mode=http dst-path="hotspot/status.html"`,
-      `    :put "AROFi HotSpot status.html installed by HTTP fallback."`,
+      `    :if ([:len [/file find name="hotspot/status.html"]] > 0) do={`,
+      `      :put "AROFi HotSpot status.html installed by HTTP fallback."`,
+      `      :set arofiStatusOk 1`,
+      `    }`,
       `  } on-error={`,
       `    :put "WARNING: status.html install FAILED — post-login page will need a manual tap."`,
       `  }`,
@@ -869,7 +906,7 @@ export class MikrotikService {
       });
     }
 
-    function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
