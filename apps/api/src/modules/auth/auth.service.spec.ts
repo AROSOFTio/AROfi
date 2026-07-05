@@ -24,6 +24,7 @@ function buildHarness(options: {
   challenge?: Record<string, unknown> | null
   failureCount?: number
   refreshCreateError?: Error
+  refreshTokenRecord?: Record<string, unknown> | null
 } = {}) {
   const user = options.user === undefined ? buildUser() : options.user
 
@@ -49,6 +50,8 @@ function buildHarness(options: {
       create: options.refreshCreateError
         ? jest.fn().mockRejectedValue(options.refreshCreateError)
         : jest.fn().mockResolvedValue({}),
+      findUnique: jest.fn().mockResolvedValue(options.refreshTokenRecord ?? null),
+      update: jest.fn().mockResolvedValue({}),
     },
   }
 
@@ -194,5 +197,64 @@ describe('AuthService email OTP login', () => {
     } finally {
       process.env.NODE_ENV = previousEnv
     }
+  })
+})
+
+describe('AuthService refresh-token rotation race condition', () => {
+  function buildRefreshRecord(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'refresh-1',
+      userId: 'user-1',
+      tokenHash: 'irrelevant-in-tests',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      ...overrides,
+    }
+  }
+
+  it('rotates a fresh (never-used) refresh token normally', async () => {
+    const { service, prisma } = buildHarness({ refreshTokenRecord: buildRefreshRecord() })
+
+    const session = await service.refresh('raw-refresh-token')
+
+    expect(session.access_token).toBe('signed-jwt')
+    expect(prisma.refreshToken.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'refresh-1' }, data: { revokedAt: expect.any(Date) } }),
+    )
+    // A brand new refresh token is issued (rotation), not the same raw value.
+    expect(prisma.refreshToken.create).toHaveBeenCalled()
+  })
+
+  it('tolerates reusing a refresh token that was rotated moments ago (concurrent request race)', async () => {
+    const { service, prisma } = buildHarness({
+      refreshTokenRecord: buildRefreshRecord({ revokedAt: new Date(Date.now() - 2_000) }),
+    })
+
+    const session = await service.refresh('raw-refresh-token')
+
+    expect(session.access_token).toBe('signed-jwt')
+    // Session-losing concurrent request must NOT be rejected...
+    // ...and must NOT re-revoke or re-rotate — the raw token is reused as-is.
+    expect(prisma.refreshToken.update).not.toHaveBeenCalled()
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled()
+    expect(session.refresh_token).toBe('raw-refresh-token')
+  })
+
+  it('rejects a refresh token that was rotated long ago (genuinely stale/stolen token)', async () => {
+    const { service } = buildHarness({
+      refreshTokenRecord: buildRefreshRecord({ revokedAt: new Date(Date.now() - 60_000) }),
+    })
+
+    await expect(service.refresh('raw-refresh-token')).rejects.toThrow(UnauthorizedException)
+  })
+
+  it('rejects an unknown or expired refresh token', async () => {
+    const { service } = buildHarness({ refreshTokenRecord: null })
+    await expect(service.refresh('raw-refresh-token')).rejects.toThrow(UnauthorizedException)
+
+    const { service: serviceExpired } = buildHarness({
+      refreshTokenRecord: buildRefreshRecord({ expiresAt: new Date(Date.now() - 1000) }),
+    })
+    await expect(serviceExpired.refresh('raw-refresh-token')).rejects.toThrow(UnauthorizedException)
   })
 })

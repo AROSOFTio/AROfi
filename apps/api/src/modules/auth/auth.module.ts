@@ -352,18 +352,39 @@ export class AuthService {
     const tokenHash = this.hashToken(rawToken)
     const record = await this.prisma.refreshToken.findUnique({ where: { tokenHash } })
 
-    if (!record || record.revokedAt || record.expiresAt < new Date()) {
+    if (!record || record.expiresAt < new Date()) {
       throw new UnauthorizedException('Session expired, please sign in again')
     }
 
-    await this.prisma.refreshToken.update({
-      where: { id: record.id },
-      data: { revokedAt: new Date() },
-    })
+    // Refresh tokens rotate on every use (old one revoked, new one issued) —
+    // but several requests can legitimately race to refresh the SAME token
+    // at once (a background timer, a page navigation, and the dashboard's
+    // own auth-recovery check can all fire within milliseconds of each
+    // other). Without tolerance for that, the request that loses the race
+    // gets hard-rejected as "already used" even though the session is
+    // completely valid — which is exactly what was bouncing users to
+    // /login across the app. Tolerate reuse of a just-rotated token for a
+    // short grace window; only a token revoked LONGER ago than that is
+    // treated as a genuine stale/stolen-token rejection.
+    const REFRESH_GRACE_MS = 10_000
+    if (record.revokedAt && Date.now() - record.revokedAt.getTime() > REFRESH_GRACE_MS) {
+      throw new UnauthorizedException('Session expired, please sign in again')
+    }
+
+    const alreadyRotatedInGraceWindow = Boolean(record.revokedAt)
+    if (!alreadyRotatedInGraceWindow) {
+      await this.prisma.refreshToken.update({
+        where: { id: record.id },
+        data: { revokedAt: new Date() },
+      })
+    }
 
     const authenticatedUser = await this.validateAccessTokenUser(record.userId)
     const access_token = await this.signAccessToken(authenticatedUser)
-    const refresh_token = await this.issueRefreshToken(authenticatedUser.id)
+    // Inside the grace window, don't rotate again — reuse the same raw
+    // token so the browser's cookie doesn't need to change and no extra
+    // RefreshToken rows pile up for one legitimate race.
+    const refresh_token = alreadyRotatedInGraceWindow ? rawToken : await this.issueRefreshToken(authenticatedUser.id)
 
     return {
       access_token,
