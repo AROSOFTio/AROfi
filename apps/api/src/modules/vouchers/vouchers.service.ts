@@ -4,6 +4,7 @@ import {
   BillingTransactionStatus,
   BillingTransactionType,
   PackageActivationSource,
+  PackageActivationStatus,
   Prisma,
   VoucherBatchStatus,
   VoucherStatus,
@@ -686,10 +687,27 @@ export class VouchersService {
         throw new BadRequestException('This voucher/package is already active on another device.')
       }
 
+      // Same device re-submitting a redeemed voucher is a legitimate RECONNECT
+      // — but ONLY while the package it activated is still live. If that
+      // activation has already expired (or was revoked/quota-exhausted),
+      // returning it as "success" makes the portal say "connecting…" and then
+      // hand the customer a dead session — the exact "connected but no
+      // internet" confusion. Reject with a plain message so they buy again.
+      const priorActivation = voucher.redemption.activation
+      const activationDead =
+        !priorActivation ||
+        priorActivation.status !== PackageActivationStatus.ACTIVE ||
+        (priorActivation.endsAt != null && priorActivation.endsAt <= new Date())
+      if (activationDead) {
+        throw new BadRequestException(
+          'This voucher has already been used and its time has expired. Please buy a new package or voucher.',
+        )
+      }
+
       return {
         voucher,
         redemption: voucher.redemption,
-        activation: voucher.redemption.activation,
+        activation: priorActivation,
       }
     }
 
