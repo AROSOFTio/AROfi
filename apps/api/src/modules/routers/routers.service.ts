@@ -2036,9 +2036,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     if (!serverWgPubKey) {
       return [
-        `# AROFi Remote Access — WireGuard Setup`,
+        `# AROFi Remote Access - WireGuard Setup`,
         `# SETUP REQUIRED: The VPS WireGuard server has not been deployed yet.`,
-        `# Ask your AROFi administrator to run the deploy script shown in Admin → Remote Access → Install`,
+        `# Ask your AROFi administrator to run the deploy script shown in Admin -> Remote Access -> Install`,
         `# then set VPN_WG_SERVER_PUBKEY in Coolify and redeploy the app.`,
         `# After that, run this install script again from the AROFi panel.`,
       ].join('\n')
@@ -2047,18 +2047,18 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return [
       `# AROFi Remote Access WinBox Tunnel (WireGuard)`,
       `# Generated for router: ${router.name}`,
-      `# WireGuard requires RouterOS 7+ — there is no WireGuard support on`,
+      `# WireGuard requires RouterOS 7+ - there is no WireGuard support on`,
       `# RouterOS 6 at all. Detect the version FIRST and abort cleanly, before`,
-      `# touching anything, if this router is still on v6 — otherwise a v6`,
+      `# touching anything, if this router is still on v6 - otherwise a v6`,
       `# router would have its existing (working) SSTP tunnel removed below,`,
       `# then fail to create WireGuard, ending up with LESS remote access than`,
       `# before this script ran.`,
       `:local arofiRosVersion [/system resource get version]`,
       `:if ([:pick $arofiRosVersion 0 2] = "6.") do={`,
       `  :put "AROFi: WireGuard remote access requires RouterOS 7 or later."`,
-      `  :put "This router is on RouterOS $arofiRosVersion — remote access was NOT changed."`,
+      `  :put "This router is on RouterOS $arofiRosVersion - remote access was NOT changed."`,
       `  :put "Your existing setup (if any) is untouched. Upgrade to RouterOS 7 to enable AROFi remote WinBox access."`,
-      `  :error "AROFi: RouterOS 6 detected — WireGuard remote access is not available on this version."`,
+      `  :error "AROFi: RouterOS 6 detected - WireGuard remote access is not available on this version."`,
       `}`,
       ``,
       `# Remove any previous AROFi remote-access tunnel`,
