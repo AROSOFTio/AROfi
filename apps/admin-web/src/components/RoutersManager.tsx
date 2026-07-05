@@ -409,7 +409,8 @@ export default function RoutersManager() {
 
   function oneRunCommand() {
     if (!selectedSetup) return ''
-    return selectedSetup.oneRunCommand ?? buildSetupFallbackCommand(selectedSetup.router.registrationKey)
+    const registrationKey = selectedSetup.router.registrationKey
+    return selectedSetup.oneRunCommand ?? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
   }
 
   async function copyScript() {

@@ -58,6 +58,20 @@ describe('PaymentsService', () => {
       providerReference: 'YO-1234',
     })
   })
+
+  it('auto-enables Airtel in portal readiness for legacy MTN-only settings when Yo Uganda is ready for both', () => {
+    expect(
+      (service as any).resolveAvailablePaymentNetworks(
+        [PaymentNetwork.MTN],
+        {
+          collection: {
+            MTN: { ready: true },
+            AIRTEL: { ready: true },
+          },
+        },
+      ),
+    ).toEqual([PaymentNetwork.MTN, PaymentNetwork.AIRTEL])
+  })
 })
 
 describe('PhoneNumberService', () => {

@@ -436,7 +436,7 @@ export default function SettingsManager({
                   <Select name="airtelCollectionProvider" label="Airtel Collection Route" defaultValue={platformForm.airtelCollectionProvider} options={providerOptions} />
                   <FormSubheading text="Customer Portal Networks" />
                   <Check name="network-MTN" label="Allow MTN on customer portal" defaultChecked={platformForm.allowedPaymentNetworks.includes('MTN')} />
-                  <Check name="network-AIRTEL" label="Allow Airtel on customer portal when route is ready" defaultChecked={platformForm.allowedPaymentNetworks.includes('AIRTEL')} />
+                  <Check name="network-AIRTEL" label="Allow Airtel on customer portal" defaultChecked={platformForm.allowedPaymentNetworks.includes('AIRTEL')} />
                 </>
               )}
               {activeTab === 'Withdrawals' && (

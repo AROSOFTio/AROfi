@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, FormEvent, useMemo } from 'react'
-import { 
+import {
   Check, 
   Copy, 
   RefreshCw, 
@@ -19,7 +19,7 @@ import {
   Ticket
 } from 'lucide-react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import { buildRemoteAccessInstallCommand } from '@/lib/mikrotik-commands'
+import { buildSetupFallbackCommand } from '@/lib/mikrotik-commands'
 import { AdminSessionResponse } from '@/lib/admin-types'
 import { DurationInput } from '@/components/DurationInput'
 
@@ -40,6 +40,11 @@ export default function OnboardingWizard({
   initialHasVouchers,
   onComplete
 }: OnboardingWizardProps) {
+  const resolveOneRunCommand = (value: { oneRunCommand?: string; router?: { registrationKey?: string | null }; registrationKey?: string | null } | null | undefined) => {
+    const registrationKey = value?.router?.registrationKey ?? value?.registrationKey
+    return value?.oneRunCommand ?? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
+  }
+
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +59,7 @@ export default function OnboardingWizard({
   
   // Registered router state
   const [registeredRouter, setRegisteredRouter] = useState<any | null>(initialRouter)
+  const [setupCommand, setSetupCommand] = useState(() => resolveOneRunCommand(initialRouter))
   const [pollingActive, setPollingActive] = useState(false)
   const [copiedText, setCopiedText] = useState(false)
   // Counts unverified check attempts (auto-poll ticks + manual "Check Now"
@@ -101,13 +107,16 @@ export default function OnboardingWizard({
       setCurrentStep(1)
     } else if (initialRouter && !initialRouter.provisioningCallbackReceived && initialRouter.onboardingStatus !== 'VERIFIED_ONLINE') {
       setRegisteredRouter(initialRouter)
+      setSetupCommand(resolveOneRunCommand(initialRouter))
       setCurrentStep(2)
       setPollingActive(true)
     } else if (!initialHasPackage) {
       setRegisteredRouter(initialRouter)
+      setSetupCommand(resolveOneRunCommand(initialRouter))
       setCurrentStep(3)
     } else if (!initialHasVouchers) {
       setRegisteredRouter(initialRouter)
+      setSetupCommand(resolveOneRunCommand(initialRouter))
       setCurrentStep(4)
     } else {
       // Completed, close wizard
@@ -124,6 +133,7 @@ export default function OnboardingWizard({
         const setup = await clientFetchApi<any>(`/routers/${registeredRouter.id}/setup`)
         if (setup?.router) {
           setRegisteredRouter(setup.router)
+          setSetupCommand(resolveOneRunCommand(setup))
           if (setup.router.provisioningCallbackReceived || setup.router.onboardingStatus === 'VERIFIED_ONLINE') {
             setPollingActive(false)
             setSuccess('Router connection verified! You can now proceed.')
@@ -172,6 +182,7 @@ export default function OnboardingWizard({
 
       if (setup?.router) {
         setRegisteredRouter(setup.router)
+        setSetupCommand(resolveOneRunCommand(setup))
         setSuccess('Router registered successfully!')
         setCurrentStep(2)
         setPollingActive(true)
@@ -202,6 +213,7 @@ export default function OnboardingWizard({
       const setup = await clientPostApi<any>(`/routers/${registeredRouter.id}/health-check`, {})
       if (setup?.router) {
         setRegisteredRouter(setup.router)
+        setSetupCommand(resolveOneRunCommand(setup))
         if (setup.router.provisioningCallbackReceived || setup.router.onboardingStatus === 'VERIFIED_ONLINE') {
           setSuccess('Router connection verified successfully!')
         } else {
@@ -218,10 +230,9 @@ export default function OnboardingWizard({
 
   // Copy installation script to clipboard
   const handleCopyScript = () => {
-    if (!registeredRouter) return
-    const command = buildRemoteAccessInstallCommand(registeredRouter.remoteToken)
+    if (!setupCommand) return
 
-    navigator.clipboard.writeText(command)
+    navigator.clipboard.writeText(setupCommand)
     setCopiedText(true)
     setTimeout(() => setCopiedText(false), 2000)
   }
@@ -689,7 +700,7 @@ export default function OnboardingWizard({
               <div style={{ display: 'grid', gap: 4 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-1)' }}>Step 2: Copy & Run Setup Script</h3>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  Connect your computer to the MikroTik router. Run this terminal command to configure the billing tunnel.
+                  Connect your computer to the MikroTik router. Run this one-line WinBox terminal command to install the hotspot and billing setup.
                 </p>
               </div>
 
@@ -713,12 +724,13 @@ export default function OnboardingWizard({
                   paddingRight: 40,
                   lineHeight: 1.6
                 }}>
-                  {buildRemoteAccessInstallCommand(registeredRouter.remoteToken)}
+                  {setupCommand || 'Generating MikroTik setup command...'}
                 </pre>
                 
                 <button
                   type="button"
                   onClick={handleCopyScript}
+                  disabled={!setupCommand}
                   style={{
                     position: 'absolute',
                     top: 14,
@@ -732,7 +744,8 @@ export default function OnboardingWizard({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    opacity: setupCommand ? 1 : 0.55
                   }}
                   title="Copy command"
                 >

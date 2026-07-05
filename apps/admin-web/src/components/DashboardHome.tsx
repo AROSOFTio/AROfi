@@ -316,10 +316,14 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
   const prefs = (tenantSettings?.settings?.routerOnboardingPreferences as Record<string, any> | null) ?? {}
   const onboardingCompletedAt = prefs.onboardingCompletedAt
+  const selfServiceOnboarding = Boolean(prefs.selfServiceOnboarding)
 
-  // Only show the onboarding wizard for brand-new tenants who haven't set ANYTHING up yet and haven't completed onboarding.
-  const isNewTenant = !hasRouter && !hasPackage && !hasVouchers
-  const onboardingIncomplete = isNewTenant && !onboardingCompletedAt
+  // Self-service tenants should be able to leave and come back mid-flow
+  // without losing the guided router/package/voucher setup path.
+  const onboardingIncomplete =
+    selfServiceOnboarding &&
+    !onboardingCompletedAt &&
+    (!hasRouter || !hasPackage || !hasVouchers)
 
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []

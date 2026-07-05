@@ -303,11 +303,10 @@ export class PaymentsService {
       create: { id: 'global' },
     })
     const readiness = this.paymentRouterService.getProviderReadiness()
-    const availablePaymentNetworks = platformSettings.allowedPaymentNetworks.filter((network) => {
-      if (network === PaymentNetwork.MTN) return readiness.collection.MTN.ready
-      if (network === PaymentNetwork.AIRTEL) return readiness.collection.AIRTEL.ready
-      return false
-    })
+    const availablePaymentNetworks = this.resolveAvailablePaymentNetworks(
+      platformSettings.allowedPaymentNetworks,
+      readiness,
+    )
 
     return {
       tenant: {
@@ -350,6 +349,32 @@ export class PaymentsService {
       activeActivation,
       latestPayment,
     }
+  }
+
+  private resolveAvailablePaymentNetworks(
+    configuredNetworks: PaymentNetwork[],
+    readiness: ReturnType<PaymentRouterService['getProviderReadiness']>,
+  ) {
+    const resolved = new Set(configuredNetworks)
+
+    // Legacy installs created the global PlatformSetting row with MTN-only as
+    // the default even after Yo! Uganda began handling both MTN and Airtel.
+    // Without this fallback, Airtel numbers are blocked in the portal before
+    // the payment request is even sent, which looks like "no MoMo popup".
+    if (
+      resolved.size === 1 &&
+      resolved.has(PaymentNetwork.MTN) &&
+      readiness.collection.MTN.ready &&
+      readiness.collection.AIRTEL.ready
+    ) {
+      resolved.add(PaymentNetwork.AIRTEL)
+    }
+
+    return [...resolved].filter((network) => {
+      if (network === PaymentNetwork.MTN) return readiness.collection.MTN.ready
+      if (network === PaymentNetwork.AIRTEL) return readiness.collection.AIRTEL.ready
+      return false
+    })
   }
 
   async initiatePortalPayment(dto: InitiatePortalPaymentDto) {

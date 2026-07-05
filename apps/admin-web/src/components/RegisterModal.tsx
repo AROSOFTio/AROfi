@@ -169,7 +169,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       setPhoneNumber(formState.phoneNumber.trim())
 
       if (!SHOW_PRICING) {
-        await handleSelectPlan('FREE')
+        window.location.href = getAppDashboardUrl()
         return
       }
 

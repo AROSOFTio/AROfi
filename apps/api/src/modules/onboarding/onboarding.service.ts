@@ -220,6 +220,19 @@ export class OnboardingService {
         },
       })
 
+      await tx.tenantSetting.create({
+        data: {
+          tenantId: tenant.id,
+          subscriptionPlan: 'FREE',
+          routerOnboardingPreferences: {
+            selectedPlan: 'FREE',
+            subscriptionStatus: 'ACTIVE',
+            selfServiceOnboarding: true,
+            onboardingStartedAt: new Date().toISOString(),
+          } as Prisma.InputJsonValue,
+        },
+      })
+
       await tx.featureLimit.createMany({
         data: DEFAULT_FEATURE_LIMITS.map((limit) => ({
           tenantId: tenant.id,
