@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { buildRemoteAccessInstallCommand } from '@/lib/mikrotik-commands'
-import type { RouterItem, RouterOverviewResponse } from '@/lib/admin-types'
+import type { RouterOverviewResponse, RouterSetupResponse } from '@/lib/admin-types'
 import { 
   Globe, 
   ShieldAlert, 
@@ -20,7 +20,7 @@ export default function RemoteAccessPage() {
   const [loading, setLoading] = useState(true)
   const [routers, setRouters] = useState<any[]>([])
   const [selectedRouterId, setSelectedRouterId] = useState<string>('')
-  const [selectedSetup, setSelectedSetup] = useState<RouterItem | null>(null)
+  const [selectedSetup, setSelectedSetup] = useState<RouterSetupResponse | null>(null)
   const [loadingSetup, setLoadingSetup] = useState(false)
   const [activeTab, setActiveTab] = useState<'status' | 'install' | 'connect'>('status')
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +58,7 @@ export default function RemoteAccessPage() {
     try {
       setLoadingSetup(true)
       setError(null)
-      const setup = await clientFetchApi<RouterItem>(`/routers/${routerId}/remote-access`)
+      const setup = await clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`)
       setSelectedSetup(setup)
       setTunnelTest(null)
     } catch (err) {
@@ -78,7 +78,7 @@ export default function RemoteAccessPage() {
     }
   }, [selectedRouterId])
 
-  const selectedRouter = selectedSetup
+  const selectedRouter = selectedSetup?.router
 
   // The "Port Open" badge only reflects whether the proxy mapping is switched
   // on in the DB - it says nothing about whether the router's SSTP tunnel is
@@ -435,8 +435,8 @@ export default function RemoteAccessPage() {
               </strong>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
                 {selectedRouter?.wgServerConfigured === false
-                  ? 'After completing Step 1 and redeploying, paste this command into the MikroTik WinBox Terminal to set up the SSTP tunnel.'
-                  : 'Paste the command below into the MikroTik WinBox Terminal. It sets up the SSTP remote-access tunnel to AROFi cloud with no manual file editing.'}
+                  ? 'After completing Step 1 and redeploying, paste this command into the MikroTik WinBox Terminal to set up the WireGuard tunnel.'
+                  : 'Paste the command below into the MikroTik WinBox Terminal. It sets up a WireGuard VPN tunnel to AROFi cloud — no button presses or reboots required.'}
               </p>
             </div>
 

@@ -436,7 +436,7 @@ export class MikrotikService {
       'On a phone, look for the new OPEN Wi-Fi network (your site/SSID name) and connect. The AROFi portal should pop up automatically.',
       'If no SSID appears, the board has no /interface wireless (v6) or /interface wifi (v7) radio - use an external AP on the arofi-hotspot bridge instead.',
       'Run one real voucher/payment test so MikroTik sends Access-Request + Accounting-Start to RADIUS and the router turns live here.',
-      'Supported: any RouterOS 6.45+ or RouterOS 7.x MikroTik with a HotSpot license (all hAP/RB/CCR/CRS boards ship with one). Remote WinBox access uses SSTP, so RouterOS 6 works directly. Some RouterOS 7 consumer boards need one-time device-mode enterprise enablement before SSTP is allowed.',
+      'Supported: any RouterOS 6.45+ or RouterOS 7.x MikroTik with a HotSpot license (all hAP/RB/CCR/CRS boards ship with one). WireGuard remote access requires RouterOS 7 — RouterOS 6 routers can still take payments/vouchers normally, they just cannot use AROFi remote WinBox access yet.',
     ]
   }
 
