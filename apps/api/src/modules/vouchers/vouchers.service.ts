@@ -1107,16 +1107,15 @@ export class VouchersService {
     let x = pageMargin
     let y = pageMargin
 
-    // The router answers for <tenantname>.wifi (see routers.service — the
-    // hotspot dns-name is derived from the tenant name). Encoding the QR as
-    // http://<tenantname>.wifi/login?voucher=CODE is what actually makes a
-    // scan AUTO-CONNECT: it's plain HTTP (so the MikroTik captive portal can
-    // intercept it — HTTPS cannot be intercepted) and resolves to the gateway
-    // on ANY of the tenant's routers. The customer is on the hotspot WiFi when
-    // they redeem, so a URL that only resolves on-network is exactly right.
-    // The login.html then auto-fills and redeems the code (directly, or from
-    // the captive dst= redirect) and connects the device.
-    const tenantDnsName = `${batch.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
+    // Encode the QR as http://10.55.0.1/login?voucher=CODE — the AROFi hotspot
+    // gateway is always 10.55.0.1 (see the MikroTik onboarding script). Using
+    // the IP is critical: a made-up hostname like <tenant>.wifi FAILS to
+    // resolve on modern phones (private DNS / DNS-over-HTTPS, or cellular data
+    // active bypass the router's DNS) → ERR_NAME_NOT_RESOLVED, which is what
+    // was happening. An IP needs no DNS at all: the gateway is reachable the
+    // instant the device associates to the WiFi, and it serves login.html
+    // directly, which auto-fills and redeems the voucher to connect the device.
+    const hotspotLoginHost = '10.55.0.1'
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
@@ -1124,7 +1123,7 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-      const qrPng = await this.generateVoucherQrPng(voucher.code, tenantDnsName)
+      const qrPng = await this.generateVoucherQrPng(voucher.code, hotspotLoginHost)
 
       this.drawVoucherCard(doc, {
         x,
