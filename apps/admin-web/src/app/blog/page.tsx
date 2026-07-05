@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { BookOpen, ArrowLeft, Calendar, Eye } from 'lucide-react'
+import { BookOpen, Calendar, Eye } from 'lucide-react'
 import { fetchPublicApi } from '@/lib/api'
 import type { BlogPostListResponse } from '@/lib/admin-types'
+import PublicSiteHeader from '@/components/PublicSiteHeader'
 
 const SITE_URL = 'https://arofi.net'
 const PAGE_SIZE = 20
@@ -49,11 +50,8 @@ export default async function BlogIndexPage({
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+      <PublicSiteHeader />
       <div className="max-w-5xl mx-auto px-6 py-16">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition mb-8">
-          <ArrowLeft className="w-4 h-4" /> Back to AROFi
-        </Link>
-
         <div className="flex items-center gap-3 mb-3">
           <BookOpen className="w-6 h-6 text-blue-600" />
           <h1 className="text-3xl font-extrabold tracking-tight">AROFi Blog</h1>

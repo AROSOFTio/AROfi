@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, Calendar, Eye } from 'lucide-react'
 import { fetchPublicApi } from '@/lib/api'
 import type { BlogPostDetail } from '@/lib/admin-types'
+import PublicSiteHeader from '@/components/PublicSiteHeader'
 
 const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
@@ -97,6 +98,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PublicSiteHeader />
       <div className="max-w-3xl mx-auto px-6 py-16">
         <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition mb-8">
           <ArrowLeft className="w-4 h-4" /> All articles
