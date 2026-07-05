@@ -2,11 +2,15 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
+  HttpStatus,
   Injectable,
+  Logger,
   Module,
   Post,
   Req,
   Res,
+  ServiceUnavailableException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common'
@@ -14,14 +18,17 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { JwtModule, JwtService } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
 import { PassportStrategy } from '@nestjs/passport'
+import { Throttle } from '@nestjs/throttler'
 import type { Request, Response } from 'express'
 import * as bcrypt from 'bcrypt'
-import { createHash, randomBytes } from 'crypto'
+import { createHash, randomBytes, randomInt } from 'crypto'
 import { AuthGuard } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator'
+import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator'
 import { PrismaService } from '../../prisma.service'
 import { PrismaModule } from '../../prisma.module'
+import { MailModule } from '../mail/mail.module'
+import { MailService } from '../mail/mail.service'
 import { UsersModule, UsersService } from '../users/users.module'
 import { AccessScopeService } from './access-scope.service'
 import { PermissionsGuard } from './permissions.guard'
@@ -29,16 +36,47 @@ import { RoleCatalogService } from './role-catalog.service'
 
 export { AccessScopeService, PermissionsGuard, RoleCatalogService }
 
+const ACCESS_COOKIE_NAME = 'arofi_admin_token'
 const REFRESH_COOKIE_NAME = 'arofi_admin_refresh'
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
+// Must match the JWT expiresIn below — the cookie should die with the token.
+const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000
 
-class LoginDto {
+// Email OTP policy. All values are clamped to safe ranges so a typo'd env var
+// can't silently produce a 24-hour OTP or unlimited attempts.
+const OTP_LENGTH = 6
+const otpTtlMinutes = () =>
+  Math.min(10, Math.max(5, Number.parseInt(process.env.ADMIN_OTP_TTL_MINUTES ?? '10', 10) || 10))
+const otpMaxAttempts = () =>
+  Math.min(10, Math.max(3, Number.parseInt(process.env.ADMIN_OTP_MAX_ATTEMPTS ?? '5', 10) || 5))
+const otpResendCooldownSeconds = () =>
+  Math.min(600, Math.max(30, Number.parseInt(process.env.ADMIN_OTP_RESEND_COOLDOWN_SECONDS ?? '60', 10) || 60))
+const loginMaxFailures = () =>
+  Math.min(50, Math.max(3, Number.parseInt(process.env.ADMIN_LOGIN_MAX_FAILURES ?? '8', 10) || 8))
+const loginLockoutWindowMinutes = () =>
+  Math.min(120, Math.max(5, Number.parseInt(process.env.ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES ?? '15', 10) || 15))
+
+class LoginStartDto {
   @IsEmail()
   email: string
 
   @IsString()
   @IsNotEmpty()
   password: string
+}
+
+class LoginVerifyDto {
+  @IsEmail()
+  email: string
+
+  @IsString()
+  @Length(OTP_LENGTH, OTP_LENGTH)
+  otp: string
+}
+
+class LoginResendDto {
+  @IsEmail()
+  email: string
 }
 
 type JwtPayload = {
@@ -58,6 +96,11 @@ export type AuthenticatedAdminUser = {
   displayName: string
 }
 
+type RequestMeta = {
+  ipAddress?: string | null
+  userAgent?: string | null
+}
+
 function extractJwtFromAdminCookie(request: Request) {
   const rawCookie = request.headers.cookie
   if (!rawCookie) {
@@ -67,7 +110,7 @@ function extractJwtFromAdminCookie(request: Request) {
   const cookie = rawCookie
     .split(';')
     .map((item) => item.trim())
-    .find((item) => item.startsWith('arofi_admin_token='))
+    .find((item) => item.startsWith(`${ACCESS_COOKIE_NAME}=`))
 
   if (!cookie) {
     return null
@@ -82,25 +125,146 @@ type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name)
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly roleCatalogService: RoleCatalogService,
     private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
   ) {}
 
-  async login(email: string, password: string) {
+  // ── Step 1: email + password → OTP email ─────────────────────────────────
+  async startLogin(email: string, password: string, meta: RequestMeta = {}) {
     await this.roleCatalogService.ensureStandardRoles()
+    await this.assertNotLockedOut(email)
+
+    const user = await this.usersService.findOneByEmail(email)
+    const passwordMatches =
+      user && user.isActive ? await bcrypt.compare(password, user.password) : false
+
+    if (!user || !user.isActive || !passwordMatches) {
+      await this.recordAuthAudit({
+        action: 'auth.login.failed',
+        email,
+        userId: user?.id,
+        tenantId: user?.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'Invalid email or password',
+        meta,
+      })
+      throw new UnauthorizedException('Invalid credentials')
+    }
+
+    const otp = this.generateOtp()
+    const otpHash = await bcrypt.hash(otp, 10)
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + otpTtlMinutes() * 60 * 1000)
+    const resendAvailableAt = new Date(now.getTime() + otpResendCooldownSeconds() * 1000)
+
+    // One pending challenge per user: a fresh password login invalidates any
+    // previous unverified codes.
+    await this.prisma.adminLoginOtp.deleteMany({
+      where: { userId: user.id, verifiedAt: null },
+    })
+    await this.prisma.adminLoginOtp.create({
+      data: {
+        userId: user.id,
+        otpHash,
+        expiresAt,
+        maxAttempts: otpMaxAttempts(),
+        resendAvailableAt,
+        requestIp: meta.ipAddress ?? null,
+        userAgent: meta.userAgent ?? null,
+      },
+    })
+
+    await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+
+    await this.recordAuthAudit({
+      action: 'auth.otp.sent',
+      email: user.email,
+      userId: user.id,
+      tenantId: user.tenantId ?? null,
+      message: 'Login OTP sent by email',
+      meta,
+    })
+
+    return {
+      otpRequired: true as const,
+      email: user.email,
+      expiresAt: expiresAt.toISOString(),
+      resendAvailableAt: resendAvailableAt.toISOString(),
+    }
+  }
+
+  // ── Step 2: OTP → session tokens ──────────────────────────────────────────
+  async verifyLogin(email: string, otp: string, meta: RequestMeta = {}) {
+    await this.assertNotLockedOut(email)
 
     const user = await this.usersService.findOneByEmail(email)
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid credentials')
+      throw new UnauthorizedException('Invalid or expired verification code')
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.password)
-    if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials')
+    const challenge = await this.prisma.adminLoginOtp.findFirst({
+      where: { userId: user.id, verifiedAt: null },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!challenge || challenge.expiresAt <= new Date()) {
+      await this.recordAuthAudit({
+        action: 'auth.otp.failed',
+        email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'OTP expired or no pending challenge',
+        meta,
+      })
+      throw new UnauthorizedException('The verification code has expired. Sign in again to get a new one.')
     }
+
+    if (challenge.attempts >= challenge.maxAttempts) {
+      await this.recordAuthAudit({
+        action: 'auth.otp.failed',
+        email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'OTP attempt limit exceeded',
+        meta,
+      })
+      throw new UnauthorizedException('Too many incorrect codes. Sign in again to get a new one.')
+    }
+
+    const otpMatches = await bcrypt.compare(otp, challenge.otpHash)
+    if (!otpMatches) {
+      await this.prisma.adminLoginOtp.update({
+        where: { id: challenge.id },
+        data: { attempts: { increment: 1 } },
+      })
+      await this.recordAuthAudit({
+        action: 'auth.otp.failed',
+        email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'Incorrect OTP entered',
+        meta,
+      })
+      throw new UnauthorizedException('Incorrect verification code')
+    }
+
+    await this.prisma.adminLoginOtp.update({
+      where: { id: challenge.id },
+      data: { verifiedAt: new Date() },
+    })
+    // Verified challenges are one-shot; remove any strays.
+    await this.prisma.adminLoginOtp.deleteMany({
+      where: { userId: user.id, verifiedAt: null },
+    })
 
     const authenticatedUser = this.toAuthenticatedUser({
       id: user.id,
@@ -113,14 +277,72 @@ export class AuthService {
       tenantName: user.tenant?.name ?? null,
     })
 
-    const access_token = await this.signAccessToken(authenticatedUser)
-    const refresh_token = await this.issueRefreshToken(authenticatedUser.id)
+    await this.recordAuthAudit({
+      action: 'auth.login.succeeded',
+      email: user.email,
+      userId: user.id,
+      tenantId: user.tenantId ?? null,
+      message: 'Admin login completed with email OTP',
+      meta,
+    })
 
     return {
-      access_token,
-      refresh_token,
+      access_token: await this.signAccessToken(authenticatedUser),
+      refresh_token: await this.issueRefreshToken(authenticatedUser.id),
       user: authenticatedUser,
     }
+  }
+
+  // Resend is only possible while a pending (password-verified) challenge
+  // exists, so knowing an email address alone cannot be used to spam OTPs.
+  async resendLoginOtp(email: string, meta: RequestMeta = {}) {
+    await this.assertNotLockedOut(email)
+
+    const user = await this.usersService.findOneByEmail(email)
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Sign in with your password first')
+    }
+
+    const challenge = await this.prisma.adminLoginOtp.findFirst({
+      where: { userId: user.id, verifiedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!challenge) {
+      throw new UnauthorizedException('Sign in with your password first')
+    }
+
+    if (challenge.resendAvailableAt > new Date()) {
+      const waitSeconds = Math.ceil((challenge.resendAvailableAt.getTime() - Date.now()) / 1000)
+      throw new HttpException(
+        `Please wait ${waitSeconds}s before requesting another code`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      )
+    }
+
+    const otp = this.generateOtp()
+    const now = new Date()
+    await this.prisma.adminLoginOtp.update({
+      where: { id: challenge.id },
+      data: {
+        otpHash: await bcrypt.hash(otp, 10),
+        attempts: 0,
+        expiresAt: new Date(now.getTime() + otpTtlMinutes() * 60 * 1000),
+        resendAvailableAt: new Date(now.getTime() + otpResendCooldownSeconds() * 1000),
+      },
+    })
+
+    await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+    await this.recordAuthAudit({
+      action: 'auth.otp.resent',
+      email: user.email,
+      userId: user.id,
+      tenantId: user.tenantId ?? null,
+      message: 'Login OTP re-sent by email',
+      meta,
+    })
+
+    return { otpRequired: true as const, email: user.email }
   }
 
   // Rotates the refresh token on every use: the old one is revoked and a new
@@ -180,10 +402,19 @@ export class AuthService {
           expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
         },
       })
-    } catch {
-      // If the RefreshToken migration hasn't been applied yet on this
-      // deployment, degrade to an access-token-only session instead of
-      // blocking login entirely.
+    } catch (error) {
+      // Fail closed in production: silently degrading to an access-token-only
+      // session would hide a broken/missing RefreshToken migration and leave
+      // sessions unrevocable. Outside production we degrade so local stacks
+      // without the migration still work.
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(
+          `Refresh token storage unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        )
+        throw new ServiceUnavailableException(
+          'Session storage is unavailable. Run the database migrations and try again.',
+        )
+      }
       return null
     }
     return rawToken
@@ -219,6 +450,90 @@ export class AuthService {
       refresh_token: await this.issueRefreshToken(authenticatedUser.id),
       user: authenticatedUser,
     }
+  }
+
+  private generateOtp() {
+    // crypto.randomInt is uniform and unbiased; pad so leading zeros survive.
+    return randomInt(0, 10 ** OTP_LENGTH).toString().padStart(OTP_LENGTH, '0')
+  }
+
+  private async deliverOtpEmail(to: string, recipientName: string, otp: string) {
+    const sent = await this.mailService.sendAdminLoginOtpEmail({
+      to,
+      recipientName,
+      otp,
+      expiresMinutes: otpTtlMinutes(),
+    })
+
+    if (!sent) {
+      if (process.env.NODE_ENV === 'production') {
+        // No OTP delivery = no login. Never fall back to passwordless-OTP-less
+        // sessions in production.
+        throw new ServiceUnavailableException(
+          'The verification email could not be sent. Contact the platform administrator.',
+        )
+      }
+      // Non-production only: SMTP is usually not configured on dev machines.
+      // Logging the code locally keeps the full OTP flow testable end-to-end.
+      this.logger.warn(`SMTP not configured — development login OTP for ${to}: ${otp}`)
+    }
+  }
+
+  // Account-level lockout on top of per-IP throttling: too many failed
+  // password or OTP attempts for one email inside the window rejects further
+  // tries regardless of source IP (defeats slow distributed guessing).
+  private async assertNotLockedOut(email: string) {
+    const windowStart = new Date(Date.now() - loginLockoutWindowMinutes() * 60 * 1000)
+    const failures = await this.prisma.auditLog.count({
+      where: {
+        action: { in: ['auth.login.failed', 'auth.otp.failed'] },
+        actorEmail: email.toLowerCase(),
+        createdAt: { gte: windowStart },
+      },
+    })
+
+    if (failures >= loginMaxFailures()) {
+      throw new HttpException(
+        `Too many failed sign-in attempts. Try again in ${loginLockoutWindowMinutes()} minutes.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      )
+    }
+  }
+
+  private async recordAuthAudit(input: {
+    action: string
+    email: string
+    userId?: string | null
+    tenantId?: string | null
+    severity?: 'INFO' | 'WARNING' | 'CRITICAL'
+    message: string
+    meta: RequestMeta
+  }) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          tenantId: input.tenantId ?? null,
+          userId: input.userId ?? null,
+          actorEmail: input.email.toLowerCase(),
+          action: input.action,
+          entity: 'AdminLogin',
+          severity: input.severity ?? 'INFO',
+          ipAddress: input.meta.ipAddress ?? null,
+          userAgent: input.meta.userAgent ?? null,
+          details: { message: input.message },
+        },
+      })
+    } catch (error) {
+      this.logger.error(
+        `Failed to write auth audit log (${input.action}): ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  private displayNameOf(user: { firstName?: string | null; lastName?: string | null; email: string }) {
+    return (
+      [user.firstName?.trim(), user.lastName?.trim()].filter(Boolean).join(' ') || user.email
+    )
   }
 
   private toAuthenticatedUser(input: {
@@ -298,15 +613,77 @@ export function setRefreshCookie(response: Response, token: string | null) {
   })
 }
 
+// The access token is delivered ONLY as an HttpOnly cookie. It must never be
+// readable from JavaScript (XSS cannot exfiltrate it) and never appear in a
+// response body. CSRF is mitigated by SameSite=Lax plus the locked-down
+// credentialed CORS policy in main.ts (admin origins only).
+export function setAdminAccessCookie(response: Response, token: string) {
+  response.cookie(ACCESS_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: ACCESS_TOKEN_TTL_MS,
+    path: '/',
+  })
+}
+
+export function clearAdminSessionCookies(response: Response) {
+  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/' })
+  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth' })
+}
+
+// Shared by auth + onboarding: apply both session cookies and strip the raw
+// tokens out of the JSON body so they are never exposed to page JavaScript.
+export function applySessionCookies<
+  T extends { access_token: string; refresh_token: string | null },
+>(response: Response, session: T): Omit<T, 'access_token' | 'refresh_token'> {
+  const { access_token, refresh_token, ...rest } = session
+  setAdminAccessCookie(response, access_token)
+  setRefreshCookie(response, refresh_token)
+  return rest
+}
+
+function requestMeta(request: Request): RequestMeta {
+  const forwardedFor = request.headers['x-forwarded-for']
+  const firstForwarded = Array.isArray(forwardedFor)
+    ? forwardedFor[0]
+    : forwardedFor?.split(',')[0]?.trim()
+
+  return {
+    ipAddress: (firstForwarded || request.ip || '').replace(/^::ffff:/, '') || null,
+    userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+  }
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('login')
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response) {
-    const { refresh_token, ...result } = await this.authService.login(dto.email, dto.password)
-    setRefreshCookie(response, refresh_token)
-    return result
+  // Step 1 — password check + OTP email. Also mounted at the legacy /login
+  // path so an out-of-date client fails loudly into the OTP flow instead of
+  // silently receiving a session without OTP.
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Post(['login', 'login/start'])
+  async loginStart(@Body() dto: LoginStartDto, @Req() request: Request) {
+    return this.authService.startLogin(dto.email, dto.password, requestMeta(request))
+  }
+
+  // Step 2 — OTP check, issues the session as HttpOnly cookies.
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @Post('login/verify')
+  async loginVerify(
+    @Body() dto: LoginVerifyDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const session = await this.authService.verifyLogin(dto.email, dto.otp, requestMeta(request))
+    return applySessionCookies(response, session)
+  }
+
+  @Throttle({ default: { ttl: 300_000, limit: 3 } })
+  @Post('login/resend')
+  async loginResend(@Body() dto: LoginResendDto, @Req() request: Request) {
+    return this.authService.resendLoginOtp(dto.email, requestMeta(request))
   }
 
   // The browser sends the httpOnly refresh cookie automatically; the access
@@ -318,15 +695,14 @@ export class AuthController {
     if (!token) {
       throw new UnauthorizedException('No refresh token presented')
     }
-    const { refresh_token, ...result } = await this.authService.refresh(token)
-    setRefreshCookie(response, refresh_token)
-    return result
+    const session = await this.authService.refresh(token)
+    return applySessionCookies(response, session)
   }
 
   @Post('logout')
   async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     await this.authService.logout(extractRefreshCookie(request))
-    response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth' })
+    clearAdminSessionCookies(response)
     return { ok: true }
   }
 
@@ -344,6 +720,7 @@ export class AuthController {
     ConfigModule,
     PrismaModule,
     UsersModule,
+    MailModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

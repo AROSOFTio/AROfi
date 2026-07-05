@@ -35,7 +35,8 @@ export type AdminSessionResponse = {
 }
 
 export type TenantRegistrationResponse = {
-  access_token: string
+  // Session is delivered as HttpOnly cookies set by the API — no token in
+  // the body.
   user: AdminSessionResponse['user']
   tenant: {
     id: string

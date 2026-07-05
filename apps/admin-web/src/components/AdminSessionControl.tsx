@@ -1,18 +1,12 @@
 'use client'
 
-import { clearBrowserAdminSession } from '@/lib/admin-session'
-
-const browserApiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api'
+import { endAdminSession } from '@/lib/admin-session'
 
 export default function AdminSessionControl() {
   async function handleLogout() {
-    try {
-      await fetch(`${browserApiBase}/auth/logout`, { method: 'POST', credentials: 'include' })
-    } catch {
-      // Best-effort: even if revocation fails, clearing the local session and
-      // leaving still blocks this browser from acting as the user.
-    }
-    clearBrowserAdminSession()
+    // Revokes the refresh token and clears the HttpOnly session cookies
+    // server-side — browser JS cannot delete HttpOnly cookies itself.
+    await endAdminSession()
     window.location.href = '/login'
   }
 

@@ -1,10 +1,5 @@
 'use client'
 import { useEffect, useState } from 'react'
-import {
-  clearBrowserAdminSession,
-  getBrowserAdminToken,
-  setBrowserAdminSession,
-} from '@/lib/admin-session'
 
 function resolveNextPath() {
   if (typeof window === 'undefined') {
@@ -20,11 +15,23 @@ function resolveNextPath() {
   return requestedPath
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const body = await response.json().catch(() => null)
+  const message = body?.message
+  if (Array.isArray(message)) return message.join(', ')
+  return typeof message === 'string' && message ? message : fallback
+}
+
 export default function LoginPage() {
+  const [step, setStep] = useState<'credentials' | 'otp'>('credentials')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
+  const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
+  const [resendCountdown, setResendCountdown] = useState(0)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
   const nextPath = resolveNextPath()
 
@@ -32,29 +39,18 @@ export default function LoginPage() {
     let isMounted = true
 
     async function validateExistingSession() {
-      const token = getBrowserAdminToken()
-
       try {
+        // The HttpOnly session cookie rides along automatically.
         const response = await fetch(`${apiBaseUrl}/auth/me`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           credentials: 'include',
           cache: 'no-store',
         })
 
-        if (!isMounted) {
-          return
-        }
-
-        if (response.ok) {
+        if (isMounted && response.ok) {
           window.location.href = nextPath
-          return
         }
-
-        clearBrowserAdminSession()
       } catch {
-        if (isMounted) {
-          clearBrowserAdminSession()
-        }
+        // Not signed in — stay on the login form.
       }
     }
 
@@ -65,13 +61,26 @@ export default function LoginPage() {
     }
   }, [apiBaseUrl, nextPath])
 
-  async function handleSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    if (!resendAvailableAt) {
+      return
+    }
+    const tick = () => {
+      setResendCountdown(Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000)))
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [resendAvailableAt])
+
+  async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setInfo('')
 
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/login`, {
+      const res = await fetch(`${apiBaseUrl}/auth/login/start`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -79,15 +88,73 @@ export default function LoginPage() {
       })
 
       if (!res.ok) {
-        throw new Error('Invalid credentials')
+        setError(await readErrorMessage(res, 'Invalid email or password. Please try again.'))
+        return
       }
 
       const data = await res.json()
-      const token = data.access_token as string
-      setBrowserAdminSession(token)
+      setStep('otp')
+      setOtp('')
+      setInfo(`We emailed a 6-digit verification code to ${email}. It expires in a few minutes.`)
+      if (typeof data?.resendAvailableAt === 'string') {
+        setResendAvailableAt(new Date(data.resendAvailableAt).getTime())
+      }
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleOtpSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch(`${apiBaseUrl}/auth/login/verify`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp: otp.trim() }),
+      })
+
+      if (!res.ok) {
+        setError(await readErrorMessage(res, 'Incorrect or expired verification code.'))
+        return
+      }
+
+      // Session cookies (HttpOnly) were set by the API on this response.
       window.location.href = nextPath
     } catch {
-      setError('Invalid email or password. Please try again.')
+      setError('Could not reach the server. Check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    if (resendCountdown > 0 || loading) {
+      return
+    }
+    setLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch(`${apiBaseUrl}/auth/login/resend`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (!res.ok) {
+        setError(await readErrorMessage(res, 'Could not resend the code. Sign in again.'))
+        return
+      }
+      setInfo(`A new verification code was sent to ${email}.`)
+      setResendAvailableAt(Date.now() + 60_000)
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -122,40 +189,115 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              className="form-input"
-              type="email"
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              className="form-input"
-              type="password"
-              placeholder="**********"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <button
-            type="submit"
-            className="btn btn-primary btn-block"
-            style={{ marginTop: 8 }}
-            disabled={loading}
+        {info && !error && (
+          <div
+            style={{
+              background: 'rgba(16,185,129,0.1)',
+              border: '1px solid rgba(16,185,129,0.3)',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: 13,
+              color: '#34d399',
+              marginBottom: 18,
+            }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+            {info}
+          </div>
+        )}
+
+        {step === 'credentials' ? (
+          <form onSubmit={handleCredentialsSubmit}>
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="name@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input
+                className="form-input"
+                type="password"
+                placeholder="**********"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              style={{ marginTop: 8 }}
+              disabled={loading}
+            >
+              {loading ? 'Checking...' : 'Continue'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleOtpSubmit}>
+            <div className="form-group">
+              <label className="form-label">Verification Code</label>
+              <input
+                className="form-input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="123456"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                required
+                autoFocus
+                autoComplete="one-time-code"
+                style={{ letterSpacing: 8, textAlign: 'center', fontSize: 20 }}
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              style={{ marginTop: 8 }}
+              disabled={loading || otp.length !== 6}
+            >
+              {loading ? 'Verifying...' : 'Verify & Sign In'}
+            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('credentials')
+                  setOtp('')
+                  setError('')
+                  setInfo('')
+                }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendCountdown > 0 || loading}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: resendCountdown > 0 ? 'var(--text-muted)' : 'var(--green)',
+                  cursor: resendCountdown > 0 ? 'default' : 'pointer',
+                  padding: 0,
+                  fontWeight: 700,
+                }}
+              >
+                {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+              </button>
+            </div>
+          </form>
+        )}
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
           Need a tenant workspace? <a href="/?register=1" style={{ color: 'var(--green)', fontWeight: 700 }}>Create one here</a>.

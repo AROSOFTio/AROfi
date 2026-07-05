@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
-import { getAppDashboardUrl, setBrowserAdminSession } from '@/lib/admin-session'
+import { getAppDashboardUrl } from '@/lib/admin-session'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 
 // Plan/payment picker is hidden from public signup for now — everyone lands
@@ -152,8 +152,9 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
         throw new Error(message ?? 'Unable to create workspace.')
       }
 
+      // The API set the HttpOnly session cookies on this response — nothing
+      // to store from JavaScript.
       const registration = body as TenantRegistrationResponse
-      setBrowserAdminSession(registration.access_token)
       setSuccess(registration)
       setPhoneNumber(formState.phoneNumber.trim())
 

@@ -148,6 +148,50 @@ export class MailService {
     return this.sendMail({ to: input.to, subject, html: this.renderLayout(body), text })
   }
 
+  async sendAdminLoginOtpEmail(input: {
+    to: string
+    recipientName: string
+    otp: string
+    expiresMinutes: number
+  }): Promise<boolean> {
+    const subject = `${input.otp} is your AROFi sign-in code`
+    const body = `
+      <h2 style="color:#2563EB; margin-top:0;">Hi ${this.escapeHtml(input.recipientName)},</h2>
+      <p>Use this code to finish signing in to the AROFi admin console:</p>
+      <p style="font-size:32px; font-weight:800; letter-spacing:8px; margin:24px 0; font-family:monospace;">${this.escapeHtml(input.otp)}</p>
+      <p style="color:#64748b; font-size:13px;">The code expires in ${input.expiresMinutes} minutes. If you did not try to sign in, change your password immediately.</p>
+    `
+    const text = `Your AROFi sign-in code is ${input.otp}. It expires in ${input.expiresMinutes} minutes. If you did not try to sign in, change your password immediately.`
+
+    return this.sendMail({ to: input.to, subject, html: this.renderLayout(body), text })
+  }
+
+  // Operational alert to the platform operator (ALERT_EMAIL). Used for
+  // production incidents: repeated CoA disconnect failures, payment
+  // mismatches, stale RADIUS accounting, router offline storms.
+  async sendOperationalAlertEmail(input: {
+    subject: string
+    lines: string[]
+  }): Promise<boolean> {
+    const to = this.configService.get<string>('ALERT_EMAIL')
+    if (!to) {
+      this.logger.warn(`ALERT_EMAIL is not configured — dropping operational alert: ${input.subject}`)
+      return false
+    }
+
+    const body = `
+      <h2 style="color:#b91c1c; margin-top:0;">AROFi production alert</h2>
+      <p style="font-weight:700;">${this.escapeHtml(input.subject)}</p>
+      ${input.lines.map((line) => `<p style="margin:6px 0; color:#0f172a;">${this.escapeHtml(line)}</p>`).join('')}
+    `
+    return this.sendMail({
+      to,
+      subject: `[AROFi ALERT] ${input.subject}`,
+      html: this.renderLayout(body),
+      text: [input.subject, ...input.lines].join('\n'),
+    })
+  }
+
   async sendSubscriptionExpiryReminderEmail(input: {
     to: string
     tenantName: string

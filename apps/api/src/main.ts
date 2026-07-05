@@ -12,7 +12,10 @@ import * as compression from 'compression';
 
 async function bootstrap() {
   assertRequiredProductionConfig()
-  const app = await NestFactory.create(AppModule);
+  // rawBody is required for HMAC verification of payment provider webhooks
+  // (payments.service.ensureWebhookSecret) — the signature is computed over
+  // the exact bytes the provider sent, not a re-serialization.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   // Behind Coolify's reverse proxy, req.ip otherwise resolves to the proxy's
   // own address for every request platform-wide, which collapses the global
   // ThrottlerGuard's per-IP bucket into one shared bucket for all tenants.
@@ -23,25 +26,32 @@ async function bootstrap() {
     level: 5,
     threshold: 1024,
   }));
-  app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (isLocalOrHotspotOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
+  // Two-tier CORS. Trusted admin origins (our own domains + the configured
+  // allowlist) get credentials so the HttpOnly admin session cookie works
+  // cross-subdomain. Hotspot/captive-portal origins (private LAN IPs,
+  // wifi.login) only ever call public portal endpoints and are served
+  // WITHOUT credentials — a page on a random LAN origin must never be able
+  // to ride an admin's session cookie (CSRF/credentialed-CORS hardening).
+  app.enableCors((req: { headers: Record<string, string | string[] | undefined> }, callback: (err: Error | null, options?: Record<string, unknown>) => void) => {
+    const rawOrigin = req.headers?.origin;
+    const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
 
-      const allowed = resolveAllowedOrigins();
-      if (allowed === true || (Array.isArray(allowed) && allowed.includes(origin))) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
-    credentials: true,
+    if (!origin) {
+      callback(null, { origin: true, credentials: false });
+      return;
+    }
+
+    if (isTrustedAdminOrigin(origin)) {
+      callback(null, { origin: true, credentials: true });
+      return;
+    }
+
+    if (isHotspotPortalOrigin(origin)) {
+      callback(null, { origin: true, credentials: false });
+      return;
+    }
+
+    callback(null, { origin: false });
   });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -60,22 +70,20 @@ bootstrap();
 // e.g. "evil-arofi.net.attacker.com" and pass CORS with credentials.
 const TRUSTED_HOST_SUFFIXES = ['arosoftlabs.com', 'arofi.arosoft.io', 'arofi.net'];
 
-function isLocalOrHotspotOrigin(origin: string) {
-  // Private-network / on-device hotspot origins. startsWith is safe here —
-  // a remote attacker's page can't be served from a private IP the victim's
-  // browser would treat as same-origin, so this can't be spoofed by suffixing.
-  if (
-    origin.startsWith('http://10.') ||
-    origin.startsWith('http://192.168.') ||
-    origin.startsWith('http://172.')
-  ) {
-    return true;
-  }
-
+// Origins that may make CREDENTIALED requests (admin session cookie).
+function isTrustedAdminOrigin(origin: string) {
   // Explicit local-dev bypass — NODE_ENV must literally be "development",
   // not merely "not production" (unset/typo'd/staging NODE_ENV must still
   // enforce the allowlist below).
   if (process.env.NODE_ENV === 'development') {
+    return true;
+  }
+
+  const configured = (process.env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (configured.includes(origin)) {
     return true;
   }
 
@@ -86,26 +94,30 @@ function isLocalOrHotspotOrigin(origin: string) {
     return false;
   }
 
-  if (hostname === 'wifi.login' || hostname.endsWith('.wifi.login') || /\.wifi$/i.test(hostname)) {
-    return true;
-  }
-
   return TRUSTED_HOST_SUFFIXES.some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
 }
 
-function resolveAllowedOrigins() {
-  const configured = process.env.CORS_ALLOWED_ORIGINS
-  if (!configured) {
-    // Same explicit-dev-only rule as isLocalOrHotspotOrigin above — an unset
-    // or mistyped NODE_ENV (staging, undefined, etc.) must not silently
-    // reflect every Origin back with credentials: true.
-    return process.env.NODE_ENV === 'development' ? true : []
+// Origins that may make UNCREDENTIALED requests only (captive portal pages
+// served by the MikroTik hotspot / private LAN). startsWith is safe here —
+// a remote attacker's page can't be served from a private IP the victim's
+// browser would treat as same-origin, so this can't be spoofed by suffixing.
+function isHotspotPortalOrigin(origin: string) {
+  if (
+    origin.startsWith('http://10.') ||
+    origin.startsWith('http://192.168.') ||
+    origin.startsWith('http://172.')
+  ) {
+    return true;
   }
 
-  return configured
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean)
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  return hostname === 'wifi.login' || hostname.endsWith('.wifi.login') || /\.wifi$/i.test(hostname);
 }
 
 function assertRequiredProductionConfig() {
