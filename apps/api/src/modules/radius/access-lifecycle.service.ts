@@ -344,26 +344,42 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     for (const attempt of attempts) {
       try {
         const secret = process.env.RADIUS_DISCONNECT_SECRET?.trim() || process.env.RADIUS_SHARED_SECRET
-        // RADIUS_DISCONNECT_HOST must be BLANK in .env so we resolve per-router.
-        // CoA Disconnect-Request must go to the MikroTik router on port 3799,
-        // NOT to the FreeRADIUS container. MikroTik uses the same shared secret for CoA.
-        let host = process.env.RADIUS_DISCONNECT_HOST?.trim() || ''
-        if (!host && attempt.routerId) {
+        const port = process.env.RADIUS_DISCONNECT_PORT ?? '3799'
+        if (!secret) {
+          throw new Error('RADIUS disconnect secret is not configured')
+        }
+
+        // Build the list of CoA targets, most-reachable first. The MikroTik
+        // router (NOT the FreeRADIUS container) is the CoA target on port 3799,
+        // and it accepts incoming CoA on all interfaces (/radius incoming
+        // accept=yes, set during onboarding), using the shared secret.
+        //
+        // CRITICAL for nationwide CGNAT: most routers sit behind carrier-grade
+        // NAT, so their public/WAN IP is NOT reachable for an inbound CoA — the
+        // "kick the device off now" packet silently fails and the customer is
+        // left "connected but no internet" until Session-Timeout eventually
+        // logs them out at the router. The WireGuard tunnel IP (10.8.1.x) IS
+        // reachable from this server over the WG interface, so we try it FIRST
+        // and fall back to the WAN IP for routers without a tunnel (RouterOS 6).
+        const candidates: string[] = []
+        const forcedHost = process.env.RADIUS_DISCONNECT_HOST?.trim()
+        if (forcedHost) {
+          candidates.push(forcedHost)
+        } else if (attempt.routerId) {
           const router = await this.prisma.router.findUnique({
             where: { id: attempt.routerId },
           })
           if (router) {
-            host = router.radiusNasIpAddress ?? router.host ?? ''
+            if (router.remoteSstpIp) candidates.push(router.remoteSstpIp)
+            if (router.radiusNasIpAddress) candidates.push(router.radiusNasIpAddress)
+            if (router.host) candidates.push(router.host)
           }
         }
-        if (!host) {
+        const targets = [...new Set(candidates.filter(Boolean))]
+        if (targets.length === 0) {
           throw new Error(
-            'CoA target unresolvable — router.radiusNasIpAddress is null. Re-provision the router so it reports its WAN IP.',
+            'CoA target unresolvable — no tunnel IP, NAS IP or host for this router. Re-provision the router so it reports its WAN IP or sets up remote access.',
           )
-        }
-        const port = process.env.RADIUS_DISCONNECT_PORT ?? '3799'
-        if (!secret) {
-          throw new Error('RADIUS disconnect secret is not configured')
         }
 
         const packet = [
@@ -372,7 +388,22 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           attempt.macAddress ? `Calling-Station-Id = ${attempt.macAddress}` : '',
         ].filter(Boolean).join('\n')
 
-        await this.runRadclientDisconnect(host, port, secret, packet)
+        let lastError: unknown = null
+        let delivered = false
+        for (const host of targets) {
+          try {
+            await this.runRadclientDisconnect(host, port, secret, packet)
+            delivered = true
+            break
+          } catch (err) {
+            lastError = err
+          }
+        }
+        if (!delivered) {
+          throw lastError instanceof Error
+            ? lastError
+            : new Error(`All CoA targets failed (${targets.join(', ')})`)
+        }
 
         await this.prisma.disconnectionAttempt.update({
           where: { id: attempt.id },
