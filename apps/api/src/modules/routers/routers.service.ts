@@ -19,6 +19,7 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { CreateRouterDto } from './dto/create-router.dto'
@@ -31,16 +32,20 @@ import { RemoteProxyService } from './remote-proxy.service'
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutersService.name)
-  // The router heartbeats every 15s. A LIVE router must have signalled within
-  // ~2 missed beats so the dashboard flips to offline within ~30s of the box
-  // going down (and back to live within one beat of it returning).
-  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '30', 10)
-  private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '120', 10)
+  // The router heartbeats every 5s (see MikrotikService.buildHeartbeatScheduler).
+  // State machine, driven by the freshest signal of any kind:
+  //   LIVE    — signal within ROUTER_LIVE_WINDOW_SECONDS (~2 missed beats)
+  //   STALE   — suspected offline: no signal within the live window but
+  //             within ROUTER_STALE_WINDOW_SECONDS
+  //   OFFLINE — confirmed offline: nothing within the stale window
+  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '12', 10)
+  private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '30', 10)
   private readonly routerProbeIntervalMs = Number.parseInt(process.env.ROUTER_PROBE_INTERVAL_MS ?? '8000', 10)
   private probeTimer?: ReturnType<typeof setInterval>
   private alertsTimer?: ReturnType<typeof setInterval>
   private probing = false
   private alertedRouters = new Set<string>()
+  private staleRouters = new Set<string>()
 
   private readonly authRadiusEventTypes = new Set<RadiusEventType>([
     RadiusEventType.ACCESS_ACCEPT,
@@ -107,6 +112,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     private readonly mikrotikService: MikrotikService,
     private readonly routerCredentialsService: RouterCredentialsService,
     private readonly remoteProxyService: RemoteProxyService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   onModuleInit() {
@@ -126,11 +132,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     // Sync all existing router VPN credentials to RADIUS database
     void this.syncAllRouterVpnCredentialsToRadius()
 
-    // Start router alert checking loop if alerts are enabled
+    // Start router alert checking loop if alerts are enabled. Runs every 5s
+    // so OFFLINE/ONLINE transitions reach the dashboard (via the realtime
+    // event stream) within seconds of the stale window elapsing.
     if (process.env.ROUTER_ALERTS_ENABLED !== 'false') {
       this.alertsTimer = setInterval(() => {
         void this.checkRouterAlerts()
-      }, 15000)
+      }, Number.parseInt(process.env.ROUTER_ALERTS_INTERVAL_MS ?? '5000', 10))
       if (this.alertsTimer && typeof this.alertsTimer.unref === 'function') {
         this.alertsTimer.unref()
       }
@@ -192,7 +200,14 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
-      select: { id: true, status: true, onboardingStatus: true, radiusNasIpAddress: true },
+      select: {
+        id: true,
+        tenantId: true,
+        status: true,
+        onboardingStatus: true,
+        radiusNasIpAddress: true,
+        lastSeenAt: true,
+      },
     })
 
     if (!router) {
@@ -206,10 +221,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     ]
     const shouldAdvanceOnboarding = pendingStatuses.includes(router.onboardingStatus as RouterOnboardingStatus)
 
+    const now = new Date()
     await this.prisma.router.update({
       where: { id: router.id },
       data: {
-        lastSeenAt: new Date(),
+        lastSeenAt: now,
         ...(shouldAdvanceOnboarding
           ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
           : {}),
@@ -219,6 +235,24 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           : {}),
       },
     })
+
+    // Every heartbeat feeds the dashboard event stream. A beat after a gap
+    // longer than the live window is a back-online transition.
+    const previousAgeSeconds = router.lastSeenAt
+      ? Math.round((now.getTime() - router.lastSeenAt.getTime()) / 1000)
+      : null
+    this.realtimeEvents.publish('router.heartbeat', {
+      tenantId: router.tenantId,
+      routerId: router.id,
+      data: { sourceIp: normalizedSourceIp || null, previousAgeSeconds },
+    })
+    if (previousAgeSeconds === null || previousAgeSeconds > this.routerLiveWindowSeconds) {
+      this.realtimeEvents.publish('router.online', {
+        tenantId: router.tenantId,
+        routerId: router.id,
+        data: { previousAgeSeconds },
+      })
+    }
 
     return { ok: true }
   }
@@ -2120,7 +2154,22 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         })
         const live = this.resolveRouterLiveState(router, activeSessions)
         const isOffline = live.liveState === 'OFFLINE'
+        const isStale = live.liveState === 'STALE'
         const hasAlerted = this.alertedRouters.has(router.id)
+        const wasStale = this.staleRouters.has(router.id)
+
+        // STALE = suspected offline. Pushed to the dashboard immediately so
+        // operators see trouble before the confirmed-offline threshold.
+        if (isStale && !wasStale) {
+          this.staleRouters.add(router.id)
+          this.realtimeEvents.publish('router.stale', {
+            tenantId: router.tenantId,
+            routerId: router.id,
+            data: { secondsSinceLastSignal: live.secondsSinceLastSignal },
+          })
+        } else if (!isStale && wasStale) {
+          this.staleRouters.delete(router.id)
+        }
 
         if (isOffline && !hasAlerted) {
           this.alertedRouters.add(router.id)
@@ -2128,12 +2177,27 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             where: { id: router.id },
             data: { lastOfflineAt: new Date() },
           })
+          this.realtimeEvents.publish('router.offline', {
+            tenantId: router.tenantId,
+            routerId: router.id,
+            data: { secondsSinceLastSignal: live.secondsSinceLastSignal },
+          })
+          this.realtimeEvents.publish('alert', {
+            tenantId: router.tenantId,
+            routerId: router.id,
+            data: { kind: 'router_offline', routerName: router.name },
+          })
           await this.sendRouterAlert(router, 'OFFLINE', live.secondsSinceLastSignal)
         } else if (!isOffline && hasAlerted) {
           this.alertedRouters.delete(router.id)
           await this.prisma.router.update({
             where: { id: router.id },
             data: { lastReconnectedAt: new Date() },
+          })
+          this.realtimeEvents.publish('router.online', {
+            tenantId: router.tenantId,
+            routerId: router.id,
+            data: { recovered: true },
           })
           await this.sendRouterAlert(router, 'ONLINE', 0)
         }

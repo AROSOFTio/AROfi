@@ -442,9 +442,11 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
+    // 5s production default pairs with ROUTER_LIVE_WINDOW_SECONDS=12 (~2
+    // missed beats) so online/offline flips reach the dashboard in seconds.
     const intervalSeconds = Math.max(
       5,
-      Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '15', 10),
+      Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '5', 10),
     )
     // URLs contain no spaces, so they need no inner quoting inside the script
     // source — this keeps the generated .rsc free of fragile nested escapes.
