@@ -12,15 +12,21 @@ server default {
 	}
 
 	authorize {
-		# Strip Message-Authenticator (attr 80) ONLY from localhost requests
-		# (the SSTP host authenticating via pppd). pppd 2.5.2's radius.so adds
-		# MA to requests, causing FreeRADIUS to mirror it in responses, and
-		# pppd's old libfreeradius-client cannot validate MA in responses
-		# ("invalid reply digest"). MikroTik hotspot traffic keeps its
-		# Message-Authenticator intact (BlastRADIUS mitigation) — enforcement
-		# for those clients is controlled per-client in clients.conf via
-		# RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR.
-		if (Packet-Src-IP-Address == 127.0.0.1) {
+		# Strip Message-Authenticator (attr 80) from the SSTP host's pppd
+		# requests. pppd 2.5.2's radius.so adds MA to requests, causing
+		# FreeRADIUS to mirror it in responses, and pppd's old
+		# libfreeradius-client cannot validate MA in responses ("invalid reply
+		# digest") — so the router loops "failed to authenticate ourselves".
+		#
+		# The source IP alone is NOT reliable: the SSTP server reaches
+		# FreeRADIUS through the host->Docker port-forward, so the packet
+		# arrives from the Docker bridge gateway (172.x.x.1), never 127.0.0.1.
+		# So we also match the router VPN login by its username prefix
+		# (router-<uuid>), which is exactly the pppd/SSTP auth. MikroTik hotspot
+		# traffic (customer vouchers/packages) keeps its Message-Authenticator
+		# intact (BlastRADIUS mitigation) — enforcement for those is controlled
+		# per-client in clients.conf via RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR.
+		if (Packet-Src-IP-Address == 127.0.0.1 || &User-Name =~ /^router-/) {
 			update request {
 				Message-Authenticator !* ANY
 			}
