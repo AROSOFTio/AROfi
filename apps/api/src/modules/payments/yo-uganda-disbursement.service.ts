@@ -42,13 +42,7 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
 </AutoCreate>`
 
     try {
-      const response = await fetch(baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml',
-        },
-        body: xmlPayload,
-      })
+      const response = await this.postToYo(baseUrl, xmlPayload)
 
       const responseXml = await response.text()
       if (!response.ok) {
@@ -99,13 +93,7 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
 </AutoCreate>`
 
     try {
-      const response = await fetch(baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml',
-        },
-        body: xmlPayload,
-      })
+      const response = await this.postToYo(baseUrl, xmlPayload)
 
       const responseXml = await response.text()
       if (!response.ok) {
@@ -165,6 +153,34 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
     if (upper === 'FAILED' || upper === 'FAILED_UNKNOWN') return 'FAILED'
     if (upper === 'CANCELLED' || upper === 'CANCELED') return 'CANCELLED'
     return 'PENDING'
+  }
+
+  // See YoUgandaCollectionService.postToYo — without a timeout a non-responsive
+  // Yo! endpoint (commonly an un-whitelisted server IP) hangs the withdrawal
+  // request forever, so the operator sees no confirmation and no error.
+  private async postToYo(baseUrl: string, xmlPayload: string): Promise<Response> {
+    const timeoutMs = Number.parseInt(this.configService.get<string>('YO_UGANDA_TIMEOUT_MS') ?? '25000', 10)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml' },
+        body: xmlPayload,
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ServiceUnavailableException(
+          `Yo! Uganda did not respond within ${Math.round(timeoutMs / 1000)}s. This usually means this server's IP is not whitelisted on your Yo! account, or Yo! is unreachable. The withdrawal was not sent.`,
+        )
+      }
+      throw new ServiceUnavailableException(
+        `Could not reach Yo! Uganda: ${error instanceof Error ? error.message : 'network error'}. The withdrawal was not sent.`,
+      )
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   private baseUrl() {

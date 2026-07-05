@@ -844,6 +844,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         setStatusMessage('Enter your Mobile Money PIN on your phone to approve.')
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       }
+    } catch (error) {
+      // Without this, a network/timeout error left the user staring at a
+      // silent, un-spinning button with no explanation ("no response at all").
+      setErrorMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not reach the payment service. Check your connection and try again.',
+      )
     } finally {
       setIsPaymentLoading(false)
     }

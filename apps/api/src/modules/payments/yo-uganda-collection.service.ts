@@ -44,13 +44,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
 </AutoCreate>`
 
     try {
-      const response = await fetch(baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml',
-        },
-        body: xmlPayload,
-      })
+      const response = await this.postToYo(baseUrl, xmlPayload)
 
       const responseXml = await response.text()
       if (!response.ok) {
@@ -101,13 +95,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
 </AutoCreate>`
 
     try {
-      const response = await fetch(baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml',
-        },
-        body: xmlPayload,
-      })
+      const response = await this.postToYo(baseUrl, xmlPayload)
 
       const responseXml = await response.text()
       if (!response.ok) {
@@ -171,6 +159,36 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
     if (upper === 'FAILED' || upper === 'FAILED_UNKNOWN') return 'FAILED'
     if (upper === 'CANCELLED' || upper === 'CANCELED') return 'CANCELLED'
     return 'PENDING'
+  }
+
+  // Yo! Uganda has no request timeout by default, so a network black-hole
+  // (most often the server's outbound IP not being whitelisted on Yo's side)
+  // makes the fetch hang indefinitely — the customer's phone never rings and
+  // the portal shows nothing. Abort after a bounded wait and surface a clear,
+  // actionable error instead of silence.
+  private async postToYo(baseUrl: string, xmlPayload: string): Promise<Response> {
+    const timeoutMs = Number.parseInt(this.configService.get<string>('YO_UGANDA_TIMEOUT_MS') ?? '25000', 10)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml' },
+        body: xmlPayload,
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ServiceUnavailableException(
+          `Yo! Uganda did not respond within ${Math.round(timeoutMs / 1000)}s. This usually means this server's IP is not whitelisted on your Yo! account, or Yo! is unreachable. Payment was not taken.`,
+        )
+      }
+      throw new ServiceUnavailableException(
+        `Could not reach Yo! Uganda: ${error instanceof Error ? error.message : 'network error'}. Payment was not taken.`,
+      )
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   private baseUrl() {
