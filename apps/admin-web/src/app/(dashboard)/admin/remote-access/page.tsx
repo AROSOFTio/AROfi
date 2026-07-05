@@ -193,7 +193,7 @@ export default function RemoteAccessPage() {
           </div>
           <div style={{ display: 'grid', gap: 2 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Remote Winbox Access</h1>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>WireGuard VPN tunnel for CGNAT traversal — works on all RouterOS 7 routers</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>SSTP VPN tunnel for CGNAT traversal — works on RouterOS 6 and 7</span>
           </div>
         </div>
 
@@ -303,7 +303,7 @@ export default function RemoteAccessPage() {
                 <span style={{ color: 'var(--text-secondary)' }}>
                   Tunnel Reachability
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Live check of the router's WireGuard tunnel - separate from port mapping above
+                    Live check of the router's SSTP tunnel - separate from port mapping above
                   </div>
                 </span>
                 <strong style={{ display: 'flex', alignItems: 'center', gap: 6, textAlign: 'right' }}>
@@ -344,12 +344,12 @@ export default function RemoteAccessPage() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <AlertCircle size={15} style={{ color: '#d97706', flexShrink: 0 }} />
-                  <strong>WireGuard tunnel is not connected</strong>
+                  <strong>SSTP tunnel is not connected</strong>
                 </div>
                 <span>
                   The SSTP tunnel is not connected. Go to the{' '}
                   <button type="button" onClick={() => setActiveTab('install')} style={{ background: 'none', border: 'none', color: '#d97706', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: 13 }}>Install tab</button>{' '}
-                  and re-run the install script — it now uses WireGuard which works on all RouterOS 7 routers without any device-mode restrictions.
+                  and re-run the install script. On RouterOS 6 it connects directly; on some RouterOS 7 boards you may need to enable enterprise device-mode once (the script tells you if so).
                 </span>
               </div>
             )}
@@ -406,7 +406,7 @@ export default function RemoteAccessPage() {
             </h3>
 
 
-            {/* WireGuard info banner — shown once VPS is configured */}
+            {/* SSTP info banner */}
             {selectedRouter?.wgServerConfigured !== false && (
               <div style={{
                 padding: 14,
@@ -419,10 +419,11 @@ export default function RemoteAccessPage() {
               }}>
                 <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
                 <div style={{ display: 'grid', gap: 4 }}>
-                  <strong style={{ fontSize: 13, color: '#166534' }}>WireGuard — works on all RouterOS 7 routers, no device-mode change needed</strong>
+                  <strong style={{ fontSize: 13, color: '#166534' }}>SSTP — works on RouterOS 6 and 7</strong>
                   <span style={{ fontSize: 12.5, color: '#15803d', lineHeight: 1.5 }}>
-                    AROFi uses WireGuard for remote access. It is built into RouterOS 7 and does not require enterprise mode.
-                    If you previously saw "SSTP client blocked", this script fixes that permanently.
+                    AROFi uses an SSTP tunnel for remote access. RouterOS 6 connects directly. On some RouterOS 7
+                    consumer boards SSTP is blocked by device-mode — the install script detects this and prints the
+                    one-time <code>/system device-mode update mode=enterprise</code> step (then press the reset button).
                   </span>
                 </div>
               </div>
