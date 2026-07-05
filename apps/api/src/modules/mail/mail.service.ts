@@ -27,11 +27,29 @@ export class MailService {
     }
 
     if (!this.transporter) {
+      // Some self-managed/shared-hosting mail servers (cPanel-style
+      // "mail.<domain>" boxes) present a self-signed certificate rather than
+      // one from a public CA. Node's default TLS validation rejects that
+      // outright ("self-signed certificate"), even though the connection is
+      // still fully encrypted — it's the certificate's issuer that's
+      // untrusted, not the encryption itself. This is an explicit, opt-in
+      // exception for a mail host YOU control; it does not disable TLS, only
+      // the public-CA-chain check. Prefer fixing the root cause instead
+      // (enable AutoSSL / install a Let's Encrypt cert on the mail host) —
+      // this flag is a deliberate stopgap, not a permanent setting.
+      const allowSelfSigned = this.configService.get<string>('SMTP_ALLOW_SELF_SIGNED_CERT') === 'true'
+      if (allowSelfSigned) {
+        this.logger.warn(
+          `SMTP_ALLOW_SELF_SIGNED_CERT=true — accepting ${host}'s certificate without public CA validation. Fix the mail server's certificate (e.g. AutoSSL) and remove this flag when possible.`,
+        )
+      }
+
       this.transporter = nodemailer.createTransport({
         host,
         port,
         secure: port === 465,
         auth: { user, pass },
+        ...(allowSelfSigned ? { tls: { rejectUnauthorized: false } } : {}),
       })
     }
 
