@@ -219,7 +219,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    mem_limit: 192m
+    # 192m was too tight for FreeRADIUS + the rlm_sql connection pool: the
+    # server was OOM-killed and restart-looped (health flapped "unhealthy"),
+    # which dropped live-session tracking and CoA/disconnects. 384m gives the
+    # SQL pool headroom while staying small on a 7.8GB host.
+    mem_limit: 384m
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x radiusd || pgrep -x freeradius || exit 1"]
       interval: 15s
