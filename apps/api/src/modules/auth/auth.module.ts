@@ -626,11 +626,45 @@ function extractRefreshCookie(request: Request) {
 // app.arofi.net/dashboard (see getAppDashboardUrl in admin-web) — without a
 // shared parent-domain cookie, that cookie never reaches app.arofi.net and
 // the dashboard's SSR auth check bounces the new user straight to /login.
-// Set AUTH_COOKIE_DOMAIN=.arofi.net in production to share the session
-// across both hosts; leave unset for single-host/local deployments.
-const COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || undefined
+//
+// The cookie domain is resolved automatically from the request host so this
+// works with zero configuration: a request to app.arofi.net (or arofi.net)
+// yields ".arofi.net", which both hosts share. Set AUTH_COOKIE_DOMAIN to
+// force a specific value (e.g. for a multi-part TLD the auto-derivation
+// below can't handle, like ".example.co.uk").
+const COOKIE_DOMAIN_OVERRIDE = process.env.AUTH_COOKIE_DOMAIN || undefined
 
-export function setRefreshCookie(response: Response, token: string | null) {
+// Derives the shareable parent domain from a request Host header. Returns
+// undefined for anything that must stay host-only: IP literals, localhost,
+// or a bare single-label host — browsers reject a Domain attribute on those.
+export function resolveCookieDomain(request?: Request): string | undefined {
+  if (COOKIE_DOMAIN_OVERRIDE) {
+    return COOKIE_DOMAIN_OVERRIDE
+  }
+  const hostHeader = request?.headers?.host
+  if (!hostHeader) {
+    return undefined
+  }
+  // Strip any :port suffix.
+  const host = hostHeader.split(':')[0].trim().toLowerCase()
+  if (!host || host === 'localhost') {
+    return undefined
+  }
+  // Bare IPv4 / IPv6 addresses can't carry a Domain attribute.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || /^[0-9a-f:]+$/.test(host)) {
+    return undefined
+  }
+  const labels = host.split('.')
+  if (labels.length < 2) {
+    return undefined
+  }
+  // Share across subdomains of the registrable domain (last two labels).
+  // Good for app.arofi.net <-> arofi.net. Multi-part TLDs (co.uk) need the
+  // explicit AUTH_COOKIE_DOMAIN override above.
+  return `.${labels.slice(-2).join('.')}`
+}
+
+export function setRefreshCookie(response: Response, token: string | null, domain?: string) {
   if (!token) {
     return
   }
@@ -640,7 +674,7 @@ export function setRefreshCookie(response: Response, token: string | null) {
     secure: process.env.NODE_ENV === 'production',
     maxAge: REFRESH_TOKEN_TTL_MS,
     path: '/api/auth',
-    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+    ...(domain ? { domain } : {}),
   })
 }
 
@@ -648,30 +682,34 @@ export function setRefreshCookie(response: Response, token: string | null) {
 // readable from JavaScript (XSS cannot exfiltrate it) and never appear in a
 // response body. CSRF is mitigated by SameSite=Lax plus the locked-down
 // credentialed CORS policy in main.ts (admin origins only).
-export function setAdminAccessCookie(response: Response, token: string) {
+export function setAdminAccessCookie(response: Response, token: string, domain?: string) {
   response.cookie(ACCESS_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     maxAge: ACCESS_TOKEN_TTL_MS,
     path: '/',
-    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+    ...(domain ? { domain } : {}),
   })
 }
 
-export function clearAdminSessionCookies(response: Response) {
-  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) })
-  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) })
+export function clearAdminSessionCookies(response: Response, request?: Request) {
+  const domain = resolveCookieDomain(request)
+  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...(domain ? { domain } : {}) })
+  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...(domain ? { domain } : {}) })
 }
 
 // Shared by auth + onboarding: apply both session cookies and strip the raw
 // tokens out of the JSON body so they are never exposed to page JavaScript.
+// Pass the request so the cookie Domain is derived from the host the client
+// actually reached us on (see resolveCookieDomain).
 export function applySessionCookies<
   T extends { access_token: string; refresh_token: string | null },
->(response: Response, session: T): Omit<T, 'access_token' | 'refresh_token'> {
+>(response: Response, session: T, request?: Request): Omit<T, 'access_token' | 'refresh_token'> {
   const { access_token, refresh_token, ...rest } = session
-  setAdminAccessCookie(response, access_token)
-  setRefreshCookie(response, refresh_token)
+  const domain = resolveCookieDomain(request)
+  setAdminAccessCookie(response, access_token, domain)
+  setRefreshCookie(response, refresh_token, domain)
   return rest
 }
 
@@ -709,7 +747,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const session = await this.authService.verifyLogin(dto.email, dto.otp, requestMeta(request))
-    return applySessionCookies(response, session)
+    return applySessionCookies(response, session, request)
   }
 
   @Throttle({ default: { ttl: 300_000, limit: 3 } })
@@ -728,13 +766,13 @@ export class AuthController {
       throw new UnauthorizedException('No refresh token presented')
     }
     const session = await this.authService.refresh(token)
-    return applySessionCookies(response, session)
+    return applySessionCookies(response, session, request)
   }
 
   @Post('logout')
   async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     await this.authService.logout(extractRefreshCookie(request))
-    clearAdminSessionCookies(response)
+    clearAdminSessionCookies(response, request)
     return { ok: true }
   }
 

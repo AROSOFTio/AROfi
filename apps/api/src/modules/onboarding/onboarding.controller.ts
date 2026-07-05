@@ -1,6 +1,6 @@
-import { Body, Controller, Post, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
-import type { Response } from 'express'
+import type { Request, Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard, applySessionCookies } from '../auth/auth.module'
 import { CurrentUser } from '../auth/current-user.decorator'
@@ -16,10 +16,15 @@ export class OnboardingController {
 
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('register')
-  async registerTenant(@Body() dto: RegisterTenantDto, @Res({ passthrough: true }) response: Response) {
+  async registerTenant(
+    @Body() dto: RegisterTenantDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     const result = await this.onboardingService.registerTenant(dto)
     // Session cookies are HttpOnly; the raw tokens never reach page JS.
-    return applySessionCookies(response, result)
+    // Pass the request so the cookie Domain spans the marketing + app hosts.
+    return applySessionCookies(response, result, request)
   }
 
   @UseGuards(JwtAuthGuard)

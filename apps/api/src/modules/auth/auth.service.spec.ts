@@ -1,6 +1,25 @@
 import { HttpException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common'
 import * as bcrypt from 'bcrypt'
-import { AuthService } from './auth.module'
+import { AuthService, resolveCookieDomain } from './auth.module'
+
+describe('resolveCookieDomain', () => {
+  const req = (host?: string) => ({ headers: host ? { host } : {} }) as never
+
+  it('shares the registrable parent domain across subdomains', () => {
+    expect(resolveCookieDomain(req('app.arofi.net'))).toBe('.arofi.net')
+    expect(resolveCookieDomain(req('arofi.net'))).toBe('.arofi.net')
+    expect(resolveCookieDomain(req('portal.arofi.net:443'))).toBe('.arofi.net')
+  })
+
+  it('stays host-only for hosts that cannot carry a Domain attribute', () => {
+    expect(resolveCookieDomain(req('localhost'))).toBeUndefined()
+    expect(resolveCookieDomain(req('localhost:3000'))).toBeUndefined()
+    expect(resolveCookieDomain(req('127.0.0.1'))).toBeUndefined()
+    expect(resolveCookieDomain(req('192.168.1.10:3000'))).toBeUndefined()
+    expect(resolveCookieDomain(req())).toBeUndefined()
+    expect(resolveCookieDomain(undefined)).toBeUndefined()
+  })
+})
 
 const PASSWORD = 'correct-horse-battery'
 
