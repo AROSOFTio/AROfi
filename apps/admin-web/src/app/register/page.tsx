@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Activity, BadgeDollarSign, Router, Ticket, Users, Wifi } from 'lucide-react'
-import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
+import { getAppLoginUrl } from '@/lib/admin-session'
 
 const features = [
   { icon: Router, title: 'Manage Routers', text: 'Generate MikroTik scripts and verify real live signals.' },
@@ -13,7 +13,6 @@ const features = [
 ]
 
 export default function RegisterPage() {
-  const [loginOpen, setLoginOpen] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(true)
 
   useEffect(() => {
@@ -28,7 +27,7 @@ export default function RegisterPage() {
           <span>AROFi</span>
         </div>
         <div className="home-actions">
-          <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
+          <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
           <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started</button>
         </div>
       </nav>
@@ -43,7 +42,7 @@ export default function RegisterPage() {
           </p>
           <div className="home-cta">
             <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Workspace</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Open Console</button>
+            <a href={getAppLoginUrl()} className="btn btn-ghost">Open Console</a>
           </div>
         </div>
         <div className="home-panel" aria-hidden="true">
@@ -68,7 +67,6 @@ export default function RegisterPage() {
         ))}
       </section>
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
     </main>
   )

@@ -176,12 +176,24 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <div className="login-card">
+      <div className="login-shell">
+        <div className="login-pitch">
+          <img src="/logo.png" alt="AROFi" />
+          <h2>Run your WiFi like a business.</h2>
+          <p>Sign in to manage routers, packages, vouchers, and Mobile Money collections from one console.</p>
+          <ul>
+            <li>RADIUS-billed MikroTik hotspots</li>
+            <li>MTN MoMo &amp; Airtel Money collection</li>
+            <li>Vouchers, wallets &amp; payouts</li>
+            <li>Self-onboarding, nationwide</li>
+          </ul>
+        </div>
+        <div className="login-card">
         <div className="login-brand">
           <img
             src="/logo.png"
             alt="AROFi Logo"
-            style={{ width: '200px', height: 'auto', margin: '0 auto 10px', display: 'block' }}
+            style={{ width: '160px', height: 'auto', margin: '0 auto 10px', display: 'block' }}
           />
           <p>Hotspot Billing & Network Management</p>
           <p style={{ marginTop: 4, fontSize: 11 }}>AROSOFT Innovations Ltd</p>
@@ -323,6 +335,7 @@ export default function LoginPage() {
         <p style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
           AROFi v1.0 | &copy; 2026 AROSOFT Innovations Ltd
         </p>
+        </div>
       </div>
     </div>
   )

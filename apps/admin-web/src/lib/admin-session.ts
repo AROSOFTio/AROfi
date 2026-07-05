@@ -30,3 +30,10 @@ export function getAppDashboardUrl() {
   }
   return '/dashboard'
 }
+
+export function getAppLoginUrl() {
+  if (typeof window !== 'undefined' && window.location.hostname === 'arofi.net') {
+    return 'https://app.arofi.net/login'
+  }
+  return '/login'
+}

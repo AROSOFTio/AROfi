@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Activity, BadgeDollarSign, Check, Radio, Router, Ticket, Users, Wifi } from 'lucide-react'
-import { LoginModal } from '@/components/LoginModal'
 import { RegisterModal } from '@/components/RegisterModal'
+import { getAppLoginUrl } from '@/lib/admin-session'
 
 // Pricing is hidden from the public marketing page for now — signup always
 // lands new tenants on the Free plan (see SHOW_PRICING in RegisterModal).
@@ -81,7 +81,6 @@ function useCountUp(target: number, durationMs = 1400) {
 }
 
 export default function RootPage() {
-  const [loginOpen, setLoginOpen] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [feedIndex, setFeedIndex] = useState(0)
 
@@ -96,8 +95,7 @@ export default function RootPage() {
       window.history.replaceState(null, '', '/')
     }
     if (params.get('login') === '1') {
-      setLoginOpen(true)
-      window.history.replaceState(null, '', '/')
+      window.location.href = getAppLoginUrl()
     }
   }, [])
 
@@ -116,7 +114,7 @@ export default function RootPage() {
         </div>
         <div className="home-actions">
           <Link href="/docs" className="btn btn-ghost">Docs</Link>
-          <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
+          <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
           <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Register Free</button>
         </div>
       </nav>
@@ -129,7 +127,7 @@ export default function RootPage() {
           <div className="home-cta">
             <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Your WiFi Business</button>
             <Link href="/docs" className="btn btn-ghost">Documentation</Link>
-            <button type="button" className="btn btn-ghost" onClick={() => setLoginOpen(true)}>Sign In</button>
+            <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
           </div>
           <div className="home-trust">
             <span><Radio size={13} className="pulse-dot" /> RADIUS auth</span>
@@ -257,7 +255,6 @@ export default function RootPage() {
         <p>Run a WiFi reseller business across Kampala and Uganda. Each tenant gets their own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
       </div>
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
     </main>
   )
