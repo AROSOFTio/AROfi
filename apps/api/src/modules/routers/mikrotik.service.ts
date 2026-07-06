@@ -837,12 +837,16 @@ export class MikrotikService {
           return;
         }
         var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;
-        if(autoReady&&!sessionStorage.getItem('arofiAutoTried')){
-          // Auto-login the returning device — but ONLY ONCE per browser session.
-          // Without this guard, a router that keeps rejecting the credential
-          // re-fires conn() on every reload, spamming MikroTik "login fail" and
-          // trapping the customer on a "connecting..." screen forever.
-          try{sessionStorage.setItem('arofiAutoTried','1');}catch(e){}
+        // Loop guard that still REMEMBERS an active bundle. Only skip the auto-
+        // login if we tried it within the last ~20s and are back here still not
+        // online (the router bounced us = a redirect loop). A returning device
+        // whose bundle is active reconnects normally because that happens much
+        // later than a few seconds. A one-shot flag would have blocked every
+        // legitimate reconnect for the whole browser session — the bug where an
+        // active bundle "wasn't remembered".
+        var _lastAuto=0;try{_lastAuto=parseInt(sessionStorage.getItem('arofiAutoAt')||'0',10);}catch(e){}
+        if(autoReady&&(!_lastAuto||(Date.now()-_lastAuto)>=20000)){
+          try{sessionStorage.setItem('arofiAutoAt',String(Date.now()));}catch(e){}
           conn(d.returningDevice.reconnect);return;
         }
 
