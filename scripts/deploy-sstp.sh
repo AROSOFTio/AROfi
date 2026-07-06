@@ -60,6 +60,20 @@ else
   echo "[sstp] sstpd is already installed, skipping pip install."
 fi
 
+# Patch a bug in sstp-server's ppp.py: pipe_data_received() calls
+#   self.sstp.logger.info("pppd says", data)
+# with a positional arg but no %s placeholder. On Python 3.11+ this raises
+# "TypeError: not all arguments converted during string formatting" inside the
+# asyncio pipe callback, which aborts relaying pppd's output back to the SSTP
+# client — the PPP handshake stalls and the router logs "failed to authenticate
+# ourselves" even though the credential is valid. Add the missing placeholder.
+for pppfile in $(python3 -c "import sstpd, os; print(os.path.join(os.path.dirname(sstpd.__file__), 'ppp.py'))" 2>/dev/null); do
+  if [ -f "$pppfile" ] && grep -q 'logger.info("pppd says", data)' "$pppfile"; then
+    sed -i 's|logger.info("pppd says", data)|logger.info("pppd says: %s", data)|' "$pppfile"
+    echo "[sstp] Patched sstp-server ppp.py logging bug in $pppfile"
+  fi
+done
+
 # Create sstpd systemd unit file
 BINARY_PATH="$(which sstpd || echo /usr/local/bin/sstpd)"
 cat << EOF > /etc/systemd/system/sstpd.service
