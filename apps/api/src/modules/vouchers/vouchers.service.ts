@@ -6,6 +6,7 @@ import {
   PackageActivationSource,
   PackageActivationStatus,
   Prisma,
+  RadiusCredentialStatus,
   VoucherBatchStatus,
   VoucherStatus,
   WalletOwnerType,
@@ -646,6 +647,7 @@ export class VouchersService {
                     name: true,
                   },
                 },
+                radiusCredential: true,
               },
             },
           },
@@ -694,13 +696,24 @@ export class VouchersService {
       // hand the customer a dead session — the exact "connected but no
       // internet" confusion. Reject with a plain message so they buy again.
       const priorActivation = voucher.redemption.activation
+      // The bundle is only reconnectable if BOTH the activation and its RADIUS
+      // credential are still live. A used voucher whose credential was removed
+      // or expired would otherwise return "success" and then hand the customer
+      // a dead session ("redeemed but no internet") — instead reject it plainly
+      // so they know to buy again.
+      const cred = priorActivation?.radiusCredential
+      const credLive =
+        !!cred &&
+        cred.status === RadiusCredentialStatus.ACTIVE &&
+        (cred.expiresAt == null || cred.expiresAt > new Date())
       const activationDead =
         !priorActivation ||
         priorActivation.status !== PackageActivationStatus.ACTIVE ||
-        (priorActivation.endsAt != null && priorActivation.endsAt <= new Date())
+        (priorActivation.endsAt != null && priorActivation.endsAt <= new Date()) ||
+        !credLive
       if (activationDead) {
         throw new BadRequestException(
-          'This voucher has already been used and its time has expired. Please buy a new package or voucher.',
+          'This voucher has already been used. Please buy a new voucher to get back online.',
         )
       }
 
