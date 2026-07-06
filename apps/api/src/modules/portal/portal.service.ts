@@ -775,10 +775,24 @@ export class PortalService {
     // hotspot-address=10.55.0.1) rather than a dead placeholder host, so
     // auto-login still has a real target when the captive link-login param was
     // not captured.
+    const username = activation.radiusCredential?.username ?? activation.radiusUsername
+    const password = activation.radiusCredential?.password ?? activation.radiusPassword
+
+    // Defensive diagnostics for the "redeemed/paid but router rejects login"
+    // class of incidents. Never logs the password itself — only whether the
+    // pieces the router needs are actually present. If username or password is
+    // missing here, the captive page would submit an unusable login and
+    // MikroTik would answer "login fail".
+    if (!username || !password) {
+      this.logger.warn(
+        `Reconnect payload INCOMPLETE: hasCredentialRow=${!!activation.radiusCredential} hasUsername=${!!username} hasPassword=${!!password} hasLoginUrl=${!!(loginUrl || process.env.HOTSPOT_LOGIN_URL)}`,
+      )
+    }
+
     return {
       loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login',
-      username: activation.radiusCredential?.username ?? activation.radiusUsername,
-      password: activation.radiusCredential?.password ?? activation.radiusPassword,
+      username,
+      password,
       method: 'mikrotik-hotspot-post',
     }
   }
