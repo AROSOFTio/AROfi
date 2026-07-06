@@ -79,16 +79,32 @@ server default {
 
 	post-auth {
 		sql
-		# Strip Message-Authenticator from replies ONLY toward localhost
-		# (pppd/SSTP; see the authorize note above). MikroTik replies keep it.
-		if (Packet-Src-IP-Address == 127.0.0.1) {
+		# BlastRADIUS-patched RouterOS (6.49.19+) REQUIRES a Message-Authenticator
+		# in the Access-Accept, or the hotspot rejects the login ("login failed")
+		# EVEN THOUGH FreeRADIUS already returned Access-Accept. FreeRADIUS 3.2.3
+		# does not add MA to replies on its own (3.2.5 did — that is why pinning
+		# to 3.2.3 for SSTP silently broke every customer hotspot login). Force
+		# MA into the reply for hotspot customers (vouchers/packages), computed
+		# with the shared secret at send time. Assigning zeros is the documented
+		# FreeRADIUS idiom to force inclusion; the real HMAC overwrites it.
+		#
+		# Do NOT add it for the SSTP router login (User-Name router-<uuid>) or
+		# localhost, whose old pppd RADIUS client cannot validate MA in the reply
+		# ("invalid reply digest") — those keep the strip below.
+		if (!("%{User-Name}" =~ /^router-/) && !(Packet-Src-IP-Address == 127.0.0.1)) {
+			update reply {
+				Message-Authenticator := 0x00000000000000000000000000000000
+			}
+		}
+		# Strip Message-Authenticator from replies toward localhost / SSTP pppd.
+		if (Packet-Src-IP-Address == 127.0.0.1 || &User-Name =~ /^router-/) {
 			update reply {
 				Message-Authenticator !* ANY
 			}
 		}
 		Post-Auth-Type Reject {
 			sql
-			if (Packet-Src-IP-Address == 127.0.0.1) {
+			if (Packet-Src-IP-Address == 127.0.0.1 || &User-Name =~ /^router-/) {
 				update reply {
 					Message-Authenticator !* ANY
 				}
