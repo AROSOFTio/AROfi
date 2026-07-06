@@ -106,15 +106,34 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   }
 
   async runOnce() {
-    await this.expireActivations()
-    await this.cleanupExpiredRadiusCredentials()
-    await this.syncRadiusSqlSignals()
-    await this.enforceDataQuotas()
-    await this.processPendingDisconnects()
-    await this.cleanStaleSessions()
-    await this.markStuckPendingPayments()
-    await this.pollPendingDisbursements()
-    await this.reconcileOrphanedPayments()
+    // Each step is isolated: a single failing step (e.g. the Yo Uganda
+    // disbursement poll when their payout endpoint is down) must NOT abort the
+    // whole cycle and starve the connectivity-critical steps — most importantly
+    // reconcileOrphanedPayments(), which auto-connects customers who paid but
+    // whose gateway webhook never arrived. Before this, one throw skipped every
+    // later step that cycle, so a payments-provider outage could look like
+    // "paid but never connected."
+    await this.step('expireActivations', () => this.expireActivations())
+    await this.step('cleanupExpiredRadiusCredentials', () => this.cleanupExpiredRadiusCredentials())
+    await this.step('syncRadiusSqlSignals', () => this.syncRadiusSqlSignals())
+    await this.step('enforceDataQuotas', () => this.enforceDataQuotas())
+    await this.step('processPendingDisconnects', () => this.processPendingDisconnects())
+    await this.step('cleanStaleSessions', () => this.cleanStaleSessions())
+    await this.step('markStuckPendingPayments', () => this.markStuckPendingPayments())
+    await this.step('pollPendingDisbursements', () => this.pollPendingDisbursements())
+    await this.step('reconcileOrphanedPayments', () => this.reconcileOrphanedPayments())
+  }
+
+  // Runs one lifecycle step, catching and logging any failure so the remaining
+  // steps in the cycle still run. Never rethrows.
+  private async step(name: string, fn: () => Promise<void>) {
+    try {
+      await fn()
+    } catch (error) {
+      this.logger.error(
+        `access-lifecycle step "${name}" failed: ${error instanceof Error ? error.message : error}`,
+      )
+    }
   }
 
   private async cleanupExpiredRadiusCredentials() {
