@@ -380,13 +380,51 @@ export class RadiusSignalSyncService {
 
     const cred = await this.prisma.radiusCredential.findFirst({
       where: { username },
-      select: { routerId: true },
+      select: { routerId: true, tenantId: true, activationId: true },
     })
-    if (!cred?.routerId) {
+    if (!cred) {
+      this.logger.warn(
+        `resolveRouter: no credential for username "${username}" (nasIp=${nasIp ?? 'none'}) — accounting row dropped`,
+      )
       return null
     }
 
-    const router = await this.prisma.router.findUnique({ where: { id: cred.routerId } })
+    let routerId = cred.routerId
+
+    // QR-scan/portal redemptions often have no routerKey, so the credential
+    // carries routerId=null. Fall back to the activation's router.
+    if (!routerId && cred.activationId) {
+      const activation = await this.prisma.packageActivation.findUnique({
+        where: { id: cred.activationId },
+        select: { routerId: true },
+      })
+      routerId = activation?.routerId ?? null
+    }
+
+    // Last resort: if the credential's tenant has exactly ONE router, the
+    // session can only belong to it. This is what keeps live users working
+    // when the stored NAS IP is the router's WAN address (self-reported by the
+    // provisioning callback) while MikroTik stamps accounting with its LAN IP
+    // — the mismatch that silently blanked live users/data on the dashboard.
+    if (!routerId) {
+      const tenantRouters = await this.prisma.router.findMany({
+        where: { tenantId: cred.tenantId },
+        select: { id: true },
+        take: 2,
+      })
+      if (tenantRouters.length === 1) {
+        routerId = tenantRouters[0].id
+      }
+    }
+
+    if (!routerId) {
+      this.logger.warn(
+        `resolveRouter: cannot map username "${username}" (nasIp=${nasIp ?? 'none'}, tenant=${cred.tenantId}) to a router — accounting row dropped`,
+      )
+      return null
+    }
+
+    const router = await this.prisma.router.findUnique({ where: { id: routerId } })
     if (router && nasIp && !router.radiusNasIpAddress) {
       try {
         await this.prisma.router.update({
