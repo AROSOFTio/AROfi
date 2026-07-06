@@ -152,7 +152,7 @@ function parseOptionalInt(value: string) {
 }
 
 function getVoucherPortalOrigin() {
-  const origin = typeof window === 'undefined' ? 'https://arofi.arosoft.io' : window.location.origin
+  const origin = typeof window === 'undefined' ? 'https://arofi.net' : window.location.origin
   return origin.replace(/\/$/, '')
 }
 

@@ -116,7 +116,7 @@ compose ps
 
 echo
 echo "Done. Point your reverse proxy (Nginx/Apache/host control panel) for"
-echo "arofi.arosoft.io to:"
+echo "arofi.net to:"
 echo "  http://127.0.0.1:4012"
 echo
 echo "Useful checks:"

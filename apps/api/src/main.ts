@@ -68,7 +68,7 @@ bootstrap();
 // parsed hostname (exact match or a real subdomain), never via
 // origin.includes(suffix) — a substring check lets an attacker register
 // e.g. "evil-arofi.net.attacker.com" and pass CORS with credentials.
-const TRUSTED_HOST_SUFFIXES = ['arosoftlabs.com', 'arofi.arosoft.io', 'arofi.net'];
+const TRUSTED_HOST_SUFFIXES = ['arofi.net'];
 
 // Origins that may make CREDENTIALED requests (admin session cookie).
 function isTrustedAdminOrigin(origin: string) {

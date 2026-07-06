@@ -11,7 +11,7 @@ AROFi is a multi-tenant hotspot billing platform with:
 
 ## Production Deploy (Contabo / Ubuntu)
 
-Run from project root (example: `/www/wwwroot/arofi.arosoft.io`):
+Run from project root (example: `/www/wwwroot/arofi.net`):
 
 ```bash
 # 1) Update source
@@ -111,7 +111,7 @@ If the AROFi callback fails and the router cannot ping `8.8.8.8`, check whether 
 ```routeros
 /ping 192.168.1.1 count=4
 /ping 8.8.8.8 count=4
-/ping arofi.arosoft.io count=4
+/ping arofi.net count=4
 /ip dhcp-client print
 /ip route print
 /interface bridge port print
@@ -137,7 +137,7 @@ Verify:
 /ip route print
 /ping 192.168.1.1 count=4
 /ping 8.8.8.8 count=4
-/ping arofi.arosoft.io count=4
+/ping arofi.net count=4
 ```
 
 RouterOS 6 wireless recovery:

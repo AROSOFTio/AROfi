@@ -436,7 +436,7 @@ export class MikrotikService {
       'On a phone, look for the new OPEN Wi-Fi network (your site/SSID name) and connect. The AROFi portal should pop up automatically.',
       'If no SSID appears, the board has no /interface wireless (v6) or /interface wifi (v7) radio - use an external AP on the arofi-hotspot bridge instead.',
       'Run one real voucher/payment test so MikroTik sends Access-Request + Accounting-Start to RADIUS and the router turns live here.',
-      'Supported: any RouterOS 6.45+ or RouterOS 7.x MikroTik with a HotSpot license (all hAP/RB/CCR/CRS boards ship with one). WireGuard remote access requires RouterOS 7 — RouterOS 6 routers can still take payments/vouchers normally, they just cannot use AROFi remote WinBox access yet.',
+      'Supported: any RouterOS 6.45+ or RouterOS 7.x MikroTik with a HotSpot license (all hAP/RB/CCR/CRS boards ship with one). AROFi remote WinBox access uses an SSTP tunnel, which works on RouterOS 6 and 7 (some RouterOS 7 consumer boards need a one-time device-mode enterprise step).',
     ]
   }
 
@@ -937,7 +937,7 @@ export class MikrotikService {
         if(++n>120){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
         apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
           if(err) return;
-          if(p.activation){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}
+          if(p.activation){if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}}
           else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
         });
       },1500);
@@ -955,7 +955,7 @@ export class MikrotikService {
       });
     }
 
-    function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst='http://neverssl.com/';var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}

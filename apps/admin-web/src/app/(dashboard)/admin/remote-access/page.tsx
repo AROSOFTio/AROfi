@@ -407,36 +407,32 @@ export default function RemoteAccessPage() {
 
 
             {/* SSTP info banner */}
-            {selectedRouter?.wgServerConfigured !== false && (
-              <div style={{
-                padding: 14,
-                border: '1px solid #bbf7d0',
-                borderRadius: 10,
-                background: '#f0fdf4',
-                display: 'flex',
-                gap: 10,
-                alignItems: 'flex-start',
-              }}>
-                <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <strong style={{ fontSize: 13, color: '#166534' }}>SSTP — works on RouterOS 6 and 7</strong>
-                  <span style={{ fontSize: 12.5, color: '#15803d', lineHeight: 1.5 }}>
-                    AROFi uses an SSTP tunnel for remote access. RouterOS 6 connects directly. On some RouterOS 7
-                    consumer boards SSTP is blocked by device-mode — the install script detects this and prints the
-                    one-time <code>/system device-mode update mode=enterprise</code> step (then press the reset button).
-                  </span>
-                </div>
+            <div style={{
+              padding: 14,
+              border: '1px solid #bbf7d0',
+              borderRadius: 10,
+              background: '#f0fdf4',
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+            }}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
+              <div style={{ display: 'grid', gap: 4 }}>
+                <strong style={{ fontSize: 13, color: '#166534' }}>SSTP — works on RouterOS 6 and 7</strong>
+                <span style={{ fontSize: 12.5, color: '#15803d', lineHeight: 1.5 }}>
+                  AROFi uses an SSTP tunnel for remote access. RouterOS 6 connects directly. On some RouterOS 7
+                  consumer boards SSTP is blocked by device-mode — the install script detects this and prints the
+                  one-time <code>/system device-mode update mode=enterprise</code> step (then press the reset button).
+                </span>
               </div>
-            )}
+            </div>
 
             <div style={{ display: 'grid', gap: 6 }}>
               <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                {selectedRouter?.wgServerConfigured === false ? 'Step 2 — ' : ''}Run this command in the WinBox Terminal
+                Run this command in the WinBox Terminal
               </strong>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
-                {selectedRouter?.wgServerConfigured === false
-                  ? 'After completing Step 1 and redeploying, paste this command into the MikroTik WinBox Terminal to set up the WireGuard tunnel.'
-                  : 'Paste the command below into the MikroTik WinBox Terminal. It sets up a WireGuard VPN tunnel to AROFi cloud — no button presses or reboots required.'}
+                Paste the command below into the MikroTik WinBox Terminal. It sets up an SSTP VPN tunnel to AROFi cloud for remote WinBox access.
               </p>
             </div>
 

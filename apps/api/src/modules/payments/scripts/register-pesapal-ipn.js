@@ -18,7 +18,7 @@ function getEnvVar(key) {
 const baseUrl = getEnvVar('PESAPAL_BASE_URL') || 'https://cybqa.pesapal.com/pesapalv3';
 const consumerKey = getEnvVar('PESAPAL_CONSUMER_KEY');
 const consumerSecret = getEnvVar('PESAPAL_CONSUMER_SECRET');
-const callbackUrl = 'https://arofi.arosoftlabs.com/api/payments/webhooks/pesapal';
+const callbackUrl = 'https://arofi.net/api/payments/webhooks/pesapal';
 
 if (!consumerKey || consumerKey.startsWith('GET_FROM') || consumerKey.startsWith('CHANGE_ME')) {
   console.error('PESAPAL_CONSUMER_KEY is not set in .env');

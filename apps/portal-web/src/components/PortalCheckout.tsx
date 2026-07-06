@@ -54,6 +54,24 @@ function stashCompanionCodes(codes: string[]) {
   }
 }
 
+// The MikroTik link-login URL is written to BOTH storages when the captive
+// page first opens (sessionStorage can be wiped when low-memory Android kills
+// the tab during the USSD/PIN dialog; localStorage survives). Every reconnect
+// path must therefore read both, or a payment-return round trip loses the
+// login target and auto-connect silently fails.
+function readStoredLoginUrl(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return (
+      sessionStorage.getItem('arofi.lastLoginUrl') ||
+      localStorage.getItem('arofi.lastLoginUrl') ||
+      null
+    )
+  } catch {
+    return null
+  }
+}
+
 function takeStashedCompanionCodes(): string[] {
   if (typeof window === 'undefined') return []
   try {
@@ -421,9 +439,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       if (redemption.reconnect?.username && redemption.reconnect?.password) {
         const effectiveLoginUrl =
           redemption.reconnect.loginUrl ||
-          (typeof window !== 'undefined' ? sessionStorage.getItem('arofi.lastLoginUrl') : null) ||
           hotspotParams.loginUrl ||
-          null
+          readStoredLoginUrl()
         if (effectiveLoginUrl) {
           if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
           // Connect FIRST. Companion codes are stashed and re-shown when the
@@ -866,8 +883,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const effectiveLoginUrl =
       payment.reconnect?.loginUrl ||
       hotspotParams.loginUrl ||
-      (typeof window !== 'undefined' ? sessionStorage.getItem('arofi.lastLoginUrl') : null) ||
-      null
+      readStoredLoginUrl()
 
     const hasCredentials = payment.reconnect?.username && payment.reconnect?.password
 
@@ -978,10 +994,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       reconnect?.loginUrl ||
       fallbackLoginUrl ||
       hotspotParams.loginUrl ||
-      (typeof window !== 'undefined'
-        ? sessionStorage.getItem('arofi.lastLoginUrl') || localStorage.getItem('arofi.lastLoginUrl')
-        : null) ||
-      null
+      readStoredLoginUrl()
 
     if (!loginUrl || !reconnect?.username || !reconnect?.password) {
       setConnectionStatus('failed')
@@ -1000,9 +1013,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Save loginUrl for future sessions on this device
+    // Save loginUrl for future sessions on this device — both storages, so it
+    // survives the payment-return round trip (see readStoredLoginUrl).
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
+      try {
+        sessionStorage.setItem('arofi.lastLoginUrl', loginUrl)
+        localStorage.setItem('arofi.lastLoginUrl', loginUrl)
+      } catch {
+        // storage full/blocked — auto-connect still proceeds with this URL
+      }
     }
 
     try {

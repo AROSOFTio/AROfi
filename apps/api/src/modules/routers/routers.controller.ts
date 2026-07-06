@@ -101,12 +101,6 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
-  @Get('wireguard-config')
-  getWireGuardServerPeersConfig() {
-    return this.routersService.getWireGuardServerPeersConfig()
-  }
-
-  @RequirePermissions(PERMISSIONS.routersManage)
   @Patch(':routerId')
   updateRouter(
     @CurrentUser() user: AuthenticatedAdminUser,

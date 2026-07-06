@@ -572,7 +572,12 @@ export class PaymentsService {
     }
 
     if (this.terminalPaymentStatuses.has(payment.status)) {
-      return this.getPayment(payment.id)
+      // A completed payment must still carry the MikroTik reconnect
+      // credentials — the portal polls this endpoint after the webhook has
+      // already transitioned the payment, and without the payload the
+      // customer sees "COMPLETED" but never gets logged in.
+      const fullPayment = await this.getPayment(payment.id)
+      return this.attachReconnectPayload(fullPayment)
     }
 
     const referenceId = payment.providerReference ?? payment.externalReference

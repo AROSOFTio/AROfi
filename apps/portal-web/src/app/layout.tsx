@@ -1,13 +1,13 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 
-const SITE_URL = 'https://arofi.arosoftlabs.com/portal'
+const SITE_URL = 'https://arofi.net/portal'
 const TITLE = 'AROFi WiFi Portal – Buy Internet Access | MTN MoMo & Airtel Money Uganda'
 const DESCRIPTION =
   'Connect to high-speed WiFi instantly. Pay with MTN Mobile Money or Airtel Money. No app needed — just your phone number. Secure hotspot access powered by AROFi, Uganda\'s leading WiFi billing platform.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://arofi.arosoftlabs.com'),
+  metadataBase: new URL('https://arofi.net'),
   title: TITLE,
   description: DESCRIPTION,
   keywords: [
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     siteName: 'AROFi WiFi Portal',
     images: [
       {
-        url: 'https://arofi.arosoftlabs.com/logo.png',
+        url: 'https://arofi.net/logo.png',
         width: 512,
         height: 512,
         alt: 'AROFi – Buy WiFi with Mobile Money Uganda',
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     card: 'summary',
     title: TITLE,
     description: DESCRIPTION,
-    images: ['https://arofi.arosoftlabs.com/logo.png'],
+    images: ['https://arofi.net/logo.png'],
   },
   alternates: {
     canonical: SITE_URL,

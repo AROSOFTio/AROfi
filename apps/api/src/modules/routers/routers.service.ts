@@ -1461,7 +1461,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     remoteToken?: string | null
     remoteClientName?: string | null
     remoteAccessEnabled?: boolean
-    remoteWgPubKey?: string | null
     lastOfflineAt?: Date | null
     lastReconnectedAt?: Date | null
     verificationStatus?: string
@@ -1559,8 +1558,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       remoteToken: router.remoteToken ?? null,
       remoteClientName: router.remoteClientName ?? 'AROFI_REMOTE',
       remoteAccessEnabled: router.remoteAccessEnabled ?? false,
-      remoteWgPubKey: router.remoteWgPubKey ?? null,
-      wgServerConfigured: Boolean(process.env.VPN_WG_SERVER_PUBKEY),
       lastRadiusSignalAt: router.lastRadiusSignalAt,
       lastAccountingSignalAt: router.lastAccountingSignalAt,
       lastAuthSignalAt: router.lastAuthSignalAt,
@@ -1754,7 +1751,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updated = true
     }
     if (!router.remoteSstpIp) {
-      // Always use deterministic WireGuard IP based on port (10.8.1.x), not random SSTP range
+      // Deterministic tunnel IP based on port (10.8.1.x) so IPs never collide
       const port = updateData.remotePort ?? router.remotePort ?? 31000
       updateData.remoteSstpIp = `10.8.1.${port - 31000 + 2}`
       updated = true
@@ -1801,22 +1798,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       ? router.remotePort
       : Math.floor(Math.random() * 100) + 31000
 
-    // Generate WireGuard keys if not already set. The private key is stored
-    // encrypted (same AES-256-GCM scheme as router passwords / RADIUS
-    // secrets below) — it's live VPN key material, not something that
-    // should sit in plaintext in a DB backup.
-    let remoteWgPrivKey = router.remoteWgPrivKey
-    let remoteWgPubKey = router.remoteWgPubKey
-    if (!remoteWgPrivKey || !remoteWgPubKey) {
-      const wgKeys = this.generateWireGuardKeyPair()
-      remoteWgPrivKey = this.routerCredentialsService.encrypt(wgKeys.privateKey)
-      remoteWgPubKey = wgKeys.publicKey
-    }
-
-    // WireGuard IP is deterministic: port 31000 → 10.8.1.2, 31001 → 10.8.1.3, …
-    // This avoids conflicts and lets the VPS sync without per-router RADIUS entries.
-    const wgIp = `10.8.1.${remotePort - 31000 + 2}`
-    const remoteSstpIp = wgIp
+    // Keep an already-assigned tunnel IP (live routers hold it in their
+    // current SSTP session); new routers get a deterministic port-derived IP
+    // (31000 -> 10.8.1.2, 31001 -> 10.8.1.3, …) so IPs never collide.
+    const remoteSstpIp = router.remoteSstpIp || `10.8.1.${remotePort - 31000 + 2}`
 
     const updatedRouter = await this.prisma.router.update({
       where: { id: routerId },
@@ -1826,70 +1811,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         remoteToken,
         remotePort,
         remoteSstpIp,
-        remoteWgPrivKey,
-        remoteWgPubKey,
       },
       include: this.routerInclude,
     })
 
-    // Start TCP proxy forwarding to the router's WireGuard tunnel IP
+    // RADIUS hands the router this Framed-IP when the SSTP tunnel dials in
+    await this.syncRadiusVpnCredentials(routerId, remoteToken, remoteSstpIp)
+
+    // Start TCP proxy forwarding to the router's SSTP tunnel IP
     this.remoteProxyService.startProxy(remotePort, remoteSstpIp, 8291, updatedRouter.name)
 
     return this.mapRouter(updatedRouter)
-  }
-
-  private generateWireGuardKeyPair(): { privateKey: string; publicKey: string } {
-    // Use require to avoid TypeScript's crypto namespace resolution issue
-    // (KeyObject type) on this project's tsconfig that lacks "types": ["node"].
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const cryptoMod = require('crypto') as {
-      generateKeyPairSync: (type: string) => {
-        privateKey: { export: (opts: object) => Buffer }
-        publicKey: { export: (opts: object) => Buffer }
-      }
-    }
-    const pair = cryptoMod.generateKeyPairSync('x25519')
-    // The last 32 bytes of PKCS8/SPKI DER for X25519 are the raw key bytes.
-    const privDer = pair.privateKey.export({ type: 'pkcs8', format: 'der' })
-    const pubDer = pair.publicKey.export({ type: 'spki', format: 'der' })
-    return {
-      privateKey: privDer.subarray(-32).toString('base64'),
-      publicKey: pubDer.subarray(-32).toString('base64'),
-    }
-  }
-
-  // Rows written before encryption was added here store the raw private key
-  // (not the "v1:iv:authTag:cipher" format RouterCredentialsService
-  // produces) — fall back to treating decrypt failure as "already
-  // plaintext" so existing routers keep working without a data migration.
-  private decryptWgPrivKey(stored: string): string {
-    try {
-      return this.routerCredentialsService.decrypt(stored)
-    } catch {
-      return stored
-    }
-  }
-
-  async getWireGuardServerPeersConfig(): Promise<string> {
-    const routers = await this.prisma.router.findMany({
-      where: {
-        remoteWgPubKey: { not: null },
-        remoteSstpIp: { not: null },
-        remoteAccessEnabled: true,
-      },
-      select: { id: true, name: true, remoteWgPubKey: true, remoteSstpIp: true },
-    })
-
-    return routers
-      .filter((r) => r.remoteWgPubKey && r.remoteSstpIp)
-      .map((r) => [
-        `# Router: ${r.name}`,
-        `[Peer]`,
-        `PublicKey = ${r.remoteWgPubKey}`,
-        `AllowedIPs = ${r.remoteSstpIp}/32`,
-        '',
-      ].join('\n'))
-      .join('\n')
   }
 
   async closeRemotePort(routerId: string, tenantId?: string) {
@@ -1972,18 +1904,6 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     return { success: true }
-  }
-
-  getDeployWireguardScript(): string | null {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const fs = require('fs') as typeof import('fs')
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const path = require('path') as typeof import('path')
-      return fs.readFileSync(path.join(process.cwd(), 'scripts', 'deploy-wireguard.sh'), 'utf8')
-    } catch {
-      return null
-    }
   }
 
   async getRemoteAccessInstallScript(token: string) {

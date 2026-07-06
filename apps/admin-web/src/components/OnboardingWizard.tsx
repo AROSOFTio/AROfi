@@ -776,7 +776,7 @@ export default function OnboardingWizard({
                 </ol>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
                   <a
-                    href="https://arofi.arosoftlabs.com/docs/mikrotik-setup-video"
+                    href="https://arofi.net/docs/mikrotik-setup-video"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-ghost"

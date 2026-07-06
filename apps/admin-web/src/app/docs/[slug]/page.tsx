@@ -43,7 +43,7 @@ export const docs: Record<string, DocPage> = {
           {
             title: 'Example one-run command',
             commands: [
-              '/tool fetch url="https://arofi.arosoft.io/api/mikrotik/script/YOUR_ROUTER_REGISTRATION_KEY" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"',
+              '/tool fetch url="https://arofi.net/api/mikrotik/script/YOUR_ROUTER_REGISTRATION_KEY" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"',
             ],
           },
         ],
@@ -101,7 +101,7 @@ export const docs: Record<string, DocPage> = {
               '/ip dhcp-server lease print',
               '/file print where name~"hotspot"',
               '/ping 8.8.8.8 count=4',
-              '/ping arofi.arosoft.io count=4',
+              '/ping arofi.net count=4',
             ],
           },
         ],
@@ -168,7 +168,7 @@ export const docs: Record<string, DocPage> = {
         heading: '4. Registering and Onboarding on AROFi',
         body: [
           'AROFi is Uganda\'s leading multi-tenant SaaS platform that makes hotspot billing automatic. You don\'t need to install local billing servers or configure complex RADIUS databases manually.',
-          '1. Create a free account at arofi.arosoftlabs.com.',
+          '1. Create a free account at arofi.net.',
           '2. Add a new Hotspot Site and create a Router Group in your operator dashboard.',
           '3. Register your MikroTik Router by filling in the router name and selecting your Hotspot configuration.',
           '4. AROFi will generate a unique one-run RouterOS script. Copy the command, open WinBox, go to New Terminal, paste the command, and press Enter.',
@@ -228,7 +228,7 @@ export const docs: Record<string, DocPage> = {
             commands: [
               '/ip hotspot walled-garden add dst-host=*.pesapal.com action=allow comment="Pesapal Gateways"',
               '/ip hotspot walled-garden add dst-host=pay.pesapal.com action=allow comment="Pesapal Checkout"',
-              '/ip hotspot walled-garden add dst-host=*.arosoftlabs.com action=allow comment="AROFi Backend"',
+              '/ip hotspot walled-garden add dst-host=arofi.net action=allow comment="AROFi Backend"',
               '/ip hotspot walled-garden add dst-host=*.momoapi.mtn.com action=allow comment="MTN API"',
               '/ip hotspot walled-garden add dst-host=*.airtel.com action=allow comment="Airtel API"'
             ]
@@ -477,7 +477,7 @@ export const docs: Record<string, DocPage> = {
         heading: '1. How It Works (Bypassing CGNAT)',
         body: [
           'Most ISP connections in Uganda (MTN, Airtel, Roke) assign private IP addresses to customers behind CGNAT. This makes direct remote WinBox access (TCP 8291) impossible.',
-          'To bypass this, AROFi creates an SSTP VPN interface on the MikroTik router. The router establishes a secure SSL/TLS connection outwards to the central AROFi VPN gateway (e.g. vpn2.arofi.arosoft.io).',
+          'To bypass this, AROFi creates an SSTP VPN interface on the MikroTik router. The router establishes a secure SSL/TLS connection outwards to the central AROFi VPN gateway (arofi.net).',
           'Once connected, the router is assigned a static IP in the VPN network. When you request a remote port, AROFi maps a high-range public port (e.g. 30000-30100) to the router\'s WinBox port (8291) through the tunnel.',
         ],
       },
@@ -599,7 +599,7 @@ export const docs: Record<string, DocPage> = {
         heading: 'Router not live',
         body: [
           'Check router internet, DNS, time/NTP, interface selection, RADIUS server reachability, and whether the script callback reached AROFi.',
-          'If pings to 8.8.8.8 and arofi.arosoft.io fail from the MikroTik terminal, fix WAN first. For Savana/upstream routers, ether1 must be WAN and must not remain inside bridgeLocal.',
+          'If pings to 8.8.8.8 and arofi.net fail from the MikroTik terminal, fix WAN first. For Savana/upstream routers, ether1 must be WAN and must not remain inside bridgeLocal.',
           'If remote API/WinBox fails, check public IP, VPN, port forwarding, firewall rules, and ISP NAT.',
         ],
       },
@@ -642,7 +642,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: `${doc.title} | AROFi WiFi Billing Uganda Docs`,
     description: doc.intro.substring(0, 155),
     alternates: {
-      canonical: `https://arofi.arosoftlabs.com/docs/${slug}`
+      canonical: `https://arofi.net/docs/${slug}`
     }
   }
 }

@@ -257,7 +257,7 @@
         if(++n>120){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
         ajax('POST', API+'/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
           if(err) return;
-          if(p.activation){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}
+          if(p.activation){if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}}
           else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
         });
       },1500);
@@ -276,7 +276,7 @@
     }
 
     function dnet(v){}
-    function conn(rc){if(!rc||!rc.username)return;var dst='http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst='http://google.com';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}

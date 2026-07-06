@@ -358,9 +358,9 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         // NAT, so their public/WAN IP is NOT reachable for an inbound CoA — the
         // "kick the device off now" packet silently fails and the customer is
         // left "connected but no internet" until Session-Timeout eventually
-        // logs them out at the router. The WireGuard tunnel IP (10.8.1.x) IS
-        // reachable from this server over the WG interface, so we try it FIRST
-        // and fall back to the WAN IP for routers without a tunnel (RouterOS 6).
+        // logs them out at the router. The SSTP tunnel IP (remoteSstpIp) IS
+        // reachable from this server over the VPN interface, so we try it FIRST
+        // and fall back to the WAN IP for routers without a tunnel.
         const candidates: string[] = []
         const forcedHost = process.env.RADIUS_DISCONNECT_HOST?.trim()
         if (forcedHost) {

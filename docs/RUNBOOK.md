@@ -46,5 +46,5 @@ Pending states mean:
 - Confirm walled garden contains portal/API/payment hosts.
 - Confirm FreeRADIUS receives packets on UDP `1812/1813`.
 - After the first script callback changes a placeholder NAS IP to the router public/NAT IP, run `sudo docker compose restart freeradius` once so FreeRADIUS re-reads SQL clients.
-- Replace or redirect MikroTik `hotspot/login.html` to `https://arofi.arosoft.io/portal?mac=$(mac)&ip=$(ip)&link-login=$(link-login-only)&server=$(server-name)` so customers land on AROFi instead of the default MikroTik page.
+- Replace or redirect MikroTik `hotspot/login.html` to `https://arofi.net/portal?mac=$(mac)&ip=$(ip)&link-login=$(link-login-only)&server=$(server-name)` so customers land on AROFi instead of the default MikroTik page.
 - If FreeRADIUS reports an unknown client for a newly added tenant router, confirm the `nas` table row exists and reload/restart the FreeRADIUS container so SQL clients are re-read.
