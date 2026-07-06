@@ -600,6 +600,55 @@ export class VouchersService {
     })
   }
 
+  // Delete a whole batch of GENERATED vouchers. Refuses if ANY voucher in the
+  // batch was already SOLD or REDEEMED — those carry financial/access records
+  // (billing transactions, redemptions, activations) that must never be
+  // orphaned. Only unused batches can be removed.
+  async deleteBatch(batchId: string, tenantId?: string) {
+    const batch = await this.prisma.voucherBatch.findUnique({
+      where: { id: batchId },
+      include: { _count: { select: { vouchers: true } } },
+    })
+    if (!batch || (tenantId && batch.tenantId !== tenantId)) {
+      throw new NotFoundException('Voucher batch not found')
+    }
+
+    const usedCount = await this.prisma.voucher.count({
+      where: {
+        batchId,
+        status: { in: [VoucherStatus.SOLD, VoucherStatus.REDEEMED] },
+      },
+    })
+    if (usedCount > 0) {
+      throw new BadRequestException(
+        `This batch cannot be deleted because ${usedCount} of its voucher(s) have already been sold or used. Only unused batches can be removed.`,
+      )
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.voucher.deleteMany({ where: { batchId } })
+      await tx.voucherBatch.delete({ where: { id: batchId } })
+    })
+
+    return { deleted: true, batchId, removedVouchers: batch._count.vouchers }
+  }
+
+  // Delete a single unused voucher (GENERATED/PRINTED). Sold/redeemed vouchers
+  // are protected for the same reason as deleteBatch.
+  async deleteVoucher(voucherId: string, tenantId?: string) {
+    const voucher = await this.prisma.voucher.findUnique({ where: { id: voucherId } })
+    if (!voucher || (tenantId && voucher.tenantId !== tenantId)) {
+      throw new NotFoundException('Voucher not found')
+    }
+    if (voucher.status === VoucherStatus.SOLD || voucher.status === VoucherStatus.REDEEMED) {
+      throw new BadRequestException('This voucher has already been sold or used and cannot be deleted.')
+    }
+    const batchId = voucher.batchId
+    await this.prisma.voucher.delete({ where: { id: voucherId } })
+    await this.refreshBatchStatus(batchId)
+    return { deleted: true, voucherId }
+  }
+
   async redeemVoucher(dto: RedeemVoucherDto, tenantId?: string) {
     const codeVariants = this.getVoucherCodeLookupVariants(dto.code)
     if (!codeVariants.length) {
