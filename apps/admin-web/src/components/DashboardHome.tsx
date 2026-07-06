@@ -337,10 +337,6 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
   const routerStatusLabel = onlineRouters > 0 ? 'Online' : offlineRouters > 0 ? 'Offline' : 'Pending'
   const routerStatusColor = onlineRouters > 0 ? 'var(--green)' : offlineRouters > 0 ? '#ef4444' : '#f59e0b'
   const totalDataUsedMb = activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
-  const overviewTicks = Array.from({ length: 12 }).map((_, index) => {
-    const day = Math.max(1, Math.round(1 + (index * Math.max(1, now.getDate() - 1)) / 11))
-    return `${now.toLocaleString('en-US', { month: 'short' })} ${day}`
-  })
 
   // Wallet helper calculations
   const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []

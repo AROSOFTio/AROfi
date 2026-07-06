@@ -167,14 +167,26 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     try {
       const routers = await this.prisma.router.findMany({
         where: { status: { not: RouterStatus.PENDING } },
-        select: { id: true, host: true, apiPort: true },
+        select: { id: true, host: true, apiPort: true, remoteSstpIp: true },
       })
       for (const router of routers) {
-        if (!router.host || this.isPendingSelfServiceHost(router.host)) {
+        // Pick a reachable probe target. Most routers sit behind CGNAT so their
+        // management host is unreachable — but if the SSTP remote-access tunnel
+        // is up we CAN reach the router at its tunnel IP (WinBox port 8291 is
+        // open there, that's what remote WinBox uses). Prefer the tunnel so
+        // NAT'd routers still get a real latency reading; fall back to a direct
+        // management host when one is configured and reachable.
+        let target: { host: string; port: number } | null = null
+        if (router.remoteSstpIp) {
+          target = { host: router.remoteSstpIp, port: 8291 }
+        } else if (router.host && !this.isPendingSelfServiceHost(router.host)) {
+          target = { host: router.host, port: router.apiPort }
+        }
+        if (!target) {
           continue
         }
         try {
-          const probe = await this.mikrotikService.probeConnection(router.host, router.apiPort, 2500)
+          const probe = await this.mikrotikService.probeConnection(target.host, target.port, 2500)
           if (probe.reachable) {
             await this.prisma.router.update({
               where: { id: router.id },
