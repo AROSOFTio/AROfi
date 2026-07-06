@@ -912,7 +912,11 @@ export class MikrotikService {
           sst(err.message||'Failed','err');b.disabled=false;b.textContent='Login';
         } else {
           sst('Success! Connecting...','ok');
-          conn(res.reconnect);
+          // Pass the typed voucher code as a fallback: the server sets the
+          // RADIUS username AND password to the voucher code, so even if the
+          // reconnect payload is missing we can still hand MikroTik a working
+          // login instead of freezing on "Connecting...".
+          conn(res.reconnect, code);
         }
       });
     }
@@ -964,7 +968,15 @@ export class MikrotikService {
       });
     }
 
-    function conn(rc){if(!rc||!rc.username)return;var dst='http://neverssl.com/';var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc,fb){
+      rc=rc||{};
+      var u=rc.username||fb||'';
+      var pw=rc.password||fb||u;
+      if(!u){sst('Connected, but auto-login failed. Enter your voucher code and tap Connect.','err');return;}
+      var dst='http://neverssl.com/';
+      var target=(rc.loginUrl||lo||'http://10.55.0.1/login');
+      window.location.href=target+'?username='+encodeURIComponent(u)+'&password='+encodeURIComponent(pw)+'&dst='+encodeURIComponent(dst);
+    }
     var _sttmr=null;
     function sst(m,t){
       t=t||'info';
