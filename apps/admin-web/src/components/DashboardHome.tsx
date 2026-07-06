@@ -64,7 +64,7 @@ async function PlatformDashboard() {
       </div>
 
       {/* KPI Strip */}
-      <div className="stats-grid" style={{ marginBottom: 24 }}>
+      <div className="stats-grid" style={{ marginBottom: 14 }}>
         <Stat label="Live Routers" value={`${liveRouters} / ${totalRouters}`} color="green" note="Currently sending signals" />
         <Stat label="Active Sessions" value={`${totalActiveSessions}`} color="blue" note="Users online right now" />
         <Stat label="Vendors" value={`${tenants?.summary.totalTenants ?? 0}`} color="purple" note="Business workspaces" />
@@ -72,7 +72,7 @@ async function PlatformDashboard() {
       </div>
 
       {/* Platform Wallet Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 20, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 14 }}>
         {/* Visual Credit Card Style Wallet Card */}
         <div style={{
           background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
@@ -118,7 +118,7 @@ async function PlatformDashboard() {
         </div>
 
         {/* Withdrawal Settings */}
-        <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
+        <div className="card" style={{ padding: 15, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Platform Withdrawal Settings</span>
@@ -153,7 +153,7 @@ async function PlatformDashboard() {
         </div>
 
         {/* Withdrawal History */}
-        <div className="card" style={{ padding: 22, margin: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ padding: 15, margin: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Platform Withdrawals</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto', maxHeight: 150 }}>
             {(!payoutProfile?.recentWithdrawals || payoutProfile.recentWithdrawals.length === 0) ? (
@@ -177,13 +177,13 @@ async function PlatformDashboard() {
       </div>
 
       {/* Router Network Live Grid */}
-      <div className="card" style={{ marginBottom: 24 }}>
+      <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-header">
           <span className="card-title">Router Network</span>
           <a href="/admin/router" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Observability</a>
         </div>
         {routerItems.length === 0 ? (
-          <div className="empty-state" style={{ padding: 32 }}><p>No routers registered yet.</p></div>
+          <div className="empty-state" style={{ padding: 18 }}><p>No routers registered yet.</p></div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, padding: '0 20px 20px' }}>
             {routerItems.map((router) => {
@@ -392,7 +392,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       </div>
 
       {/* Modern Wallet Card & Disbursement Settings Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 20, marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 4 }}>
         {/* Visual Credit Card Style Wallet Card */}
         <div style={{
           background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
@@ -465,7 +465,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         </div>
 
         {/* Disbursement settings & actions */}
-        <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
+        <div className="card" style={{ padding: 15, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Disbursement Settings</span>
@@ -507,7 +507,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         </div>
 
         {/* Withdrawal History */}
-        <div className="card" style={{ padding: 22, margin: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ padding: 15, margin: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Recent Withdrawals</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto', maxHeight: 150 }}>
             {(!payoutProfile?.recentWithdrawals || payoutProfile.recentWithdrawals.length === 0) ? (
@@ -849,7 +849,7 @@ function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
   return (
     <tr>
       <td colSpan={colSpan}>
-        <div className="empty-state" style={{ padding: 24 }}>
+        <div className="empty-state" style={{ padding: 16 }}>
           <p>{text}</p>
         </div>
       </td>

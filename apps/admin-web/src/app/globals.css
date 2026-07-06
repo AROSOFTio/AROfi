@@ -376,7 +376,7 @@ body {
 /* ═══════════════════════════════════════════════
    CONTENT
 ═══════════════════════════════════════════════ */
-.content { padding: 28px 24px; }
+.content { padding: 14px 16px; }
 
 /* ═══════════════════════════════════════════════
    PAGE HEADER
@@ -385,8 +385,8 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
-  gap: 16px;
+  margin-bottom: 14px;
+  gap: 12px;
 }
 
 .page-title {
@@ -408,15 +408,15 @@ body {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 18px 20px;
+  padding: 13px 15px;
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.2s, border-color 0.2s;
 }
@@ -474,12 +474,12 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   box-shadow: var(--shadow-md);
 }
 
 .card-header {
-  padding: 16px 20px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -506,7 +506,7 @@ table {
 }
 
 th {
-  padding: 10px 20px;
+  padding: 8px 14px;
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -519,7 +519,7 @@ th {
 }
 
 td {
-  padding: 13px 20px;
+  padding: 9px 14px;
   color: var(--text-2);
   border-bottom: 1px solid var(--border-soft);
 }
