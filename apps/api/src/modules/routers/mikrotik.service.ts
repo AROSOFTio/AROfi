@@ -836,7 +836,13 @@ export class MikrotikService {
           document.getElementById('content').style.display='block';
           return;
         }
-        if(d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect){
+        var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;
+        if(autoReady&&!sessionStorage.getItem('arofiAutoTried')){
+          // Auto-login the returning device — but ONLY ONCE per browser session.
+          // Without this guard, a router that keeps rejecting the credential
+          // re-fires conn() on every reload, spamming MikroTik "login fail" and
+          // trapping the customer on a "connecting..." screen forever.
+          try{sessionStorage.setItem('arofiAutoTried','1');}catch(e){}
           conn(d.returningDevice.reconnect);return;
         }
 
@@ -866,6 +872,12 @@ export class MikrotikService {
         });
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
+        if(autoReady){
+          // We reached here with active access still showing = the one auto-login
+          // attempt was rejected by the router and it bounced back. Tell the
+          // customer the truth instead of silently looping.
+          sst('You already have active access, but the router did not accept the automatic login. Turn WiFi off and on to retry, or contact support.','err');
+        }
       });
     }
 
