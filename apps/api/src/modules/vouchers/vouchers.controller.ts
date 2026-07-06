@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
 import { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
@@ -112,6 +112,20 @@ export class VouchersController {
   redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.vouchersService.redeemVoucher(dto, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.vouchersManage)
+  @Delete('batches/:batchId')
+  deleteBatch(@CurrentUser() user: AuthenticatedAdminUser, @Param('batchId') batchId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.vouchersService.deleteBatch(batchId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.vouchersManage)
+  @Delete(':voucherId')
+  deleteVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Param('voucherId') voucherId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.vouchersService.deleteVoucher(voucherId, tenantId)
   }
 }
 

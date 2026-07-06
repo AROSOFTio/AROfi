@@ -9,7 +9,7 @@ import {
   VouchersOverviewResponse,
 } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
-import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { clientDeleteApi, clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, formatDuration, getStatusBadgeClass } from '@/lib/format'
 
 type TemplateFormState = {
@@ -359,6 +359,25 @@ export default function VouchersManager() {
     window.setTimeout(() => void loadData(), 1200)
   }
 
+  async function handleDeleteBatch(batch: VouchersOverviewResponse['batches'][number]) {
+    setError(null)
+    setSuccess(null)
+    if (batch.redeemedCount > 0) {
+      setError('This batch has redeemed/sold vouchers and cannot be deleted.')
+      return
+    }
+    if (!window.confirm(`Delete batch ${batch.batchNumber} and its ${batch.quantity} unused voucher(s)? This cannot be undone.`)) {
+      return
+    }
+    try {
+      await clientDeleteApi(`/vouchers/batches/${batch.id}`)
+      setSuccess(`Batch ${batch.batchNumber} deleted.`)
+      await loadData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete this batch.')
+    }
+  }
+
   function buildBatchFileUrl(batchId: string, type: 'print.pdf' | 'export.csv', templateId?: string, inline = false) {
     const params = new URLSearchParams()
     if (type === 'print.pdf' && templateId) {
@@ -661,6 +680,16 @@ export default function VouchersManager() {
                         Print PDF
                       </button>
                       <button type="button" className="btn btn-ghost" onClick={() => void downloadBatchFile(batch.id, 'export.csv')}>CSV</button>
+                      {batch.redeemedCount === 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ color: '#dc2626' }}
+                          onClick={() => void handleDeleteBatch(batch)}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
