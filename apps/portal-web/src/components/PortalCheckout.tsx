@@ -384,10 +384,32 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   useEffect(() => {
     if (!context?.returningDevice?.existingActiveAccess) return
     if (autoConnectAttemptedRef.current) return
+
+    // CRITICAL loop guard. After a successful hotspot login the router redirects
+    // the browser back here with ?connected=1. At that point the device already
+    // has active access, so without this guard the effect would auto-connect
+    // AGAIN — bouncing to the router login and back to ?connected=1 forever
+    // ("voucher scan stuck connecting"). The autoConnectAttemptedRef alone can't
+    // stop it because each redirect is a fresh page load that resets the ref, so
+    // we also persist a one-shot flag in sessionStorage across those reloads.
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connected') === '1') {
+      autoConnectAttemptedRef.current = true
+      // Genuinely online now — clear the flag so a later disconnect can
+      // auto-reconnect on a fresh visit.
+      try { sessionStorage.removeItem('arofiPortalAutoConnected') } catch {}
+      return
+    }
+    if (typeof window !== 'undefined' && sessionStorage.getItem('arofiPortalAutoConnected')) {
+      autoConnectAttemptedRef.current = true
+      return
+    }
+
     const reconnect = context.returningDevice.reconnect
     if (!reconnect?.username || !reconnect?.password) return
 
     autoConnectAttemptedRef.current = true
+    try { sessionStorage.setItem('arofiPortalAutoConnected', '1') } catch {}
     setConnectionStatus('reconnecting')
     autoSubmitHotspotLogin(reconnect)
   // eslint-disable-next-line react-hooks/exhaustive-deps
