@@ -49,6 +49,7 @@ function buildHarness(options: {
       findUnique: jest.fn().mockResolvedValue(options.existingSession ?? null),
       upsert: jest.fn().mockResolvedValue({}),
       aggregate: jest.fn().mockResolvedValue({ _sum: { inputOctets: BigInt(1024), outputOctets: BigInt(4096) } }),
+      count: jest.fn().mockResolvedValue(1),
     },
     radiusEvent: {
       findFirst: jest.fn().mockResolvedValue(options.existingEvent ?? null),
@@ -157,6 +158,23 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
     expect(prisma.router.update).not.toHaveBeenCalled()
   })
 
+  it('does not revive an old open accounting row as ACTIVE', async () => {
+    const oldSignal = new Date(Date.now() - 10 * 60 * 1000)
+    const { service, prisma } = buildHarness({ existingSession: null })
+
+    await service.processAcctRow(
+      buildAcctRow({ acctstarttime: oldSignal, acctupdatetime: oldSignal, acctstoptime: null }) as never,
+    )
+
+    expect(prisma.networkSession.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          status: SessionStatus.STALE,
+          endedAt: oldSignal,
+        }),
+      }),
+    )
+  })
   it('turns a radpostauth accept into a radius.auth event and fresh auth signal', async () => {
     const { service, prisma, realtimeEvents } = buildHarness()
 

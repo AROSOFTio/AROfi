@@ -578,32 +578,56 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
     }
 
-    // Capture affected router IDs before the bulk update so we can sync the
-    // cached activeSessionCount column. Without this, the column stays at the
-    // pre-cleanup value and mapRouter sees activeSessions > 0 indefinitely,
-    // causing offline routers to appear permanently LIVE.
     const affected = await this.prisma.networkSession.findMany({
       where: staleWhere,
-      select: { routerId: true },
-      distinct: ['routerId'],
-    })
-
-    await this.prisma.networkSession.updateMany({
-      where: staleWhere,
-      data: {
-        status: SessionStatus.STALE,
-        endedAt: new Date(),
+      select: {
+        id: true,
+        tenantId: true,
+        routerId: true,
+        radiusSessionId: true,
+        username: true,
+        macAddress: true,
+        lastAccountingAt: true,
       },
     })
 
-    for (const { routerId } of affected) {
-      if (!routerId) continue
+    if (affected.length === 0) {
+      return
+    }
+
+    const endedAt = new Date()
+    await this.prisma.networkSession.updateMany({
+      where: { id: { in: affected.map((session) => session.id) } },
+      data: {
+        status: SessionStatus.STALE,
+        endedAt,
+      },
+    })
+
+    const routerIds = new Set(affected.map((session) => session.routerId).filter((routerId): routerId is string => Boolean(routerId)))
+    for (const routerId of routerIds) {
       const count = await this.prisma.networkSession.count({
-        where: { routerId, status: SessionStatus.ACTIVE },
+        where: { routerId, status: SessionStatus.ACTIVE, lastAccountingAt: { gte: staleBefore } },
       })
       await this.prisma.router.update({
         where: { id: routerId },
         data: { activeSessionCount: count },
+      })
+    }
+
+    for (const session of affected) {
+      this.realtimeEvents.publish('session.stopped', {
+        tenantId: session.tenantId,
+        routerId: session.routerId ?? null,
+        data: {
+          sessionId: session.id,
+          radiusSessionId: session.radiusSessionId,
+          username: session.username,
+          macAddress: session.macAddress,
+          stale: true,
+          lastAccountingAt: session.lastAccountingAt?.toISOString() ?? null,
+          endedAt: endedAt.toISOString(),
+        },
       })
     }
   }

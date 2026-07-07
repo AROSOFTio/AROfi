@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { RadiusEventType, SessionStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { parseDeviceLabel } from './device-label'
+import { accountingLiveCutoff } from '../radius/accounting-liveness'
 
 @Injectable()
 export class SessionsService {
@@ -55,11 +56,14 @@ export class SessionsService {
     const startOfDay = new Date()
     startOfDay.setHours(0, 0, 0, 0)
 
+    const liveAccountingCutoff = accountingLiveCutoff()
+
     const [activeSessions, sessionsToday, recentEvents] = await Promise.all([
       this.prisma.networkSession.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
           status: SessionStatus.ACTIVE,
+          lastAccountingAt: { gte: liveAccountingCutoff },
         },
         include: this.sessionInclude,
         orderBy: {
@@ -151,7 +155,7 @@ export class SessionsService {
 
       existing.totalSessions += 1
       existing.totalDataMb += this.toMegabytes(session.inputOctets + session.outputOctets)
-      if (session.status === SessionStatus.ACTIVE) {
+      if (session.status === SessionStatus.ACTIVE && session.lastAccountingAt && session.lastAccountingAt >= liveAccountingCutoff) {
         existing.activeSessions += 1
       }
 

@@ -8,6 +8,7 @@ import {
 import type { RadAcct, RadPostAuth, Router } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { RealtimeEventsService } from '../events/realtime-events.service'
+import { accountingLiveCutoff, isLiveAccountingRow } from './accounting-liveness'
 
 // Converts FreeRADIUS SQL rows (radacct / radpostauth, written by rlm_sql)
 // into AROFi state: NetworkSession upserts, RadiusEvent records, router
@@ -119,7 +120,8 @@ export class RadiusSignalSyncService {
     const outputOctets = row.acctoutputoctets ?? BigInt(0)
     const sessionTimeSeconds = row.acctsessiontime ?? 0
     const isStopped = row.acctstoptime != null
-    const sessionStatus = isStopped ? SessionStatus.CLOSED : SessionStatus.ACTIVE
+    const isLive = isLiveAccountingRow(row, now)
+    const sessionStatus = isStopped ? SessionStatus.CLOSED : isLive ? SessionStatus.ACTIVE : SessionStatus.STALE
     const startedAt = row.acctstarttime ?? now
     const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
 
@@ -166,7 +168,7 @@ export class RadiusSignalSyncService {
             ...(macAddress ? { macAddress } : {}),
             ...(ipAddress ? { ipAddress } : {}),
             nasIpAddress: nasIp ?? undefined,
-            endedAt: isStopped ? (row.acctstoptime ?? now) : null,
+            endedAt: isStopped ? (row.acctstoptime ?? now) : isLive ? null : lastAccountingAt,
             ...(activation ? { activationId: activation.id } : {}),
             ...(activation?.voucherRedemptionId
               ? { voucherRedemptionId: activation.voucherRedemptionId }
@@ -187,7 +189,7 @@ export class RadiusSignalSyncService {
             sessionTimeSeconds,
             startedAt,
             lastAccountingAt,
-            endedAt: isStopped ? (row.acctstoptime ?? now) : null,
+            endedAt: isStopped ? (row.acctstoptime ?? now) : isLive ? null : lastAccountingAt,
             activationId: activation?.id ?? null,
             voucherRedemptionId: activation?.voucherRedemptionId ?? null,
           },
@@ -210,7 +212,7 @@ export class RadiusSignalSyncService {
       // actually changes, so it reflects reality within one accounting cycle.
       if (!existing || existing.status !== sessionStatus) {
         const liveCount = await this.prisma.networkSession.count({
-          where: { routerId: router.id, status: SessionStatus.ACTIVE },
+          where: { routerId: router.id, status: SessionStatus.ACTIVE, lastAccountingAt: { gte: accountingLiveCutoff(now) } },
         })
         await this.prisma.router.update({
           where: { id: router.id },
@@ -218,9 +220,10 @@ export class RadiusSignalSyncService {
         })
       }
 
-      const eventType = !existing && !isStopped
+      const eventType = !existing && sessionStatus === SessionStatus.ACTIVE
         ? 'session.started'
-        : isStopped && existing?.status !== SessionStatus.CLOSED
+        : (isStopped && existing?.status !== SessionStatus.CLOSED) ||
+            (sessionStatus === SessionStatus.STALE && existing?.status === SessionStatus.ACTIVE)
           ? 'session.stopped'
           : 'session.updated'
       this.realtimeEvents.publish(eventType, {

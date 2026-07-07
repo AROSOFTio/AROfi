@@ -18,6 +18,7 @@ describe('RoutersService', () => {
         findUnique: jest.fn(),
       },
       router: {
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({ id: 'router-1' }),
       },
     }
@@ -239,6 +240,42 @@ describe('RoutersService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 
+  describe('remote access allocation', () => {
+    it('allocates the lowest free deterministic 10.8.0.x endpoint', async () => {
+      const prisma = {
+        router: {
+          findMany: jest.fn().mockResolvedValue([
+            { remotePort: 31000, remoteSstpIp: '10.8.0.2' },
+            { remotePort: 31002, remoteSstpIp: '10.8.0.4' },
+          ]),
+        },
+      }
+      const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
+
+      await expect((service as any).allocateRemoteAccessEndpoint()).resolves.toEqual({
+        remotePort: 31001,
+        remoteSstpIp: '10.8.0.3',
+      })
+    })
+
+    it('generates an SSTP client script that cannot become a default route or DNS source', async () => {
+      const prisma = {
+        router: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'router-1',
+            name: 'Shop Router',
+            remoteClientName: 'AROFI_REMOTE',
+          }),
+        },
+      }
+      const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
+
+      const script = await service.getRemoteAccessInstallScript('token-1')
+
+      expect(script).toContain('add-default-route=no')
+      expect(script).toContain('use-peer-dns=no')
+    })
+  })
   describe('recordRouterHeartbeatByKey', () => {
     it('records heartbeat without updating database clients when IP has not changed', async () => {
       const router = buildCallbackRouter({ radiusNasIpAddress: '102.209.111.77' })

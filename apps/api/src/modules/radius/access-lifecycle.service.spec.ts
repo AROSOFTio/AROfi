@@ -41,6 +41,14 @@ function buildHarness() {
   }
 
   const prisma = {
+    networkSession: {
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    router: {
+      update: jest.fn().mockResolvedValue({}),
+    },
     packageActivation: {
       findMany: jest.fn().mockResolvedValue([activation]),
     },
@@ -189,6 +197,53 @@ describe('AccessLifecycleService disconnect retries and alerts', () => {
   })
 })
 
+describe('AccessLifecycleService stale session cleanup', () => {
+  it('marks stale active sessions stale, updates router count and publishes realtime events', async () => {
+    const { service, prisma, realtimeEvents } = buildHarness()
+    const staleSession = {
+      id: 'session-stale',
+      tenantId: 'tenant-1',
+      routerId: 'router-1',
+      radiusSessionId: 'radius-session-stale',
+      username: 'arofi-user',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      lastAccountingAt: new Date(Date.now() - 10 * 60 * 1000),
+    }
+    prisma.networkSession.findMany.mockResolvedValue([staleSession])
+    prisma.networkSession.count.mockResolvedValue(0)
+
+    await (service as never as { cleanStaleSessions: () => Promise<void> }).cleanStaleSessions()
+
+    expect(prisma.networkSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ['session-stale'] } },
+        data: expect.objectContaining({ status: 'STALE', endedAt: expect.any(Date) }),
+      }),
+    )
+    expect(prisma.router.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'router-1' }, data: { activeSessionCount: 0 } }),
+    )
+    expect(realtimeEvents.publish).toHaveBeenCalledWith(
+      'session.stopped',
+      expect.objectContaining({
+        tenantId: 'tenant-1',
+        routerId: 'router-1',
+        data: expect.objectContaining({ sessionId: 'session-stale', stale: true }),
+      }),
+    )
+  })
+
+  it('does not touch fresh active sessions during stale cleanup', async () => {
+    const { service, prisma, realtimeEvents } = buildHarness()
+    prisma.networkSession.findMany.mockResolvedValue([])
+
+    await (service as never as { cleanStaleSessions: () => Promise<void> }).cleanStaleSessions()
+
+    expect(prisma.networkSession.updateMany).not.toHaveBeenCalled()
+    expect(prisma.router.update).not.toHaveBeenCalled()
+    expect(realtimeEvents.publish).not.toHaveBeenCalled()
+  })
+})
 describe('AccessLifecycleService signal sync delegation', () => {
   it('delegates the polling fallback to RadiusSignalSyncService.syncRecent', async () => {
     const { service } = buildHarness()

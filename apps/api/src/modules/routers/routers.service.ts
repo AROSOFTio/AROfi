@@ -29,6 +29,7 @@ import { UpdateRouterDto } from './dto/update-router.dto'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RemoteProxyService } from './remote-proxy.service'
+import { accountingLiveCutoff, isLiveAccountingRow } from '../radius/accounting-liveness'
 
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
@@ -42,6 +43,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '12', 10)
   private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '30', 10)
   private readonly routerProbeIntervalMs = Number.parseInt(process.env.ROUTER_PROBE_INTERVAL_MS ?? '8000', 10)
+  private readonly remotePortStart = 31000
+  private readonly remotePortEnd = 31100
   private probeTimer?: ReturnType<typeof setInterval>
   private alertsTimer?: ReturnType<typeof setInterval>
   private probing = false
@@ -106,6 +109,19 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
       take: 1,
     },
+  }
+
+  private routerIncludeForLiveSessions(cutoff = accountingLiveCutoff()) {
+    return {
+      ...this.routerInclude,
+      sessions: {
+        where: {
+          status: SessionStatus.ACTIVE,
+          lastAccountingAt: { gte: cutoff },
+        },
+        select: { id: true },
+      },
+    }
   }
 
   constructor(
@@ -275,6 +291,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const startOfDay = new Date()
     startOfDay.setHours(0, 0, 0, 0)
 
+    const liveAccountingCutoff = accountingLiveCutoff()
+
     const [groups, routers, recentHealthChecks, radiusEventsToday] = await Promise.all([
       this.prisma.routerGroup.findMany({
         where: tenantId ? { tenantId } : undefined,
@@ -296,7 +314,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }),
       this.prisma.router.findMany({
         where: tenantId ? { tenantId } : undefined,
-        include: this.routerInclude,
+        include: this.routerIncludeForLiveSessions(liveAccountingCutoff),
         orderBy: [{ createdAt: 'desc' }],
       }),
       this.prisma.routerHealthCheck.findMany({
@@ -347,7 +365,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
     const activeAccountingByNas = new Map<string, number>()
     for (const row of recentAccountingRows) {
-      if (!row.nasipaddress || row.acctstoptime) {
+      if (!row.nasipaddress || !isLiveAccountingRow(row)) {
         continue
       }
       activeAccountingByNas.set(row.nasipaddress, (activeAccountingByNas.get(row.nasipaddress) ?? 0) + 1)
@@ -358,7 +376,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     // even with a connected customer. Also map open sessions to a router via the
     // RADIUS username (which is bound to the router that issued the credential).
     const openSessionUsernames = Array.from(
-      new Set(recentAccountingRows.filter((row) => !row.acctstoptime && row.username).map((row) => row.username as string)),
+      new Set(recentAccountingRows.filter((row) => isLiveAccountingRow(row) && row.username).map((row) => row.username as string)),
     )
     const credentialsForOpenSessions = openSessionUsernames.length
       ? await this.prisma.radiusCredential.findMany({
@@ -373,7 +391,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     )
     const activeAccountingByRouterId = new Map<string, number>()
     for (const row of recentAccountingRows) {
-      if (row.acctstoptime || !row.username) {
+      if (!isLiveAccountingRow(row) || !row.username) {
         continue
       }
       const routerId = routerIdByUsername.get(row.username)
@@ -553,8 +571,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     const registrationKey = randomUUID()
     const remoteToken = randomUUID()
-    const remotePort = Math.floor(Math.random() * 100) + 31000
-    const remoteSstpIp = `10.8.0.${Math.floor(Math.random() * 250) + 2}`
+    const { remotePort, remoteSstpIp } = await this.allocateRemoteAccessEndpoint()
     const sharedSecret = this.getPlatformRadiusSharedSecret()
     const host = dto.host?.trim() || `pending-${registrationKey.slice(0, 12)}.self-service`
     const username = dto.username?.trim() || 'admin'
@@ -617,7 +634,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           },
         },
       },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
       })
 
       // Sync VPN credentials to FreeRADIUS
@@ -671,7 +688,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async runHealthCheck(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     if (!router) {
@@ -788,7 +805,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async markRouterProvisionedByKey(key: string, sourceIp: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     if (!router) {
@@ -921,7 +938,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async getRouterSetup(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     if (!router) {
@@ -1086,7 +1103,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async rotateRadiusSecret(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     if (!router) {
@@ -1719,6 +1736,36 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return randomBytes(18).toString('base64url')
   }
 
+  private isLegacyRemoteSstpIp(remoteSstpIp: string | null | undefined) {
+    const [first, second, third] = (remoteSstpIp ?? '').split('.')
+    return first === '10' && second === '8' && third === '1'
+  }
+
+  private remoteSstpIpForPort(remotePort: number) {
+    return `10.8.0.${remotePort - this.remotePortStart + 2}`
+  }
+
+  private async allocateRemoteAccessEndpoint(excludeRouterId?: string) {
+    const routers = await this.prisma.router.findMany({
+      where: {
+        OR: [{ remotePort: { not: null } }, { remoteSstpIp: { not: null } }],
+        ...(excludeRouterId ? { id: { not: excludeRouterId } } : {}),
+      },
+      select: { remotePort: true, remoteSstpIp: true },
+    })
+    const usedPorts = new Set(routers.map((router) => router.remotePort).filter((port): port is number => port != null))
+    const usedIps = new Set(routers.map((router) => router.remoteSstpIp).filter((ip): ip is string => Boolean(ip)))
+
+    for (let remotePort = this.remotePortStart; remotePort <= this.remotePortEnd; remotePort += 1) {
+      const remoteSstpIp = this.remoteSstpIpForPort(remotePort)
+      if (!usedPorts.has(remotePort) && !usedIps.has(remoteSstpIp)) {
+        return { remotePort, remoteSstpIp }
+      }
+    }
+
+    throw new BadRequestException('No free remote WinBox ports are available in 31000-31100')
+  }
+
   private resolvePortalHosts(configured: string[]) {
     const envHosts = [
       process.env.PORTAL_PUBLIC_HOST,
@@ -1740,7 +1787,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async getRemoteAccess(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     if (!router) {
@@ -1758,14 +1805,16 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       updateData.remoteToken = randomUUID()
       updated = true
     }
-    if (!router.remotePort || router.remotePort < 31000 || router.remotePort > 31100) {
-      updateData.remotePort = Math.floor(Math.random() * 100) + 31000
-      updated = true
-    }
-    if (!router.remoteSstpIp) {
-      // Deterministic tunnel IP based on port (10.8.1.x) so IPs never collide
-      const port = updateData.remotePort ?? router.remotePort ?? 31000
-      updateData.remoteSstpIp = `10.8.1.${port - 31000 + 2}`
+    const needsEndpoint =
+      !router.remotePort ||
+      router.remotePort < this.remotePortStart ||
+      router.remotePort > this.remotePortEnd ||
+      !router.remoteSstpIp ||
+      this.isLegacyRemoteSstpIp(router.remoteSstpIp)
+    if (needsEndpoint) {
+      const endpoint = await this.allocateRemoteAccessEndpoint(router.id)
+      updateData.remotePort = endpoint.remotePort
+      updateData.remoteSstpIp = endpoint.remoteSstpIp
       updated = true
     }
     if (!router.remoteClientName) {
@@ -1777,7 +1826,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       const updatedRouter = await this.prisma.router.update({
         where: { id: routerId },
         data: updateData,
-        include: this.routerInclude,
+        include: this.routerIncludeForLiveSessions(),
       })
       if (updatedRouter.remoteToken && updatedRouter.remoteSstpIp) {
         await this.syncRadiusVpnCredentials(
@@ -1806,14 +1855,16 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     const remoteToken = router.remoteToken || randomUUID()
-    const remotePort = (router.remotePort && router.remotePort >= 31000 && router.remotePort <= 31100)
-      ? router.remotePort
-      : Math.floor(Math.random() * 100) + 31000
-
-    // Keep an already-assigned tunnel IP (live routers hold it in their
-    // current SSTP session); new routers get a deterministic port-derived IP
-    // (31000 -> 10.8.1.2, 31001 -> 10.8.1.3, …) so IPs never collide.
-    const remoteSstpIp = router.remoteSstpIp || `10.8.1.${remotePort - 31000 + 2}`
+    const needsEndpoint =
+      !router.remotePort ||
+      router.remotePort < this.remotePortStart ||
+      router.remotePort > this.remotePortEnd ||
+      !router.remoteSstpIp ||
+      this.isLegacyRemoteSstpIp(router.remoteSstpIp)
+    const endpoint = needsEndpoint
+      ? await this.allocateRemoteAccessEndpoint(router.id)
+      : { remotePort: router.remotePort, remoteSstpIp: router.remoteSstpIp }
+    const { remotePort, remoteSstpIp } = endpoint
 
     const updatedRouter = await this.prisma.router.update({
       where: { id: routerId },
@@ -1824,7 +1875,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         remotePort,
         remoteSstpIp,
       },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     // RADIUS hands the router this Framed-IP when the SSTP tunnel dials in
@@ -1854,7 +1905,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       data: {
         isRemotePortOpen: false,
       },
-      include: this.routerInclude,
+      include: this.routerIncludeForLiveSessions(),
     })
 
     // Stop TCP proxy forwarding
@@ -1958,7 +2009,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // provisioning script is now only ever a deliberate operator action.
       `/ppp profile add name="AROFi_Profile"`,
       `:local sstpOk 0`,
-      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
+      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no use-peer-dns=no disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
       // The SSTP tunnel interface must NOT be added to the router's "LAN"
       // interface list. It served no purpose here — WinBox/API remote access
       // connects over the tunnel's own PPP-assigned IP directly, never via
