@@ -624,6 +624,9 @@ export class MikrotikService {
     // HTTP fallback base URL (raw IP) so the page works when HTTPS fails in a
     // captive-portal mini-browser or when DNS hasn't resolved yet.
     const fallbackApiBaseUrl = this.escapeHtml(this.resolveHttpCallbackBaseUrl())
+    const connectedUrl = this.escapeHtml(
+      `${(portalBaseUrl || this.resolvePortalBaseUrl()).replace(/\/$/, '')}?connected=1`,
+    )
     const escapedKey = this.escapeHtml(registrationKey)
 
     // Self-contained white-themed static portal served directly from the router's
@@ -785,7 +788,7 @@ export class MikrotikService {
   </div>
 
   <script>
-    var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
+    var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}",CONNECTED="${connectedUrl}";
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
     var pkgs=[],selId=null;
     // Try HTTPS API first; if the captive-portal mini-browser blocks it (clock
@@ -807,7 +810,7 @@ export class MikrotikService {
           if(kv[0]==='dst') dst=kv[1];
         }
         if(u&&p){
-          window.location.href=lo+'?username='+u+'&password='+p+'&dst='+(dst||encodeURIComponent('http://google.com'));
+          window.location.href=lo+'?username='+u+'&password='+p+'&dst='+(dst||encodeURIComponent(CONNECTED));
           return;
         }
       }
@@ -1007,7 +1010,7 @@ export class MikrotikService {
       });
     }
 
-    function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst='http://neverssl.com/';var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
