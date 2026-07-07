@@ -233,6 +233,13 @@ export class MikrotikService {
       // re-entry point for field agents without a laptop. Force it on the
       // same way winbox is, since some operators harden it off by default.
       `:do { /ip service set www disabled=no } on-error={}`,
+      `# Block direct WAN access to router management; remote access should use the AROFi SSTP tunnel`,
+      ...this.buildWanDetectionScript('arofiMgmtWan', remoteClientName),
+      `/ip firewall filter remove [find comment="AROFi WAN mgmt block"]`,
+      `:if ($arofiMgmtWan != "") do={`,
+      `  /ip firewall filter add chain=input action=drop in-interface=$arofiMgmtWan protocol=tcp dst-port=80,443,8291,8728,8729,${input.apiPort} comment="AROFi WAN mgmt block"`,
+      `  :foreach r in=[/ip firewall filter find comment="AROFi WAN mgmt block"] do={ /ip firewall filter move $r destination=0 }`,
+      `}`,
       // Deliberately NOT touching /tool mac-server allowed-interface-list here.
       // Forcing it to "all" would expose MAC-Telnet/MAC-WinBox discovery (a
       // layer-2 protocol that bypasses IP firewall rules entirely) to the new

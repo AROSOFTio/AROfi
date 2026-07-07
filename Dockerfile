@@ -117,13 +117,8 @@ EXPOSE 31000-31099
 # Default service to run. "all" = nginx + api + admin-web + portal-web in one
 # container (single domain). Set SERVICE_NAME=api|admin|portal to run just one.
 ENV SERVICE_NAME=all
-# Provide defaults for development if not set in environment
+# Non-secret local default. Production still must provide DATABASE_URL.
 ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/arofi_dev?schema=public}
-ENV JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
-ENV PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:-dev-portal-secret-change-in-production}
-ENV ROUTER_CREDENTIAL_SECRET=${ROUTER_CREDENTIAL_SECRET:-dev-router-secret-change-in-production}
-ENV RADIUS_INTERNAL_API_KEY=${RADIUS_INTERNAL_API_KEY:-dev-radius-api-key-change-in-production}
-ENV RADIUS_SHARED_SECRET=${RADIUS_SHARED_SECRET:-dev-radius-secret-change-in-production}
 
 # Start appropriate service based on SERVICE_NAME environment variable
 CMD if [ "$SERVICE_NAME" = "all" ]; then \

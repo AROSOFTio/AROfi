@@ -1,15 +1,18 @@
-import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus, Headers } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
 
 @Controller('chat')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('session')
   createSession(@Body() body: { name?: string }) {
     return this.chatService.createSession(body.name || 'Visitor');
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @Post('send')
   @HttpCode(HttpStatus.OK)
   async sendMessage(@Body() body: { sessionId: string; text: string }) {
@@ -17,6 +20,7 @@ export class ChatController {
     return { success };
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Get('messages')
   async getMessages(@Query('sessionId') sessionId: string): Promise<any> {
     const session = await this.chatService.getSession(sessionId);
@@ -27,10 +31,17 @@ export class ChatController {
     };
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhook(@Body() payload: any) {
-    await this.chatService.handleWebhook(payload);
+  async handleWebhook(
+    @Body() payload: any,
+    @Headers('x-arofi-webhook-secret') arofiSecret?: string,
+    @Headers('x-webhook-secret') webhookSecret?: string,
+    @Headers('x-api-key') apiKey?: string,
+    @Query('secret') querySecret?: string,
+  ) {
+    await this.chatService.handleWebhook(payload, arofiSecret || webhookSecret || apiKey || querySecret);
     return { received: true };
   }
 }

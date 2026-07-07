@@ -28,6 +28,7 @@ export class UpdatePackageDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(5)
   deviceLimit?: number
 
   @IsOptional()

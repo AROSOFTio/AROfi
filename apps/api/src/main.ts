@@ -143,7 +143,13 @@ function assertRequiredProductionConfig() {
   // non-payment workflows while MTN/Airtel credentials are pending.
   const missing = required.filter((key) => {
     const value = process.env[key]
-    return !value || value.startsWith('change_') || value.startsWith('replace_with') || value.startsWith('CHANGE_ME')
+    return (
+      !value ||
+      value.startsWith('change_') ||
+      value.startsWith('replace_with') ||
+      value.startsWith('CHANGE_ME') ||
+      value.startsWith('dev-')
+    )
   })
   if (missing.length > 0) {
     throw new Error(`Missing required production configuration: ${missing.join(', ')}`)

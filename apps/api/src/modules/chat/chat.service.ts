@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ChatMessageSender, SupportTicketChannel } from '@prisma/client'
+import { randomBytes, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 
 // Anonymous marketing-site visitors have no tenant context, so chat-derived
 // support tickets are filed against AROFi's own internal placeholder tenant
 // (same pattern wallets.service.ts uses for platform-level wallet entries).
 const PLATFORM_TENANT_ID = 'platform'
+const MAX_VISITOR_NAME_LENGTH = 80
+const MAX_CHAT_MESSAGE_LENGTH = 2000
 
 export interface ChatMessage {
   sender: 'visitor' | 'admin'
@@ -24,6 +27,7 @@ export interface ChatSession {
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name)
+  private warnedMissingWebhookSecret = false
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -36,12 +40,12 @@ export class ChatService {
   }
 
   async createSession(name: string): Promise<{ sessionId: string; code: string }> {
-    const sessionId = Math.random().toString(36).substring(2, 10).toUpperCase()
-    const visitorName = name || 'Visitor'
+    const sessionId = randomBytes(12).toString('hex').toUpperCase()
+    const visitorName = this.normalizeText(name || 'Visitor', MAX_VISITOR_NAME_LENGTH) || 'Visitor'
 
     let code = ''
     for (let attempts = 0; attempts < 20; attempts += 1) {
-      const candidate = Math.random().toString(36).substring(2, 6).toUpperCase()
+      const candidate = randomBytes(4).toString('hex').slice(0, 6).toUpperCase()
       const existing = await this.prisma.chatSession.findUnique({ where: { code: candidate } })
       if (!existing) {
         code = candidate
@@ -100,6 +104,11 @@ export class ChatService {
   }
 
   async sendMessageFromVisitor(sessionId: string, text: string): Promise<boolean> {
+    const cleanText = this.normalizeText(text, MAX_CHAT_MESSAGE_LENGTH)
+    if (!cleanText) {
+      return false
+    }
+
     const session = await this.prisma.chatSession.findUnique({ where: { sessionId } })
     if (!session) {
       return false
@@ -107,7 +116,7 @@ export class ChatService {
 
     await this.prisma.$transaction([
       this.prisma.chatMessage.create({
-        data: { chatSessionId: session.id, sender: ChatMessageSender.VISITOR, text },
+        data: { chatSessionId: session.id, sender: ChatMessageSender.VISITOR, text: cleanText },
       }),
       this.prisma.chatSession.update({
         where: { id: session.id },
@@ -120,7 +129,7 @@ export class ChatService {
                 ticketId: session.supportTicketId,
                 authorName: session.name,
                 authorRole: 'CUSTOMER',
-                body: text,
+                body: cleanText,
               },
             }),
             this.prisma.supportTicket.update({
@@ -142,7 +151,7 @@ export class ChatService {
         const chatId = cleanPhone.endsWith('@c.us') ? cleanPhone : `${cleanPhone}@c.us`
         const url = `${wahaUrl.replace(/\/$/, '')}/api/sendText`
 
-        const waMessage = `💬 [Live Chat] #${session.code}\nVisitor: ${session.name}\n\n${text}`
+        const waMessage = `Live Chat #${session.code}\nVisitor: ${session.name}\n\n${cleanText}`
 
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -168,7 +177,11 @@ export class ChatService {
     return true
   }
 
-  async handleWebhook(payload: any): Promise<void> {
+  async handleWebhook(payload: any, providedSecret?: string): Promise<void> {
+    if (!this.isWebhookAuthorized(providedSecret)) {
+      return
+    }
+
     // WAHA sends events where the message content is in metadata/data.
     const event = payload?.event
     if (event !== 'message' && event !== 'message.any' && event !== 'message.created') {
@@ -180,7 +193,7 @@ export class ChatService {
       return
     }
 
-    const body = messageData.body || ''
+    const body = this.normalizeText(messageData.body || '', MAX_CHAT_MESSAGE_LENGTH)
     const from = messageData.from || '' // Sender's phone number, e.g. "256770000000@c.us"
     const fromMe = messageData.fromMe
 
@@ -200,8 +213,9 @@ export class ChatService {
       return
     }
 
-    // Scan for code in format #CODE (e.g. #A7F9)
-    const match = body.match(/#([A-Z0-9]{4})/i)
+    // Scan for code in format #CODE. New sessions use 6 chars; 4-char codes
+    // are still accepted so active chats created before this change can close.
+    const match = body.match(/#([A-Z0-9]{4,8})/i)
     if (!match) {
       return
     }
@@ -243,5 +257,40 @@ export class ChatService {
     ])
 
     this.logger.log(`Routed admin WhatsApp reply to session ${session.sessionId} (Code: #${code})`)
+  }
+  private normalizeText(value: unknown, maxLength: number) {
+    if (typeof value !== 'string') {
+      return ''
+    }
+
+    return value.trim().slice(0, maxLength)
+  }
+
+  private isWebhookAuthorized(providedSecret?: string) {
+    const expectedSecret = process.env.WAHA_WEBHOOK_SECRET?.trim()
+    if (!expectedSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        if (!this.warnedMissingWebhookSecret) {
+          this.logger.error('WAHA_WEBHOOK_SECRET is required in production; chat webhook ignored.')
+          this.warnedMissingWebhookSecret = true
+        }
+        return false
+      }
+
+      return true
+    }
+
+    if (!providedSecret) {
+      return false
+    }
+
+    return this.safeEqual(providedSecret.trim(), expectedSecret)
+  }
+
+  private safeEqual(actual: string, expected: string) {
+    const actualBuffer = Buffer.from(actual)
+    const expectedBuffer = Buffer.from(expected)
+
+    return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer)
   }
 }
