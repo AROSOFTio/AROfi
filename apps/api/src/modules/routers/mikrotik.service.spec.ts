@@ -86,6 +86,8 @@ describe('MikrotikService', () => {
     expect(script).toContain('security-profile=arofi-open')
     expect(script).toContain('ssid=\\"AROFi Free WiFi\\"')
     expect(script).toContain('bridge=arofi-hotspot')
+    expect(script).toContain('/interface ethernet find')
+    expect(script).toContain('$ethName != "ether1"')
     expect(script).toContain('/ip address add address=10.55.0.1/24 interface=arofi-hotspot')
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
