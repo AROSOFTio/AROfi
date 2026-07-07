@@ -39,6 +39,8 @@ describe('MikrotikService', () => {
     expect(script).toContain('mode=http keep-result=no')
     expect(script).toContain(':len [/ip hotspot active find]')
     expect(script).toContain('?activeUsers=')
+    expect(script).toContain('url=(\\"https://arofi.net/api/mikrotik/heartbeat/')
+    expect(script).not.toContain('url=("https://arofi.net/api/mikrotik/heartbeat/')
     expect(script).toContain('interval=2s on-event="arofi-heartbeat"')
     expect(script).toContain('/api/mikrotik/provisioned/')
     expect(script).toContain('/api/mikrotik/login-html/')

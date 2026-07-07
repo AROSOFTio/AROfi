@@ -511,7 +511,7 @@ export class MikrotikService {
       `on-error={ :do { /tool fetch url=("${fallbackHeartbeatUrl}" . "?activeUsers=" . $arofiActiveUsers) mode=http keep-result=no } on-error={} }`
     return [
       `/system script remove [find name="arofi-heartbeat"]`,
-      `/system script add name="arofi-heartbeat" source="${source}"`,
+      `/system script add name="arofi-heartbeat" source="${this.escape(source)}"`,
       `/system scheduler remove [find name="arofi-heartbeat"]`,
       `/system scheduler add name="arofi-heartbeat" interval=${intervalSeconds}s on-event="arofi-heartbeat" comment="AROFi heartbeat"`,
     ]

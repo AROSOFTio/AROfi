@@ -290,6 +290,7 @@ describe('RoutersService', () => {
 
       expect(script).toContain('add-default-route=no')
       expect(script).not.toContain('use-peer-dns=')
+      expect(script).not.toContain('/system script add')
     })
   })
   describe('recordRouterHeartbeatByKey', () => {
