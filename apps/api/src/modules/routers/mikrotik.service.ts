@@ -260,17 +260,21 @@ export class MikrotikService {
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
       `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
-      // keepalive-timeout=30s was too aggressive: captive-portal mini-browsers
-      // (Android/iOS/Windows "sign in to network") auto-close themselves right
-      // after showing "You are logged in", which stops the heartbeat and got
-      // the device logged out ~30s later even though it never left the WiFi.
-      // shared-users=1 + MAC-bound RADIUS credentials already prevent sharing,
-      // so this only needs to reclaim genuinely abandoned sessions, not police
-      // normal logins. 2m matches MikroTik's own default. Package-expiry
-      // disconnection is unaffected — that's enforced separately via the
-      // RADIUS Session-Timeout attribute, which still cuts off instantly.
-      `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=2m`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=2m }`,
+      // keepalive-timeout=2m (MikroTik's own default) was still far too
+      // aggressive in practice: phones and laptops routinely stop answering
+      // the HotSpot's ARP-based keepalive probe within 1-2 minutes of the
+      // screen locking / WiFi radio going idle, even though the device never
+      // actually left the network — so a paying customer got logged out for
+      // simply not touching their phone for a minute. shared-users=1 +
+      // MAC-bound RADIUS credentials already prevent session sharing, so
+      // this setting only needs to eventually reclaim a device that is
+      // genuinely gone, not police normal idle behaviour. 1h gives real
+      // idle/sleep time without materially delaying reclaim of abandoned
+      // sessions. Package-expiry disconnection is unaffected either way —
+      // that's enforced separately via the RADIUS Session-Timeout attribute
+      // (and CoA disconnect), which still cuts off exactly on schedule.
+      `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=1h`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=1h }`,
       // dns-name on the profile only controls which name the HotSpot itself answers
       // for unauthenticated clients it already intercepted; resolving the name from
       // a fresh DNS query (e.g. a customer scanning the printed voucher QR before
