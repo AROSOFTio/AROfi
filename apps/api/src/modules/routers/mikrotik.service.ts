@@ -276,6 +276,8 @@ export class MikrotikService {
       // customer gets disconnected.
       `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30d`,
       `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=30d }`,
+      `# Remove HotSpot bypass bindings so every device must authenticate through AROFi`,
+      `:do { /ip hotspot ip-binding remove [find type=bypassed] } on-error={}`,
       // dns-name on the profile only controls which name the HotSpot itself answers
       // for unauthenticated clients it already intercepted; resolving the name from
       // a fresh DNS query (e.g. a customer scanning the printed voucher QR before
@@ -727,6 +729,11 @@ export class MikrotikService {
 
       <p class="section-label">Select a package and pay with Mobile Money</p>
       <div class="pkgs" id="plist"></div>
+      <div id="multiSection" style="display:none">
+        <p class="section-label">Multi-device packages</p>
+        <div class="pkgs" id="multiList"></div>
+      </div>
+
 
       <div class="accept" id="acceptBox">
         <div class="accept-label">We accept:</div>
@@ -882,12 +889,17 @@ export class MikrotikService {
         }
 
         var el=document.getElementById('plist');el.innerHTML='';
+        var ml=document.getElementById('multiList');ml.innerHTML='';
+        var mc=0;
         pkgs.forEach(function(p){
+          var limit=parseInt(p.deviceLimit||1,10)||1;
           var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;
-          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(fdur(p.durationMinutes))+'</span></span><span class="pk-price">UGX '+fn(p.amountUgx)+'</span><span class="pk-buy">BUY</span>';
+          var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');
+          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">UGX '+fn(p.amountUgx)+'</span><span class="pk-buy">BUY</span>';
           c.onclick=function(){selPkg(p.id);};
-          el.appendChild(c);
+          if(limit>1){ml.appendChild(c);mc++;}else{el.appendChild(c);}
         });
+        document.getElementById('multiSection').style.display=mc>0?'block':'none';
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
         if(autoReady){

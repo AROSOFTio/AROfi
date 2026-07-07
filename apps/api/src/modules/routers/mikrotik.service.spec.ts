@@ -35,6 +35,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=1m')
     expect(script).toContain('login-by=http-pap')
+    expect(script).toContain('/ip hotspot ip-binding remove [find type=bypassed]')
     expect(script).toContain('mode=http keep-result=no')
     expect(script).toContain('/api/mikrotik/provisioned/')
     expect(script).toContain('/api/mikrotik/login-html/')
@@ -140,6 +141,10 @@ describe('MikrotikService', () => {
     expect(html).toContain('ip="$(ip)"')
     expect(html).toContain('lo="$(link-login-only)"')
     expect(html).toContain('srv="$(server-name)"')
+    expect(html).toContain('id="multiSection"')
+    expect(html).toContain('Multi-device packages')
+    expect(html).toContain('deviceLimit')
+    expect(html).toContain('multiList')
   })
 
   it('builds idempotent walled garden and optional TTL anti-tethering sections', () => {
