@@ -328,13 +328,23 @@ function TenantCard({ tenant, busy, onActivate, onSuspend, onFraudHold, onReleas
         </div>
       </div>
 
+      {/* Contact details */}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+        <ContactLine label="Support phone" value={tenant.supportPhone} href={tenant.supportPhone ? `tel:${tenant.supportPhone.replace(/\s+/g, '')}` : undefined} />
+        <ContactLine label="Support email" value={tenant.supportEmail} href={tenant.supportEmail ? `mailto:${tenant.supportEmail}` : undefined} />
+      </div>
+
       {/* Payout numbers */}
       {(tenant.payoutNumbers ?? []).length > 0 && (
         <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Payout Numbers</div>
-          {(tenant.payoutNumbers ?? []).slice(0, 2).map((number) => (
-            <div key={number.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{number.network} {maskPhone(number.normalizedPhone)}</span>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Payout / telephone numbers</div>
+          {(tenant.payoutNumbers ?? []).slice(0, 5).map((number) => (
+            <div key={number.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+              <a href={`tel:${number.normalizedPhone}`} style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, textDecoration: 'none' }}>
+                {number.network} {number.normalizedPhone}
+              </a>
+              {number.ownerName && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{number.ownerName}</span>}
+              {number.isPrimary && <span className="badge badge-info">primary</span>}
               <span className={getStatusBadgeClass(number.status)}>{number.status.toLowerCase().replace(/_/g, ' ')}</span>
             </div>
           ))}
@@ -347,7 +357,6 @@ function TenantCard({ tenant, busy, onActivate, onSuspend, onFraudHold, onReleas
       {/* Metadata */}
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
         <span>Portal: <strong>{tenant.portalTemplate ?? 'classic'}</strong></span>
-        {(tenant.supportPhone ?? tenant.supportEmail) && <span>Support: {tenant.supportPhone ?? tenant.supportEmail}</span>}
         <span>Created: {formatDate(tenant.createdAt)}</span>
       </div>
 
@@ -375,7 +384,17 @@ function TenantCard({ tenant, busy, onActivate, onSuspend, onFraudHold, onReleas
 
 const actionBtnStyle: React.CSSProperties = { padding: '6px 10px', fontSize: 12 }
 
-function maskPhone(value: string) {
-  if (value.length <= 6) return value
-  return `${value.slice(0, 4)}xxxx${value.slice(-3)}`
+function ContactLine({ label, value, href }: { label: string; value?: string | null; href?: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>{label}</div>
+      {value ? (
+        <a href={href} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, fontWeight: 600, color: 'var(--text-1)', textDecoration: 'none' }} title={value}>
+          {value}
+        </a>
+      ) : (
+        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Not set</span>
+      )}
+    </div>
+  )
 }
