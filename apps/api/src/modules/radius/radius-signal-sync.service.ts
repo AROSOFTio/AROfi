@@ -199,6 +199,25 @@ export class RadiusSignalSyncService {
         return
       }
 
+      // Router.activeSessionCount is a cached column the dashboard/router-list
+      // pages read directly (a live COUNT on every page load would be fine for
+      // one router but doesn't scale). Nothing was keeping it in sync with
+      // reality: it was only ever written by the health-check probe and the
+      // stale-session sweep, NEITHER of which fires when a brand-new session
+      // goes ACTIVE. That's why a device could be connected, tracked, and
+      // billed correctly while the dashboard's "Active Users" stayed at 0
+      // forever. Recompute it here whenever a session's ACTIVE/CLOSED status
+      // actually changes, so it reflects reality within one accounting cycle.
+      if (!existing || existing.status !== sessionStatus) {
+        const liveCount = await this.prisma.networkSession.count({
+          where: { routerId: router.id, status: SessionStatus.ACTIVE },
+        })
+        await this.prisma.router.update({
+          where: { id: router.id },
+          data: { activeSessionCount: liveCount },
+        })
+      }
+
       const eventType = !existing && !isStopped
         ? 'session.started'
         : isStopped && existing?.status !== SessionStatus.CLOSED
