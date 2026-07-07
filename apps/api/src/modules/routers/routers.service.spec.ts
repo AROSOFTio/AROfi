@@ -258,7 +258,7 @@ describe('RoutersService', () => {
       })
     })
 
-    it('generates an SSTP client script that cannot become a default route or DNS source', async () => {
+    it('generates a RouterOS 6-compatible SSTP client script that cannot become a default route', async () => {
       const prisma = {
         router: {
           findFirst: jest.fn().mockResolvedValue({
@@ -273,7 +273,7 @@ describe('RoutersService', () => {
       const script = await service.getRemoteAccessInstallScript('token-1')
 
       expect(script).toContain('add-default-route=no')
-      expect(script).toContain('use-peer-dns=no')
+      expect(script).not.toContain('use-peer-dns=')
     })
   })
   describe('recordRouterHeartbeatByKey', () => {

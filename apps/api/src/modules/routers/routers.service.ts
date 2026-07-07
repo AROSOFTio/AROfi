@@ -2009,7 +2009,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // provisioning script is now only ever a deliberate operator action.
       `/ppp profile add name="AROFi_Profile"`,
       `:local sstpOk 0`,
-      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no use-peer-dns=no disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
+      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}:${sstpPort}" user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
       // The SSTP tunnel interface must NOT be added to the router's "LAN"
       // interface list. It served no purpose here — WinBox/API remote access
       // connects over the tunnel's own PPP-assigned IP directly, never via
