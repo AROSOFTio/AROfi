@@ -3328,128 +3328,20 @@ pre, code.block {
 /* Vendor withdrawals workspace */
 .withdraw-workspace {
   --withdraw-blue: #0b63f6;
-  --withdraw-blue-soft: #eaf2ff;
   --withdraw-line: rgba(148, 163, 184, 0.34);
   display: grid;
   gap: 16px;
 }
 .withdraw-alert-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.withdraw-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.9fr);
-  gap: 18px;
-  align-items: start;
-}
-.withdraw-left { display: grid; gap: 16px; }
-.withdraw-hero,
-.withdraw-card,
-.withdraw-now-panel {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--bg-card);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
-}
-.withdraw-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  min-height: 218px;
-  overflow: hidden;
-  padding: 22px 24px;
-  background: radial-gradient(circle at 85% 40%, rgba(11, 99, 246, 0.18), transparent 30%), linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(234, 242, 255, 0.74));
-}
-.withdraw-eyebrow { color: var(--text-1); font-size: 20px; font-weight: 900; }
-.withdraw-hero h2 {
-  margin: 10px 0 4px;
-  color: var(--withdraw-blue);
-  font-size: clamp(30px, 4vw, 42px);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-.withdraw-hero p,
-.withdraw-section-head p,
-.withdraw-now-header p,
 .field-hint {
   margin: 5px 0 0;
   color: var(--text-2);
   font-size: 12px;
 }
 .field-hint.danger { color: var(--danger-fg); }
-.withdraw-note-stack { display: grid; gap: 8px; margin-top: 18px; max-width: 430px; }
-.withdraw-info-line {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid rgba(219, 234, 254, 0.95);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
-  padding: 11px 13px;
-  color: var(--text-2);
-  font-size: 12px;
-}
-.withdraw-info-line svg { color: var(--withdraw-blue); flex-shrink: 0; }
-.withdraw-wallet-art { position: relative; min-height: 170px; }
-.cash-note {
-  position: absolute;
-  top: 28px;
-  right: 70px;
-  width: 78px;
-  height: 38px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #d1fae5, #22c55e);
-  color: rgba(255, 255, 255, 0.9);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 900;
-  transform: rotate(-15deg);
-  box-shadow: 0 12px 20px rgba(34, 197, 94, 0.22);
-}
-.cash-note.note-two {
-  top: 48px;
-  right: 28px;
-  transform: rotate(18deg);
-  background: linear-gradient(135deg, #bbf7d0, #16a34a);
-}
-.wallet-illustration {
-  position: absolute;
-  right: 34px;
-  bottom: 18px;
-  width: 146px;
-  height: 104px;
-  border-radius: 22px;
-  background: linear-gradient(145deg, #4f8cff, #0b63f6);
-  color: white;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 20px 38px rgba(11, 99, 246, 0.3);
-  transform: rotate(-8deg);
-}
-.wallet-illustration span {
-  position: absolute;
-  right: 12px;
-  top: 40px;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #fde68a, #f59e0b);
-  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.35);
-}
-.withdraw-card { padding: 18px; }
-.withdraw-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 14px;
-}
-.withdraw-section-head.compact { align-items: center; }
-.withdraw-section-head h3,
-.withdraw-now-header h3,
-.withdraw-step h4 {
-  margin: 0;
-  color: var(--text-1);
-  font-weight: 900;
-}
+.withdraw-card-body { padding: 16px; }
+.secret-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.secret-row p { margin: 0; color: var(--text-2); font-size: 12.5px; }
 .withdraw-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .payout-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .payout-column { display: grid; gap: 10px; min-width: 0; }
@@ -3505,53 +3397,7 @@ pre, code.block {
 .mini-badge.amber { border: 1px solid #fde68a; background: #fffbeb; color: #b45309; }
 .primary-star { margin-left: auto; color: #f59e0b; fill: #f59e0b; }
 .muted-icon { margin-left: auto; color: var(--text-3); }
-.secret-card { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; align-items: center; }
-.secret-visual {
-  position: relative;
-  width: 98px;
-  height: 112px;
-  border-radius: 26px;
-  background: linear-gradient(150deg, #dbeafe, #2563eb);
-  color: white;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.24);
-}
-.secret-dots {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 18px;
-  display: flex;
-  justify-content: space-between;
-}
-.secret-dots span { width: 8px; height: 8px; border-radius: 50%; background: white; }
-.secret-check { position: absolute; right: -8px; bottom: 10px; border-radius: 50%; background: #22c55e; padding: 2px; }
-.secret-content { min-width: 0; }
-.withdraw-now-panel { position: sticky; top: 86px; padding: 20px; }
-.withdraw-now-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
 .withdraw-step-form { display: grid; gap: 16px; }
-.withdraw-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; }
-.step-marker {
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: var(--withdraw-blue);
-  color: white;
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-  font-size: 13px;
-  box-shadow: 0 8px 18px rgba(11, 99, 246, 0.28);
-}
-.step-body { min-width: 0; }
-.step-body h4 { font-size: 14px; margin-bottom: 10px; }
 .amount-input { font-size: 18px; font-weight: 800; }
 .destination-list { display: grid; gap: 10px; }
 .destination-phone { font-weight: 800; }
@@ -3629,23 +3475,15 @@ pre, code.block {
   padding: 0;
   cursor: pointer;
 }
-@media (max-width: 1180px) {
-  .withdraw-layout { grid-template-columns: 1fr; }
-  .withdraw-now-panel { position: static; }
-}
 @media (max-width: 720px) {
-  .withdraw-hero,
-  .secret-card,
   .payout-columns { grid-template-columns: 1fr; }
-  .withdraw-wallet-art { display: none; }
   .payout-column + .payout-column {
     border-left: 0;
     padding-left: 0;
     border-top: 1px solid var(--border);
     padding-top: 14px;
   }
-  .withdraw-section-head,
-  .withdraw-now-header,
+  .secret-row,
   .withdraw-head-actions {
     align-items: stretch;
     flex-direction: column;

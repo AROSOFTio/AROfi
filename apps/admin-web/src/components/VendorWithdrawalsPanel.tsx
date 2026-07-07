@@ -1,20 +1,16 @@
 'use client'
 
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  Info,
   KeyRound,
-  LockKeyhole,
   MoreVertical,
   Plus,
   Send,
   Settings,
-  ShieldCheck,
   Star,
-  Wallet,
 } from 'lucide-react'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { Modal } from '@/components/Modal'
@@ -76,7 +72,7 @@ type PayoutProfile = {
   } | null
 }
 
-type PanelAction = 'secret' | 'number' | 'change' | null
+type PanelAction = 'secret' | 'number' | 'change' | 'withdraw' | null
 
 export default function VendorWithdrawalsPanel({ initialProfile }: { initialProfile: PayoutProfile | null }) {
   const [profile, setProfile] = useState(initialProfile)
@@ -102,6 +98,8 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   const airtelNumbers = profile?.numbers.filter((item) => item.network === 'AIRTEL') ?? []
   const availableUgx = profile?.metrics?.availableBalanceUgx ?? profile?.wallet?.balanceUgx ?? 0
   const walletBalanceUgx = profile?.metrics?.walletBalanceUgx ?? profile?.wallet?.balanceUgx ?? availableUgx
+  const pendingWithdrawalsUgx = profile?.metrics?.pendingWithdrawalsUgx ?? 0
+  const alreadyWithdrawnUgx = profile?.metrics?.alreadyWithdrawnUgx ?? 0
   const feeBps = profile?.rules?.withdrawalFeeBasisPoints ?? 0
   const flatFeeUgx = profile?.rules?.withdrawalFlatFeeUgx ?? 0
   const minimumPayoutUgx = profile?.rules?.minimumPayoutUgx ?? 0
@@ -225,19 +223,19 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   async function withdraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedNumber) {
-      setError('Select a verified payout number before requesting withdrawal.')
+      setModalError('Select a verified payout number before requesting withdrawal.')
       return
     }
     if (!selectedIsPrimary) {
-      setError('Withdrawals currently go only to the primary verified payout number.')
+      setModalError('Withdrawals currently go only to the primary verified payout number.')
       return
     }
     if (withdrawalMath.belowMinimum) {
-      setError(`Minimum withdrawal is ${formatCurrency(minimumPayoutUgx)}.`)
+      setModalError(`Minimum withdrawal is ${formatCurrency(minimumPayoutUgx)}.`)
       return
     }
     if (withdrawalMath.exceedsBalance) {
-      setError('Withdrawal amount plus charges is higher than the available wallet balance.')
+      setModalError('Withdrawal amount plus charges is higher than the available wallet balance.')
       return
     }
 
@@ -265,259 +263,149 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         </div>
       )}
 
-      <div className="withdraw-layout">
-        <div className="withdraw-left">
-          <section className="withdraw-hero">
-            <div className="withdraw-hero-copy">
-              <span className="withdraw-eyebrow">Withdraw Funds</span>
-              <h2>{formatCurrency(availableUgx)}</h2>
-              <p>Send wallet funds directly to your approved registered payout number.</p>
-              <div className="withdraw-note-stack">
-                <InfoLine icon={<ShieldCheck size={18} />} text="Withdrawals are sent only to approved registered numbers." />
-                <InfoLine icon={<Info size={18} />} text={reviewText(profile.rules?.requireApprovalAboveAmountUgx)} />
-              </div>
-            </div>
-            <div className="withdraw-wallet-art" aria-hidden="true">
-              <div className="cash-note note-one">UGX</div>
-              <div className="cash-note note-two">UGX</div>
-              <div className="wallet-illustration">
-                <Wallet size={54} />
-                <span />
-              </div>
-            </div>
-          </section>
-
-          <section className="withdraw-card">
-            <div className="withdraw-section-head">
-              <div>
-                <h3>Registered Payout Numbers</h3>
-                <p>You can register up to {profile.rules?.maxActiveNumbers ?? 2} payout number(s), based on platform rules.</p>
-              </div>
-              <div className="withdraw-head-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setAction('number')} disabled={(profile.rules?.maxActiveNumbers ?? 2) <= profile.numbers.length}>
-                  <Plus size={16} /> Add Number
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={() => setAction('change')}>
-                  <Settings size={16} /> Manage Numbers
-                </button>
-              </div>
-            </div>
-            <div className="payout-columns">
-              <PayoutColumn network="MTN" numbers={mtnNumbers} selectedId={selectedNumber?.id} onSelect={setSelectedPayoutNumberId} />
-              <PayoutColumn network="AIRTEL" numbers={airtelNumbers} selectedId={selectedNumber?.id} onSelect={setSelectedPayoutNumberId} />
-            </div>
-          </section>
-
-          <section className="withdraw-card secret-card">
-            <div className="secret-visual">
-              <LockKeyhole size={44} />
-              <div className="secret-dots"><span /><span /><span /><span /></div>
-              {profile.profile.secretConfigured && <Check className="secret-check" size={18} />}
-            </div>
-            <div className="secret-content">
-              <div className="withdraw-section-head compact">
-                <div>
-                  <h3>Withdrawal Secret Code</h3>
-                  <p>This secret is required every time you withdraw.</p>
-                </div>
-                <span className={`badge ${profile.profile.secretConfigured ? 'badge-success' : 'badge-warning'}`}>
-                  {profile.profile.secretConfigured ? 'Secret Code Active' : 'Secret Required'}
-                </span>
-              </div>
-              <button type="button" className="btn btn-primary" onClick={() => setAction('secret')}>
-                <KeyRound size={16} /> {profile.profile.secretConfigured ? 'Update Secret Code' : 'Set Secret Code'}
-              </button>
-            </div>
-          </section>
-
-          <section className="withdraw-card">
-            <div className="withdraw-section-head">
-              <div>
-                <h3>Recent Withdrawals</h3>
-                <p>Showing real payout activity from your wallet records.</p>
-              </div>
-              <HistoryFilters
-                value={historyRange}
-                onChange={setHistoryRange}
-                customFrom={customFrom}
-                customTo={customTo}
-                onCustomFrom={setCustomFrom}
-                onCustomTo={setCustomTo}
-              />
-            </div>
-            <div className="table-wrap clean-withdraw-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Network</th>
-                    <th>Number</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredWithdrawals.length === 0 && (
-                    <tr>
-                      <td colSpan={5}>
-                        <div className="empty-state" style={{ padding: 24 }}>
-                          <p>No withdrawals in this date range.</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {filteredWithdrawals.map((withdrawal) => (
-                    <tr key={withdrawal.id}>
-                      <td>{formatDate(withdrawal.createdAt)}</td>
-                      <td>{formatCurrency(withdrawal.amountUgx)}</td>
-                      <td><NetworkMark network={withdrawal.network} compact /> {networkLabel(withdrawal.network)}</td>
-                      <td>{withdrawal.destinationReference ? maskPhone(withdrawal.destinationReference) : '-'}</td>
-                      <td><span className={getStatusBadgeClass(withdrawal.status)}>{humanize(withdrawal.status)}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+      <div className="stats-grid">
+        <div className="stat-card vibrant">
+          <div className="stat-label">Available Balance</div>
+          <div className="stat-value vibrant">{formatCurrency(availableUgx)}</div>
+          <div className="stat-change">Ready to withdraw now</div>
         </div>
-
-        <aside className="withdraw-now-panel">
-          <div className="withdraw-now-header">
-            <div>
-              <h3>Withdraw Now</h3>
-              <p>Balance: {formatCurrency(walletBalanceUgx)}</p>
-            </div>
-            <span className={profile.rules?.instantWithdrawalsEnabled ? 'badge badge-success' : 'badge badge-warning'}>
-              {profile.rules?.instantWithdrawalsEnabled ? 'Instant enabled' : 'Review mode'}
-            </span>
-          </div>
-
-          <form onSubmit={withdraw} className="withdraw-step-form">
-            <Step number={1} title="Enter Amount">
-              <label className="form-group">
-                <span className="form-label">Amount (UGX)</span>
-                <input
-                  className="form-input amount-input"
-                  type="number"
-                  min={Math.max(1, minimumPayoutUgx)}
-                  value={withdrawAmount}
-                  onChange={(event) => setWithdrawAmount(event.target.value)}
-                  placeholder={minimumPayoutUgx > 0 ? `${minimumPayoutUgx}` : 'Amount UGX'}
-                  disabled={busy === 'withdraw'}
-                  required
-                />
-              </label>
-              {minimumPayoutUgx > 0 && <p className="field-hint">Minimum withdrawal is {formatCurrency(minimumPayoutUgx)}.</p>}
-            </Step>
-
-            <Step number={2} title="Select Destination Number">
-              <div className="destination-list">
-                {verifiedNumbers.length === 0 && (
-                  <div className="destination-empty">No verified payout number yet. Add a number first.</div>
-                )}
-                {verifiedNumbers.map((number) => {
-                  const active = selectedNumber?.id === number.id
-                  return (
-                    <button
-                      key={number.id}
-                      type="button"
-                      className={`destination-option ${active ? 'active' : ''}`}
-                      onClick={() => setSelectedPayoutNumberId(number.id)}
-                    >
-                      <NetworkMark network={number.network} />
-                      <span className="destination-phone">{formatPhone(number.normalizedPhone)}</span>
-                      {number.isPrimary && <span className="mini-badge blue">Default</span>}
-                      <span className="mini-badge green">Approved</span>
-                      <Check size={18} className="destination-check" />
-                    </button>
-                  )
-                })}
-              </div>
-              {selectedNumber && !selectedIsPrimary && (
-                <p className="field-hint danger">Backend rules currently allow withdrawal only to the primary verified number.</p>
-              )}
-            </Step>
-
-            <Step number={3} title="Enter Withdrawal Secret">
-              <label className="form-group">
-                <span className="form-label">Secret code</span>
-                <input
-                  className="form-input"
-                  type="password"
-                  value={secretKey}
-                  onChange={(event) => setSecretKey(event.target.value)}
-                  placeholder="Enter your withdrawal secret"
-                  disabled={busy === 'withdraw'}
-                  required
-                />
-              </label>
-              {!profile.profile.secretConfigured && (
-                <button type="button" className="link-button" onClick={() => setAction('secret')}>Set secret code</button>
-              )}
-            </Step>
-
-            <Step number={4} title="Confirm Withdrawal">
-              <div className="withdraw-summary-box">
-                <SummaryRow label="Amount" value={formatCurrency(withdrawalMath.amountUgx)} />
-                <SummaryRow label="Fee" value={formatCurrency(withdrawalMath.feeAmountUgx)} />
-                <SummaryRow
-                  label="Destination"
-                  value={selectedNumber ? `${selectedNumber.network} - ${formatPhone(selectedNumber.normalizedPhone)}` : 'No verified number'}
-                />
-                <div className="summary-total">
-                  <span>You Receive</span>
-                  <strong>{formatCurrency(withdrawalMath.receiveUgx)}</strong>
-                </div>
-              </div>
-              <label className="withdraw-check">
-                <input type="checkbox" checked={confirmedPhone} onChange={(event) => setConfirmedPhone(event.target.checked)} disabled={busy === 'withdraw'} />
-                <span>I have this registered payout phone with me.</span>
-              </label>
-              <label className="withdraw-check">
-                <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} disabled={busy === 'withdraw'} />
-                <span>I accept the final disbursement terms.</span>
-              </label>
-              {(withdrawalMath.exceedsBalance || withdrawalMath.belowMinimum || !canWithdraw) && (
-                <div className="inline-warning">
-                  {!profile.profile.secretConfigured
-                    ? 'Set a withdrawal secret code before withdrawing.'
-                    : !primaryNumber
-                      ? 'Register a verified primary payout number before withdrawing.'
-                      : pendingChange
-                        ? 'A payout number change is pending; withdrawals are blocked.'
-                        : withdrawalMath.exceedsBalance
-                          ? 'Amount plus charges exceeds available balance.'
-                          : 'Amount is below the configured minimum payout.'}
-                </div>
-              )}
-            </Step>
-
-            <FormProcessStatus
-              busy={busy === 'withdraw'}
-              error={busy === 'withdraw' ? '' : error}
-              text={progress || 'Withdrawal requests are validated against the live wallet balance before submission.'}
-            />
-
-            <div className="withdraw-action-row">
-              <button type="button" className="btn btn-ghost" onClick={() => {
-                setWithdrawAmount('')
-                setSecretKey('')
-                setConfirmedPhone(false)
-                setAcceptedTerms(false)
-                setError('')
-              }}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary withdraw-submit" disabled={busy === 'withdraw' || !canSubmitWithdrawal}>
-                <Send size={18} /> {busy === 'withdraw' ? 'Withdrawing...' : 'Withdraw Now'}
-              </button>
-            </div>
-          </form>
-        </aside>
+        <div className="stat-card">
+          <div className="stat-label">Wallet Balance</div>
+          <div className="stat-value">{formatCurrency(walletBalanceUgx)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Pending Withdrawals</div>
+          <div className="stat-value">{formatCurrency(pendingWithdrawalsUgx)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Already Withdrawn</div>
+          <div className="stat-value">{formatCurrency(alreadyWithdrawnUgx)}</div>
+        </div>
       </div>
 
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">Payout Numbers</span>
+          <div className="withdraw-head-actions">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setAction('withdraw')} disabled={!canWithdraw}>
+              <Send size={14} /> Withdraw
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setAction('number')}
+              disabled={(profile.rules?.maxActiveNumbers ?? 2) <= profile.numbers.length}
+            >
+              <Plus size={14} /> Add Number
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAction('change')}>
+              <Settings size={14} /> Manage
+            </button>
+          </div>
+        </div>
+        <div className="withdraw-card-body">
+          {!canWithdraw && (
+            <p className="field-hint">{withdrawBlockedReason(profile, primaryNumber, pendingChange)}</p>
+          )}
+          <div className="payout-columns">
+            <PayoutColumn network="MTN" numbers={mtnNumbers} selectedId={selectedNumber?.id} onSelect={setSelectedPayoutNumberId} />
+            <PayoutColumn network="AIRTEL" numbers={airtelNumbers} selectedId={selectedNumber?.id} onSelect={setSelectedPayoutNumberId} />
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">Withdrawal Secret</span>
+          <span className={`badge ${profile.profile.secretConfigured ? 'badge-success' : 'badge-warning'}`}>
+            {profile.profile.secretConfigured ? 'Active' : 'Not set'}
+          </span>
+        </div>
+        <div className="withdraw-card-body secret-row">
+          <p>Required every time you withdraw funds.</p>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAction('secret')}>
+            <KeyRound size={14} /> {profile.profile.secretConfigured ? 'Change Secret' : 'Set Secret'}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">Recent Withdrawals</span>
+          <HistoryFilters
+            value={historyRange}
+            onChange={setHistoryRange}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFrom={setCustomFrom}
+            onCustomTo={setCustomTo}
+          />
+        </div>
+        <div className="table-wrap clean-withdraw-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Network</th>
+                <th>Number</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredWithdrawals.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state" style={{ padding: 24 }}>
+                      <p>No withdrawals in this date range.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {filteredWithdrawals.map((withdrawal) => (
+                <tr key={withdrawal.id}>
+                  <td>{formatDate(withdrawal.createdAt)}</td>
+                  <td>{formatCurrency(withdrawal.amountUgx)}</td>
+                  <td><NetworkMark network={withdrawal.network} compact /> {networkLabel(withdrawal.network)}</td>
+                  <td>{withdrawal.destinationReference ? maskPhone(withdrawal.destinationReference) : '-'}</td>
+                  <td><span className={getStatusBadgeClass(withdrawal.status)}>{humanize(withdrawal.status)}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <WithdrawModal
+        open={action === 'withdraw'}
+        busy={busy === 'withdraw'}
+        modalError={modalError}
+        progress={progress}
+        onClose={() => setAction(null)}
+        onSubmit={withdraw}
+        availableUgx={availableUgx}
+        minimumPayoutUgx={minimumPayoutUgx}
+        withdrawAmount={withdrawAmount}
+        onWithdrawAmount={setWithdrawAmount}
+        verifiedNumbers={verifiedNumbers}
+        selectedNumber={selectedNumber}
+        onSelectNumber={setSelectedPayoutNumberId}
+        selectedIsPrimary={selectedIsPrimary}
+        secretConfigured={profile.profile.secretConfigured}
+        secretKey={secretKey}
+        onSecretKey={setSecretKey}
+        onSetSecret={() => setAction('secret')}
+        withdrawalMath={withdrawalMath}
+        confirmedPhone={confirmedPhone}
+        onConfirmedPhone={setConfirmedPhone}
+        acceptedTerms={acceptedTerms}
+        onAcceptedTerms={setAcceptedTerms}
+        canSubmit={canSubmitWithdrawal}
+        blockedReason={!canWithdraw ? withdrawBlockedReason(profile, primaryNumber, pendingChange) : ''}
+      />
+
       <SetupModal
-        action={action}
+        action={action === 'withdraw' ? null : action}
         profile={profile}
         verifiedNumbers={verifiedNumbers}
         busy={busy}
@@ -529,6 +417,155 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         onChangeNumber={requestChange}
       />
     </div>
+  )
+}
+
+function WithdrawModal({
+  open,
+  busy,
+  modalError,
+  progress,
+  onClose,
+  onSubmit,
+  availableUgx,
+  minimumPayoutUgx,
+  withdrawAmount,
+  onWithdrawAmount,
+  verifiedNumbers,
+  selectedNumber,
+  onSelectNumber,
+  selectedIsPrimary,
+  secretConfigured,
+  secretKey,
+  onSecretKey,
+  onSetSecret,
+  withdrawalMath,
+  confirmedPhone,
+  onConfirmedPhone,
+  acceptedTerms,
+  onAcceptedTerms,
+  canSubmit,
+  blockedReason,
+}: {
+  open: boolean
+  busy: boolean
+  modalError: string
+  progress: string
+  onClose: () => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  availableUgx: number
+  minimumPayoutUgx: number
+  withdrawAmount: string
+  onWithdrawAmount: (value: string) => void
+  verifiedNumbers: PayoutNumber[]
+  selectedNumber: PayoutNumber | null
+  onSelectNumber: (id: string) => void
+  selectedIsPrimary: boolean
+  secretConfigured: boolean
+  secretKey: string
+  onSecretKey: (value: string) => void
+  onSetSecret: () => void
+  withdrawalMath: { amountUgx: number; feeAmountUgx: number; receiveUgx: number }
+  confirmedPhone: boolean
+  onConfirmedPhone: (value: boolean) => void
+  acceptedTerms: boolean
+  onAcceptedTerms: (value: boolean) => void
+  canSubmit: boolean
+  blockedReason: string
+}) {
+  return (
+    <Modal open={open} onClose={onClose} closeDisabled={busy} style={{ width: 'min(560px, 100%)' }} kicker="Withdraw" title="Withdraw Funds">
+      <p className="field-hint" style={{ marginTop: 8 }}>Available balance: {formatCurrency(availableUgx)}</p>
+      <form onSubmit={onSubmit} className="withdraw-step-form" style={{ marginTop: 18 }}>
+        <label className="form-group">
+          <span className="form-label">Amount (UGX)</span>
+          <input
+            className="form-input amount-input"
+            type="number"
+            min={Math.max(1, minimumPayoutUgx)}
+            value={withdrawAmount}
+            onChange={(event) => onWithdrawAmount(event.target.value)}
+            placeholder={minimumPayoutUgx > 0 ? `${minimumPayoutUgx}` : 'Amount UGX'}
+            disabled={busy}
+            required
+          />
+        </label>
+        {minimumPayoutUgx > 0 && <p className="field-hint">Minimum withdrawal is {formatCurrency(minimumPayoutUgx)}.</p>}
+
+        <div className="form-group">
+          <span className="form-label">Destination number</span>
+          <div className="destination-list">
+            {verifiedNumbers.length === 0 && (
+              <div className="destination-empty">No verified payout number yet. Add a number first.</div>
+            )}
+            {verifiedNumbers.map((number) => {
+              const active = selectedNumber?.id === number.id
+              return (
+                <button
+                  key={number.id}
+                  type="button"
+                  className={`destination-option ${active ? 'active' : ''}`}
+                  onClick={() => onSelectNumber(number.id)}
+                >
+                  <NetworkMark network={number.network} />
+                  <span className="destination-phone">{formatPhone(number.normalizedPhone)}</span>
+                  {number.isPrimary && <span className="mini-badge blue">Default</span>}
+                  <Check size={18} className="destination-check" />
+                </button>
+              )
+            })}
+          </div>
+          {selectedNumber && !selectedIsPrimary && (
+            <p className="field-hint danger">Withdrawals currently go only to the primary verified number.</p>
+          )}
+        </div>
+
+        <label className="form-group">
+          <span className="form-label">Secret code</span>
+          <input
+            className="form-input"
+            type="password"
+            value={secretKey}
+            onChange={(event) => onSecretKey(event.target.value)}
+            placeholder="Enter your withdrawal secret"
+            disabled={busy}
+            required
+          />
+          {!secretConfigured && (
+            <button type="button" className="link-button" style={{ marginTop: 6 }} onClick={onSetSecret}>Set secret code</button>
+          )}
+        </label>
+
+        <div className="withdraw-summary-box">
+          <SummaryRow label="Amount" value={formatCurrency(withdrawalMath.amountUgx)} />
+          <SummaryRow label="Fee" value={formatCurrency(withdrawalMath.feeAmountUgx)} />
+          <div className="summary-total">
+            <span>You Receive</span>
+            <strong>{formatCurrency(withdrawalMath.receiveUgx)}</strong>
+          </div>
+        </div>
+
+        <label className="withdraw-check">
+          <input type="checkbox" checked={confirmedPhone} onChange={(event) => onConfirmedPhone(event.target.checked)} disabled={busy} />
+          <span>I have this registered payout phone with me.</span>
+        </label>
+        <label className="withdraw-check">
+          <input type="checkbox" checked={acceptedTerms} onChange={(event) => onAcceptedTerms(event.target.checked)} disabled={busy} />
+          <span>I accept the final disbursement terms.</span>
+        </label>
+
+        {blockedReason && <div className="inline-warning">{blockedReason}</div>}
+
+        <FormProcessStatus busy={busy} error={modalError} text={progress || 'Withdrawal requests are validated against the live wallet balance.'} />
+
+        <div className="withdraw-action-row">
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="btn btn-primary withdraw-submit" disabled={busy || !canSubmit}>
+            <Send size={18} /> {busy ? 'Withdrawing...' : 'Withdraw Now'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -740,18 +777,6 @@ function HistoryFilters({
   )
 }
 
-function Step({ number, title, children }: { number: number; title: string; children: ReactNode }) {
-  return (
-    <div className="withdraw-step">
-      <div className="step-marker">{number}</div>
-      <div className="step-body">
-        <h4>{title}</h4>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="summary-row">
@@ -767,15 +792,6 @@ function Notice({ tone, text }: { tone: 'success' | 'danger'; text: string }) {
     <div className={`badge badge-${tone}`} style={{ display: 'flex', gap: 8, alignItems: 'center', width: 'fit-content', padding: '8px 10px' }}>
       <Icon size={15} />
       {text}
-    </div>
-  )
-}
-
-function InfoLine({ icon, text }: { icon: ReactNode; text: string }) {
-  return (
-    <div className="withdraw-info-line">
-      {icon}
-      <span>{text}</span>
     </div>
   )
 }
@@ -811,10 +827,15 @@ function humanize(status: string) {
   return status.toLowerCase().replace(/_/g, ' ')
 }
 
-function reviewText(limit?: number | null) {
-  return limit && limit > 0
-    ? `Withdrawals above ${formatCurrency(limit)} may require approval review.`
-    : 'Large or unusual withdrawals may require approval review.'
+function withdrawBlockedReason(
+  profile: PayoutProfile,
+  primaryNumber: PayoutNumber | null,
+  pendingChange: PayoutProfile['changeRequests'][number] | undefined,
+) {
+  if (!profile.profile.secretConfigured) return 'Set a withdrawal secret code before withdrawing.'
+  if (!primaryNumber) return 'Register a verified primary payout number before withdrawing.'
+  if (pendingChange) return 'A payout number change is pending; withdrawals are blocked.'
+  return ''
 }
 
 function filterWithdrawals(items: PayoutProfile['recentWithdrawals'], range: 'today' | 'yesterday' | 'last7' | 'month' | 'custom', customFrom: string, customTo: string) {
