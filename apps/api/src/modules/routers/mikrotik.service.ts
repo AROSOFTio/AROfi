@@ -498,10 +498,7 @@ export class MikrotikService {
     // disconnect state immediately, so send the active HotSpot user count on
     // every beat and keep the dashboard under a couple of seconds behind
     // reality even before RADIUS interim updates arrive.
-    const intervalSeconds = Math.max(
-      2,
-      Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '2', 10),
-    )
+    const intervalSeconds = 2
     // URLs contain no spaces, so they need no inner quoting inside the script
     // source — this keeps the generated .rsc free of fragile nested escapes.
     const source =
