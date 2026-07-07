@@ -87,9 +87,13 @@ export class MikrotikController {
   }
 
   @Get('heartbeat/:key')
-  async heartbeat(@Param('key') key: string, @Req() request: any) {
+  async heartbeat(
+    @Param('key') key: string,
+    @Req() request: any,
+    @Query('activeUsers') activeUsers?: string,
+  ) {
     const sourceIp = this.resolveSourceIp(request);
-    const result = await this.routersService.recordRouterHeartbeatByKey(key, sourceIp);
+    const result = await this.routersService.recordRouterHeartbeatByKey(key, sourceIp, activeUsers);
     if (!result) {
       throw new NotFoundException('Router registration key not found');
     }

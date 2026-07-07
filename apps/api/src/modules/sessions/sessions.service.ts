@@ -57,8 +57,11 @@ export class SessionsService {
     startOfDay.setHours(0, 0, 0, 0)
 
     const liveAccountingCutoff = accountingLiveCutoff()
+    const routerHeartbeatCutoff = new Date(
+      Date.now() - Math.max(2, Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '12', 10) || 12) * 1000,
+    )
 
-    const [activeSessions, sessionsToday, recentEvents] = await Promise.all([
+    const [activeSessions, sessionsToday, recentEvents, routerActiveUsers] = await Promise.all([
       this.prisma.networkSession.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
@@ -123,6 +126,15 @@ export class SessionsService {
         },
         take: 25,
       }),
+      this.prisma.router.aggregate({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          lastSeenAt: { gte: routerHeartbeatCutoff },
+        },
+        _sum: {
+          activeSessionCount: true,
+        },
+      }),
     ])
 
     const usageByRouterMap = new Map<
@@ -178,7 +190,7 @@ export class SessionsService {
 
     return {
       summary: {
-        activeSessions: activeSessions.length,
+        activeSessions: routerActiveUsers._sum.activeSessionCount ?? 0,
         totalSessionsToday: sessionsToday.length,
         dataUsedTodayMb: totalDataTodayMb,
         averageSessionMinutes,

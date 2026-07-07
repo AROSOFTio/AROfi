@@ -17,7 +17,18 @@ describe('RoutersService', () => {
       hotspot: {
         findUnique: jest.fn(),
       },
+      platformSetting: {
+        upsert: jest.fn().mockResolvedValue({
+          freeRouterLimit: null,
+          proRouterLimit: null,
+          enterpriseRouterLimit: null,
+        }),
+      },
+      tenantSetting: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       router: {
+        count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({ id: 'router-1' }),
       },
@@ -60,6 +71,7 @@ describe('RoutersService', () => {
       tenantId: 'tenant-1',
       name: 'Shop Router',
       host: 'pending-router.self-service',
+      activeSessionCount: 0,
       sharedSecretCiphertext: 'encrypted-secret',
       radiusClient: {
         id: 'radius-client-1',
@@ -100,6 +112,10 @@ describe('RoutersService', () => {
       router: {
         findUnique: jest.fn().mockResolvedValue(router),
         update: jest.fn().mockResolvedValue(router),
+      },
+      networkSession: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       $transaction: jest.fn((callback) => callback(tx)),
     }
@@ -281,9 +297,9 @@ describe('RoutersService', () => {
       const router = buildCallbackRouter({ radiusNasIpAddress: '102.209.111.77' })
       const { service, prisma, tx } = buildCallbackHarness(router)
 
-      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.77')
+      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.77', '0')
 
-      expect(result).toEqual({ ok: true })
+      expect(result).toEqual({ ok: true, activeUsers: 0 })
       expect(prisma.router.update).toHaveBeenCalled()
       expect(tx.radiusClient.update).not.toHaveBeenCalled()
       expect(tx.nasClient.update).not.toHaveBeenCalled()
@@ -294,13 +310,52 @@ describe('RoutersService', () => {
       const router = buildCallbackRouter({ radiusNasIpAddress: '102.209.111.77' })
       const { service, prisma, tx } = buildCallbackHarness(router)
 
-      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.88')
+      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.88', '0')
 
-      expect(result).toEqual({ ok: true })
+      expect(result).toEqual({ ok: true, activeUsers: 0 })
       expect(prisma.router.update).toHaveBeenCalled()
       expect(tx.radiusClient.update).not.toHaveBeenCalled()
       expect(tx.nasClient.update).not.toHaveBeenCalled()
       expect(service.reloadFreeradiusNasClients).not.toHaveBeenCalled()
+    })
+
+    it('marks active sessions stale when router heartbeat reports zero active users', async () => {
+      const router = buildCallbackRouter({ activeSessionCount: 1, radiusNasIpAddress: '102.209.111.77' })
+      const { service, prisma } = buildCallbackHarness(router)
+      const realtimeEvents = (service as any).realtimeEvents as { publish: jest.Mock }
+      prisma.networkSession.findMany.mockResolvedValue([
+        {
+          id: 'session-1',
+          tenantId: 'tenant-1',
+          routerId: 'router-1',
+          radiusSessionId: 'radius-session-1',
+          username: 'arofi-user',
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          lastAccountingAt: new Date(),
+        },
+      ])
+
+      const result = await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.77', '0')
+
+      expect(result).toEqual({ ok: true, activeUsers: 0 })
+      expect(prisma.router.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ activeSessionCount: 0 }),
+        }),
+      )
+      expect(prisma.networkSession.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'STALE', endedAt: expect.any(Date) }),
+        }),
+      )
+      expect(realtimeEvents.publish).toHaveBeenCalledWith(
+        'session.stopped',
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          routerId: 'router-1',
+          data: expect.objectContaining({ source: 'router-heartbeat' }),
+        }),
+      )
     })
   })
 

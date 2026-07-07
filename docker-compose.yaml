@@ -44,9 +44,9 @@ x-app-env: &app-env
   ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-2000}
   RADIUS_DB_LISTEN_ENABLED: ${RADIUS_DB_LISTEN_ENABLED:-true}
   RADIUS_DISCONNECT_MAX_RETRIES: ${RADIUS_DISCONNECT_MAX_RETRIES:-5}
-  # Router liveness: 5s heartbeat, LIVE within 12s, STALE (suspected offline)
+  # Router liveness: 2s heartbeat, LIVE within 12s, STALE (suspected offline)
   # within 30s, OFFLINE after that.
-  ROUTER_HEARTBEAT_SECONDS: ${ROUTER_HEARTBEAT_SECONDS:-5}
+  ROUTER_HEARTBEAT_SECONDS: ${ROUTER_HEARTBEAT_SECONDS:-2}
   ROUTER_LIVE_WINDOW_SECONDS: ${ROUTER_LIVE_WINDOW_SECONDS:-12}
   ROUTER_STALE_WINDOW_SECONDS: ${ROUTER_STALE_WINDOW_SECONDS:-30}
   # Admin login OTP + lockout policy (defaults are production-safe).

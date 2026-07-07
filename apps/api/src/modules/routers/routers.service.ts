@@ -34,7 +34,7 @@ import { accountingLiveCutoff, isLiveAccountingRow } from '../radius/accounting-
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutersService.name)
-  // The router heartbeats every 5s (see MikrotikService.buildHeartbeatScheduler).
+  // The router heartbeats every 2s (see MikrotikService.buildHeartbeatScheduler).
   // State machine, driven by the freshest signal of any kind:
   //   LIVE    — signal within ROUTER_LIVE_WINDOW_SECONDS (~2 missed beats)
   //   STALE   — suspected offline: no signal within the live window but
@@ -226,8 +226,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // Called by the router-side scheduler (works behind NAT) to prove it is alive.
-  async recordRouterHeartbeatByKey(key: string, sourceIp: string) {
+  // Called by the router-side scheduler (works behind NAT) to prove it is
+  // alive and report the current HotSpot active-user count directly from the
+  // router itself. This is the only source that can drop to zero immediately
+  // when a client leaves Wi-Fi without waiting for RADIUS interim updates.
+  async recordRouterHeartbeatByKey(key: string, sourceIp: string, reportedActiveUsersInput?: string | number | null) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
       select: {
@@ -237,6 +240,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         onboardingStatus: true,
         radiusNasIpAddress: true,
         lastSeenAt: true,
+        activeSessionCount: true,
       },
     })
 
@@ -252,10 +256,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const shouldAdvanceOnboarding = pendingStatuses.includes(router.onboardingStatus as RouterOnboardingStatus)
 
     const now = new Date()
+    const reportedActiveUsers = this.parseReportedActiveUsers(reportedActiveUsersInput)
+    const previousActiveUsers = router.activeSessionCount
     await this.prisma.router.update({
       where: { id: router.id },
       data: {
         lastSeenAt: now,
+        ...(reportedActiveUsers !== null ? { activeSessionCount: reportedActiveUsers } : {}),
         ...(shouldAdvanceOnboarding
           ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
           : {}),
@@ -266,6 +273,48 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       },
     })
 
+    if (reportedActiveUsers === 0) {
+      const staleSessions = await this.prisma.networkSession.findMany({
+        where: { routerId: router.id, status: SessionStatus.ACTIVE },
+        select: {
+          id: true,
+          tenantId: true,
+          routerId: true,
+          radiusSessionId: true,
+          username: true,
+          macAddress: true,
+          lastAccountingAt: true,
+        },
+      })
+
+      if (staleSessions.length > 0) {
+        await this.prisma.networkSession.updateMany({
+          where: { id: { in: staleSessions.map((session) => session.id) } },
+          data: {
+            status: SessionStatus.STALE,
+            endedAt: now,
+          },
+        })
+
+        for (const session of staleSessions) {
+          this.realtimeEvents.publish('session.stopped', {
+            tenantId: session.tenantId,
+            routerId: session.routerId ?? null,
+            data: {
+              sessionId: session.id,
+              radiusSessionId: session.radiusSessionId,
+              username: session.username,
+              macAddress: session.macAddress,
+              stale: true,
+              source: 'router-heartbeat',
+              lastAccountingAt: session.lastAccountingAt?.toISOString() ?? null,
+              endedAt: now.toISOString(),
+            },
+          })
+        }
+      }
+    }
+
     // Every heartbeat feeds the dashboard event stream. A beat after a gap
     // longer than the live window is a back-online transition.
     const previousAgeSeconds = router.lastSeenAt
@@ -274,8 +323,24 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     this.realtimeEvents.publish('router.heartbeat', {
       tenantId: router.tenantId,
       routerId: router.id,
-      data: { sourceIp: normalizedSourceIp || null, previousAgeSeconds },
+      data: {
+        sourceIp: normalizedSourceIp || null,
+        previousAgeSeconds,
+        activeUsers: reportedActiveUsers,
+        previousActiveUsers,
+      },
     })
+    if (reportedActiveUsers !== null && reportedActiveUsers !== previousActiveUsers) {
+      this.realtimeEvents.publish('session.updated', {
+        tenantId: router.tenantId,
+        routerId: router.id,
+        data: {
+          source: 'router-heartbeat',
+          activeUsers: reportedActiveUsers,
+          previousActiveUsers,
+        },
+      })
+    }
     if (previousAgeSeconds === null || previousAgeSeconds > this.routerLiveWindowSeconds) {
       this.realtimeEvents.publish('router.online', {
         tenantId: router.tenantId,
@@ -284,7 +349,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       })
     }
 
-    return { ok: true }
+    return { ok: true, activeUsers: reportedActiveUsers ?? previousActiveUsers }
   }
 
   async getOverview(tenantId?: string) {
@@ -1547,11 +1612,15 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       checkedAt: Date
     }>
   }) {
-    // router.sessions is always loaded with status:ACTIVE filter — it is the
-    // authoritative count. The cached router.activeSessionCount can lag behind
-    // after stale-session cleanup and must not override a zero live count.
-    const activeSessions = router.sessions.length
-    const live = this.resolveRouterLiveState(router, activeSessions)
+    const live = this.resolveRouterLiveState(router, router.sessions.length)
+    // The RADIUS-backed session list is still authoritative for detailed
+    // records, but the router heartbeat reports the active user COUNT
+    // immediately. Prefer the higher of the two while the router is live so
+    // dashboard counters don't sit at 0/1 waiting for accounting lag.
+    const activeSessions =
+      live.liveState === 'OFFLINE'
+        ? 0
+        : Math.max(router.sessions.length, router.activeSessionCount)
     const effectiveStatus =
       live.liveState === 'LIVE'
         ? RouterStatus.HEALTHY
@@ -1730,6 +1799,23 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       secondsSinceLastSignal,
       message: null,
     }
+  }
+
+  private parseReportedActiveUsers(input?: string | number | null) {
+    if (input === undefined || input === null || input === '') {
+      return null
+    }
+
+    const parsed =
+      typeof input === 'number'
+        ? input
+        : Number.parseInt(String(input).trim(), 10)
+
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return null
+    }
+
+    return Math.floor(parsed)
   }
 
   private generateSharedSecret() {

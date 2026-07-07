@@ -49,6 +49,7 @@ export class BillingService {
   // Mirrors RoutersService's own threshold (routers.service.ts) so "online"
   // means the same thing on the dashboard KPI as it does on the routers list.
   private readonly routerStaleWindowSeconds = Number.parseInt(process.env.ROUTER_STALE_WINDOW_SECONDS ?? '120', 10)
+  private readonly routerLiveWindowSeconds = Number.parseInt(process.env.ROUTER_LIVE_WINDOW_SECONDS ?? '12', 10)
 
   private readonly transactionInclude: Prisma.BillingTransactionInclude = {
     tenant: {
@@ -328,7 +329,7 @@ export class BillingService {
     filters = await this.clampFiltersToAnalyticsWindow(tenantId, filters)
     const transactionWhere = this.buildTransactionWhere(tenantId, filters)
     const dateWhere = this.buildDateWhere(filters)
-    const staleSessionCutoff = new Date(Date.now() - 5 * 60 * 1000)
+    const routerActiveUserCutoff = new Date(Date.now() - this.routerLiveWindowSeconds * 1000)
     const routerLiveCutoff = new Date(Date.now() - this.routerStaleWindowSeconds * 1000)
     // Today / month-to-date figures are computed independently of the selected
     // filter range so the dashboard can always surface "Today" and "This month"
@@ -406,16 +407,16 @@ export class BillingService {
           ...(dateWhere.createdAt ? { createdAt: dateWhere.createdAt } : {}),
         },
       }),
-      // "ACTIVE" alone is not enough — a router that lost power leaves its
-      // sessions ACTIVE for up to 5 minutes until access-lifecycle.service.ts's
-      // cleanStaleSessions() cron catches up. Require a recent accounting
-      // signal too so the dashboard is correct immediately, not just
-      // eventually. Threshold matches that cron's own staleness window.
-      this.prisma.networkSession.count({
+      // The router heartbeat carries the MikroTik HotSpot active count every
+      // 2s. Use that count for the dashboard KPI so connect/disconnect changes
+      // do not wait for RADIUS interim accounting.
+      this.prisma.router.aggregate({
         where: {
           ...(tenantId ? { tenantId } : {}),
-          status: 'ACTIVE',
-          lastAccountingAt: { gte: staleSessionCutoff },
+          lastSeenAt: { gte: routerActiveUserCutoff },
+        },
+        _sum: {
+          activeSessionCount: true,
         },
       }),
       // router.status is a persisted column that's only written at onboarding
@@ -521,7 +522,7 @@ export class BillingService {
         pendingWithdrawalUgx,
         completedWithdrawalUgx,
         failedWithdrawalUgx,
-        activeUsers,
+        activeUsers: activeUsers._sum.activeSessionCount ?? 0,
         onlineRouters,
         dataUsedMb: Math.round(((inputBytes + outputBytes) / (1024 * 1024)) * 100) / 100,
       },

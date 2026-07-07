@@ -494,15 +494,21 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
-    // 5s production default pairs with ROUTER_LIVE_WINDOW_SECONDS=12 (~2
-    // missed beats) so online/offline flips reach the dashboard in seconds.
+    // 2s production default: the router itself knows customer connect /
+    // disconnect state immediately, so send the active HotSpot user count on
+    // every beat and keep the dashboard under a couple of seconds behind
+    // reality even before RADIUS interim updates arrive.
     const intervalSeconds = Math.max(
-      5,
-      Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '5', 10),
+      2,
+      Number.parseInt(process.env.ROUTER_HEARTBEAT_SECONDS ?? '2', 10),
     )
     // URLs contain no spaces, so they need no inner quoting inside the script
     // source — this keeps the generated .rsc free of fragile nested escapes.
-    const source = `:do { /tool fetch url=${heartbeatUrl} check-certificate=no mode=https keep-result=no } on-error={ :do { /tool fetch url=${fallbackHeartbeatUrl} mode=http keep-result=no } on-error={} }`
+    const source =
+      `:local arofiActiveUsers 0; ` +
+      `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={ :set arofiActiveUsers 0 }; ` +
+      `:do { /tool fetch url=("${heartbeatUrl}" . "?activeUsers=" . $arofiActiveUsers) check-certificate=no mode=https keep-result=no } ` +
+      `on-error={ :do { /tool fetch url=("${fallbackHeartbeatUrl}" . "?activeUsers=" . $arofiActiveUsers) mode=http keep-result=no } on-error={} }`
     return [
       `/system script remove [find name="arofi-heartbeat"]`,
       `/system script add name="arofi-heartbeat" source="${source}"`,
