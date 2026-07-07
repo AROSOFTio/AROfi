@@ -24,6 +24,7 @@ function buildAcctRow(overrides: Record<string, unknown> = {}) {
 function buildHarness(options: {
   existingSession?: Record<string, unknown> | null
   existingEvent?: Record<string, unknown> | null
+  credential?: Record<string, unknown> | null
 } = {}) {
   const router = {
     id: 'router-1',
@@ -42,7 +43,12 @@ function buildHarness(options: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     packageActivation: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'activation-1', voucherRedemptionId: null }),
+      findFirst: jest.fn().mockImplementation(({ select }) => {
+        if (select?.voucherRedemptionId) {
+          return Promise.resolve({ id: 'activation-1', voucherRedemptionId: null })
+        }
+        return Promise.resolve({ id: 'activation-1', tenantId: 'tenant-1', routerId: 'router-1' })
+      }),
       update: jest.fn().mockResolvedValue({}),
     },
     networkSession: {
@@ -56,7 +62,11 @@ function buildHarness(options: {
       create: jest.fn().mockResolvedValue({}),
     },
     radiusCredential: {
-      findFirst: jest.fn().mockResolvedValue({ username: 'arofi-user', tenantId: 'tenant-1', routerId: 'router-1' }),
+      findFirst: jest.fn().mockResolvedValue(
+        options.credential === undefined
+          ? { username: 'arofi-user', tenantId: 'tenant-1', routerId: 'router-1' }
+          : options.credential,
+      ),
     },
   }
   const realtimeEvents = { publish: jest.fn() }
@@ -175,6 +185,35 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
       }),
     )
   })
+
+  it('falls back to packageActivation.radiusUsername when the credential row is missing', async () => {
+    const { service, prisma, realtimeEvents } = buildHarness({
+      credential: null,
+      existingSession: null,
+    })
+
+    await service.processAcctRow(buildAcctRow() as never)
+
+    expect(prisma.packageActivation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          radiusUsername: expect.objectContaining({ equals: 'arofi-user', mode: 'insensitive' }),
+        }),
+      }),
+    )
+    expect(prisma.networkSession.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_radiusSessionId: { tenantId: 'tenant-1', radiusSessionId: 'sess-101' },
+        },
+      }),
+    )
+    expect(realtimeEvents.publish).toHaveBeenCalledWith(
+      'session.started',
+      expect.objectContaining({ tenantId: 'tenant-1', routerId: 'router-1' }),
+    )
+  })
+
   it('turns a radpostauth accept into a radius.auth event and fresh auth signal', async () => {
     const { service, prisma, realtimeEvents } = buildHarness()
 
@@ -200,5 +239,39 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
       }),
     )
     expect(prisma.router.updateMany).toHaveBeenCalled()
+  })
+
+  it('falls back to packageActivation.radiusUsername for radpostauth when the credential row is missing', async () => {
+    const { service, prisma, realtimeEvents } = buildHarness({ credential: null })
+
+    await service.processPostAuthRow({
+      id: 55,
+      username: 'arofi-user',
+      pass: null,
+      reply: 'Access-Accept',
+      authdate: new Date(),
+      class: null,
+    } as never)
+
+    expect(prisma.packageActivation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          radiusUsername: expect.objectContaining({ equals: 'arofi-user', mode: 'insensitive' }),
+        }),
+      }),
+    )
+    expect(realtimeEvents.publish).toHaveBeenCalledWith(
+      'radius.auth',
+      expect.objectContaining({
+        tenantId: 'tenant-1',
+        routerId: 'router-1',
+        data: expect.objectContaining({ accepted: true }),
+      }),
+    )
+    expect(prisma.router.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'router-1' }),
+      }),
+    )
   })
 })

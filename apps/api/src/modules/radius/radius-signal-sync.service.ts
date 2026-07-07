@@ -319,7 +319,19 @@ export class RadiusSignalSyncService {
       where: { username: row.username },
       select: { username: true, tenantId: true, routerId: true },
     })
-    if (!cred?.tenantId) {
+
+    const activation =
+      cred?.tenantId
+        ? null
+        : await this.prisma.packageActivation.findFirst({
+            where: { radiusUsername: { equals: row.username, mode: 'insensitive' } },
+            select: { tenantId: true, routerId: true },
+          })
+
+    const tenantId = cred?.tenantId ?? activation?.tenantId ?? null
+    const routerId = cred?.routerId ?? activation?.routerId ?? null
+
+    if (!tenantId) {
       return // Cannot attribute to a tenant — skip
     }
 
@@ -329,7 +341,7 @@ export class RadiusSignalSyncService {
     // Idempotency: one radiusEvent per radpostauth row, keyed by row id.
     const authMarker = `syn-auth:${row.id}`
     const existingAuthEvent = await this.prisma.radiusEvent.findFirst({
-      where: { tenantId: cred.tenantId, message: authMarker },
+      where: { tenantId, message: authMarker },
       select: { id: true },
     })
     if (existingAuthEvent) {
@@ -339,8 +351,8 @@ export class RadiusSignalSyncService {
     try {
       await this.prisma.radiusEvent.create({
         data: {
-          tenantId: cred.tenantId,
-          routerId: cred.routerId ?? null,
+          tenantId,
+          routerId,
           eventType,
           username: row.username,
           authMethod: 'PAP',
@@ -357,8 +369,8 @@ export class RadiusSignalSyncService {
     }
 
     this.realtimeEvents.publish('radius.auth', {
-      tenantId: cred.tenantId,
-      routerId: cred.routerId ?? null,
+      tenantId,
+      routerId,
       data: {
         username: row.username,
         accepted: isAccept,
@@ -366,10 +378,10 @@ export class RadiusSignalSyncService {
       },
     })
 
-    if (isAccept && cred.routerId) {
+    if (isAccept && routerId) {
       await this.prisma.router.updateMany({
         where: {
-          id: cred.routerId,
+          id: routerId,
           OR: [{ lastAuthSignalAt: null }, { lastAuthSignalAt: { lt: row.authdate } }],
         },
         data: { lastRadiusSignalAt: row.authdate, lastAuthSignalAt: row.authdate },
@@ -404,18 +416,28 @@ export class RadiusSignalSyncService {
       where: { username },
       select: { routerId: true, tenantId: true, activationId: true },
     })
-    if (!cred) {
+    const activationFromUsername =
+      cred
+        ? null
+        : await this.prisma.packageActivation.findFirst({
+            where: { radiusUsername: { equals: username, mode: 'insensitive' } },
+            select: { id: true, tenantId: true, routerId: true },
+          })
+
+    const tenantId = cred?.tenantId ?? activationFromUsername?.tenantId ?? null
+
+    if (!cred && !activationFromUsername) {
       this.logger.warn(
         `resolveRouter: no credential for username "${username}" (nasIp=${nasIp ?? 'none'}) — accounting row dropped`,
       )
       return null
     }
 
-    let routerId = cred.routerId
+    let routerId = cred?.routerId ?? activationFromUsername?.routerId ?? null
 
     // QR-scan/portal redemptions often have no routerKey, so the credential
     // carries routerId=null. Fall back to the activation's router.
-    if (!routerId && cred.activationId) {
+    if (!routerId && cred?.activationId) {
       const activation = await this.prisma.packageActivation.findUnique({
         where: { id: cred.activationId },
         select: { routerId: true },
@@ -430,7 +452,7 @@ export class RadiusSignalSyncService {
     // — the mismatch that silently blanked live users/data on the dashboard.
     if (!routerId) {
       const tenantRouters = await this.prisma.router.findMany({
-        where: { tenantId: cred.tenantId },
+        where: tenantId ? { tenantId } : undefined,
         select: { id: true },
         take: 2,
       })
@@ -441,7 +463,7 @@ export class RadiusSignalSyncService {
 
     if (!routerId) {
       this.logger.warn(
-        `resolveRouter: cannot map username "${username}" (nasIp=${nasIp ?? 'none'}, tenant=${cred.tenantId}) to a router — accounting row dropped`,
+        `resolveRouter: cannot map username "${username}" (nasIp=${nasIp ?? 'none'}, tenant=${tenantId ?? 'unknown'}) to a router — accounting row dropped`,
       )
       return null
     }
