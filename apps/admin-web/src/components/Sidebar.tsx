@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
 import ThemeToggle from './ThemeToggle'
@@ -142,7 +142,6 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
       items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly, item.tenantOnly)),
     }))
     .filter((group) => group.items.length > 0), [user])
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
   const workspaceLabel = isVendor ? 'Business Dashboard' : 'Platform Admin'
 
@@ -173,36 +172,40 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           </span>
         </Link>
       </div>
-      {visibleGroups.map((group) => (
-        <div key={group.label} className="sidebar-section">
-          {false && null}
-          <button
-            type="button"
-            className={`sidebar-group-toggle ${group.items.some((item) => isActiveHref(currentHref, item.href)) ? 'active' : ''}`}
-            aria-expanded={Boolean(openGroups[group.label])}
-            onClick={() => setOpenGroups((previous) => ({ ...previous, [group.label]: !previous[group.label] }))}
-          >
-            <span className="sidebar-group-label">
-              {group.icon}
-              {group.label}
-            </span>
-            <ChevronIcon open={Boolean(openGroups[group.label])} />
-          </button>
-          {openGroups[group.label] && (
-            <div className="sidebar-group-items">
-              {group.items.map((item) => (
-                <Link
-                  key={`${group.label}-${item.href}-${item.label}`}
-                  href={item.href}
-                  className={`nav-item ${isActiveHref(currentHref, item.href) ? 'active' : ''}`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
+      {visibleGroups.map((group) => {
+        // A single click on a section navigates straight to its main page —
+        // no expand/collapse step required, which is what made the sidebar
+        // feel scattered. The sub-links for that section only appear once
+        // you're actually inside it (based on the current route), so nothing
+        // is lost — you just don't see every section's internals at once.
+        const isInSection = group.items.some((item) => isActiveHref(currentHref, item.href))
+        return (
+          <div key={group.label} className="sidebar-section">
+            <Link
+              href={group.items[0].href}
+              className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`}
+            >
+              <span className="sidebar-group-label">
+                {group.icon}
+                {group.label}
+              </span>
+            </Link>
+            {isInSection && group.items.length > 1 && (
+              <div className="sidebar-group-items">
+                {group.items.map((item) => (
+                  <Link
+                    key={`${group.label}-${item.href}-${item.label}`}
+                    href={item.href}
+                    className={`nav-item ${isActiveHref(currentHref, item.href) ? 'active' : ''}`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
       <div className="sidebar-footer">
         <span className="sidebar-footer-label">Appearance</span>
         <ThemeToggle variant="segmented" />
@@ -216,14 +219,6 @@ function isActiveHref(currentHref: string, href: string) {
     return currentHref === href
   }
   return currentHref.split('?')[0] === href
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg className={`sidebar-chevron ${open ? 'open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5.2 8.2a1.8 1.8 0 012.5 0L12 12.5l4.3-4.3a1.8 1.8 0 112.5 2.6l-5.5 5.5a1.8 1.8 0 01-2.6 0l-5.5-5.5a1.8 1.8 0 010-2.6z" />
-    </svg>
-  )
 }
 
 function HomeIcon() { return <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> }

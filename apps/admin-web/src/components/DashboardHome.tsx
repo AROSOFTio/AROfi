@@ -372,13 +372,17 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <div className="dashboard-insights-row">
         <DashboardStatTodayMonth
           title="Gross Sales"
+          filteredUgx={billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0}
+          dateRangeLabel={dateRange}
           todayUgx={billing?.summary.todayGrossSalesUgx ?? 0}
-          monthUgx={billing?.summary.monthGrossSalesUgx ?? billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0}
+          monthUgx={billing?.summary.monthGrossSalesUgx ?? 0}
         />
         <DashboardStatTodayMonth
           title="Net Earnings"
+          filteredUgx={billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0}
+          dateRangeLabel={dateRange}
           todayUgx={billing?.summary.todayNetEarningsUgx ?? 0}
-          monthUgx={billing?.summary.monthNetEarningsUgx ?? billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0}
+          monthUgx={billing?.summary.monthNetEarningsUgx ?? 0}
         />
         <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
         <SystemInsightsCompact
@@ -776,13 +780,26 @@ function DashboardStatCompact({
   )
 }
 
-function DashboardStatTodayMonth({ title, todayUgx, monthUgx }: { title: string; todayUgx: number; monthUgx: number }) {
+function DashboardStatTodayMonth({
+  title,
+  filteredUgx,
+  dateRangeLabel,
+  todayUgx,
+  monthUgx,
+}: {
+  title: string
+  filteredUgx: number
+  dateRangeLabel: string
+  todayUgx: number
+  monthUgx: number
+}) {
   return (
     <div className="tenant-stat-compact">
       <div className="tenant-stat-compact-title">{title}</div>
-      <div className="tenant-stat-compact-value">{formatCurrency(todayUgx)}</div>
+      <div className="tenant-stat-compact-value">{formatCurrency(filteredUgx)}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: -2, marginBottom: 4 }}>{dateRangeLabel}</div>
       <div className="tenant-stat-compact-split">
-        <span><span className="split-label">Today</span></span>
+        <span><span className="split-label">Today</span> {formatCurrency(todayUgx)}</span>
         <span style={{ marginLeft: 'auto' }}>
           <span className="split-label">This month</span> {formatCurrency(monthUgx)}
         </span>
