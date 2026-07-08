@@ -3742,6 +3742,7 @@ pre, code.block {
   font-family: inherit;
 }
 .chat-bubble {
+  position: relative;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -3757,6 +3758,20 @@ pre, code.block {
 .chat-bubble:hover {
   transform: scale(1.05);
   background: var(--green-dark);
+}
+.chat-bubble-logo { width: 32px; height: 32px; object-fit: contain; }
+.chat-bubble-spark {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--brand);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
 }
 .chat-window {
   position: absolute;
