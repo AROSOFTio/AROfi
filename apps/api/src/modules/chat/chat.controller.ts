@@ -1,10 +1,21 @@
 import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus, Headers } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
+import { AiChatService } from './ai-chat.service';
 
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly aiChatService: AiChatService,
+  ) {}
+
+  @Throttle({ default: { ttl: 60_000, limit: 15 } })
+  @Post('ai')
+  @HttpCode(HttpStatus.OK)
+  async askAi(@Body() body: { message: string; history?: Array<{ role: 'user' | 'model'; text: string }> }) {
+    return this.aiChatService.reply(body.message, body.history);
+  }
 
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('session')

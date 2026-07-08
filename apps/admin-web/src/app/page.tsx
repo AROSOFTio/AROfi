@@ -2,21 +2,92 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Activity, BadgeDollarSign, Check, Radio, Router, Ticket, Users, Wifi } from 'lucide-react'
+import {
+  Activity,
+  BadgeDollarSign,
+  Bell,
+  Check,
+  ChevronDown,
+  Clock,
+  Layers,
+  Mail,
+  MapPin,
+  Phone,
+  QrCode,
+  Radio,
+  Router,
+  ShieldCheck,
+  Ticket,
+  Timer,
+  Users,
+  Wifi,
+  Zap,
+} from 'lucide-react'
 import { RegisterModal } from '@/components/RegisterModal'
 import { getAppLoginUrl } from '@/lib/admin-session'
 
-// Pricing is hidden from the public marketing page for now — signup always
-// lands new tenants on the Free plan (see SHOW_PRICING in RegisterModal).
-// Flip back on when pricing is ready to go public; section JSX is untouched.
-const SHOW_PRICING = false
+const SHOW_PRICING = true
+
+const whyPoints = [
+  { stat: 'UGX 0', label: 'To get started', text: 'Register free and start billing today — no setup fee, no contract.' },
+  { stat: '<5 min', label: 'Router onboarding', text: 'Paste one RouterOS command and your hotspot is billing customers.' },
+  { stat: '24/7', label: 'Automated collection', text: 'MTN MoMo & Airtel Money payments post to your wallet around the clock.' },
+  { stat: '256', label: 'Built for Uganda', text: 'Local mobile money rails, local support, local currency — no workarounds.' },
+]
 
 const features = [
-  { icon: Router, title: 'MikroTik Hotspot Billing', text: 'One RouterOS command to onboard. No lockouts, no console diving. Any MikroTik model.' },
-  { icon: Ticket, title: 'WiFi Packages & Vouchers', text: 'Sell hourly & daily bundles, print voucher batches for field agents — all from one place.' },
-  { icon: BadgeDollarSign, title: 'MTN MoMo & Airtel Money', text: 'Auto-collect mobile money. Wallets, settlements and reconciliation built-in.' },
+  { icon: BadgeDollarSign, title: 'MTN MoMo & Airtel Money', text: 'Customers pay straight from their phone. Payments post to your wallet automatically.' },
+  { icon: Ticket, title: 'Beautiful Voucher Templates', text: 'Branded, print-ready voucher batches for field agents and walk-in customers.' },
+  { icon: QrCode, title: 'QR Code Scan & Connect', text: 'Guests scan a QR code to connect and pay — no typing WiFi passwords.' },
+  { icon: Clock, title: '24/7 Support', text: 'Real people on chat, WhatsApp, phone and email — every day, all day.' },
+  { icon: Bell, title: 'Instant Alerts', text: 'Get an email the moment a router goes offline, so you fix it before customers notice.' },
+  { icon: Layers, title: 'Multi-Device Bundles', text: 'Sell packages that cover several devices per customer on one payment.' },
+  { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated tenants, and secret-key protected withdrawals.' },
+  { icon: Zap, title: 'Instant Withdrawals', text: 'Cash out to your approved mobile money number the moment you need it.' },
+  { icon: Router, title: 'Add Multiple Routers', text: 'Run one hotspot or fifty — every MikroTik router lives in one dashboard.' },
+  { icon: Wifi, title: 'Remote Router Access', text: 'Reach any router from anywhere over our secure VPN tunnel — no port forwarding, no static IP.' },
+  { icon: Timer, title: 'Live Session Tracking', text: 'See who is online, for how long, and how much they have paid — in real time.' },
   { icon: Users, title: 'Multi-Tenant · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
 ]
+
+const faqs = [
+  {
+    q: 'Is AROFi really free to start?',
+    a: 'Yes. The Starter plan has no monthly fee and no setup cost — you only ever pay a small percentage on payments that actually go through. There is no free trial that expires; Starter stays free.',
+  },
+  {
+    q: 'How do I get paid?',
+    a: 'Every sale — mobile money or voucher — lands in your AROFi wallet automatically. Withdraw to your approved MTN or Airtel number whenever you like; approved withdrawals are processed instantly.',
+  },
+  {
+    q: 'Which routers work with AROFi?',
+    a: 'Any MikroTik RouterOS device — RB951Ui, hAP ac², CCR, CHR and more. Paste one setup command from your dashboard and the router starts authenticating and billing through AROFi.',
+  },
+  {
+    q: 'Can I manage a router that isn’t on-site?',
+    a: 'Yes — every router connects out to AROFi over a secure VPN tunnel, so you can reach its WinBox console remotely (e.g. arofi.net:3081) without opening ports or needing a static IP.',
+  },
+  {
+    q: 'What happens if my router goes offline?',
+    a: 'You get an instant email notification so you can act before customers complain. Router health is also visible live on your dashboard.',
+  },
+  {
+    q: 'Is my money and customer data safe?',
+    a: 'Every tenant is fully isolated, payments are encrypted end-to-end, and withdrawals require a separate secret code on top of your login — so a leaked password alone can’t move funds.',
+  },
+  {
+    q: 'How many routers or hotspot sites can I run?',
+    a: 'Starter supports up to 5 routers, Pro up to 10, and Enterprise is unlimited. You can upgrade anytime as you grow.',
+  },
+  {
+    q: 'Do you support vouchers as well as mobile money?',
+    a: 'Yes — print branded voucher batches for agents or walk-in customers, redeemable by code or QR scan, alongside live MTN MoMo and Airtel Money collection.',
+  },
+]
+
+const CONTACT_PHONE = '256787726388'
+const CONTACT_PHONE_DISPLAY = '+256 787 726 388'
+const CONTACT_EMAIL = 'support@arofi.net'
 
 // Mirrors SUBSCRIPTION_PLAN_CATALOG in apps/api/src/modules/subscription/subscription.service.ts
 // — keep these in sync if the plans/commission rates ever change there.
@@ -83,6 +154,7 @@ function useCountUp(target: number, durationMs = 1400) {
 export default function RootPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [feedIndex, setFeedIndex] = useState(0)
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   const revenue = useCountUp(284500)
   const sessions = useCountUp(126)
@@ -111,6 +183,13 @@ export default function RootPage() {
         <div className="home-brand">
           <img src="/logo.png" alt="AROFi" />
           <span className="home-brand-text" aria-hidden="true">AROFi</span>
+        </div>
+        <div className="home-nav-links">
+          <a href="#features">Features</a>
+          {SHOW_PRICING && <a href="#pricing">Pricing</a>}
+          <a href="#faq">FAQ</a>
+          <a href="#contact">Contact</a>
+          <Link href="/blog">Blog</Link>
         </div>
         <div className="home-actions">
           <Link href="/docs" className="btn btn-ghost">Docs</Link>
@@ -181,14 +260,81 @@ export default function RootPage() {
         </div>
       </section>
 
-      <section className="home-feature-grid">
-        {features.map((feature) => (
-          <article key={feature.title} className="home-feature">
-            <feature.icon size={20} />
-            <h2>{feature.title}</h2>
-            <p>{feature.text}</p>
-          </article>
+      <section className="home-why">
+        {whyPoints.map((point) => (
+          <div key={point.label} className="home-why-card">
+            <strong>{point.stat}</strong>
+            <span className="home-why-label">{point.label}</span>
+            <p>{point.text}</p>
+          </div>
         ))}
+      </section>
+
+      <section className="home-section" id="features">
+        <div className="home-section-head">
+          <div className="home-kicker"><Zap size={15} /> Features</div>
+          <h2>Everything a WiFi business needs.</h2>
+          <p>From getting paid to keeping routers online — AROFi covers the whole operation, not just billing.</p>
+        </div>
+        <div className="home-feature-grid">
+          {features.map((feature) => (
+            <article key={feature.title} className="home-feature">
+              <feature.icon size={20} />
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section" id="screenshots">
+        <div className="home-section-head">
+          <div className="home-kicker"><Wifi size={15} /> Inside AROFi</div>
+          <h2>Your whole operation, in one dashboard.</h2>
+          <p>A preview of what you get after sign-in — sales, vouchers, routers and payouts, all live.</p>
+        </div>
+        <div className="home-preview-grid">
+          <PreviewCard title="Sales Dashboard" tone="blue">
+            <div className="preview-mini-metric-row">
+              <span>Today</span><strong>UGX 284,500</strong>
+            </div>
+            <div className="home-chart mini">
+              {[38, 62, 44, 71, 55, 83, 90].map((h, i) => (
+                <span key={i} className="home-bar" style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          </PreviewCard>
+          <PreviewCard title="Voucher Batches" tone="green">
+            <div className="preview-voucher">
+              <div className="preview-voucher-code">AR7X-K92M</div>
+              <span className="mini-badge green">1 HR · UGX 500</span>
+            </div>
+            <div className="preview-voucher">
+              <div className="preview-voucher-code">QP4T-L03R</div>
+              <span className="mini-badge blue">24 HR · UGX 4,000</span>
+            </div>
+          </PreviewCard>
+          <PreviewCard title="Router Fleet" tone="amber">
+            {['Mutungo Hill', 'Ntinda Office', 'Kireka Junction'].map((name, i) => (
+              <div key={name} className="preview-router-row">
+                <span className={`preview-dot ${i === 2 ? 'offline' : 'online'}`} />
+                <span>{name}</span>
+                <span className="preview-router-status">{i === 2 ? 'Offline' : 'Online'}</span>
+              </div>
+            ))}
+          </PreviewCard>
+          <PreviewCard title="Wallet & Payouts" tone="blue">
+            <div className="preview-mini-metric-row">
+              <span>Available</span><strong>UGX 612,000</strong>
+            </div>
+            <div className="preview-router-row">
+              <span className="preview-dot online" />
+              <span>Withdrawal to 0788***388</span>
+              <span className="preview-router-status">Sent</span>
+            </div>
+          </PreviewCard>
+        </div>
+        <p className="home-preview-note">Illustrative previews · your real dashboard appears after sign-in.</p>
       </section>
 
       {SHOW_PRICING && (
@@ -227,6 +373,68 @@ export default function RootPage() {
         </section>
       )}
 
+      <section className="home-section home-faq" id="faq">
+        <div className="home-section-head">
+          <div className="home-kicker"><Activity size={15} /> FAQ</div>
+          <h2>Questions, answered.</h2>
+          <p>Can&apos;t find what you&apos;re looking for? <a href="#contact">Talk to us</a> directly.</p>
+        </div>
+        <div className="home-faq-list">
+          {faqs.map((item, i) => {
+            const open = openFaq === i
+            return (
+              <div key={item.q} className={`home-faq-item ${open ? 'open' : ''}`}>
+                <button type="button" className="home-faq-question" onClick={() => setOpenFaq(open ? null : i)} aria-expanded={open}>
+                  <span>{item.q}</span>
+                  <ChevronDown size={18} className="home-faq-chevron" />
+                </button>
+                {open && <p className="home-faq-answer">{item.a}</p>}
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="home-section home-contact" id="contact">
+        <div className="home-contact-card">
+          <div className="home-contact-copy">
+            <div className="home-kicker"><Radio size={15} /> Contact &amp; Support</div>
+            <h2>We&apos;re here every day of the week.</h2>
+            <p>Questions about billing, routers, or getting paid — reach the AROFi team directly, or open the chat in the corner of your screen.</p>
+          </div>
+          <div className="home-contact-grid">
+            <a href={`tel:+${CONTACT_PHONE}`} className="home-contact-item">
+              <Phone size={20} />
+              <div>
+                <span className="home-contact-label">Call or WhatsApp</span>
+                <strong>{CONTACT_PHONE_DISPLAY}</strong>
+              </div>
+            </a>
+            <a href={`mailto:${CONTACT_EMAIL}`} className="home-contact-item">
+              <Mail size={20} />
+              <div>
+                <span className="home-contact-label">Email</span>
+                <strong>{CONTACT_EMAIL}</strong>
+              </div>
+            </a>
+            <div className="home-contact-item">
+              <Clock size={20} />
+              <div>
+                <span className="home-contact-label">Support hours</span>
+                <strong>24/7, every day</strong>
+              </div>
+            </div>
+            <div className="home-contact-item">
+              <MapPin size={20} />
+              <div>
+                <span className="home-contact-label">Based in</span>
+                <strong>Kampala, Uganda</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="home-footer">
         <a
@@ -239,6 +447,13 @@ export default function RootPage() {
           <img src="/logo.png" alt="" aria-hidden="true" className="home-footer-logo" />
           <span>AROSOFT</span>
         </a>
+        <div className="home-footer-links">
+          <Link href="/docs">Docs</Link>
+          <Link href="/blog">Blog</Link>
+          <a href="#faq">FAQ</a>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+          <a href={`tel:+${CONTACT_PHONE}`}>{CONTACT_PHONE_DISPLAY}</a>
+        </div>
       </footer>
 
       {/* SEO-only content — hidden from visual users, fully indexed by crawlers & AI agents */}
@@ -257,5 +472,14 @@ export default function RootPage() {
 
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
     </main>
+  )
+}
+
+function PreviewCard({ title, tone, children }: { title: string; tone: 'blue' | 'green' | 'amber'; children: React.ReactNode }) {
+  return (
+    <div className={`preview-card ${tone}`}>
+      <div className="preview-card-head">{title}</div>
+      <div className="preview-card-body">{children}</div>
+    </div>
   )
 }

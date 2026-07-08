@@ -8,8 +8,21 @@ interface Message {
   timestamp: string
 }
 
+interface AiMessage {
+  role: 'user' | 'assistant'
+  text: string
+}
+
+const AI_GREETING: AiMessage = {
+  role: 'assistant',
+  text: "Hi! I'm the AROFi assistant. Ask me about pricing, routers, mobile money payouts, or anything else about the platform.",
+}
+
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
+  const [mode, setMode] = useState<'ai' | 'support'>('ai')
+
+  // Human support chat (WhatsApp bridge) — unchanged from the original widget.
   const [name, setName] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -18,6 +31,12 @@ export default function ChatWidget() {
   const [inputText, setInputText] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // AI assistant chat
+  const [aiMessages, setAiMessages] = useState<AiMessage[]>([AI_GREETING])
+  const [aiInput, setAiInput] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const aiMessagesEndRef = useRef<HTMLDivElement>(null)
 
   // Load session from localStorage if it exists
   useEffect(() => {
@@ -34,7 +53,7 @@ export default function ChatWidget() {
 
   // Poll for messages when session is active and widget is open
   useEffect(() => {
-    if (!sessionId || !isOpen) return
+    if (!sessionId || !isOpen || mode !== 'support') return
 
     const fetchMessages = async () => {
       try {
@@ -51,12 +70,16 @@ export default function ChatWidget() {
     fetchMessages() // initial fetch
     const id = setInterval(fetchMessages, 3000)
     return () => clearInterval(id)
-  }, [sessionId, isOpen])
+  }, [sessionId, isOpen, mode])
 
   // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    aiMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [aiMessages, aiLoading])
 
   const handleStartChat = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -109,15 +132,47 @@ export default function ChatWidget() {
     }
   }
 
+  const handleSendAiMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = aiInput.trim()
+    if (!text || aiLoading) return
+    setAiInput('')
+
+    const history = aiMessages
+      .filter((m) => m !== AI_GREETING)
+      .map((m) => ({ role: m.role === 'assistant' ? 'model' as const : 'user' as const, text: m.text }))
+
+    setAiMessages((prev) => [...prev, { role: 'user', text }])
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/chat/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history }),
+      })
+      const data = res.ok ? await res.json() : null
+      const reply = data?.reply || 'Sorry, something went wrong. Please try again or use "Talk to Support".'
+      setAiMessages((prev) => [...prev, { role: 'assistant', text: reply }])
+    } catch (err) {
+      console.error(err)
+      setAiMessages((prev) => [...prev, { role: 'assistant', text: 'Sorry, something went wrong. Please try again or use "Talk to Support".' }])
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <div className="arofi-chat-widget">
       {isOpen ? (
         <div className="chat-window">
           <div className="chat-header">
             <div>
-              <h3>AROFi Support</h3>
-              {hasStarted && code && (
+              <h3>AROFi {mode === 'ai' ? 'AI Assistant' : 'Support'}</h3>
+              {mode === 'support' && hasStarted && code && (
                 <div className="chat-header-desc">Session Code: #{code}</div>
+              )}
+              {mode === 'ai' && (
+                <div className="chat-header-desc">Instant answers, powered by AI</div>
               )}
             </div>
             <button className="close-btn" onClick={() => setIsOpen(false)} aria-label="Close chat">
@@ -125,57 +180,101 @@ export default function ChatWidget() {
             </button>
           </div>
 
-          <div className="chat-body">
-            {!hasStarted ? (
-              <form onSubmit={handleStartChat} className="chat-setup-form">
-                <p>Have questions about AROFi billing? Chat with support directly from your screen!</p>
-                <input
-                  type="text"
-                  placeholder="Enter your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="chat-input-field"
-                  required
-                />
-                <button type="submit" className="chat-btn-primary" disabled={loading}>
-                  {loading ? 'Starting...' : 'Start Chat'}
-                </button>
-              </form>
-            ) : (
-              <>
-                {messages.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#718096', fontSize: '12px', margin: 'auto' }}>
-                    Type a message below to start chatting with support.
-                  </div>
-                )}
-                {messages.map((msg, index) => (
-                  <div key={index} className={`msg-bubble ${msg.sender}`}>
-                    <div>{msg.text}</div>
-                    <div className="msg-time">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </>
-            )}
+          <div className="chat-tabs">
+            <button type="button" className={`chat-tab ${mode === 'ai' ? 'active' : ''}`} onClick={() => setMode('ai')}>
+              Ask AI
+            </button>
+            <button type="button" className={`chat-tab ${mode === 'support' ? 'active' : ''}`} onClick={() => setMode('support')}>
+              Talk to Support
+            </button>
           </div>
 
-          {hasStarted && (
-            <div className="chat-footer">
-              <form onSubmit={handleSendMessage} className="chat-input-row">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  className="chat-input-field"
-                  required
-                />
-                <button type="submit" className="chat-btn-primary" style={{ padding: '0 16px' }}>Send</button>
-              </form>
-              <div className="chat-footer-brand">Powered by AROSOFT WhatsApp Bridge</div>
-            </div>
+          {mode === 'ai' ? (
+            <>
+              <div className="chat-body">
+                {aiMessages.map((msg, index) => (
+                  <div key={index} className={`msg-bubble ${msg.role === 'user' ? 'visitor' : 'admin'}`}>
+                    <div>{msg.text}</div>
+                  </div>
+                ))}
+                {aiLoading && (
+                  <div className="msg-bubble admin">
+                    <div className="chat-typing"><span /><span /><span /></div>
+                  </div>
+                )}
+                <div ref={aiMessagesEndRef} />
+              </div>
+              <div className="chat-footer">
+                <form onSubmit={handleSendAiMessage} className="chat-input-row">
+                  <input
+                    type="text"
+                    placeholder="Ask about pricing, routers, payouts..."
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    className="chat-input-field"
+                    maxLength={600}
+                    required
+                  />
+                  <button type="submit" className="chat-btn-primary" style={{ padding: '0 16px' }} disabled={aiLoading}>Send</button>
+                </form>
+                <div className="chat-footer-brand">AI can make mistakes — for account issues, use Talk to Support</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="chat-body">
+                {!hasStarted ? (
+                  <form onSubmit={handleStartChat} className="chat-setup-form">
+                    <p>Have questions about AROFi billing? Chat with support directly from your screen!</p>
+                    <input
+                      type="text"
+                      placeholder="Enter your name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="chat-input-field"
+                      required
+                    />
+                    <button type="submit" className="chat-btn-primary" disabled={loading}>
+                      {loading ? 'Starting...' : 'Start Chat'}
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    {messages.length === 0 && (
+                      <div style={{ textAlign: 'center', color: '#718096', fontSize: '12px', margin: 'auto' }}>
+                        Type a message below to start chatting with support.
+                      </div>
+                    )}
+                    {messages.map((msg, index) => (
+                      <div key={index} className={`msg-bubble ${msg.sender}`}>
+                        <div>{msg.text}</div>
+                        <div className="msg-time">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
+
+              {hasStarted && (
+                <div className="chat-footer">
+                  <form onSubmit={handleSendMessage} className="chat-input-row">
+                    <input
+                      type="text"
+                      placeholder="Type a message..."
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      className="chat-input-field"
+                      required
+                    />
+                    <button type="submit" className="chat-btn-primary" style={{ padding: '0 16px' }}>Send</button>
+                  </form>
+                  <div className="chat-footer-brand">Powered by AROSOFT WhatsApp Bridge</div>
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : (
