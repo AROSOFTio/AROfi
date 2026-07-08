@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
+import EmailChangeRequestCard from './EmailChangeRequestCard'
 
 type AdminUser = {
   permissions: string[]
@@ -557,6 +558,8 @@ export default function SettingsManager({
           </form>
         )}
       </div>
+
+      {activeTab === 'Security' && <EmailChangeRequestCard />}
 
       {activeTab === 'Subscription Plan' && tenant && (
         <div className="card" style={{ padding: '24px 32px', animation: 'fadeIn 0.2s ease-out' }}>

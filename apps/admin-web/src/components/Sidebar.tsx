@@ -104,6 +104,7 @@ const navItems: NavGroup[] = [
     items: [
       { href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true },
       { href: '/disbursements', label: 'Phone Approvals', required: ['disbursements.read'], platformOnly: true },
+      { href: '/admin/email-approvals', label: 'Email Approvals', required: ['users.manage'], platformOnly: true },
       { href: '/transactions', label: 'All Transactions', required: ['billing.read'], platformOnly: true },
     ]
   },

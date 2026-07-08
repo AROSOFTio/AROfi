@@ -265,6 +265,10 @@ export default function LoginPage() {
             >
               {loading ? 'Checking...' : 'Continue'}
             </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
+              <a href="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>Forgot password?</a>
+              <a href="/forgot-email" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Forgot email?</a>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleOtpSubmit}>

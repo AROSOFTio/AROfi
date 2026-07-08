@@ -1,13 +1,17 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpException,
   HttpStatus,
   Injectable,
   Logger,
   Module,
+  Param,
   Post,
+  Query,
   Req,
   Res,
   ServiceUnavailableException,
@@ -24,7 +28,8 @@ import * as bcrypt from 'bcrypt'
 import { createHash, randomBytes, randomInt } from 'crypto'
 import { AuthGuard } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
-import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator'
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, Length, MinLength } from 'class-validator'
+import { EmailChangeRequestStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { PrismaModule } from '../../prisma.module'
 import { MailModule } from '../mail/mail.module'
@@ -41,6 +46,18 @@ const REFRESH_COOKIE_NAME = 'arofi_admin_refresh'
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 // Must match the JWT expiresIn below — the cookie should die with the token.
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000
+
+// "bangella23@gmail.com" -> "ba*******3@gmail.com" — enough for the owner to
+// recognise their address without handing it to whoever typed the phone number.
+function maskEmail(email: string) {
+  const [local, domain] = email.split('@')
+  if (!domain) return email
+  if (local.length <= 3) {
+    return `${local[0]}${'*'.repeat(Math.max(2, local.length - 1))}@${domain}`
+  }
+  return `${local.slice(0, 2)}${'*'.repeat(local.length - 3)}${local.slice(-1)}@${domain}`
+}
 
 // Email OTP policy. All values are clamped to safe ranges so a typo'd env var
 // can't silently produce a 24-hour OTP or unlimited attempts.
@@ -77,6 +94,49 @@ class LoginVerifyDto {
 class LoginResendDto {
   @IsEmail()
   email: string
+}
+
+class PasswordResetRequestDto {
+  @IsEmail()
+  email: string
+}
+
+class PasswordResetConfirmDto {
+  @IsString()
+  @IsNotEmpty()
+  token: string
+
+  @IsString()
+  @MinLength(8)
+  password: string
+}
+
+class ForgotEmailDto {
+  @IsString()
+  @IsNotEmpty()
+  phoneNumber: string
+}
+
+class EmailChangeRequestDto {
+  @IsEmail()
+  newEmail: string
+
+  @IsString()
+  @MinLength(10)
+  reason: string
+
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string
+}
+
+class EmailChangeReviewDto {
+  @IsBoolean()
+  approve: boolean
+
+  @IsOptional()
+  @IsString()
+  note?: string
 }
 
 type JwtPayload = {
@@ -480,6 +540,214 @@ export class AuthService {
     }
   }
 
+  // ── Forgot password ──────────────────────────────────────────────────────
+
+  async requestPasswordReset(email: string) {
+    // Same body whether or not the account exists, so this endpoint can't be
+    // used to probe which emails are registered.
+    const generic = { ok: true, message: 'If an account with that email exists, a password reset link has been sent.' }
+    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } })
+    if (!user || !user.isActive) {
+      return generic
+    }
+
+    const rawToken = randomBytes(32).toString('hex')
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: this.hashToken(rawToken),
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+      },
+    })
+
+    const baseUrl = process.env.ADMIN_BASE_URL || 'https://arofi.net'
+    const link = `${baseUrl}/reset-password?token=${rawToken}`
+    await this.mailService.sendMail({
+      to: user.email,
+      subject: 'Reset your AROFi password',
+      html: `<p>Hello${user.firstName ? ` ${user.firstName}` : ''},</p>
+        <p>We received a request to reset your AROFi password. Click the link below to choose a new one. The link expires in 1 hour.</p>
+        <p><a href="${link}">${link}</a></p>
+        <p>If you didn't request this, you can safely ignore this email — your password stays unchanged.</p>`,
+    })
+    return generic
+  }
+
+  async confirmPasswordReset(rawToken: string, newPassword: string) {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) },
+    })
+    if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('This reset link is invalid or has expired. Request a new one.')
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: record.userId }, data: { password: passwordHash } }),
+      // Burn every outstanding reset link and live session for this user —
+      // whoever just proved control of the mailbox owns the account now.
+      this.prisma.passwordResetToken.updateMany({
+        where: { userId: record.userId, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ])
+    return { ok: true, message: 'Password updated. You can now sign in with your new password.' }
+  }
+
+  // ── Forgot email (reveal masked account email by registration phone) ─────
+
+  async revealEmailByPhone(phoneNumber: string) {
+    const digits = phoneNumber.replace(/\D/g, '')
+    if (digits.length < 9) {
+      throw new BadRequestException('Enter the full phone number you registered with.')
+    }
+    // Compare on the last 9 digits so 0787..., +256787... and 256787... all
+    // match regardless of the format the tenant was registered with.
+    const last9 = digits.slice(-9)
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { supportPhone: { endsWith: last9 } },
+      select: { id: true },
+    })
+    const user = tenant
+      ? await this.prisma.user.findFirst({
+          where: { tenantId: tenant.id, isActive: true },
+          orderBy: { createdAt: 'asc' },
+          select: { email: true },
+        })
+      : null
+
+    if (!user) {
+      return { ok: true, maskedEmail: null, message: 'No account matched that phone number. Contact support@arofi.net for help recovering your account.' }
+    }
+
+    return { ok: true, maskedEmail: maskEmail(user.email), message: 'This is the email registered with that phone number.' }
+  }
+
+  // ── Email change requests (user submits, platform admin approves) ────────
+
+  async createEmailChangeRequest(user: AuthenticatedAdminUser, newEmail: string, reason: string, currentPassword: string) {
+    const normalizedNewEmail = newEmail.trim().toLowerCase()
+    const account = await this.prisma.user.findUnique({ where: { id: user.id } })
+    if (!account || !(await bcrypt.compare(currentPassword, account.password))) {
+      throw new UnauthorizedException('Current password is incorrect.')
+    }
+    if (normalizedNewEmail === account.email) {
+      throw new BadRequestException('That is already your current email address.')
+    }
+    const emailTaken = await this.prisma.user.findUnique({ where: { email: normalizedNewEmail }, select: { id: true } })
+    if (emailTaken) {
+      throw new BadRequestException('That email address is already in use by another account.')
+    }
+    const pending = await this.prisma.emailChangeRequest.findFirst({
+      where: { userId: user.id, status: EmailChangeRequestStatus.PENDING },
+      select: { id: true },
+    })
+    if (pending) {
+      throw new BadRequestException('You already have a pending email change request. Wait for it to be reviewed.')
+    }
+
+    const request = await this.prisma.emailChangeRequest.create({
+      data: {
+        userId: user.id,
+        currentEmail: account.email,
+        requestedEmail: normalizedNewEmail,
+        reason: reason.trim(),
+      },
+    })
+
+    // Fire-and-forget notifications — the request itself is already saved.
+    void this.mailService.sendMail({
+      to: process.env.SUPPORT_EMAIL || 'support@arofi.net',
+      subject: `Email change request from ${account.email}`,
+      html: `<p>${user.displayName} (${account.email}${user.tenantName ? `, ${user.tenantName}` : ''}) requested to change their sign-in email to <strong>${normalizedNewEmail}</strong>.</p>
+        <p><strong>Reason:</strong> ${reason.trim()}</p>
+        <p>Review it in the admin console under Email Approvals.</p>`,
+    })
+
+    return {
+      ok: true,
+      requestId: request.id,
+      message: 'Email change request submitted. You will be notified once it is reviewed.',
+    }
+  }
+
+  async listEmailChangeRequests(reviewer: AuthenticatedAdminUser, status?: string) {
+    this.requirePlatformAdmin(reviewer)
+    const where =
+      status && ['PENDING', 'APPROVED', 'REJECTED'].includes(status)
+        ? { status: status as EmailChangeRequestStatus }
+        : {}
+    return this.prisma.emailChangeRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { user: { select: { email: true, firstName: true, lastName: true, tenant: { select: { name: true } } } } },
+    })
+  }
+
+  async reviewEmailChangeRequest(reviewer: AuthenticatedAdminUser, requestId: string, approve: boolean, note?: string) {
+    this.requirePlatformAdmin(reviewer)
+    const request = await this.prisma.emailChangeRequest.findUnique({ where: { id: requestId } })
+    if (!request) {
+      throw new BadRequestException('Email change request not found.')
+    }
+    if (request.status !== EmailChangeRequestStatus.PENDING) {
+      throw new BadRequestException('This request has already been reviewed.')
+    }
+
+    if (!approve) {
+      await this.prisma.emailChangeRequest.update({
+        where: { id: requestId },
+        data: { status: EmailChangeRequestStatus.REJECTED, reviewedBy: reviewer.email, reviewedAt: new Date(), reviewNote: note?.trim() || null },
+      })
+      void this.mailService.sendMail({
+        to: request.currentEmail,
+        subject: 'Your AROFi email change request was declined',
+        html: `<p>Your request to change your sign-in email to ${request.requestedEmail} was declined.${note ? ` Reason: ${note.trim()}` : ''}</p>
+          <p>If you believe this is a mistake, contact support@arofi.net.</p>`,
+      })
+      return { ok: true, status: 'REJECTED' }
+    }
+
+    const emailTaken = await this.prisma.user.findUnique({ where: { email: request.requestedEmail }, select: { id: true } })
+    if (emailTaken) {
+      throw new BadRequestException('The requested email address is now in use by another account. Reject this request instead.')
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: request.userId }, data: { email: request.requestedEmail } }),
+      this.prisma.emailChangeRequest.update({
+        where: { id: requestId },
+        data: { status: EmailChangeRequestStatus.APPROVED, reviewedBy: reviewer.email, reviewedAt: new Date(), reviewNote: note?.trim() || null },
+      }),
+      // Email is the login identifier — force re-authentication everywhere.
+      this.prisma.refreshToken.updateMany({
+        where: { userId: request.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ])
+
+    for (const recipient of [request.currentEmail, request.requestedEmail]) {
+      void this.mailService.sendMail({
+        to: recipient,
+        subject: 'Your AROFi sign-in email has changed',
+        html: `<p>The sign-in email for your AROFi account was changed from ${request.currentEmail} to <strong>${request.requestedEmail}</strong> after an approved request.</p>
+          <p>If you did not request this, contact support@arofi.net immediately.</p>`,
+      })
+    }
+    return { ok: true, status: 'APPROVED' }
+  }
+
+  private requirePlatformAdmin(user: AuthenticatedAdminUser) {
+    if (!user.permissions.includes('ALL')) {
+      throw new ForbiddenException('Only platform administrators can review email change requests.')
+    }
+  }
+
   async issueSessionForUserId(userId: string) {
     const authenticatedUser = await this.validateAccessTokenUser(userId)
 
@@ -798,6 +1066,51 @@ export class AuthController {
     return {
       user: request.user,
     }
+  }
+
+  // ── Account recovery (public) ─────────────────────────────────────────────
+
+  @Throttle({ default: { ttl: 300_000, limit: 3 } })
+  @Post('password-reset/request')
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
+    return this.authService.requestPasswordReset(dto.email)
+  }
+
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Post('password-reset/confirm')
+  confirmPasswordReset(@Body() dto: PasswordResetConfirmDto) {
+    return this.authService.confirmPasswordReset(dto.token, dto.password)
+  }
+
+  @Throttle({ default: { ttl: 300_000, limit: 5 } })
+  @Post('forgot-email')
+  forgotEmail(@Body() dto: ForgotEmailDto) {
+    return this.authService.revealEmailByPhone(dto.phoneNumber)
+  }
+
+  // ── Email change requests ─────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 300_000, limit: 3 } })
+  @Post('email-change-requests')
+  createEmailChangeRequest(@Req() request: AuthenticatedRequest, @Body() dto: EmailChangeRequestDto) {
+    return this.authService.createEmailChangeRequest(request.user, dto.newEmail, dto.reason, dto.currentPassword)
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('email-change-requests')
+  listEmailChangeRequests(@Req() request: AuthenticatedRequest, @Query('status') status?: string) {
+    return this.authService.listEmailChangeRequests(request.user, status)
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('email-change-requests/:id/review')
+  reviewEmailChangeRequest(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: EmailChangeReviewDto,
+  ) {
+    return this.authService.reviewEmailChangeRequest(request.user, id, dto.approve, dto.note)
   }
 }
 

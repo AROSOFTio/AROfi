@@ -501,6 +501,44 @@ model User {
   refreshTokens          RefreshToken[]
   adminLoginOtps         AdminLoginOtp[]
   blogPosts              BlogPost[]
+  passwordResetTokens    PasswordResetToken[]
+  emailChangeRequests    EmailChangeRequest[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
+}
+
+enum EmailChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model EmailChangeRequest {
+  id             String                   @id @default(uuid())
+  userId         String
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentEmail   String
+  requestedEmail String
+  reason         String
+  status         EmailChangeRequestStatus @default(PENDING)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
 
 model RefreshToken {
