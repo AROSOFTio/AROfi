@@ -3809,23 +3809,22 @@ pre, code.block {
 .close-btn:hover {
   opacity: 1;
 }
-.chat-escalate-link,
-.chat-back-link {
+.chat-escalate-link {
   display: flex;
   align-items: center;
   gap: 5px;
+  width: fit-content;
+  margin: 8px auto 0;
   background: transparent;
   border: 0;
   color: #93c5fd;
   font-size: 11px;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
   padding: 0;
 }
-.chat-escalate-link { width: fit-content; margin: 8px auto 0; }
-.chat-escalate-link:hover,
-.chat-back-link:hover { color: #fff; }
-.chat-back-link { margin-bottom: 10px; }
+.chat-escalate-link:hover { color: #fff; }
 .chat-typing { display: inline-flex; gap: 4px; padding: 2px; }
 .chat-typing span {
   width: 6px;
@@ -3853,19 +3852,6 @@ pre, code.block {
   gap: 12px;
   color: #e2e8f0;
   background: #111827;
-}
-.chat-setup-form {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: 100%;
-  gap: 12px;
-}
-.chat-setup-form p {
-  font-size: 13px;
-  color: #94a3b8;
-  text-align: center;
-  margin: 0 0 10px 0;
 }
 .chat-input-field {
   background: #1f2937;
@@ -3920,12 +3906,6 @@ pre, code.block {
   border-bottom-left-radius: 2px;
   border: 1px solid #1e40af;
 }
-.msg-time {
-  font-size: 9px;
-  color: #718096;
-  margin-top: 4px;
-  text-align: right;
-}
 .chat-link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chat-link-chip {
   display: inline-flex;
@@ -3954,13 +3934,6 @@ pre, code.block {
 .chat-input-row input {
   flex: 1;
 }
-.chat-footer-brand {
-  font-size: 9px;
-  color: #4a5568;
-  text-align: center;
-  margin-top: 6px;
-}
-
 /* ═══════════════════════════════════════════════
    RESPONSIVE DESIGN ADDITIONS & MOCKUP FIXES
    ═══════════════════════════════════════════════ */

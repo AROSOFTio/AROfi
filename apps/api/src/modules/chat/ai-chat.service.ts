@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { SupportTicketChannel } from '@prisma/client'
+import { SubscriptionPlanTier, SupportTicketChannel } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { MailService } from '../mail/mail.service'
 import { AuthService, AccessScopeService } from '../auth/auth.module'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { RoutersService } from '../routers/routers.service'
 import { BillingService } from '../billing/billing.service'
+import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 
 function hasPermission(user: { permissions: string[] }, permission: string) {
   return user.permissions.includes(permission) || user.permissions.includes('ALL')
@@ -19,8 +20,22 @@ const SUPPORT_NOTIFY_EMAIL = 'support@arofi.net'
 const PLATFORM_TENANT_ID = 'platform'
 const ASSISTANT_NAME = 'Aria'
 
+// Public/anonymous visitors are unlimited (rate-limited only by the
+// controller's per-IP @Throttle) — these daily caps apply only to signed-in
+// tenant users, scaling with their subscription plan.
+const DAILY_MESSAGE_LIMITS: Record<SubscriptionPlanTier, number> = {
+  FREE: 10,
+  PRO: 30,
+  ENTERPRISE: 100,
+}
+const PLAN_LABELS: Record<SubscriptionPlanTier, string> = {
+  FREE: 'Starter',
+  PRO: 'Pro',
+  ENTERPRISE: 'Enterprise',
+}
+
 const FALLBACK_REPLY =
-  `${ASSISTANT_NAME} is warming up right now. Meanwhile, tap "Talk to Support" above, WhatsApp/call +256 787 726 388, or email support@arofi.net.`
+  `${ASSISTANT_NAME} is warming up right now. Meanwhile, message us on WhatsApp (+256 787 726 388) or email support@arofi.net — we reply fast.`
 
 // Kept in sync by hand with the marketing copy on the homepage (apps/admin-web/src/app/page.tsx)
 // and the subscription plan catalog (apps/api/src/modules/subscription/subscription.service.ts).
@@ -92,6 +107,11 @@ type AiChatResult = { reply: string; configured: boolean; links: SuggestedLink[]
 export class AiChatService {
   private readonly logger = new Logger(AiChatService.name)
   private readonly recentLeads = new Map<string, number>()
+  // Per-user daily message counts, keyed "userId|YYYY-MM-DD". In-memory on
+  // purpose: the count only needs to hold within a day, a container restart
+  // resetting it is harmless (users just get a fresh allowance), and it
+  // avoids a schema migration for what is soft quota enforcement.
+  private readonly dailyUsage = new Map<string, number>()
 
   constructor(
     private readonly configService: ConfigService,
@@ -121,6 +141,21 @@ export class AiChatService {
 
     if (!this.isConfigured()) {
       return { reply: FALLBACK_REPLY, configured: false, links: [], authenticated, assistantName: ASSISTANT_NAME }
+    }
+
+    // Daily quota applies to signed-in tenant users only, scaled by plan.
+    // Anonymous/public visitors chat freely (per-IP throttling still applies).
+    if (user && user.tenantId) {
+      const quota = await this.checkAndCountDailyUsage(user.id, user.tenantId)
+      if (!quota.allowed) {
+        return {
+          reply: `You've used all ${quota.limit} of today's ${ASSISTANT_NAME} messages on the ${quota.planLabel} plan. Your allowance resets at midnight — or upgrade in Settings for a higher daily limit. For urgent issues, message us on WhatsApp (+256 787 726 388) or email support@arofi.net.`,
+          configured: true,
+          links: [{ label: 'Upgrade plan', path: '/settings' }],
+          authenticated,
+          assistantName: ASSISTANT_NAME,
+        }
+      }
     }
 
     const systemPrompt = await this.buildSystemPrompt(user)
@@ -191,6 +226,34 @@ export class AiChatService {
       this.logger.warn(`Gemini API call failed: ${error instanceof Error ? error.message : error}`)
       return { reply: FALLBACK_REPLY, configured: true, links: [], authenticated, assistantName: ASSISTANT_NAME }
     }
+  }
+
+  private async checkAndCountDailyUsage(userId: string, tenantId: string): Promise<{ allowed: boolean; limit: number; planLabel: string }> {
+    const settings = await this.prisma.tenantSetting.findUnique({
+      where: { tenantId },
+      select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true },
+    })
+    const tier = settings
+      ? resolveEffectiveSubscriptionTier(settings.subscriptionPlan, settings.subscriptionPlanExpiresAt)
+      : SubscriptionPlanTier.FREE
+    const limit = DAILY_MESSAGE_LIMITS[tier]
+    const planLabel = PLAN_LABELS[tier]
+
+    const today = new Date().toISOString().slice(0, 10)
+    const key = `${userId}|${today}`
+    const used = this.dailyUsage.get(key) ?? 0
+    if (used >= limit) {
+      return { allowed: false, limit, planLabel }
+    }
+
+    this.dailyUsage.set(key, used + 1)
+    // Drop stale entries from previous days so the map doesn't grow forever.
+    if (this.dailyUsage.size > 10_000) {
+      for (const existingKey of this.dailyUsage.keys()) {
+        if (!existingKey.endsWith(today)) this.dailyUsage.delete(existingKey)
+      }
+    }
+    return { allowed: true, limit, planLabel }
   }
 
   private async buildSystemPrompt(user: Awaited<ReturnType<AuthService['tryAuthenticateFromRawToken']>>): Promise<string> {
