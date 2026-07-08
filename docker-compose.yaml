@@ -91,6 +91,8 @@ x-app-env: &app-env
   SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@arofi.net}
   WHATSAPP_GATEWAY_URL: ${WHATSAPP_GATEWAY_URL:-http://whatsapp:3000}
   WHATSAPP_GATEWAY_API_KEY: ${WHATSAPP_GATEWAY_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
   SENTRY_DSN: ${SENTRY_DSN:-}
   # SSR calls from admin-web go straight to the api container on the compose
   # network instead of 127.0.0.1 (which only worked inside the old single
