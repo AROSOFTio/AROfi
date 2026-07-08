@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { AiChatService } from './ai-chat.service';
 import { ChatController } from './chat.controller';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
+  imports: [MailModule],
   controllers: [ChatController],
   providers: [ChatService, AiChatService],
   exports: [ChatService],

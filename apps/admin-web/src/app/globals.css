@@ -667,7 +667,7 @@ tr:hover td { background: var(--bg-hover); }
   justify-content: center;
   gap: 18px;
   padding: 48px 40px;
-  background: linear-gradient(155deg, #0f172a 0%, #16a34a 130%);
+  background: var(--brand);
   color: #fff;
 }
 .login-pitch img { width: 44px; height: auto; }
@@ -675,7 +675,7 @@ tr:hover td { background: var(--bg-hover); }
 .login-pitch p { font-size: 13.5px; color: rgba(255,255,255,0.78); line-height: 1.5; }
 .login-pitch ul { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .login-pitch li { font-size: 13px; color: rgba(255,255,255,0.92); display: flex; align-items: center; gap: 8px; }
-.login-pitch li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+.login-pitch li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #bfdbfe; flex-shrink: 0; }
 
 .login-card {
   background: var(--bg-card);
@@ -1207,6 +1207,17 @@ body.mobile-nav-locked { overflow: hidden; }
 .home-pricing-list li svg {
   color: var(--green);
   flex-shrink: 0;
+}
+
+/* ── Scroll-reveal animation (marketing page sections) ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal-in { opacity: 1; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
 }
 
 /* ── Nav anchor links (Features / Pricing / FAQ / Contact) ── */
@@ -3734,18 +3745,18 @@ pre, code.block {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #10b981;
+  background: var(--brand);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
   transition: transform 0.2s ease, background 0.2s ease;
 }
 .chat-bubble:hover {
   transform: scale(1.05);
-  background: #059669;
+  background: var(--green-dark);
 }
 .chat-window {
   position: absolute;
@@ -3767,7 +3778,7 @@ pre, code.block {
   to { transform: translateY(0); opacity: 1; }
 }
 .chat-header {
-  background: #10b981;
+  background: var(--brand);
   color: white;
   padding: 14px 16px;
   display: flex;
@@ -3813,7 +3824,7 @@ pre, code.block {
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .chat-tab:hover { color: #fff; }
-.chat-tab.active { color: #fff; border-bottom-color: #10b981; background: rgba(16, 185, 129, 0.08); }
+.chat-tab.active { color: #fff; border-bottom-color: var(--brand); background: rgba(37, 99, 235, 0.12); }
 .chat-typing { display: inline-flex; gap: 4px; padding: 2px; }
 .chat-typing span {
   width: 6px;
@@ -3867,10 +3878,10 @@ pre, code.block {
   box-sizing: border-box;
 }
 .chat-input-field:focus {
-  border-color: #10b981;
+  border-color: var(--brand);
 }
 .chat-btn-primary {
-  background: #10b981;
+  background: var(--brand);
   color: white;
   border: none;
   border-radius: 6px;
@@ -3881,7 +3892,7 @@ pre, code.block {
   transition: background 0.15s;
 }
 .chat-btn-primary:hover {
-  background: #059669;
+  background: var(--green-dark);
 }
 .chat-btn-primary:disabled {
   background: #4b5563;
@@ -3902,11 +3913,11 @@ pre, code.block {
   border-bottom-right-radius: 2px;
 }
 .msg-bubble.admin {
-  background: #064e3b;
-  color: #ecfdf5;
+  background: #1e3a8a;
+  color: #eff6ff;
   align-self: flex-start;
   border-bottom-left-radius: 2px;
-  border: 1px solid #065f46;
+  border: 1px solid #1e40af;
 }
 .msg-time {
   font-size: 9px;
@@ -3914,6 +3925,22 @@ pre, code.block {
   margin-top: 4px;
   text-align: right;
 }
+.chat-link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chat-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #eff6ff;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.chat-link-chip:hover { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.4); }
 .chat-footer {
   padding: 12px;
   background: #1a1f2c;

@@ -221,6 +221,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         addressLocality: 'Kampala',
         addressRegion: 'Central Region',
       },
+      contactPoint: [
+        {
+          '@type': 'ContactPoint',
+          telephone: '+256787726388',
+          email: 'support@arofi.net',
+          contactType: 'customer support',
+          areaServed: 'UG',
+          availableLanguage: ['en'],
+        },
+      ],
     },
     audience: {
       '@type': 'Audience',
@@ -258,58 +268,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* FAQ Schema for AI discovery */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'FAQPage',
-              mainEntity: [
-                {
-                  '@type': 'Question',
-                  name: 'What is the best WiFi hotspot billing software in Uganda?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text: 'AROFi by AROSOFT is Uganda\'s leading hotspot billing platform. It supports MikroTik routers, MTN MoMo, Airtel Money, WiFi vouchers, and multi-tenant management — all in one cloud console at arofi.net.',
-                  },
-                },
-                {
-                  '@type': 'Question',
-                  name: 'How do I accept MTN MoMo for my WiFi hotspot in Uganda?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text: 'With AROFi, you simply self-onboard your MikroTik router and the system automatically accepts MTN Mobile Money (MoMo) and Airtel Money payments from WiFi customers without any extra setup.',
-                  },
-                },
-                {
-                  '@type': 'Question',
-                  name: 'Is there free WiFi billing software available in Uganda?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text: 'AROFi offers free self-onboarding with no upfront cost. The platform runs on a commission-based model, meaning you only pay when you collect revenue. It is the most accessible WiFi billing system in Uganda and across East Africa.',
-                  },
-                },
-                {
-                  '@type': 'Question',
-                  name: 'How do I set up MikroTik hotspot billing in Uganda?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text: 'Register on AROFi, add your MikroTik router using one RouterOS terminal command, and you are ready. The system handles RADIUS authentication, customer sessions, mobile money billing, and voucher printing automatically.',
-                  },
-                },
-                {
-                  '@type': 'Question',
-                  name: 'What is AROFi?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text: 'AROFi is a multi-tenant SaaS platform built by AROSOFT Innovations Ltd (Uganda) that enables WiFi operators to onboard MikroTik routers, sell internet packages, collect MTN MoMo and Airtel Money payments, issue vouchers, and manage customer sessions from a single online dashboard.',
-                  },
-                },
-              ],
-            }),
-          }}
-        />
+        {/* Page-specific FAQPage/Product schema (must mirror visible content) lives on the homepage itself — see apps/admin-web/src/app/page.tsx */}
       </head>
       <body>
         {children}

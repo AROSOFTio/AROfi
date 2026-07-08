@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, Calendar, Eye } from 'lucide-react'
 import { fetchPublicApi } from '@/lib/api'
 import type { BlogPostDetail } from '@/lib/admin-types'
+import { getAppLoginUrl } from '@/lib/admin-session'
 
 const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
@@ -97,6 +98,23 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <nav className="home-nav" style={{ padding: '24px 24px 0' }}>
+        <Link href="/" className="home-brand">
+          <img src="/logo.png" alt="AROFi" />
+          <span className="home-brand-text" aria-hidden="true">AROFi</span>
+        </Link>
+        <div className="home-nav-links">
+          <Link href="/#features">Features</Link>
+          <Link href="/#pricing">Pricing</Link>
+          <Link href="/#faq">FAQ</Link>
+          <Link href="/#contact">Contact</Link>
+        </div>
+        <div className="home-actions">
+          <Link href="/docs" className="btn btn-ghost">Docs</Link>
+          <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
+          <Link href="/?register=1" className="btn btn-primary">Register Free</Link>
+        </div>
+      </nav>
       <div className="max-w-3xl mx-auto px-6 py-16">
         <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition mb-8">
           <ArrowLeft className="w-4 h-4" /> All articles

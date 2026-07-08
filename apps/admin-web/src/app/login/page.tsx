@@ -218,12 +218,12 @@ export default function LoginPage() {
         {info && !error && (
           <div
             style={{
-              background: 'rgba(16,185,129,0.1)',
-              border: '1px solid rgba(16,185,129,0.3)',
+              background: 'rgba(37,99,235,0.1)',
+              border: '1px solid rgba(37,99,235,0.3)',
               borderRadius: 8,
               padding: '10px 14px',
               fontSize: 13,
-              color: '#34d399',
+              color: '#60a5fa',
               marginBottom: 18,
             }}
           >

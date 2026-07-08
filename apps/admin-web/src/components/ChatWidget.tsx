@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 
 interface Message {
   sender: 'visitor' | 'admin'
@@ -8,9 +10,15 @@ interface Message {
   timestamp: string
 }
 
+interface SuggestedLink {
+  label: string
+  path: string
+}
+
 interface AiMessage {
   role: 'user' | 'assistant'
   text: string
+  links?: SuggestedLink[]
 }
 
 const AI_GREETING: AiMessage = {
@@ -152,7 +160,8 @@ export default function ChatWidget() {
       })
       const data = res.ok ? await res.json() : null
       const reply = data?.reply || 'Sorry, something went wrong. Please try again or use "Talk to Support".'
-      setAiMessages((prev) => [...prev, { role: 'assistant', text: reply }])
+      const links: SuggestedLink[] = Array.isArray(data?.links) ? data.links : []
+      setAiMessages((prev) => [...prev, { role: 'assistant', text: reply, links }])
     } catch (err) {
       console.error(err)
       setAiMessages((prev) => [...prev, { role: 'assistant', text: 'Sorry, something went wrong. Please try again or use "Talk to Support".' }])
@@ -195,6 +204,15 @@ export default function ChatWidget() {
                 {aiMessages.map((msg, index) => (
                   <div key={index} className={`msg-bubble ${msg.role === 'user' ? 'visitor' : 'admin'}`}>
                     <div>{msg.text}</div>
+                    {msg.links && msg.links.length > 0 && (
+                      <div className="chat-link-row">
+                        {msg.links.map((link) => (
+                          <Link key={link.path} href={link.path} className="chat-link-chip" onClick={() => setIsOpen(false)}>
+                            {link.label} <ArrowRight size={12} />
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {aiLoading && (

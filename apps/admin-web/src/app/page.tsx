@@ -24,7 +24,10 @@ import {
   Zap,
 } from 'lucide-react'
 import { RegisterModal } from '@/components/RegisterModal'
+import Reveal from '@/components/Reveal'
 import { getAppLoginUrl } from '@/lib/admin-session'
+
+const SITE_URL = 'https://arofi.net'
 
 const SHOW_PRICING = true
 
@@ -97,7 +100,7 @@ const pricingTiers = [
     name: 'Starter',
     priceUgx: 0,
     period: null,
-    commissionSummary: '8% Mobile Money · 2% Voucher',
+    commissionSummary: 'MM Gateway Fee · 2% Voucher',
     routerLimit: 'Up to 5 Routers/Hotspots',
     features: ['Cloud WinBox Tunnels', 'Free Analytics', 'AROFi branding'],
     featured: false,
@@ -107,7 +110,7 @@ const pricingTiers = [
     name: 'Pro',
     priceUgx: 20000,
     period: '/month',
-    commissionSummary: '4% Mobile Money · 0% Voucher',
+    commissionSummary: '5% MM Gateway Fee · Free Vouchers',
     routerLimit: 'Up to 10 Routers/Hotspots',
     features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
     featured: true,
@@ -176,9 +179,55 @@ export default function RootPage() {
     return () => clearInterval(id)
   }, [])
 
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  }
+
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: 'AROFi WiFi Hotspot Billing Platform',
+    description: 'Cloud WiFi hotspot billing with MTN Mobile Money and Airtel Money collection for MikroTik router operators in Uganda.',
+    brand: { '@type': 'Brand', name: 'AROFi' },
+    offers: pricingTiers.map((tier) => ({
+      '@type': 'Offer',
+      name: `AROFi ${tier.name}`,
+      price: tier.priceUgx,
+      priceCurrency: 'UGX',
+      url: `${SITE_URL}/#pricing`,
+      availability: 'https://schema.org/InStock',
+    })),
+  }
+
+  const contactJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'AROSOFT Innovations Ltd',
+    url: SITE_URL,
+    contactPoint: [
+      {
+        '@type': 'ContactPoint',
+        telephone: `+${CONTACT_PHONE}`,
+        email: CONTACT_EMAIL,
+        contactType: 'customer support',
+        areaServed: 'UG',
+        availableLanguage: ['en'],
+      },
+    ],
+  }
+
   return (
     <main className="home-shell">
-      <nav className="home-nav">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(contactJsonLd) }} />
+      <nav className="home-nav" aria-label="Primary">
         {/* Logo only — hide text when logo is present */}
         <div className="home-brand">
           <img src="/logo.png" alt="AROFi" />
@@ -260,93 +309,107 @@ export default function RootPage() {
         </div>
       </section>
 
-      <section className="home-why">
-        {whyPoints.map((point) => (
-          <div key={point.label} className="home-why-card">
+      <section className="home-why" aria-label="Why AROFi">
+        {whyPoints.map((point, i) => (
+          <Reveal key={point.label} delay={i * 70} className="home-why-card">
             <strong>{point.stat}</strong>
             <span className="home-why-label">{point.label}</span>
             <p>{point.text}</p>
-          </div>
+          </Reveal>
         ))}
       </section>
 
-      <section className="home-section" id="features">
-        <div className="home-section-head">
-          <div className="home-kicker"><Zap size={15} /> Features</div>
-          <h2>Everything a WiFi business needs.</h2>
-          <p>From getting paid to keeping routers online — AROFi covers the whole operation, not just billing.</p>
-        </div>
+      <section className="home-section" id="features" aria-labelledby="features-title">
+        <Reveal>
+          <div className="home-section-head">
+            <div className="home-kicker"><Zap size={15} /> Features</div>
+            <h2 id="features-title">Everything a WiFi business needs.</h2>
+            <p>From getting paid to keeping routers online — AROFi covers the whole operation, not just billing.</p>
+          </div>
+        </Reveal>
         <div className="home-feature-grid">
-          {features.map((feature) => (
-            <article key={feature.title} className="home-feature">
+          {features.map((feature, i) => (
+            <Reveal key={feature.title} as="article" delay={(i % 4) * 60} className="home-feature">
               <feature.icon size={20} />
               <h3>{feature.title}</h3>
               <p>{feature.text}</p>
-            </article>
+            </Reveal>
           ))}
         </div>
       </section>
 
-      <section className="home-section" id="screenshots">
-        <div className="home-section-head">
-          <div className="home-kicker"><Wifi size={15} /> Inside AROFi</div>
-          <h2>Your whole operation, in one dashboard.</h2>
-          <p>A preview of what you get after sign-in — sales, vouchers, routers and payouts, all live.</p>
-        </div>
+      <section className="home-section" id="screenshots" aria-labelledby="screenshots-title">
+        <Reveal>
+          <div className="home-section-head">
+            <div className="home-kicker"><Wifi size={15} /> Inside AROFi</div>
+            <h2 id="screenshots-title">Your whole operation, in one dashboard.</h2>
+            <p>A preview of what you get after sign-in — sales, vouchers, routers and payouts, all live.</p>
+          </div>
+        </Reveal>
         <div className="home-preview-grid">
-          <PreviewCard title="Sales Dashboard" tone="blue">
-            <div className="preview-mini-metric-row">
-              <span>Today</span><strong>UGX 284,500</strong>
-            </div>
-            <div className="home-chart mini">
-              {[38, 62, 44, 71, 55, 83, 90].map((h, i) => (
-                <span key={i} className="home-bar" style={{ height: `${h}%` }} />
-              ))}
-            </div>
-          </PreviewCard>
-          <PreviewCard title="Voucher Batches" tone="green">
-            <div className="preview-voucher">
-              <div className="preview-voucher-code">AR7X-K92M</div>
-              <span className="mini-badge green">1 HR · UGX 500</span>
-            </div>
-            <div className="preview-voucher">
-              <div className="preview-voucher-code">QP4T-L03R</div>
-              <span className="mini-badge blue">24 HR · UGX 4,000</span>
-            </div>
-          </PreviewCard>
-          <PreviewCard title="Router Fleet" tone="amber">
-            {['Mutungo Hill', 'Ntinda Office', 'Kireka Junction'].map((name, i) => (
-              <div key={name} className="preview-router-row">
-                <span className={`preview-dot ${i === 2 ? 'offline' : 'online'}`} />
-                <span>{name}</span>
-                <span className="preview-router-status">{i === 2 ? 'Offline' : 'Online'}</span>
+          <Reveal delay={0}>
+            <PreviewCard title="Sales Dashboard" tone="blue">
+              <div className="preview-mini-metric-row">
+                <span>Today</span><strong>UGX 284,500</strong>
               </div>
-            ))}
-          </PreviewCard>
-          <PreviewCard title="Wallet & Payouts" tone="blue">
-            <div className="preview-mini-metric-row">
-              <span>Available</span><strong>UGX 612,000</strong>
-            </div>
-            <div className="preview-router-row">
-              <span className="preview-dot online" />
-              <span>Withdrawal to 0788***388</span>
-              <span className="preview-router-status">Sent</span>
-            </div>
-          </PreviewCard>
+              <div className="home-chart mini">
+                {[38, 62, 44, 71, 55, 83, 90].map((h, i) => (
+                  <span key={i} className="home-bar" style={{ height: `${h}%` }} />
+                ))}
+              </div>
+            </PreviewCard>
+          </Reveal>
+          <Reveal delay={60}>
+            <PreviewCard title="Voucher Batches" tone="green">
+              <div className="preview-voucher">
+                <div className="preview-voucher-code">AR7X-K92M</div>
+                <span className="mini-badge green">1 HR · UGX 500</span>
+              </div>
+              <div className="preview-voucher">
+                <div className="preview-voucher-code">QP4T-L03R</div>
+                <span className="mini-badge blue">24 HR · UGX 4,000</span>
+              </div>
+            </PreviewCard>
+          </Reveal>
+          <Reveal delay={120}>
+            <PreviewCard title="Router Fleet" tone="amber">
+              {['Mutungo Hill', 'Ntinda Office', 'Kireka Junction'].map((name, i) => (
+                <div key={name} className="preview-router-row">
+                  <span className={`preview-dot ${i === 2 ? 'offline' : 'online'}`} />
+                  <span>{name}</span>
+                  <span className="preview-router-status">{i === 2 ? 'Offline' : 'Online'}</span>
+                </div>
+              ))}
+            </PreviewCard>
+          </Reveal>
+          <Reveal delay={180}>
+            <PreviewCard title="Wallet & Payouts" tone="blue">
+              <div className="preview-mini-metric-row">
+                <span>Available</span><strong>UGX 612,000</strong>
+              </div>
+              <div className="preview-router-row">
+                <span className="preview-dot online" />
+                <span>Withdrawal to 0788***388</span>
+                <span className="preview-router-status">Sent</span>
+              </div>
+            </PreviewCard>
+          </Reveal>
         </div>
         <p className="home-preview-note">Illustrative previews · your real dashboard appears after sign-in.</p>
       </section>
 
       {SHOW_PRICING && (
-        <section className="home-pricing" id="pricing">
-          <div className="home-pricing-head">
-            <div className="home-kicker"><BadgeDollarSign size={15} /> Pricing</div>
-            <h2>Register free. Upgrade when it pays for itself.</h2>
-            <p>All plans include MTN MoMo &amp; Airtel Money collection, vouchers, and RADIUS-billed hotspots — AROFi only earns when you do.</p>
-          </div>
+        <section className="home-pricing" id="pricing" aria-labelledby="pricing-title">
+          <Reveal>
+            <div className="home-pricing-head">
+              <div className="home-kicker"><BadgeDollarSign size={15} /> Pricing</div>
+              <h2 id="pricing-title">Register free. Upgrade when it pays for itself.</h2>
+              <p>All plans include MTN MoMo &amp; Airtel Money collection, vouchers, and RADIUS-billed hotspots — AROFi only earns when you do.</p>
+            </div>
+          </Reveal>
           <div className="home-pricing-grid">
-            {pricingTiers.map((tier) => (
-              <article key={tier.key} className={`home-pricing-card ${tier.featured ? 'featured' : ''}`}>
+            {pricingTiers.map((tier, i) => (
+              <Reveal key={tier.key} as="article" delay={i * 80} className={`home-pricing-card ${tier.featured ? 'featured' : ''}`}>
                 {tier.featured && <div className="home-pricing-badge">Most Popular</div>}
                 <h3>{tier.name}</h3>
                 <div className="home-pricing-price">
@@ -367,39 +430,41 @@ export default function RootPage() {
                 >
                   {tier.priceUgx === 0 ? 'Register Free' : 'Get Started'}
                 </button>
-              </article>
+              </Reveal>
             ))}
           </div>
         </section>
       )}
 
-      <section className="home-section home-faq" id="faq">
-        <div className="home-section-head">
-          <div className="home-kicker"><Activity size={15} /> FAQ</div>
-          <h2>Questions, answered.</h2>
-          <p>Can&apos;t find what you&apos;re looking for? <a href="#contact">Talk to us</a> directly.</p>
-        </div>
+      <section className="home-section home-faq" id="faq" aria-labelledby="faq-title">
+        <Reveal>
+          <div className="home-section-head">
+            <div className="home-kicker"><Activity size={15} /> FAQ</div>
+            <h2 id="faq-title">Questions, answered.</h2>
+            <p>Can&apos;t find what you&apos;re looking for? <a href="#contact">Talk to us</a> directly.</p>
+          </div>
+        </Reveal>
         <div className="home-faq-list">
           {faqs.map((item, i) => {
             const open = openFaq === i
             return (
-              <div key={item.q} className={`home-faq-item ${open ? 'open' : ''}`}>
+              <Reveal key={item.q} delay={(i % 4) * 50} className={`home-faq-item ${open ? 'open' : ''}`}>
                 <button type="button" className="home-faq-question" onClick={() => setOpenFaq(open ? null : i)} aria-expanded={open}>
                   <span>{item.q}</span>
                   <ChevronDown size={18} className="home-faq-chevron" />
                 </button>
                 {open && <p className="home-faq-answer">{item.a}</p>}
-              </div>
+              </Reveal>
             )
           })}
         </div>
       </section>
 
-      <section className="home-section home-contact" id="contact">
-        <div className="home-contact-card">
+      <section className="home-section home-contact" id="contact" aria-labelledby="contact-title">
+        <Reveal className="home-contact-card">
           <div className="home-contact-copy">
             <div className="home-kicker"><Radio size={15} /> Contact &amp; Support</div>
-            <h2>We&apos;re here every day of the week.</h2>
+            <h2 id="contact-title">We&apos;re here every day of the week.</h2>
             <p>Questions about billing, routers, or getting paid — reach the AROFi team directly, or open the chat in the corner of your screen.</p>
           </div>
           <div className="home-contact-grid">
@@ -432,7 +497,7 @@ export default function RootPage() {
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* Footer */}
