@@ -232,7 +232,7 @@ export class AgentsService {
     })
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     const normalizedPhone = this.normalizePhoneNumber(dto.phoneNumber)
@@ -327,7 +327,7 @@ export class AgentsService {
         data: { balanceUgx: { increment: posting.sourceWalletDeltaUgx } },
       })
       if (debited.count !== 1) {
-        throw new BadRequestException('Tenant wallet does not have enough float for this top-up')
+        throw new BadRequestException('Business wallet does not have enough float for this top-up')
       }
 
       const [updatedTenantWallet, updatedAgentWallet, billingTransaction] = await Promise.all([

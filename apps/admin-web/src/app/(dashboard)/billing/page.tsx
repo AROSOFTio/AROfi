@@ -14,7 +14,7 @@ export default async function BillingPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Billing & Wallet</h1>
-          <p className="page-subtitle">Tenant float positions, platform fee intake, and recent immutable ledger activity.</p>
+          <p className="page-subtitle">Business float positions, platform fee intake, and recent immutable ledger activity.</p>
         </div>
       </div>
 
@@ -34,13 +34,13 @@ export default async function BillingPage() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Tenant Wallets</span>
+          <span className="card-title">Business Wallets</span>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Balance</th>
                 <th>Currency</th>
               </tr>
@@ -50,7 +50,7 @@ export default async function BillingPage() {
                 <tr>
                   <td colSpan={3}>
                     <div className="empty-state">
-                      <p>No tenant wallets have been created yet.</p>
+                      <p>No business wallets have been created yet.</p>
                     </div>
                   </td>
                 </tr>

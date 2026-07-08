@@ -37,7 +37,7 @@ export class BillingController {
   @Get('sales-by-tenant')
   getSalesByTenant(@CurrentUser() user: AuthenticatedAdminUser, @Query() query?: BillingReportFilters) {
     if (!this.accessScope.isSuperAdmin(user)) {
-      throw new ForbiddenException('Only Dev Admin can view sales broken down by vendor/tenant')
+      throw new ForbiddenException('Only Dev Admin can view sales broken down by business')
     }
     return this.billingService.getSalesByTenant(query)
   }

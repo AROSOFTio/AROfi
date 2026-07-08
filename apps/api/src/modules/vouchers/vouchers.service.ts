@@ -300,7 +300,7 @@ export class VouchersService {
     ])
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     if (pkg && pkg.tenantId !== dto.tenantId) {
@@ -441,7 +441,7 @@ export class VouchersService {
     }
 
     if (!pkg || pkg.tenantId !== dto.tenantId) {
-      throw new NotFoundException('Package not found for tenant')
+      throw new NotFoundException('Package not found for this business')
     }
 
     if (template?.packageId && template.packageId !== dto.packageId) {

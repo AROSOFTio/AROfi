@@ -48,7 +48,7 @@ export default async function TransactionsPage() {
             <thead>
               <tr>
                 <th>Reference</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Type</th>
                 <th>Channel</th>
                 <th>Customer</th>

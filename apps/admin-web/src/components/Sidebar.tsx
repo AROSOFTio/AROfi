@@ -9,6 +9,7 @@ import {
   RadioTower,
   Router,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Users,
   Wallet,
@@ -85,6 +86,13 @@ const navItems: NavGroup[] = [
     ]
   },
   {
+    label: 'Compliance',
+    icon: <ShieldCheck size={17} />,
+    items: [
+      { href: '/compliance', label: 'Compliance Overview', tenantOnly: true },
+    ]
+  },
+  {
     label: 'Business Management',
     icon: <Building2 size={17} />,
     items: [
@@ -116,6 +124,7 @@ const navItems: NavGroup[] = [
       { href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true },
       { href: '/disbursements', label: 'Phone Approvals', required: ['disbursements.read'], platformOnly: true },
       { href: '/admin/email-approvals', label: 'Email Approvals', required: ['users.manage'], platformOnly: true },
+      { href: '/admin/compliance-reviews', label: 'Compliance Reviews', required: ['tenants.manage'], platformOnly: true },
       { href: '/transactions', label: 'All Transactions', required: ['billing.read'], platformOnly: true },
     ]
   },

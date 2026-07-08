@@ -41,7 +41,7 @@ export default async function PaymentsPage() {
             <thead>
               <tr>
                 <th>Reference</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Package</th>
                 <th>Phone</th>
                 <th>Network</th>
@@ -108,7 +108,7 @@ export default async function PaymentsPage() {
               <tr>
                 <th>Event</th>
                 <th>Payment</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Verification</th>
                 <th>Processed</th>
                 <th>Notes</th>

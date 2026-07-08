@@ -166,7 +166,7 @@ export class TenantsService {
 
   async deleteTenant(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } })
-    if (!tenant) throw new BadRequestException('Tenant not found')
+    if (!tenant) throw new BadRequestException('Business not found')
 
     await this.prisma.$transaction(async (tx) => {
       // Collect RADIUS usernames before deletion — radcheck/radreply use plain

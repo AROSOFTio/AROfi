@@ -197,7 +197,7 @@ export class SystemService {
     })
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     const settings =
@@ -233,7 +233,7 @@ export class SystemService {
       select: { id: true, tenantSettings: { select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true } } },
     })
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     const tenantData: Prisma.TenantUpdateInput = {}
@@ -539,7 +539,7 @@ export class SystemService {
     })
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     const reference = await this.resolveTicketReference(dto.tenantId, dto.reference)

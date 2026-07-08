@@ -16,7 +16,7 @@ export default async function AgentsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Agents</h1>
-          <p className="page-subtitle">Resellers, field float positions, accrued commissions, and payout history across tenant operations.</p>
+          <p className="page-subtitle">Resellers, field float positions, accrued commissions, and payout history across your business operations.</p>
         </div>
         <RegisterAgentPanel />
       </div>

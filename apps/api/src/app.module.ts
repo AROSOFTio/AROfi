@@ -22,6 +22,7 @@ import { VouchersModule } from './modules/vouchers/vouchers.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { PrismaModule } from './prisma.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { ComplianceModule } from './modules/compliance/compliance.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { MailModule } from './modules/mail/mail.module';
 import { EventsModule } from './modules/events/events.module';
@@ -63,6 +64,7 @@ export class HealthController {
     BillingModule,
     WalletsModule,
     ChatModule,
+    ComplianceModule,
     SubscriptionModule,
     MailModule,
     BlogModule,

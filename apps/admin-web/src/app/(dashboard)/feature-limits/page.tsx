@@ -21,7 +21,7 @@ export default async function FeatureLimitsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Feature Limits</h1>
-          <p className="page-subtitle">Tenant usage caps, warning thresholds, and operational capacity signals.</p>
+          <p className="page-subtitle">Business usage caps, warning thresholds, and operational capacity signals.</p>
         </div>
       </div>
 
@@ -55,7 +55,7 @@ export default async function FeatureLimitsPage() {
           <table>
             <thead>
               <tr>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Limit</th>
                 <th>Category</th>
                 <th>Usage</th>

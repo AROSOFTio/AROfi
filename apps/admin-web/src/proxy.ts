@@ -15,6 +15,7 @@ const PROTECTED_PREFIXES = [
   '/agents',
   '/audit-logs',
   '/billing',
+  '/compliance',
   '/customers',
   '/disbursements',
   '/earnings',

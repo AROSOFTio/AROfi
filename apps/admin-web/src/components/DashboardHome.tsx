@@ -299,7 +299,7 @@ async function PlatformDashboard() {
 async function VendorDashboard({ session, searchParams }: { session: AdminSessionResponse | null; searchParams?: DashboardSearchParams }) {
   const range = resolveDashboardRange(searchParams)
   const query = new URLSearchParams({ from: range.from.toISOString(), to: range.to.toISOString() }).toString()
-  const [billing, routers, sessions, vouchers, payoutProfile, packages, tenantSettings] = await Promise.all([
+  const [billing, routers, sessions, vouchers, payoutProfile, packages, tenantSettings, compliance] = await Promise.all([
     fetchApi<BillingOverviewResponse>(`/billing/overview?${query}`),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<SessionOverviewResponse>('/sessions/overview'),
@@ -307,7 +307,9 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
     fetchApi<any>('/wallets/payouts/profile/me'),
     fetchApi<PackageCatalogResponse>('/packages'),
     fetchApi<any>('/system/tenant-settings').catch(() => null),
+    fetchApi<{ status: string }>('/compliance/me').catch(() => null),
   ])
+  const complianceStatus = compliance?.status ?? 'NOT_SUBMITTED'
 
   const hasRouter = Boolean(routers?.routers && routers.routers.length > 0)
   const hasPackage = Boolean(packages?.items && packages.items.length > 0)
@@ -363,6 +365,29 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <div className="dashboard-header">
         <h1 className="page-title">Dashboard</h1>
       </div>
+
+      {complianceStatus !== 'APPROVED' && (
+        <a href="/compliance" className={`compliance-banner ${complianceStatus === 'REJECTED' ? 'danger' : ''}`}>
+          <strong>
+            Compliance Status:{' '}
+            {complianceStatus === 'NOT_SUBMITTED'
+              ? 'Not Submitted'
+              : complianceStatus === 'PENDING_REVIEW'
+                ? 'Pending Review'
+                : complianceStatus === 'NEEDS_INFO'
+                  ? 'Needs More Information'
+                  : 'Rejected'}
+          </strong>
+          <span>
+            {complianceStatus === 'NOT_SUBMITTED'
+              ? 'Submit your business and hotspot details for verification — AROFi is built for authorised, compliant operators.'
+              : complianceStatus === 'PENDING_REVIEW'
+                ? 'Your hotspot setup has been submitted for review. Some live selling features may remain limited until approval is completed.'
+                : 'Action needed — open the Compliance page to see the reviewer note and resubmit.'}
+          </span>
+          <span className="compliance-banner-cta">Open Compliance →</span>
+        </a>
+      )}
 
       {/* System Insights (with the date filter at its top) and the money KPI
           boxes sit in one row. Platform Fees is intentionally omitted here —

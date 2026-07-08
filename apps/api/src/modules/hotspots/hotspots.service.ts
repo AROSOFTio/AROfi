@@ -261,7 +261,7 @@ export class HotspotsService {
     })
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     const hotspot = await this.prisma.hotspot.create({

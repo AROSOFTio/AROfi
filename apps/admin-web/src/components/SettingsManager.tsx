@@ -423,7 +423,7 @@ export default function SettingsManager({
             <div className="form-grid">
               {activeTab === 'Payment & Fees' && (
                 <>
-                  <FormSubheading text="Starter Plan Commission (applies to every tenant by default)" />
+                  <FormSubheading text="Starter Plan Commission (applies to every business by default)" />
                   <Input name="mobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.mobileMoneyFeePercent} />
                   <Input name="voucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.voucherFeePercent} />
                   <FormSubheading text="Pro Plan Commission" />

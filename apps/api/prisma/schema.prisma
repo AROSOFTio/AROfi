@@ -398,6 +398,7 @@ model Tenant {
   payoutNumberChangeRequests TenantPayoutNumberChangeRequest[]
   disconnectionAttempts DisconnectionAttempt[]
   kycDocuments        KycDocument[]
+  complianceProfile   ComplianceProfile?
 }
 
 enum KycDocumentType {
@@ -411,6 +412,44 @@ enum KycDocumentStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum ComplianceStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  NEEDS_INFO
+}
+
+// One structured compliance/business-verification profile per tenant.
+// Supporting documents reuse the existing KycDocument table; this row holds
+// the declared business + hotspot facts and the overall review verdict.
+model ComplianceProfile {
+  id                String           @id @default(uuid())
+  tenantId          String           @unique
+  tenant            Tenant           @relation(fields: [tenantId], references: [id])
+  businessName      String
+  ownerName         String
+  phoneNumber       String
+  email             String
+  country           String           @default("Uganda")
+  district          String
+  hotspotLocation   String
+  businessType      String
+  ispName           String
+  ispPackage        String?
+  routerCount       Int              @default(1)
+  expectedUsers     Int?
+  payoutPhoneNumber String?
+  notes             String?
+  status            ComplianceStatus @default(PENDING_REVIEW)
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewNotes       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model KycDocument {

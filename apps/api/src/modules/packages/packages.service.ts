@@ -78,7 +78,7 @@ export class PackagesService {
   async createPackage(dto: CreatePackageDto) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: dto.tenantId } })
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     return this.prisma.package.create({

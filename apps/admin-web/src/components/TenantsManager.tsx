@@ -129,7 +129,7 @@ export default function TenantsManager() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Tenants</h1>
-          <p className="page-subtitle">Manage vendor tenants and their default operations wallet.</p>
+          <p className="page-subtitle">Manage vendor businesses and their default operations wallet.</p>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setIsCreateModalOpen(true) }}>+ Add Tenant</button>
       </div>
@@ -236,9 +236,9 @@ export default function TenantsManager() {
       )}
 
       {loading ? (
-        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading tenants...</div>
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading businesses...</div>
       ) : items.length === 0 ? (
-        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>No tenants registered yet.</div>
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>No businesses registered yet.</div>
       ) : (
         <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))' }}>
           {items.map((tenant) => (

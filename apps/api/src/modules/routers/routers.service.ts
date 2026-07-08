@@ -561,7 +561,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     return this.prisma.routerGroup.create({
@@ -621,7 +621,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     ])
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     if (group && group.tenantId !== dto.tenantId) {

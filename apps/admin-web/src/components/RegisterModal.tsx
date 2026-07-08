@@ -257,9 +257,9 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
   }
 
   const stepTitles: Record<number, string> = {
-    1: 'Create Tenant Workspace',
-    2: 'Create Tenant Workspace',
-    3: 'Create Tenant Workspace',
+    1: 'Create Business Workspace',
+    2: 'Create Business Workspace',
+    3: 'Create Business Workspace',
     4: 'Choose Your Plan',
     5: 'Activate Your Plan',
   }

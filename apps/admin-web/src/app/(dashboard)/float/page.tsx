@@ -15,7 +15,7 @@ export default async function FloatPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Earnings</h1>
-          <p className="page-subtitle">Tenant settlement balance, agent wallet balances, reserved commissions, and recent wallet movements.</p>
+          <p className="page-subtitle">Business settlement balance, agent wallet balances, reserved commissions, and recent wallet movements.</p>
         </div>
       </div>
 
@@ -35,13 +35,13 @@ export default async function FloatPage() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Tenant Wallets</span>
+          <span className="card-title">Business Wallets</span>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Balance</th>
                 <th>Currency</th>
               </tr>
@@ -51,7 +51,7 @@ export default async function FloatPage() {
                 <tr>
                   <td colSpan={3}>
                     <div className="empty-state">
-                      <p>No tenant wallets are available yet.</p>
+                      <p>No business wallets are available yet.</p>
                     </div>
                   </td>
                 </tr>
@@ -145,7 +145,7 @@ export default async function FloatPage() {
                     <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{movement.externalReference ?? movement.id.slice(0, 8)}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{movement.ledgerTransaction?.reference ?? 'No ledger ref'}</div>
                   </td>
-                  <td>{movement.agent?.name ?? 'Tenant Op'}</td>
+                  <td>{movement.agent?.name ?? 'Business Op'}</td>
                   <td>{formatTransactionType(movement.type)}</td>
                   <td>{formatCurrency(movement.grossAmountUgx)}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(movement.netAmountUgx)}</td>

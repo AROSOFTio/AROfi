@@ -48,7 +48,7 @@ export default async function SalesPage() {
             <thead>
               <tr>
                 <th>Reference</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Package</th>
                 <th>Type</th>
                 <th>Gross</th>

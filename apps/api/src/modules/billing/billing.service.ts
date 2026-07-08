@@ -147,17 +147,17 @@ export class BillingService {
     ])
 
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     if (!pkg || pkg.tenantId !== input.tenantId) {
-      throw new NotFoundException('Package not found for tenant')
+      throw new NotFoundException('Package not found for this business')
     }
 
     if (input.voucherId) {
       const voucher = await this.prisma.voucher.findUnique({ where: { id: input.voucherId } })
       if (!voucher || voucher.tenantId !== input.tenantId) {
-        throw new NotFoundException('Voucher not found for tenant')
+        throw new NotFoundException('Voucher not found for this business')
       }
     }
 
@@ -171,7 +171,7 @@ export class BillingService {
       })
 
       if (!agent) {
-        throw new NotFoundException('Active agent not found for tenant')
+        throw new NotFoundException('Active agent not found for this business')
       }
     }
 
@@ -266,7 +266,7 @@ export class BillingService {
   async adjustWallet(dto: AdjustWalletDto) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: dto.tenantId } })
     if (!tenant) {
-      throw new NotFoundException('Tenant not found')
+      throw new NotFoundException('Business not found')
     }
 
     return this.prisma.$transaction(async (tx) => {

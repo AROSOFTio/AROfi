@@ -596,7 +596,7 @@ export default function SettingsRoutersPage() {
                 {/* Tenant Selector */}
                 {session?.user.permissions.includes('ALL') && (
                   <div className="form-group">
-                    <label className="form-label">Tenant</label>
+                    <label className="form-label">Business</label>
                     <select
                       className="form-input"
                       value={routerForm.tenantId}
@@ -889,7 +889,7 @@ export default function SettingsRoutersPage() {
             <form onSubmit={(e) => void handleCreateGroup(e)} style={{ display: 'grid', gap: 12 }}>
               {session?.user.permissions.includes('ALL') && tenants.length > 1 && (
                 <div className="form-group">
-                  <label className="form-label">Tenant</label>
+                  <label className="form-label">Business</label>
                   <select
                     className="form-input"
                     value={routerForm.tenantId}

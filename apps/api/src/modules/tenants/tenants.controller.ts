@@ -33,7 +33,7 @@ export class TenantsController {
   @Delete(':id')
   deleteTenant(@CurrentUser() user: AuthenticatedAdminUser, @Param('id') id: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
-      throw new ForbiddenException('Only SuperAdmins can delete tenants')
+      throw new ForbiddenException('Only SuperAdmins can delete businesses')
     }
     return this.tenantsService.deleteTenant(id)
   }

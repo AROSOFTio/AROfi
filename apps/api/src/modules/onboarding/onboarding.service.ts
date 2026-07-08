@@ -110,7 +110,7 @@ export class OnboardingService {
     })
 
     if (!tenant) {
-      throw new BadRequestException('Tenant not found')
+      throw new BadRequestException('Business not found')
     }
 
     const prefs = (tenant.tenantSettings?.routerOnboardingPreferences as Record<string, unknown> | null) ?? {}

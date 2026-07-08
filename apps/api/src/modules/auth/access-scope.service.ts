@@ -10,7 +10,7 @@ export class AccessScopeService {
 
   resolveTenantScope(user: AuthenticatedAdminUser | undefined, requestedTenantId?: string | null) {
     if (!user) {
-      throw new ForbiddenException('You must be signed in to access tenant resources')
+      throw new ForbiddenException('You must be signed in to access business resources')
     }
 
     if (this.isSuperAdmin(user)) {
@@ -18,11 +18,11 @@ export class AccessScopeService {
     }
 
     if (!user.tenantId) {
-      throw new ForbiddenException('Your account is not assigned to a tenant')
+      throw new ForbiddenException('Your account is not assigned to a business')
     }
 
     if (requestedTenantId && requestedTenantId !== user.tenantId) {
-      throw new ForbiddenException('You can only access resources for your assigned tenant')
+      throw new ForbiddenException('You can only access resources for your own business')
     }
 
     return user.tenantId
@@ -32,7 +32,7 @@ export class AccessScopeService {
     const tenantId = this.resolveTenantScope(user, requestedTenantId)
 
     if (!tenantId) {
-      throw new ForbiddenException('A tenant must be selected for this action')
+      throw new ForbiddenException('A business must be selected for this action')
     }
 
     return tenantId

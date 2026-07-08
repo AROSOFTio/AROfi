@@ -9,7 +9,7 @@ const features = [
   { icon: Router, title: 'Manage Routers', text: 'Generate MikroTik scripts and verify real live signals.' },
   { icon: Ticket, title: 'Sell Vouchers', text: 'Create packages, batches, and customer access codes.' },
   { icon: BadgeDollarSign, title: 'Track Money', text: 'Monitor collections, wallets, commissions, and payouts.' },
-  { icon: Users, title: 'Vendor Workspace', text: 'Create an isolated tenant console with guided onboarding.' },
+  { icon: Users, title: 'Vendor Workspace', text: 'Create an isolated business console with guided onboarding.' },
 ]
 
 export default function RegisterPage() {

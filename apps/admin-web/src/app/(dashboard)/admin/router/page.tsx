@@ -257,7 +257,7 @@ export default function RouterObservabilityPage() {
               <thead>
                 <tr>
                   <th>Router</th>
-                  <th>Tenant</th>
+                  <th>Business</th>
                   <th>Status</th>
                   <th>Latency</th>
                   <th>Message</th>

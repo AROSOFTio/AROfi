@@ -52,7 +52,7 @@ export default async function AuditLogsPage() {
                 <th>Action</th>
                 <th>Entity</th>
                 <th>Actor</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Context</th>
               </tr>
             </thead>
