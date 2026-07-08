@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, Headset, Sparkles } from 'lucide-react'
 
 interface Message {
   sender: 'visitor' | 'admin'
@@ -21,14 +21,13 @@ interface AiMessage {
   links?: SuggestedLink[]
 }
 
-const AI_GREETING: AiMessage = {
-  role: 'assistant',
-  text: "Hi! I'm the AROFi assistant. Ask me about pricing, routers, mobile money payouts, or anything else about the platform.",
-}
+const DEFAULT_GREETING =
+  "Hi! I'm Aria, AROFi's AI assistant. Ask me about pricing, routers, mobile money payouts, or anything else about the platform."
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [mode, setMode] = useState<'ai' | 'support'>('ai')
+  const [sessionUser, setSessionUser] = useState<{ displayName: string } | null>(null)
 
   // Human support chat (WhatsApp bridge) — unchanged from the original widget.
   const [name, setName] = useState('')
@@ -40,8 +39,8 @@ export default function ChatWidget() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // AI assistant chat
-  const [aiMessages, setAiMessages] = useState<AiMessage[]>([AI_GREETING])
+  // AI assistant chat (Aria)
+  const [aiMessages, setAiMessages] = useState<AiMessage[]>([{ role: 'assistant', text: DEFAULT_GREETING }])
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const aiMessagesEndRef = useRef<HTMLDivElement>(null)
@@ -56,6 +55,28 @@ export default function ChatWidget() {
       setCode(savedCode)
       setName(savedName)
       setHasStarted(true)
+    }
+  }, [])
+
+  // If signed in, personalize Aria's greeting — the real account snapshot
+  // (routers, revenue) is fetched per-message by the backend once they ask.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.user) return
+        setSessionUser({ displayName: data.user.displayName })
+        setAiMessages([
+          {
+            role: 'assistant',
+            text: `Hi ${data.user.displayName.split(' ')[0]}! I'm Aria. Ask me about your routers, revenue, or any account issue — I can see your live numbers and help troubleshoot.`,
+          },
+        ])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -146,9 +167,7 @@ export default function ChatWidget() {
     if (!text || aiLoading) return
     setAiInput('')
 
-    const history = aiMessages
-      .filter((m) => m !== AI_GREETING)
-      .map((m) => ({ role: m.role === 'assistant' ? 'model' as const : 'user' as const, text: m.text }))
+    const history = aiMessages.map((m) => ({ role: m.role === 'assistant' ? ('model' as const) : ('user' as const), text: m.text }))
 
     setAiMessages((prev) => [...prev, { role: 'user', text }])
     setAiLoading(true)
@@ -176,25 +195,16 @@ export default function ChatWidget() {
         <div className="chat-window">
           <div className="chat-header">
             <div>
-              <h3>AROFi {mode === 'ai' ? 'AI Assistant' : 'Support'}</h3>
+              <h3>{mode === 'ai' ? <><Sparkles size={15} /> Aria</> : 'AROFi Support'}</h3>
               {mode === 'support' && hasStarted && code && (
                 <div className="chat-header-desc">Session Code: #{code}</div>
               )}
               {mode === 'ai' && (
-                <div className="chat-header-desc">Instant answers, powered by AI</div>
+                <div className="chat-header-desc">{sessionUser ? `Your AI copilot, ${sessionUser.displayName.split(' ')[0]}` : "AROFi's AI assistant"}</div>
               )}
             </div>
             <button className="close-btn" onClick={() => setIsOpen(false)} aria-label="Close chat">
               &times;
-            </button>
-          </div>
-
-          <div className="chat-tabs">
-            <button type="button" className={`chat-tab ${mode === 'ai' ? 'active' : ''}`} onClick={() => setMode('ai')}>
-              Ask AI
-            </button>
-            <button type="button" className={`chat-tab ${mode === 'support' ? 'active' : ''}`} onClick={() => setMode('support')}>
-              Talk to Support
             </button>
           </div>
 
@@ -226,7 +236,7 @@ export default function ChatWidget() {
                 <form onSubmit={handleSendAiMessage} className="chat-input-row">
                   <input
                     type="text"
-                    placeholder="Ask about pricing, routers, payouts..."
+                    placeholder={sessionUser ? 'Ask about your routers, revenue, an issue...' : 'Ask about pricing, routers, payouts...'}
                     value={aiInput}
                     onChange={(e) => setAiInput(e.target.value)}
                     className="chat-input-field"
@@ -235,12 +245,17 @@ export default function ChatWidget() {
                   />
                   <button type="submit" className="chat-btn-primary" style={{ padding: '0 16px' }} disabled={aiLoading}>Send</button>
                 </form>
-                <div className="chat-footer-brand">AI can make mistakes — for account issues, use Talk to Support</div>
+                <button type="button" className="chat-escalate-link" onClick={() => setMode('support')}>
+                  <Headset size={12} /> Prefer a human? Talk to Support
+                </button>
               </div>
             </>
           ) : (
             <>
               <div className="chat-body">
+                <button type="button" className="chat-back-link" onClick={() => setMode('ai')}>
+                  <ArrowLeft size={12} /> Back to Aria
+                </button>
                 {!hasStarted ? (
                   <form onSubmit={handleStartChat} className="chat-setup-form">
                     <p>Have questions about AROFi billing? Chat with support directly from your screen!</p>
@@ -296,10 +311,8 @@ export default function ChatWidget() {
           )}
         </div>
       ) : (
-        <div className="chat-bubble" onClick={() => setIsOpen(true)} role="button" aria-label="Open support chat">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
+        <div className="chat-bubble" onClick={() => setIsOpen(true)} role="button" aria-label="Chat with Aria, AROFi's AI assistant">
+          <Bot size={28} strokeWidth={2} />
         </div>
       )}
     </div>

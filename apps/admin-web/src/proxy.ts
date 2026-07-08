@@ -2,18 +2,53 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { adminAuthCookieName } from './lib/admin-session'
 
-function isPublicPath(pathname: string) {
-  return pathname === '/' || pathname === '/login' || pathname === '/register' || pathname.startsWith('/_next') || pathname === '/favicon.ico'
+// Only routes under app/(dashboard)/* require a signed-in session. Everything
+// else — the marketing homepage, blog, docs, login, register, router setup
+// links, PWA/SEO files — is public. This is a denylist of the (dashboard)
+// route group's top-level folder names, not an allowlist of public pages,
+// so a new public page (blog, docs, ...) never has to be added here to work —
+// only a new *protected* top-level route does. Keep in sync with the folder
+// names under src/app/(dashboard)/.
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/admin',
+  '/agents',
+  '/audit-logs',
+  '/billing',
+  '/customers',
+  '/disbursements',
+  '/earnings',
+  '/feature-limits',
+  '/float',
+  '/hotspots',
+  '/packages',
+  '/payments',
+  '/reports',
+  '/routers',
+  '/sales-by-tenant',
+  '/sales',
+  '/sessions',
+  '/settings',
+  '/settlements',
+  '/support',
+  '/tenants',
+  '/transactions',
+  '/users',
+  '/vouchers',
+]
+
+function isProtectedPath(pathname: string) {
+  return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const token = request.cookies.get(adminAuthCookieName)?.value
 
-  if (isPublicPath(pathname)) {
+  if (!isProtectedPath(pathname)) {
     return NextResponse.next()
   }
 
+  const token = request.cookies.get(adminAuthCookieName)?.value
   if (!token) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

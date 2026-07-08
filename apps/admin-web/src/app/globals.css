@@ -3788,7 +3788,10 @@ pre, code.block {
 .chat-header h3 {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .chat-header-desc {
   font-size: 11px;
@@ -3806,25 +3809,23 @@ pre, code.block {
 .close-btn:hover {
   opacity: 1;
 }
-.chat-tabs {
+.chat-escalate-link,
+.chat-back-link {
   display: flex;
-  background: #0b1220;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.chat-tab {
-  flex: 1;
-  padding: 10px 12px;
+  align-items: center;
+  gap: 5px;
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
-  color: rgba(226, 232, 240, 0.55);
-  font-size: 12.5px;
+  color: #93c5fd;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  padding: 0;
 }
-.chat-tab:hover { color: #fff; }
-.chat-tab.active { color: #fff; border-bottom-color: var(--brand); background: rgba(37, 99, 235, 0.12); }
+.chat-escalate-link { width: fit-content; margin: 8px auto 0; }
+.chat-escalate-link:hover,
+.chat-back-link:hover { color: #fff; }
+.chat-back-link { margin-bottom: 10px; }
 .chat-typing { display: inline-flex; gap: 4px; padding: 2px; }
 .chat-typing span {
   width: 6px;

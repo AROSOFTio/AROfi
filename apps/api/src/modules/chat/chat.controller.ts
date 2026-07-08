@@ -2,6 +2,16 @@ import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus, Headers } fro
 import { Throttle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
 import { AiChatService } from './ai-chat.service';
+import { ACCESS_COOKIE_NAME } from '../auth/auth.module';
+
+function extractAccessToken(cookieHeader?: string): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${ACCESS_COOKIE_NAME}=`));
+  return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null;
+}
 
 @Controller('chat')
 export class ChatController {
@@ -13,8 +23,11 @@ export class ChatController {
   @Throttle({ default: { ttl: 60_000, limit: 15 } })
   @Post('ai')
   @HttpCode(HttpStatus.OK)
-  async askAi(@Body() body: { message: string; history?: Array<{ role: 'user' | 'model'; text: string }> }) {
-    return this.aiChatService.reply(body.message, body.history);
+  async askAi(
+    @Body() body: { message: string; history?: Array<{ role: 'user' | 'model'; text: string }> },
+    @Headers('cookie') cookieHeader?: string,
+  ) {
+    return this.aiChatService.reply(body.message, body.history, extractAccessToken(cookieHeader));
   }
 
   @Throttle({ default: { ttl: 60_000, limit: 10 } })

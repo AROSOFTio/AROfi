@@ -3,19 +3,28 @@ import { ConfigService } from '@nestjs/config'
 import { SupportTicketChannel } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { MailService } from '../mail/mail.service'
+import { AuthService, AccessScopeService } from '../auth/auth.module'
+import { PERMISSIONS } from '../auth/permissions.constants'
+import { RoutersService } from '../routers/routers.service'
+import { BillingService } from '../billing/billing.service'
+
+function hasPermission(user: { permissions: string[] }, permission: string) {
+  return user.permissions.includes(permission) || user.permissions.includes('ALL')
+}
 
 const MAX_MESSAGE_LENGTH = 600
 const MAX_HISTORY_TURNS = 6
 const LEAD_DEDUPE_WINDOW_MS = 30 * 60 * 1000
 const SUPPORT_NOTIFY_EMAIL = 'support@arofi.net'
 const PLATFORM_TENANT_ID = 'platform'
+const ASSISTANT_NAME = 'Aria'
 
 const FALLBACK_REPLY =
-  'Our AI assistant is warming up right now. Meanwhile, tap "Talk to Support" above, WhatsApp/call +256 787 726 388, or email support@arofi.net.'
+  `${ASSISTANT_NAME} is warming up right now. Meanwhile, tap "Talk to Support" above, WhatsApp/call +256 787 726 388, or email support@arofi.net.`
 
 // Kept in sync by hand with the marketing copy on the homepage (apps/admin-web/src/app/page.tsx)
 // and the subscription plan catalog (apps/api/src/modules/subscription/subscription.service.ts).
-const SYSTEM_PROMPT = `You are the AROFi website assistant. AROFi is a cloud WiFi hotspot billing platform for MikroTik router operators in Uganda and East Africa, built by AROSOFT Innovations Ltd (Kampala, Uganda).
+const BASE_SYSTEM_PROMPT = `You are ${ASSISTANT_NAME}, AROFi's AI assistant. AROFi is a cloud WiFi hotspot billing platform for MikroTik router operators in Uganda and East Africa, built by AROSOFT Innovations Ltd (Kampala, Uganda).
 
 What AROFi does:
 - Turns any MikroTik RouterOS router into a billed WiFi hotspot in minutes (one setup command, RADIUS auth + captive portal built in).
@@ -39,22 +48,20 @@ Common troubleshooting you can help with (give practical steps, then point to th
 - Withdrawal is delayed or blocked: withdrawals need a verified primary payout number and the withdrawal secret code; large or unusual withdrawals may need manual review — direct them to Support for a specific case.
 - Forgot password / can't log in: use the "Forgot password" link on the sign-in page, or contact Support to help recover the account.
 - Customers can tether/share the paid connection: MikroTik hotspot sharing can be blocked — guide: /docs ("Block Hotspot Sharing/Tethering on MikroTik RouterOS").
-- For anything account-specific (a real balance, a real router's status, a real transaction), you cannot look it up — tell them to sign in to their dashboard or contact Support with details.
 
 How you should behave:
 - Answer only questions about AROFi (product, pricing, setup, billing, routers, payments, troubleshooting, support). For anything unrelated, politely redirect to what AROFi does.
 - Be concise — 2-4 sentences unless the user asks for detail or troubleshooting steps.
 - Never invent numbers, features or policies that aren't listed above. If you don't know something, say so and point to support@arofi.net or +256 787 726 388.
 - Never ask for or handle passwords, secret withdrawal codes, OTPs or full card/account numbers.
-- You cannot access anyone's real account, balance or router — for account-specific issues, direct them to sign in or contact support, and offer to pass their contact details to the team.
-- If it would genuinely help the visitor, suggest 1-2 relevant page links from this exact list (use the path as given, do not invent other paths): "/" (home), "/#features" (Features), "/#pricing" (Pricing), "/#faq" (FAQ), "/#contact" (Contact), "/docs" (Documentation), "/blog" (Blog), "/register" (Sign up), "/login" (Sign in). Only include links when they're actually relevant to what was just discussed — don't include any for casual replies.
 - If the visitor shares an email address or a phone number anywhere in their message (e.g. offering it so the team can follow up, or as part of describing an issue), extract exactly what they typed into contactEmail / contactPhone in your structured response so the team can follow up. Leave these fields empty otherwise, and never ask for both in the same turn if the user has already provided one earlier in the conversation.`
 
-type ChatTurn = { role: 'user' | 'model'; text: string }
-type SuggestedLink = { label: string; path: string }
-type AiChatResult = { reply: string; configured: boolean; links: SuggestedLink[] }
+const PUBLIC_VISITOR_ADDENDUM = `
+This visitor is browsing anonymously (not signed in). Focus on general product information: what AROFi does, pricing, how to get started, and high-level troubleshooting. You cannot access anyone's real account, balance or router — for account-specific issues, direct them to sign in or contact support, and offer to pass their contact details to the team.
+- If it would genuinely help, suggest 1-2 relevant page links from this exact list (use the path as given, do not invent other paths): "/" (home), "/#features" (Features), "/#pricing" (Pricing), "/#faq" (FAQ), "/#contact" (Contact), "/docs" (Documentation), "/blog" (Blog), "/register" (Sign up), "/login" (Sign in). Only include links when they're actually relevant to what was just discussed.`
 
-const ALLOWED_LINK_PATHS = new Set(['/', '/#features', '/#pricing', '/#faq', '/#contact', '/docs', '/blog', '/register', '/login'])
+const PUBLIC_LINK_PATHS = new Set(['/', '/#features', '/#pricing', '/#faq', '/#contact', '/docs', '/blog', '/register', '/login'])
+const AUTHENTICATED_LINK_PATHS = new Set(['/dashboard', '/routers', '/earnings', '/disbursements', '/sessions', '/support', '/settings', '/docs'])
 
 const RESPONSE_SCHEMA = {
   type: 'OBJECT',
@@ -77,6 +84,10 @@ const RESPONSE_SCHEMA = {
   required: ['reply'],
 }
 
+type ChatTurn = { role: 'user' | 'model'; text: string }
+type SuggestedLink = { label: string; path: string }
+type AiChatResult = { reply: string; configured: boolean; links: SuggestedLink[]; authenticated: boolean; assistantName: string }
+
 @Injectable()
 export class AiChatService {
   private readonly logger = new Logger(AiChatService.name)
@@ -86,13 +97,17 @@ export class AiChatService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly authService: AuthService,
+    private readonly accessScope: AccessScopeService,
+    private readonly routersService: RoutersService,
+    private readonly billingService: BillingService,
   ) {}
 
   private isConfigured(): boolean {
     return Boolean(this.configService.get<string>('GEMINI_API_KEY'))
   }
 
-  async reply(message: string, history: ChatTurn[] = []): Promise<AiChatResult> {
+  async reply(message: string, history: ChatTurn[] = [], rawToken?: string | null): Promise<AiChatResult> {
     const trimmed = (message ?? '').trim()
     if (!trimmed) {
       throw new BadRequestException('Message is required.')
@@ -101,9 +116,15 @@ export class AiChatService {
       throw new BadRequestException(`Message must be ${MAX_MESSAGE_LENGTH} characters or fewer.`)
     }
 
+    const user = await this.authService.tryAuthenticateFromRawToken(rawToken)
+    const authenticated = Boolean(user)
+
     if (!this.isConfigured()) {
-      return { reply: FALLBACK_REPLY, configured: false, links: [] }
+      return { reply: FALLBACK_REPLY, configured: false, links: [], authenticated, assistantName: ASSISTANT_NAME }
     }
+
+    const systemPrompt = await this.buildSystemPrompt(user)
+    const allowedLinks = authenticated ? new Set([...PUBLIC_LINK_PATHS, ...AUTHENTICATED_LINK_PATHS]) : PUBLIC_LINK_PATHS
 
     const apiKey = this.configService.get<string>('GEMINI_API_KEY')
     const model = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.0-flash'
@@ -126,7 +147,7 @@ export class AiChatService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            system_instruction: { parts: [{ text: systemPrompt }] },
             contents,
             generationConfig: {
               maxOutputTokens: 500,
@@ -141,30 +162,90 @@ export class AiChatService {
 
       if (!response.ok) {
         this.logger.warn(`Gemini API returned ${response.status}: ${await response.text().catch(() => '')}`)
-        return { reply: FALLBACK_REPLY, configured: true, links: [] }
+        return { reply: FALLBACK_REPLY, configured: true, links: [], authenticated, assistantName: ASSISTANT_NAME }
       }
 
       const data: any = await response.json()
       const rawText = data?.candidates?.[0]?.content?.parts?.map((part: any) => part.text).join('') as string | undefined
       if (!rawText?.trim()) {
-        return { reply: FALLBACK_REPLY, configured: true, links: [] }
+        return { reply: FALLBACK_REPLY, configured: true, links: [], authenticated, assistantName: ASSISTANT_NAME }
       }
 
       const parsed = this.parseStructuredReply(rawText)
       if (!parsed?.reply?.trim()) {
-        return { reply: FALLBACK_REPLY, configured: true, links: [] }
+        return { reply: FALLBACK_REPLY, configured: true, links: [], authenticated, assistantName: ASSISTANT_NAME }
       }
 
-      const links = this.sanitizeLinks(parsed.links)
-      this.captureLead(parsed.contactEmail, parsed.contactPhone, trimmed).catch((error) =>
-        this.logger.warn(`Lead capture failed: ${error instanceof Error ? error.message : error}`),
-      )
+      const links = this.sanitizeLinks(parsed.links, allowedLinks)
 
-      return { reply: parsed.reply.trim(), configured: true, links }
+      // Anonymous visitors only — logged-in users already have a real
+      // account on file, so there's nothing to "capture" for them.
+      if (!authenticated) {
+        this.captureLead(parsed.contactEmail, parsed.contactPhone, trimmed).catch((error) =>
+          this.logger.warn(`Lead capture failed: ${error instanceof Error ? error.message : error}`),
+        )
+      }
+
+      return { reply: parsed.reply.trim(), configured: true, links, authenticated, assistantName: ASSISTANT_NAME }
     } catch (error) {
       this.logger.warn(`Gemini API call failed: ${error instanceof Error ? error.message : error}`)
-      return { reply: FALLBACK_REPLY, configured: true, links: [] }
+      return { reply: FALLBACK_REPLY, configured: true, links: [], authenticated, assistantName: ASSISTANT_NAME }
     }
+  }
+
+  private async buildSystemPrompt(user: Awaited<ReturnType<AuthService['tryAuthenticateFromRawToken']>>): Promise<string> {
+    if (!user) {
+      return BASE_SYSTEM_PROMPT + PUBLIC_VISITOR_ADDENDUM
+    }
+
+    const snapshot = await this.buildAccountSnapshot(user).catch((error) => {
+      this.logger.warn(`Account snapshot failed for AI chat: ${error instanceof Error ? error.message : error}`)
+      return null
+    })
+
+    const snapshotBlock = snapshot
+      ? `\n\nLive account snapshot for ${user.displayName} (${user.tenantName ?? 'their account'}) as of right now — you may reference these real numbers directly when answering:\n${snapshot}`
+      : `\n\nThis user is signed in, but live account data could not be loaded right now — answer from general knowledge and suggest they check their dashboard directly for exact figures.`
+
+    return `${BASE_SYSTEM_PROMPT}
+${snapshotBlock}
+
+This visitor is SIGNED IN as ${user.displayName}${user.tenantName ? ` at ${user.tenantName}` : ''}. For signed-in users, act as their support and troubleshooting copilot: answer questions about their own routers, revenue, sessions and performance using the live snapshot above, proactively point out anything that looks off (e.g. offline/degraded routers, unusually low revenue), and give practical advice. Do not discuss marketing/pricing pitches unless asked. Never reveal or ask for passwords, OTPs, or the withdrawal secret code, and never guess at numbers not present in the snapshot — say so and suggest checking the relevant dashboard page instead.
+- If it would help, suggest 1-2 relevant in-app page links from this exact list (do not invent other paths): "/dashboard" (Dashboard), "/routers" (Routers), "/earnings" (Wallet & Earnings), "/disbursements" (Withdrawals), "/sessions" (Sessions), "/support" (Support), "/settings" (Settings), "/docs" (Documentation).`
+  }
+
+  private async buildAccountSnapshot(user: NonNullable<Awaited<ReturnType<AuthService['tryAuthenticateFromRawToken']>>>): Promise<string | null> {
+    if (!user.tenantId) {
+      // Platform staff without a specific tenant selected — no single
+      // account's data to summarize.
+      return null
+    }
+
+    const tenantId = this.accessScope.resolveTenantScope(user, undefined)
+    if (!tenantId) return null
+
+    // Mirror the same @RequirePermissions checks the /routers and /billing
+    // controllers enforce — this service call bypasses their guards, so the
+    // permission check has to happen here instead.
+    const [routers, billing] = await Promise.all([
+      hasPermission(user, PERMISSIONS.routersRead) ? this.routersService.getOverview(tenantId) : null,
+      hasPermission(user, PERMISSIONS.billingRead) ? this.billingService.getOverview(tenantId) : null,
+    ])
+
+    const r = routers?.summary
+    const b = billing?.summary
+    const lines: string[] = []
+    if (r) {
+      lines.push(
+        `Routers: ${r.totalRouters} total — ${r.healthyRouters} healthy, ${r.degradedRouters} degraded, ${r.offlineRouters} offline, ${r.liveRouters} live right now.`,
+      )
+    }
+    if (b) {
+      lines.push(`Revenue today: UGX ${b.todayGrossSalesUgx.toLocaleString()}. Revenue this month: UGX ${b.monthGrossSalesUgx.toLocaleString()}.`)
+      lines.push(`Wallet balance: UGX ${b.walletBalanceUgx.toLocaleString()}. Pending withdrawals: UGX ${b.pendingWithdrawalUgx.toLocaleString()}.`)
+      lines.push(`Active users right now: ${b.activeUsers}. Routers currently online: ${b.onlineRouters}.`)
+    }
+    return lines.length ? lines.join('\n') : null
   }
 
   private parseStructuredReply(rawText: string): { reply: string; links?: unknown; contactEmail?: string; contactPhone?: string } | null {
@@ -176,7 +257,7 @@ export class AiChatService {
     }
   }
 
-  private sanitizeLinks(links: unknown): SuggestedLink[] {
+  private sanitizeLinks(links: unknown, allowedPaths: Set<string>): SuggestedLink[] {
     if (!Array.isArray(links)) return []
     const seen = new Set<string>()
     const result: SuggestedLink[] = []
@@ -184,7 +265,7 @@ export class AiChatService {
       const label = (entry as any)?.label
       const path = (entry as any)?.path
       if (typeof label !== 'string' || typeof path !== 'string') continue
-      if (!ALLOWED_LINK_PATHS.has(path) || seen.has(path)) continue
+      if (!allowedPaths.has(path) || seen.has(path)) continue
       seen.add(path)
       result.push({ label: label.slice(0, 40), path })
       if (result.length >= 2) break

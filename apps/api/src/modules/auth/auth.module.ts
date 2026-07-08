@@ -36,7 +36,7 @@ import { RoleCatalogService } from './role-catalog.service'
 
 export { AccessScopeService, PermissionsGuard, RoleCatalogService }
 
-const ACCESS_COOKIE_NAME = 'arofi_admin_token'
+export const ACCESS_COOKIE_NAME = 'arofi_admin_token'
 const REFRESH_COOKIE_NAME = 'arofi_admin_refresh'
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 // Must match the JWT expiresIn below — the cookie should die with the token.
@@ -461,6 +461,23 @@ export class AuthService {
       tenantId: user.tenantId,
       tenantName: user.tenant?.name ?? null,
     })
+  }
+
+  // Best-effort session lookup for endpoints that behave differently for
+  // signed-in vs anonymous callers but must never reject an anonymous
+  // request (e.g. the public/authenticated hybrid AI chat endpoint). Unlike
+  // validateAccessTokenUser, this never throws — an invalid, expired, or
+  // missing token just resolves to null.
+  async tryAuthenticateFromRawToken(rawToken: string | null | undefined): Promise<AuthenticatedAdminUser | null> {
+    if (!rawToken) {
+      return null
+    }
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(rawToken)
+      return await this.validateAccessTokenUser(payload.sub)
+    } catch {
+      return null
+    }
   }
 
   async issueSessionForUserId(userId: string) {
