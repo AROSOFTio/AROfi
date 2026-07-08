@@ -23,6 +23,11 @@ export class BlogController {
     return this.blogService.getPublishedBySlug(slug)
   }
 
+  @Get('posts/:slug/related')
+  getRelated(@Param('slug') slug: string) {
+    return this.blogService.getRelated(slug, 4)
+  }
+
   @Get('images/:id')
   async getImage(@Param('id') id: string, @Res() response: Response) {
     const image = await this.blogService.getImage(id)

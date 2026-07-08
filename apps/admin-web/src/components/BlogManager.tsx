@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { BlogPostListResponse, BlogPostDetail, BlogPostStatus } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import BlogEditor from '@/components/BlogEditor'
+import { Modal } from '@/components/Modal'
 import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi, clientUploadApi } from '@/lib/client-api'
 import { slugify } from '@/lib/slugify'
 
@@ -39,6 +40,20 @@ function statusLabel(status: BlogPostStatus) {
   return 'Draft'
 }
 
+// Published posts preview the real live page in an iframe (so what you see is
+// exactly what visitors get); drafts render their HTML in-document with the
+// same .blog-post-content styles since the public page 404s until publish.
+type PreviewTarget =
+  | { mode: 'live'; slug: string; title: string }
+  | { mode: 'draft'; title: string; excerpt: string; html: string }
+
+const PREVIEW_WIDTHS = [
+  { label: 'Mobile', width: 375 },
+  { label: 'Tablet', width: 768 },
+  { label: 'Laptop', width: 1024 },
+  { label: 'Full', width: 0 },
+] as const
+
 export default function BlogManager() {
   const [list, setList] = useState<BlogPostListResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -54,6 +69,8 @@ export default function BlogManager() {
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
+  const [previewWidth, setPreviewWidth] = useState<number>(0)
 
   const items = list?.items ?? []
 
@@ -120,6 +137,20 @@ export default function BlogManager() {
 
   function handleSlugChange(slug: string) {
     setFormState((previous) => ({ ...previous, slug, slugTouched: true }))
+  }
+
+  async function openRowPreview(id: string, status: BlogPostStatus, slug: string, title: string) {
+    setError(null)
+    if (status === 'PUBLISHED') {
+      setPreview({ mode: 'live', slug, title })
+      return
+    }
+    try {
+      const post = await clientFetchApi<BlogPostDetail>(`/blog/admin/posts/${id}`)
+      setPreview({ mode: 'draft', title: post.title, excerpt: post.excerpt ?? '', html: post.contentHtml })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not load the post for preview.')
+    }
   }
 
   async function handleDelete(id: string) {
@@ -267,6 +298,14 @@ export default function BlogManager() {
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={submitting}
+                  onClick={() => setPreview({ mode: 'draft', title: formState.title || 'Untitled post', excerpt: formState.excerpt, html: formState.contentHtml })}
+                >
+                  Preview
+                </button>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
                   {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Create Post'}
                 </button>
@@ -353,6 +392,10 @@ export default function BlogManager() {
                       </span>
                     ) : (
                       <span style={{ display: 'inline-flex', gap: 6 }}>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openRowPreview(item.id, item.status, item.slug, item.title)}>Preview</button>
+                        {item.status === 'PUBLISHED' && (
+                          <a href={`/${item.slug}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">Visit</a>
+                        )}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => void startEdit(item.id)}>Edit</button>
                         <button
                           type="button"
@@ -371,6 +414,49 @@ export default function BlogManager() {
           </table>
         </div>
       </div>
+
+      <Modal
+        open={Boolean(preview)}
+        onClose={() => setPreview(null)}
+        style={{ width: 'min(1200px, 100%)' }}
+        kicker="Preview"
+        title={preview?.title ?? ''}
+      >
+        <div className="blog-preview-toolbar">
+          {PREVIEW_WIDTHS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className={`btn btn-sm ${previewWidth === preset.width ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setPreviewWidth(preset.width)}
+            >
+              {preset.label}{preset.width ? ` · ${preset.width}px` : ''}
+            </button>
+          ))}
+          {preview?.mode === 'live' && (
+            <a href={`/${preview.slug}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }}>
+              Open in new tab
+            </a>
+          )}
+          {preview?.mode === 'draft' && (
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>Draft preview — publish to see the full live page.</span>
+          )}
+        </div>
+        <div className="blog-preview-stage">
+          <div className="blog-preview-frame" style={{ width: previewWidth ? previewWidth : '100%' }}>
+            {preview?.mode === 'live' && (
+              <iframe src={`/${preview.slug}`} title="Article preview" />
+            )}
+            {preview?.mode === 'draft' && (
+              <div className="blog-preview-draft">
+                <h1 className="blog-article-title" style={{ fontSize: 28 }}>{preview.title}</h1>
+                {preview.excerpt && <p className="blog-article-excerpt">{preview.excerpt}</p>}
+                <div className="blog-post-content" dangerouslySetInnerHTML={{ __html: preview.html }} />
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }

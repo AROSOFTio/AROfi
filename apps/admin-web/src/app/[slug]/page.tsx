@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Calendar, Eye } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Calendar, Eye, PenLine, RefreshCw } from 'lucide-react'
 import { fetchPublicApi } from '@/lib/api'
-import type { BlogPostDetail } from '@/lib/admin-types'
+import type { BlogPostDetail, BlogPostListResponse, BlogPostSummary } from '@/lib/admin-types'
 import { getAppLoginUrl } from '@/lib/admin-session'
+import SiteFooter from '@/components/SiteFooter'
 
 const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
@@ -12,7 +13,7 @@ const SITE_NAME = 'AROFi by AROSOFT'
 export const revalidate = 60
 
 async function getPost(slug: string) {
-  return fetchPublicApi<BlogPostDetail>(`/blog/posts/${encodeURIComponent(slug)}`, 60)
+  return fetchPublicApi<BlogPostDetail & { authorName?: string | null }>(`/blog/posts/${encodeURIComponent(slug)}`, 60)
 }
 
 export async function generateStaticParams() {
@@ -22,6 +23,27 @@ export async function generateStaticParams() {
 
 function coverUrl(coverImageId: string | null) {
   return coverImageId ? `${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/blog/images/${coverImageId}` : `${SITE_URL}/logo.png`
+}
+
+function formatDay(value: string | null | undefined) {
+  return value
+    ? new Date(value).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null
+}
+
+// Split the sanitized article HTML after the Nth closing paragraph so the
+// inline "You might also like" block can sit between the two halves without
+// ever landing inside a tag.
+function splitAfterParagraph(html: string, paragraphCount: number): [string, string] {
+  let index = -1
+  for (let found = 0; found < paragraphCount; found++) {
+    const next = html.indexOf('</p>', index + 1)
+    if (next === -1) return [html, '']
+    index = next
+  }
+  const cut = index + '</p>'.length
+  // Only split if there's meaningful content left after the cut.
+  return html.length - cut > 200 ? [html.slice(0, cut), html.slice(cut)] : [html, '']
 }
 
 export async function generateMetadata({
@@ -64,15 +86,44 @@ export async function generateMetadata({
   }
 }
 
+function RelatedCard({ post }: { post: BlogPostSummary }) {
+  const cover = post.coverImageId ? coverUrl(post.coverImageId) : null
+  return (
+    <Link href={`/${post.slug}`} className="blog-related-card">
+      {cover && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={cover} alt={post.title} loading="lazy" />
+      )}
+      <div className="blog-related-card-body">
+        <h3>{post.title}</h3>
+        {post.excerpt && <p>{post.excerpt}</p>}
+      </div>
+    </Link>
+  )
+}
+
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const post = await getPost(slug)
+  const [post, related, recent] = await Promise.all([
+    getPost(slug),
+    fetchPublicApi<BlogPostSummary[]>(`/blog/posts/${encodeURIComponent(slug)}/related`, 300),
+    fetchPublicApi<BlogPostListResponse>('/blog/posts?page=1&pageSize=6', 120),
+  ])
   if (!post) {
     notFound()
   }
 
   const canonical = `${SITE_URL}/${post.slug}`
   const image = coverUrl(post.coverImageId)
+  const relatedPosts = (related ?? []).slice(0, 4)
+  const inlineRelated = relatedPosts.slice(0, 3)
+  const recentPosts = (recent?.items ?? []).filter((item) => item.slug !== post.slug).slice(0, 5)
+  const topics = Array.from(new Set((recent?.items ?? []).flatMap((item) => item.tags))).slice(0, 8)
+  const primaryTag = post.tags[0] ?? null
+  const published = formatDay(post.publishedAt ?? post.createdAt)
+  const updated = formatDay(post.updatedAt)
+  const showUpdated = updated && published !== updated
+  const [contentTop, contentRest] = splitAfterParagraph(post.contentHtml, 3)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -83,9 +134,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     datePublished: post.publishedAt ?? post.createdAt,
     dateModified: post.updatedAt,
     author: {
-      '@type': 'Organization',
-      name: 'AROSOFT Innovations Ltd',
-      url: 'https://arosoftlabs.com',
+      '@type': post.authorName ? 'Person' : 'Organization',
+      name: post.authorName || 'AROSOFT Innovations Ltd',
     },
     publisher: {
       '@type': 'Organization',
@@ -115,46 +165,112 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           <Link href="/?register=1" className="btn btn-primary">Register Free</Link>
         </div>
       </nav>
-      <div className="max-w-3xl mx-auto px-6 py-16">
-        <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition mb-8">
-          <ArrowLeft className="w-4 h-4" /> All articles
-        </Link>
 
-        {post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {post.tags.map((tag) => (
-              <span key={tag} className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+      <div className="blog-article-shell">
+        <article className="blog-article">
+          <Link href="/blog" className="blog-back-link">
+            <ArrowLeft size={15} /> All articles
+          </Link>
 
-        <h1 className="text-4xl font-extrabold tracking-tight leading-tight">{post.title}</h1>
+          <h1 className="blog-article-title">{post.title}</h1>
+          {post.excerpt && <p className="blog-article-excerpt">{post.excerpt}</p>}
 
-        <div className="flex items-center gap-4 mt-4 text-sm text-slate-400">
-          {post.publishedAt && (
-            <span className="inline-flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              {new Date(post.publishedAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}
-            </span>
+          {post.coverImageId && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt={post.title} className="blog-article-cover" />
           )}
-          <span className="inline-flex items-center gap-1">
-            <Eye className="w-4 h-4" />
-            {post.viewCount} views
-          </span>
-        </div>
 
-        {post.coverImageId && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt={post.title} className="w-full rounded-2xl mt-8 object-cover max-h-96" />
-        )}
+          <div className="blog-article-meta">
+            <span><PenLine size={14} /> {post.authorName || 'AROFi Team'}</span>
+            {published && <span><Calendar size={14} /> Published {published}</span>}
+            {showUpdated && <span><RefreshCw size={14} /> Updated {updated}</span>}
+            {primaryTag && <Link href={`/blog?tag=${encodeURIComponent(primaryTag)}`} className="blog-meta-tag">{primaryTag}</Link>}
+            <span><Eye size={14} /> {post.viewCount} views</span>
+          </div>
 
-        <article
-          className="blog-post-content mt-10 max-w-none"
-          dangerouslySetInnerHTML={{ __html: post.contentHtml }}
-        />
+          <div className="blog-post-content" dangerouslySetInnerHTML={{ __html: contentTop }} />
+
+          {contentRest && inlineRelated.length > 0 && (
+            <aside className="blog-inline-related" aria-label="Related reading">
+              <h2>You might also like</h2>
+              <ul>
+                {inlineRelated.map((item) => (
+                  <li key={item.id}>
+                    <Link href={`/${item.slug}`}>{item.title} <ArrowRight size={13} /></Link>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
+
+          {contentRest && <div className="blog-post-content" dangerouslySetInnerHTML={{ __html: contentRest }} />}
+
+          {post.tags.length > 0 && (
+            <div className="blog-article-tags">
+              <span>Tags:</span>
+              {post.tags.map((tag) => (
+                <Link key={tag} href={`/blog?tag=${encodeURIComponent(tag)}`} className="blog-tag-chip">{tag}</Link>
+              ))}
+            </div>
+          )}
+
+          {relatedPosts.length > 0 && (
+            <section className="blog-related-section" aria-label="Related articles">
+              <h2>Related Articles</h2>
+              <div className="blog-related-grid">
+                {relatedPosts.map((item) => (
+                  <RelatedCard key={item.id} post={item} />
+                ))}
+              </div>
+            </section>
+          )}
+        </article>
+
+        <aside className="blog-sidebar">
+          <div className="blog-sidebar-card blog-cta-card">
+            <img src="/logo.png" alt="" aria-hidden="true" />
+            <h3>Run WiFi the professional way</h3>
+            <p>Manage MikroTik hotspots, vouchers, mobile money payments and reports with AROFi — built for authorised and compliant operators.</p>
+            <Link href="/" className="btn btn-primary btn-block">Visit AROFi.net</Link>
+          </div>
+
+          {recentPosts.length > 0 && (
+            <div className="blog-sidebar-card">
+              <h3>Recent Articles</h3>
+              <ul className="blog-sidebar-list">
+                {recentPosts.map((item) => (
+                  <li key={item.id}>
+                    <Link href={`/${item.slug}`}>{item.title}</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {topics.length > 0 && (
+            <div className="blog-sidebar-card">
+              <h3>Topics</h3>
+              <div className="blog-sidebar-topics">
+                {topics.map((tag) => (
+                  <Link key={tag} href={`/blog?tag=${encodeURIComponent(tag)}`} className="blog-tag-chip">{tag}</Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="blog-sidebar-card">
+            <h3>Important Links</h3>
+            <ul className="blog-sidebar-list">
+              <li><Link href="/docs">AROFi Documentation</Link></li>
+              <li><Link href="/#pricing">Plans &amp; Pricing</Link></li>
+              <li><a href="https://www.ucc.co.ug" target="_blank" rel="noreferrer">UCC — Uganda Communications Commission</a></li>
+              <li><Link href="/#contact">Contact Support</Link></li>
+            </ul>
+          </div>
+        </aside>
       </div>
+
+      <SiteFooter />
     </main>
   )
 }

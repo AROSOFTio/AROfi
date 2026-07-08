@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { RegisterModal } from '@/components/RegisterModal'
 import Reveal from '@/components/Reveal'
+import SiteFooter from '@/components/SiteFooter'
 import { getAppLoginUrl } from '@/lib/admin-session'
 
 const SITE_URL = 'https://arofi.net'
@@ -85,6 +86,10 @@ const faqs = [
   {
     q: 'Do you support vouchers as well as mobile money?',
     a: 'Yes — print branded voucher batches for agents or walk-in customers, redeemable by code or QR scan, alongside live MTN MoMo and Airtel Money collection.',
+  },
+  {
+    q: 'Do I need authorisation to run a public WiFi business in Uganda?',
+    a: 'Public internet service provision in Uganda is regulated by the Uganda Communications Commission (UCC). AROFi is built for authorised operators, licensed ISPs, approved resellers and compliant hotspot businesses — the platform includes a compliance section where you submit your business details for review, and we encourage every operator to work with a licensed ISP and follow UCC requirements.',
   },
 ]
 
@@ -251,7 +256,7 @@ export default function RootPage() {
         <div className="home-hero-copy">
           <div className="home-kicker"><Activity size={15} /> Free WiFi Billing · Uganda</div>
           <h1>Run your WiFi<br />like a business.</h1>
-          <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, no IT team, free to start.</p>
+          <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money — built for authorised WiFi operators, licensed ISPs and compliant hotspot businesses. Self-onboarding, no IT team, free to start.</p>
           <div className="home-cta">
             <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Your WiFi Business</button>
             <Link href="/docs" className="btn btn-ghost">Documentation</Link>
@@ -500,26 +505,7 @@ export default function RootPage() {
         </Reveal>
       </section>
 
-      {/* Footer */}
-      <footer className="home-footer">
-        <a
-          href="https://arosoftlabs.com"
-          target="_blank"
-          rel="noreferrer"
-          className="home-footer-brand"
-          aria-label="Powered by AROSOFT"
-        >
-          <img src="/logo.png" alt="" aria-hidden="true" className="home-footer-logo" />
-          <span>AROSOFT</span>
-        </a>
-        <div className="home-footer-links">
-          <Link href="/docs">Docs</Link>
-          <Link href="/blog">Blog</Link>
-          <a href="#faq">FAQ</a>
-          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-          <a href={`tel:+${CONTACT_PHONE}`}>{CONTACT_PHONE_DISPLAY}</a>
-        </div>
-      </footer>
+      <SiteFooter />
 
       {/* SEO-only content — hidden from visual users, fully indexed by crawlers & AI agents */}
       <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>

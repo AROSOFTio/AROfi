@@ -14,6 +14,8 @@ const RESERVED_SLUGS = new Set([
   'disbursements', 'users', 'agents', 'settings', 'support', 'tenants',
   'sales-by-tenant', 'feature-limits', 'audit-logs', 'sessions', 'hotspots',
   'payments', 'reports', 'router', 'portal',
+  'forgot-password', 'reset-password', 'forgot-email', 'privacy', 'terms',
+  'compliance', 'customers', 'billing', 'settlements',
 ])
 const DEFAULT_PAGE_SIZE = 20
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -94,7 +96,10 @@ export class BlogService {
   }
 
   async getPublishedBySlug(slug: string) {
-    const post = await this.prisma.blogPost.findUnique({ where: { slug } })
+    const post = await this.prisma.blogPost.findUnique({
+      where: { slug },
+      include: { author: { select: { firstName: true, lastName: true } } },
+    })
     if (!post || post.status !== BlogPostStatus.PUBLISHED) {
       throw new NotFoundException('Post not found')
     }
@@ -103,7 +108,49 @@ export class BlogService {
       .update({ where: { id: post.id }, data: { viewCount: { increment: 1 } } })
       .catch(() => undefined)
 
-    return post
+    const { author, ...rest } = post
+    const authorName = [author?.firstName, author?.lastName].filter(Boolean).join(' ') || null
+    return { ...rest, authorName }
+  }
+
+  // Related posts: share the most tags with the source post; recent published
+  // posts fill any remaining slots so the section never comes back empty.
+  async getRelated(slug: string, limit = 4) {
+    const post = await this.prisma.blogPost.findUnique({
+      where: { slug },
+      select: { id: true, tags: true },
+    })
+    if (!post) {
+      throw new NotFoundException('Post not found')
+    }
+
+    const related = post.tags.length
+      ? await this.prisma.blogPost.findMany({
+          where: {
+            status: BlogPostStatus.PUBLISHED,
+            id: { not: post.id },
+            tags: { hasSome: post.tags },
+          },
+          select: postSummarySelect,
+          orderBy: { publishedAt: 'desc' },
+          take: limit,
+        })
+      : []
+
+    if (related.length < limit) {
+      const fill = await this.prisma.blogPost.findMany({
+        where: {
+          status: BlogPostStatus.PUBLISHED,
+          id: { notIn: [post.id, ...related.map((item) => item.id)] },
+        },
+        select: postSummarySelect,
+        orderBy: { publishedAt: 'desc' },
+        take: limit - related.length,
+      })
+      related.push(...fill)
+    }
+
+    return related
   }
 
   async getImage(id: string) {

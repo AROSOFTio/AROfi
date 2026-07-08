@@ -4,6 +4,7 @@ import { BookOpen, Calendar, Eye } from 'lucide-react'
 import { fetchPublicApi } from '@/lib/api'
 import type { BlogPostListResponse } from '@/lib/admin-types'
 import { getAppLoginUrl } from '@/lib/admin-session'
+import SiteFooter from '@/components/SiteFooter'
 
 const SITE_URL = 'https://arofi.net'
 const PAGE_SIZE = 20
@@ -13,11 +14,13 @@ export const revalidate = 60
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; tag?: string }>
 }): Promise<Metadata> {
-  const { page } = await searchParams
+  const { page, tag } = await searchParams
   const pageNumber = Number.parseInt(page ?? '1', 10) || 1
-  const canonical = pageNumber > 1 ? `${SITE_URL}/blog?page=${pageNumber}` : `${SITE_URL}/blog`
+  const canonical = tag
+    ? `${SITE_URL}/blog?tag=${encodeURIComponent(tag)}`
+    : pageNumber > 1 ? `${SITE_URL}/blog?page=${pageNumber}` : `${SITE_URL}/blog`
 
   return {
     title: 'Blog',
@@ -34,13 +37,13 @@ function coverUrl(coverImageId: string | null) {
 export default async function BlogIndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; tag?: string }>
 }) {
-  const { page } = await searchParams
+  const { page, tag } = await searchParams
   const pageNumber = Number.parseInt(page ?? '1', 10) || 1
 
   const data = await fetchPublicApi<BlogPostListResponse>(
-    `/blog/posts?page=${pageNumber}&pageSize=${PAGE_SIZE}`,
+    `/blog/posts?page=${pageNumber}&pageSize=${PAGE_SIZE}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
     60,
   )
   const items = data?.items ?? []
@@ -73,9 +76,17 @@ export default async function BlogIndexPage({
           <BookOpen className="w-6 h-6 text-blue-600" />
           <h1 className="text-3xl font-extrabold tracking-tight">AROFi Blog</h1>
         </div>
-        <p className="text-slate-500 max-w-2xl mb-12">
-          Guides on WiFi hotspot billing, MikroTik setup, mobile money integration, and growing your internet business in Uganda.
+        <p className="text-slate-500 max-w-2xl mb-6">
+          Guides on WiFi hotspot billing, MikroTik setup, mobile money integration, compliance updates, and growing a licensed internet business in Uganda.
         </p>
+
+        {tag && (
+          <p className="mb-8 text-sm text-slate-600">
+            Showing articles tagged <span className="font-bold text-blue-600">{tag}</span>
+            {' · '}
+            <Link href="/blog" className="text-blue-600 hover:underline">Clear filter</Link>
+          </p>
+        )}
 
         {items.length === 0 && <p className="text-slate-400">No articles published yet — check back soon.</p>}
 
@@ -127,18 +138,20 @@ export default async function BlogIndexPage({
         {(hasPrevPage || hasNextPage) && (
           <div className="flex items-center justify-between mt-12">
             {hasPrevPage ? (
-              <Link href={`/blog?page=${pageNumber - 1}`} className="text-sm font-semibold text-blue-600 hover:underline">
+              <Link href={`/blog?page=${pageNumber - 1}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`} className="text-sm font-semibold text-blue-600 hover:underline">
                 ← Newer posts
               </Link>
             ) : <span />}
             {hasNextPage && (
-              <Link href={`/blog?page=${pageNumber + 1}`} className="text-sm font-semibold text-blue-600 hover:underline">
+              <Link href={`/blog?page=${pageNumber + 1}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`} className="text-sm font-semibold text-blue-600 hover:underline">
                 Older posts →
               </Link>
             )}
           </div>
         )}
       </div>
+
+      <SiteFooter />
     </main>
   )
 }

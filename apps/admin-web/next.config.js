@@ -46,8 +46,11 @@ const nextConfig = {
             ].join('; '),
           },
           {
+            // SAMEORIGIN (matching the nginx layer) instead of DENY: the blog
+            // admin's responsive preview iframes the live article page from
+            // the same origin. Cross-origin framing stays blocked.
             key: 'X-Frame-Options',
-            value: 'DENY',
+            value: 'SAMEORIGIN',
           },
           {
             key: 'X-Content-Type-Options',
