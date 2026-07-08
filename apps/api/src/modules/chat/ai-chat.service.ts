@@ -162,7 +162,7 @@ export class AiChatService {
     const allowedLinks = authenticated ? new Set([...PUBLIC_LINK_PATHS, ...AUTHENTICATED_LINK_PATHS]) : PUBLIC_LINK_PATHS
 
     const apiKey = this.configService.get<string>('GEMINI_API_KEY')
-    const model = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.0-flash'
+    const model = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash'
     const recentHistory = history
       .filter((turn) => turn && typeof turn.text === 'string' && turn.text.trim())
       .slice(-MAX_HISTORY_TURNS)
