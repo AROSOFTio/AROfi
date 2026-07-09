@@ -589,7 +589,7 @@ export type AgentsOverviewResponse = {
       id: string
       code: string
       name: string
-    }
+    } | null
     settlement?: {
       id: string
       reference: string
