@@ -1,10 +1,13 @@
 import { BillingOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
+import { isPlatformAdmin } from '@/lib/workspace'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
 export default async function BillingPage() {
+  const session = await fetchApi<import('@/lib/admin-types').AdminSessionResponse>('/auth/me')
+  const showFees = isPlatformAdmin(session?.user)
   const data = await fetchApi<BillingOverviewResponse>('/billing/overview')
   const wallets = data?.wallets ?? []
   const ledgerEntries = data?.recentLedgerEntries ?? []
@@ -14,14 +17,14 @@ export default async function BillingPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Billing & Wallet</h1>
-          <p className="page-subtitle">Business float positions, platform fee intake, and recent immutable ledger activity.</p>
+          <p className="page-subtitle">Business float positions and recent immutable ledger activity.</p>
         </div>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
           { label: 'Wallet Float', value: formatCurrency(data?.summary.walletBalanceUgx ?? 0), color: 'green' },
-          { label: 'Platform Fees', value: formatCurrency(data?.summary.platformFeesUgx ?? 0), color: 'amber' },
+          ...(showFees ? [{ label: 'Platform Fees', value: formatCurrency(data?.summary.platformFeesUgx ?? 0), color: 'amber' }] : []),
           { label: 'Vendor Net', value: formatCurrency(data?.summary.vendorNetUgx ?? 0), color: 'blue' },
           { label: 'Posted Sales', value: formatCurrency(data?.summary.totalSalesUgx ?? 0), color: 'purple' },
         ].map((stat) => (

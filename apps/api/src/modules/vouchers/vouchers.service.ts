@@ -1079,6 +1079,13 @@ export class VouchersService {
     customerReference?: string | null
     reference: string
   }) {
+    // Per-sale receipt emails are opt-in: a busy hotspot generates dozens of
+    // sales an hour and the owner's inbox drowned in them. Sales remain fully
+    // visible in the dashboard; set SALE_RECEIPT_EMAILS_ENABLED=true to turn
+    // the emails back on.
+    if (process.env.SALE_RECEIPT_EMAILS_ENABLED !== 'true') {
+      return
+    }
     try {
       const tenant = await this.prisma.tenant.findUnique({
         where: { id: input.tenantId },

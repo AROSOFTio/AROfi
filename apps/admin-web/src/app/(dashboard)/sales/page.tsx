@@ -1,11 +1,18 @@
-import { BillingSalesResponse } from '@/lib/admin-types'
+import { AdminSessionResponse, BillingSalesResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { isPlatformAdmin } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SalesPage() {
-  const data = await fetchApi<BillingSalesResponse>('/billing/sales')
+  const [session, data] = await Promise.all([
+    fetchApi<AdminSessionResponse>('/auth/me'),
+    fetchApi<BillingSalesResponse>('/billing/sales'),
+  ])
+  // Businesses see their earnings, never a fee breakdown — fee figures are
+  // platform-admin-only across the app.
+  const showFees = isPlatformAdmin(session?.user)
   const items = data?.items ?? []
 
   return (
@@ -13,15 +20,16 @@ export default async function SalesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Sales</h1>
-          <p className="page-subtitle">Gross collections, platform fees, and vendor net revenue across mobile money and vouchers.</p>
+          <p className="page-subtitle">{showFees ? 'Gross collections, fees, and net revenue across mobile money and vouchers.' : 'Your sales and earnings across mobile money and vouchers.'}</p>
         </div>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
           { label: 'Total Sales', value: formatCurrency(data?.summary.totalGrossUgx ?? 0), color: 'green' },
-          { label: 'Platform Fees', value: formatCurrency(data?.summary.totalFeesUgx ?? 0), color: 'amber' },
-          { label: 'Vendor Net', value: formatCurrency(data?.summary.totalNetUgx ?? 0), color: 'blue' },
+          ...(showFees ? [{ label: 'Fees', value: formatCurrency(data?.summary.totalFeesUgx ?? 0), color: 'amber' }] : []),
+          { label: showFees ? 'Net Revenue' : 'Your Earnings', value: formatCurrency(data?.summary.totalNetUgx ?? 0), color: 'blue' },
+          { label: 'Mobile Money Sales', value: formatCurrency(data?.summary.mobileMoneyGrossUgx ?? 0), color: 'green' },
           { label: 'Voucher Sales', value: formatCurrency(data?.summary.voucherGrossUgx ?? 0), color: 'purple' },
         ].map((stat) => (
           <div key={stat.label} className={`stat-card ${stat.color}`}>
@@ -52,8 +60,8 @@ export default async function SalesPage() {
                 <th>Package</th>
                 <th>Type</th>
                 <th>Gross</th>
-                <th>Fee</th>
-                <th>Net</th>
+                {showFees && <th>Fee</th>}
+                <th>{showFees ? 'Net' : 'You Earned'}</th>
                 <th>Status</th>
                 <th>Date</th>
               </tr>
@@ -75,7 +83,7 @@ export default async function SalesPage() {
                   <td>{item.package?.name ?? 'N/A'}</td>
                   <td>{formatTransactionType(item.type)}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(item.grossAmountUgx)}</td>
-                  <td>{formatCurrency(item.feeAmountUgx)}</td>
+                  {showFees && <td>{formatCurrency(item.feeAmountUgx)}</td>}
                   <td>{formatCurrency(item.netAmountUgx)}</td>
                   <td>
                     <span className={getStatusBadgeClass(item.status)}>{item.status.toLowerCase()}</span>

@@ -1,10 +1,13 @@
 import { BillingTransactionsResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
+import { isPlatformAdmin } from '@/lib/workspace'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TransactionsPage() {
+  const session = await fetchApi<import('@/lib/admin-types').AdminSessionResponse>('/auth/me')
+  const showFees = isPlatformAdmin(session?.user)
   const data = await fetchApi<BillingTransactionsResponse>('/billing/transactions')
   const items = data?.items ?? []
 
@@ -21,7 +24,7 @@ export default async function TransactionsPage() {
         {[
           { label: 'Transactions', value: `${data?.summary.totalTransactions ?? 0}`, color: 'blue' },
           { label: 'Wallet Balance', value: formatCurrency(data?.summary.walletBalanceUgx ?? 0), color: 'green' },
-          { label: 'Fees Posted', value: formatCurrency(data?.summary.totalFeesUgx ?? 0), color: 'amber' },
+          ...(showFees ? [{ label: 'Fees Posted', value: formatCurrency(data?.summary.totalFeesUgx ?? 0), color: 'amber' }] : []),
           { label: 'Gross Value', value: formatCurrency(data?.summary.totalGrossUgx ?? 0), color: 'purple' },
         ].map((stat) => (
           <div key={stat.label} className={`stat-card ${stat.color}`}>
@@ -54,7 +57,7 @@ export default async function TransactionsPage() {
                 <th>Customer</th>
                 <th>Provider</th>
                 <th>Gross</th>
-                <th>Fee</th>
+                {showFees && <th>Fee</th>}
                 <th>Net</th>
                 <th>Status</th>
                 <th>Date</th>
@@ -89,7 +92,7 @@ export default async function TransactionsPage() {
                   </td>
                   <td>{item.paymentProvider ?? 'Internal'}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(item.grossAmountUgx)}</td>
-                  <td>{formatCurrency(item.feeAmountUgx)}</td>
+                  {showFees && <td>{formatCurrency(item.feeAmountUgx)}</td>}
                   <td>{formatCurrency(item.netAmountUgx)}</td>
                   <td>
                     <span className={getStatusBadgeClass(item.status)}>{item.status.toLowerCase()}</span>

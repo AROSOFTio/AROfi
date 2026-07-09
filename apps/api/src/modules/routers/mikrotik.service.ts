@@ -146,6 +146,17 @@ export class MikrotikService {
     )
   }
 
+  // VPS-side tunnel gateway addresses routers see as the CoA packet source.
+  // 192.168.20.1 is the live sstpd local address; 10.8.0.1 is the address in
+  // options.sstpd kept for older tunnels. Override via RADIUS_COA_SOURCE_IPS.
+  getCoaSourceIps(): string[] {
+    const raw = this.configService.get<string>('RADIUS_COA_SOURCE_IPS') ?? '192.168.20.1,10.8.0.1'
+    return raw
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter((ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip))
+  }
+
   getRadiusServerConfig(sharedSecret?: string) {
     const host =
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ??
@@ -259,6 +270,19 @@ export class MikrotikService {
             `/radius add service=hotspot address=${input.radiusSecondaryHost} secret="${this.escape(input.sharedSecret)}" authentication-port=${input.radiusAuthPort} accounting-port=${input.radiusAccountingPort} timeout=5s comment="AROFi ${this.escape(registrationKey)} standby"`,
           ]
         : []),
+      // CoA/Disconnect source registration: RouterOS silently DROPS incoming
+      // Disconnect-Requests whose source IP is not in the /radius list. Our
+      // CoA packets travel down the SSTP tunnel, so the router sees them
+      // coming from the VPS-side tunnel address — not the public RADIUS host.
+      // Register those tunnel gateways as radius entries. service=dhcp is
+      // deliberate: it's never used for hotspot auth, so these entries can't
+      // interfere with authentication failover; incoming CoA validation only
+      // matches on address + secret.
+      `/radius remove [find where comment="AROFi ${this.escape(registrationKey)} coa"]`,
+      ...this.getCoaSourceIps().map(
+        (ip) =>
+          `/radius add service=dhcp address=${ip} secret="${this.escape(input.sharedSecret)}" timeout=1s comment="AROFi ${this.escape(registrationKey)} coa"`,
+      ),
       `:do { /radius incoming set accept=yes } on-error={}`,
     ]
 

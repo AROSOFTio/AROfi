@@ -106,7 +106,6 @@ export function RevenueChart({ data }: { data: ChartPoint[] }) {
         />
         <Area type="monotone" dataKey="grossSalesUgx" name="Gross Sales" stroke="#2563EB" fill="url(#gradGross)" strokeWidth={2} dot={false} />
         <Area type="monotone" dataKey="netEarningsUgx" name="Net Earnings" stroke="#16a34a" fill="url(#gradNet)" strokeWidth={2} dot={false} />
-        <Area type="monotone" dataKey="platformFeesUgx" name="Platform Fees" stroke="#f59e0b" fill="url(#gradFee)" strokeWidth={1.5} dot={false} />
       </AreaChart>
     </ResponsiveContainer>
   )
