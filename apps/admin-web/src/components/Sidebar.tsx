@@ -3,9 +3,18 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useMemo, type ReactNode } from 'react'
 import {
+  Activity,
+  BarChart3,
   Building2,
-  CircleDollarSign,
+  CreditCard,
+  FileText,
+  Gauge,
+  Globe,
   LayoutDashboard,
+  LifeBuoy,
+  Mail,
+  PenLine,
+  Percent,
   RadioTower,
   Router,
   Settings,
@@ -13,6 +22,8 @@ import {
   ShoppingCart,
   Users,
   Wallet,
+  Wifi,
+  Zap,
 } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
@@ -92,41 +103,98 @@ const navItems: NavGroup[] = [
       { href: '/compliance', label: 'Compliance Overview', tenantOnly: true },
     ]
   },
+  // Platform (Dev Admin) navigation is intentionally FLAT: every destination
+  // is a direct top-level link (single-item groups render without sub-menus),
+  // nothing is folded away, and no page appears twice.
   {
-    label: 'Business Management',
+    label: 'Businesses',
     icon: <Building2 size={17} />,
-    items: [
-      { href: '/tenants', label: 'Businesses', required: ['tenants.read'], platformOnly: true },
-      { href: '/sales-by-tenant', label: 'Sales by Business', required: ['billing.read'], platformOnly: true },
-      { href: '/users?tab=staff', label: 'Platform Staff', required: ['users.read'], platformOnly: true },
-      { href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true },
-      { href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true },
-      { href: '/admin/settings/commission', label: 'Commission Rates', required: ['settings.manage'], platformOnly: true },
-      { href: '/admin/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true },
-      { href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true },
-    ]
+    items: [{ href: '/tenants', label: 'Businesses', required: ['tenants.read'], platformOnly: true }]
   },
   {
-    label: 'Router Support',
+    label: 'Compliance Reviews',
+    icon: <ShieldCheck size={17} />,
+    items: [{ href: '/admin/compliance-reviews', label: 'Compliance Reviews', required: ['tenants.manage'], platformOnly: true }]
+  },
+  {
+    label: 'Payout Approvals',
+    icon: <Wallet size={17} />,
+    items: [{ href: '/disbursements', label: 'Payout Approvals', required: ['disbursements.read'], platformOnly: true }]
+  },
+  {
+    label: 'Email Approvals',
+    icon: <Mail size={17} />,
+    items: [{ href: '/admin/email-approvals', label: 'Email Approvals', required: ['users.manage'], platformOnly: true }]
+  },
+  {
+    label: 'Payment Health',
+    icon: <Activity size={17} />,
+    items: [{ href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true }]
+  },
+  {
+    label: 'Transactions',
+    icon: <CreditCard size={17} />,
+    items: [{ href: '/transactions', label: 'Transactions', required: ['billing.read'], platformOnly: true }]
+  },
+  {
+    label: 'Sales by Business',
+    icon: <BarChart3 size={17} />,
+    items: [{ href: '/sales-by-tenant', label: 'Sales by Business', required: ['billing.read'], platformOnly: true }]
+  },
+  {
+    label: 'Routers',
+    icon: <Router size={17} />,
+    items: [{ href: '/admin/settings/routers', label: 'Routers', required: ['routers.read'], platformOnly: true }]
+  },
+  {
+    label: 'Observability',
+    icon: <Gauge size={17} />,
+    items: [{ href: '/admin/router', label: 'Observability', required: ['routers.read'], platformOnly: true }]
+  },
+  {
+    label: 'Remote Access',
+    icon: <Globe size={17} />,
+    items: [{ href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], platformOnly: true }]
+  },
+  {
+    label: 'Sessions & RADIUS',
     icon: <RadioTower size={17} />,
-    items: [
-      { href: '/admin/router', label: 'Router Observability', required: ['routers.read'], platformOnly: true },
-      { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], platformOnly: true },
-      { href: '/admin/settings/routers', label: 'Routers Support', required: ['routers.read'], platformOnly: true },
-      { href: '/sessions', label: 'Sessions & RADIUS', required: ['sessions.read'], platformOnly: true },
-      { href: '/hotspots', label: 'Hotspot Sites', required: ['hotspots.read'], platformOnly: true },
-    ]
+    items: [{ href: '/sessions', label: 'Sessions & RADIUS', required: ['sessions.read'], platformOnly: true }]
   },
   {
-    label: 'Finance & Approvals',
-    icon: <CircleDollarSign size={17} />,
-    items: [
-      { href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true },
-      { href: '/disbursements', label: 'Phone Approvals', required: ['disbursements.read'], platformOnly: true },
-      { href: '/admin/email-approvals', label: 'Email Approvals', required: ['users.manage'], platformOnly: true },
-      { href: '/admin/compliance-reviews', label: 'Compliance Reviews', required: ['tenants.manage'], platformOnly: true },
-      { href: '/transactions', label: 'All Transactions', required: ['billing.read'], platformOnly: true },
-    ]
+    label: 'Hotspot Sites',
+    icon: <Wifi size={17} />,
+    items: [{ href: '/hotspots', label: 'Hotspot Sites', required: ['hotspots.read'], platformOnly: true }]
+  },
+  {
+    label: 'Blog',
+    icon: <PenLine size={17} />,
+    items: [{ href: '/admin/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true }]
+  },
+  {
+    label: 'Support Tickets',
+    icon: <LifeBuoy size={17} />,
+    items: [{ href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true }]
+  },
+  {
+    label: 'Platform Staff',
+    icon: <Users size={17} />,
+    items: [{ href: '/users?tab=staff', label: 'Platform Staff', required: ['users.read'], platformOnly: true }]
+  },
+  {
+    label: 'Feature Limits',
+    icon: <Zap size={17} />,
+    items: [{ href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true }]
+  },
+  {
+    label: 'Commission Rates',
+    icon: <Percent size={17} />,
+    items: [{ href: '/admin/settings/commission', label: 'Commission Rates', required: ['settings.manage'], platformOnly: true }]
+  },
+  {
+    label: 'Audit Logs',
+    icon: <FileText size={17} />,
+    items: [{ href: '/audit-logs', label: 'Audit Logs', required: ['audit.read'], platformOnly: true }]
   },
 ]
 

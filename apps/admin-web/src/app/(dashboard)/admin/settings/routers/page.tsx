@@ -59,6 +59,10 @@ export default function SettingsRoutersPage() {
     hotspotId: '',
     name: '',
     siteLabel: '',
+    locationText: '',
+    ispName: '',
+    managerName: '',
+    managerPhone: '',
     host: '',
     connectionMode: 'ROUTEROS_API' as 'ROUTEROS_API' | 'ROUTEROS_API_SSL',
     apiPort: '8728',
@@ -175,6 +179,10 @@ export default function SettingsRoutersPage() {
 
       await clientPostApi('/routers', {
         ...routerForm,
+        locationText: routerForm.locationText || undefined,
+        ispName: routerForm.ispName || undefined,
+        managerName: routerForm.managerName || undefined,
+        managerPhone: routerForm.managerPhone || undefined,
         groupId: routerForm.groupId || undefined,
         hotspotId: routerForm.hotspotId || undefined,
         host: routerForm.host || '192.168.88.1',
@@ -633,6 +641,52 @@ export default function SettingsRoutersPage() {
                     onChange={(e) => setRouterForm(prev => ({ ...prev, siteLabel: e.target.value }))}
                     placeholder="e.g. MUTUNGO_HILL_WIFI"
                     required
+                  />
+                </div>
+
+                {/* Physical location */}
+                <div className="form-group">
+                  <label className="form-label">Physical Location</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={routerForm.locationText}
+                    onChange={(e) => setRouterForm(prev => ({ ...prev, locationText: e.target.value }))}
+                    placeholder="e.g. Mutungo Hill Stage, Plot 12, Kampala"
+                  />
+                </div>
+
+                {/* ISP */}
+                <div className="form-group">
+                  <label className="form-label">Internet Provider (ISP)</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={routerForm.ispName}
+                    onChange={(e) => setRouterForm(prev => ({ ...prev, ispName: e.target.value }))}
+                    placeholder="e.g. MTN, Airtel, Liquid, Roke"
+                  />
+                </div>
+
+                {/* Site manager */}
+                <div className="form-group">
+                  <label className="form-label">Site Manager Name</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={routerForm.managerName}
+                    onChange={(e) => setRouterForm(prev => ({ ...prev, managerName: e.target.value }))}
+                    placeholder="Person managing this hotspot"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Site Manager Phone</label>
+                  <input
+                    className="form-input"
+                    type="tel"
+                    value={routerForm.managerPhone}
+                    onChange={(e) => setRouterForm(prev => ({ ...prev, managerPhone: e.target.value }))}
+                    placeholder="e.g. 0787726388"
                   />
                 </div>
 

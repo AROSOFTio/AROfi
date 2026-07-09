@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Modal } from '@/components/Modal'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientPostApi } from '@/lib/client-api'
+import ReviewActionModal from '@/components/ReviewActionModal'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import type { DisbursementOverviewResponse } from '@/lib/admin-types'
 
@@ -83,10 +84,9 @@ export default function SettlementsManager({
     }
   }
 
+  const [cancelTarget, setCancelTarget] = useState<SettlementItem | null>(null)
+
   async function cancelSettlement(settlement: SettlementItem) {
-    if (!window.confirm(`Cancel settlement ${settlement.reference}? Its commissions will return to the unsettled pool.`)) {
-      return
-    }
     setBusy(true)
     setError(null)
     try {
@@ -170,7 +170,7 @@ export default function SettlementsManager({
                         </button>
                       )}
                       {canCancel && (
-                        <button className="secondary-button" type="button" onClick={() => cancelSettlement(settlement)} disabled={busy}>
+                        <button className="secondary-button" type="button" onClick={() => setCancelTarget(settlement)} disabled={busy}>
                           Cancel
                         </button>
                       )}
@@ -314,6 +314,23 @@ export default function SettlementsManager({
           </div>
         </form>
       </Modal>
+
+      <ReviewActionModal
+        open={Boolean(cancelTarget)}
+        title={`Cancel settlement ${cancelTarget?.reference ?? ''}`}
+        description="Its commissions will return to the unsettled pool. This cannot be undone."
+        confirmLabel="Cancel Settlement"
+        danger
+        showNote={false}
+        busy={busy}
+        onConfirm={() => {
+          if (!cancelTarget) return
+          const target = cancelTarget
+          setCancelTarget(null)
+          void cancelSettlement(target)
+        }}
+        onClose={() => setCancelTarget(null)}
+      />
     </div>
   )
 }

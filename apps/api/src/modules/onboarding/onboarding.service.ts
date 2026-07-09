@@ -295,6 +295,29 @@ export class OnboardingService {
 
     const session = await this.authService.issueSessionForUserId(workspace.user.id)
 
+    // Notify the platform team about every new business, and welcome the
+    // owner — fire-and-forget so a mail hiccup never fails a registration.
+    void this.mailService.sendMail({
+      to: process.env.SUPPORT_EMAIL || 'support@arofi.net',
+      subject: `New business onboarded: ${tenantName}`,
+      html: `<p>A new business just registered on AROFi.</p>
+        <p><strong>Business:</strong> ${tenantName} (${domain})<br/>
+        <strong>Owner:</strong> ${firstName} ${lastName} · ${email} · ${supportPhone}</p>
+        <p>Their compliance submission will appear under Compliance Reviews once they complete it.</p>`,
+    })
+    void this.mailService.sendMail({
+      to: email,
+      subject: 'Welcome to AROFi — your business workspace is ready',
+      html: `<p>Hello ${firstName},</p>
+        <p>Your AROFi workspace for <strong>${tenantName}</strong> is ready. Next steps:</p>
+        <ol>
+          <li>Add your MikroTik router from the dashboard (one paste-in command).</li>
+          <li>Create your WiFi packages and voucher batches.</li>
+          <li>Complete the Compliance section so our team can verify your business — AROFi is built for authorised, compliant operators.</li>
+        </ol>
+        <p>Need help? Reply to this email, message us on WhatsApp (+256 787 726 388), or ask Aria — the assistant in the corner of your dashboard.</p>`,
+    })
+
     return {
       ...session,
       tenant: {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -57,6 +57,9 @@ function ToolbarButton({
 
 export default function BlogEditor({ value, onChange, placeholder }: BlogEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploadError, setUploadError] = useState('')
+  const [linkBarOpen, setLinkBarOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -106,22 +109,24 @@ export default function BlogEditor({ value, onChange, placeholder }: BlogEditorP
     try {
       const uploaded = await clientUploadApi<{ id: string; url: string }>('/blog/admin/images', formData)
       editor.chain().focus().setImage({ src: uploaded.url }).run()
-    } catch (uploadError) {
-      window.alert(uploadError instanceof Error ? uploadError.message : 'Unable to upload image')
+    } catch (caught) {
+      setUploadError(caught instanceof Error ? caught.message : 'Unable to upload image')
     }
   }
 
   function setLink() {
     const previousUrl = editor?.getAttributes('link').href as string | undefined
-    const url = window.prompt('Link URL', previousUrl ?? 'https://')
-    if (url === null) {
-      return
-    }
-    if (url === '') {
+    setLinkUrl(previousUrl ?? 'https://')
+    setLinkBarOpen(true)
+  }
+
+  function applyLink() {
+    if (linkUrl.trim() === '' || linkUrl.trim() === 'https://') {
       editor?.chain().focus().extendMarkRange('link').unsetLink().run()
-      return
+    } else {
+      editor?.chain().focus().extendMarkRange('link').setLink({ href: linkUrl.trim() }).run()
     }
-    editor?.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+    setLinkBarOpen(false)
   }
 
   return (
@@ -154,6 +159,31 @@ export default function BlogEditor({ value, onChange, placeholder }: BlogEditorP
         <ToolbarButton label="Redo" onClick={() => editor.chain().focus().redo().run()}><Redo size={15} /></ToolbarButton>
       </div>
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImagePick} />
+      {linkBarOpen && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid var(--border)', background: 'var(--bg-app)' }}>
+          <input
+            className="form-input"
+            style={{ maxWidth: 420 }}
+            value={linkUrl}
+            onChange={(event) => setLinkUrl(event.target.value)}
+            placeholder="https://example.com"
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') { event.preventDefault(); applyLink() }
+              if (event.key === 'Escape') setLinkBarOpen(false)
+            }}
+          />
+          <button type="button" className="btn btn-primary btn-sm" onClick={applyLink}>Apply</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setLinkUrl(''); applyLink() }}>Remove link</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLinkBarOpen(false)}>Cancel</button>
+        </div>
+      )}
+      {uploadError && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--danger-bg)', color: 'var(--danger-fg)', fontSize: 12.5 }}>
+          <span>{uploadError}</span>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'inherit' }} onClick={() => setUploadError('')}>Dismiss</button>
+        </div>
+      )}
       <div style={{ padding: 16, minHeight: 320 }}>
         <EditorContent editor={editor} />
       </div>

@@ -4372,6 +4372,30 @@ pre, code.block {
   .blog-related-grid { grid-template-columns: 1fr; }
 }
 
+/* ── Dev Admin action center ── */
+.action-center-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+.action-center-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--bg-app);
+  color: var(--text-1);
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.action-center-item:hover { border-color: var(--green-mid); transform: translateY(-2px); }
+.action-center-item svg { color: var(--brand); flex-shrink: 0; }
+.action-center-item strong { display: block; font-size: 18px; font-weight: 800; line-height: 1.1; }
+.action-center-item span { display: block; font-size: 12px; color: var(--text-2); margin-top: 2px; }
+
 /* ── Compliance ── */
 .compliance-status-row { display: flex; gap: 14px; align-items: flex-start; }
 .compliance-status-row > svg { color: var(--brand); flex-shrink: 0; margin-top: 2px; }

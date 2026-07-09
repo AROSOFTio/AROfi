@@ -5,12 +5,14 @@ import type { ReactNode } from 'react'
 import type { PlatformWithdrawalsResponse } from '@/lib/admin-types'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import ReviewActionModal from '@/components/ReviewActionModal'
 
 export default function PlatformWithdrawalsPanel({ initialData }: { initialData: PlatformWithdrawalsResponse | null }) {
   const [data, setData] = useState(initialData)
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [pendingReject, setPendingReject] = useState<{ actionId: string; title: string; success: string; path: string } | null>(null)
 
   async function reload() {
     setData(await clientFetchApi<PlatformWithdrawalsResponse>('/wallets/withdrawals/all'))
@@ -92,10 +94,12 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
                       approveBusy={busy === `approve-number-${number.id}`}
                       rejectBusy={busy === `reject-number-${number.id}`}
                       onApprove={() => run(`approve-number-${number.id}`, 'Payout number approved.', () => clientPostApi(`/wallets/payouts/numbers/${number.id}/approve`, {}))}
-                      onReject={() => {
-                        const reason = window.prompt('Why reject this payout number?', 'Number could not be verified')
-                        if (reason) void run(`reject-number-${number.id}`, 'Payout number rejected.', () => clientPostApi(`/wallets/payouts/numbers/${number.id}/reject`, { reason }))
-                      }}
+                      onReject={() => setPendingReject({
+                        actionId: `reject-number-${number.id}`,
+                        title: `Reject payout number ${maskPhone(number.normalizedPhone)}`,
+                        success: 'Payout number rejected.',
+                        path: `/wallets/payouts/numbers/${number.id}/reject`,
+                      })}
                     />
                   </td>
                 </tr>
@@ -133,10 +137,12 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
                       approveBusy={busy === `approve-change-${request.id}`}
                       rejectBusy={busy === `reject-change-${request.id}`}
                       onApprove={() => run(`approve-change-${request.id}`, 'Payout number change approved.', () => clientPostApi(`/wallets/payouts/number-change-requests/${request.id}/approve`, {}))}
-                      onReject={() => {
-                        const reason = window.prompt('Why reject this payout number change?', 'Change request rejected')
-                        if (reason) void run(`reject-change-${request.id}`, 'Payout number change rejected.', () => clientPostApi(`/wallets/payouts/number-change-requests/${request.id}/reject`, { reason }))
-                      }}
+                      onReject={() => setPendingReject({
+                        actionId: `reject-change-${request.id}`,
+                        title: `Reject number change for ${request.tenant.name}`,
+                        success: 'Payout number change rejected.',
+                        path: `/wallets/payouts/number-change-requests/${request.id}/reject`,
+                      })}
                     />
                   </td>
                 </tr>
@@ -176,10 +182,12 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
                       approveBusy={busy === `approve-withdrawal-${withdrawal.id}`}
                       rejectBusy={busy === `reject-withdrawal-${withdrawal.id}`}
                       onApprove={() => run(`approve-withdrawal-${withdrawal.id}`, 'Withdrawal approved and sent to provider.', () => clientPostApi(`/wallets/withdrawals/${withdrawal.id}/approve`, {}, { timeoutMs: 30000 }))}
-                      onReject={() => {
-                        const reason = window.prompt('Why reject this withdrawal?', 'Rejected during Dev Admin review')
-                        if (reason) void run(`reject-withdrawal-${withdrawal.id}`, 'Withdrawal rejected and reserve released.', () => clientPostApi(`/wallets/withdrawals/${withdrawal.id}/reject`, { reason }))
-                      }}
+                      onReject={() => setPendingReject({
+                        actionId: `reject-withdrawal-${withdrawal.id}`,
+                        title: `Reject withdrawal ${withdrawal.reference}`,
+                        success: 'Withdrawal rejected and reserve released.',
+                        path: `/wallets/withdrawals/${withdrawal.id}/reject`,
+                      })}
                     />
                   </td>
                 </tr>
@@ -221,6 +229,23 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
           </table>
         </div>
       </section>
+
+      <ReviewActionModal
+        open={Boolean(pendingReject)}
+        title={pendingReject?.title ?? ''}
+        description="The business will see this reason on the rejected item."
+        confirmLabel="Reject"
+        danger
+        noteRequired
+        noteLabel="Reason for rejection"
+        busy={Boolean(pendingReject && busy === pendingReject.actionId)}
+        onConfirm={(reason) => {
+          if (!pendingReject) return
+          const target = pendingReject
+          void run(target.actionId, target.success, () => clientPostApi(target.path, { reason })).then(() => setPendingReject(null))
+        }}
+        onClose={() => setPendingReject(null)}
+      />
     </div>
   )
 }

@@ -687,6 +687,10 @@ model Router {
   passwordCiphertext    String
   sharedSecretCiphertext String
   siteLabel             String?
+  locationText          String?
+  ispName               String?
+  managerName           String?
+  managerPhone          String?
   model                 String?
   serialNumber          String?
   routerOsVersion       String?

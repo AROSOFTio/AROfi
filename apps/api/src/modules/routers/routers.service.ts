@@ -671,6 +671,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         lastScriptMode: dto.scriptMode ?? RouterScriptMode.SAFE_EXISTING_ROUTER,
         scriptGeneratedAt: new Date(),
         siteLabel: dto.siteLabel,
+        locationText: dto.locationText,
+        ispName: dto.ispName,
+        managerName: dto.managerName,
+        managerPhone: dto.managerPhone,
         model: dto.model,
         serialNumber: dto.serialNumber,
         routerOsVersion: dto.routerOsVersion,
@@ -860,6 +864,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : null),
         ...(dto.siteLabel !== undefined ? { siteLabel: dto.siteLabel } : null),
+        ...(dto.locationText !== undefined ? { locationText: dto.locationText } : null),
+        ...(dto.ispName !== undefined ? { ispName: dto.ispName } : null),
+        ...(dto.managerName !== undefined ? { managerName: dto.managerName } : null),
+        ...(dto.managerPhone !== undefined ? { managerPhone: dto.managerPhone } : null),
         ...(dto.password !== undefined
           ? { passwordCiphertext: this.routerCredentialsService.encrypt(dto.password) }
           : null),
@@ -1543,6 +1551,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     apiPort: number
     connectionMode: RouterConnectionMode
     siteLabel: string | null
+    locationText?: string | null
+    ispName?: string | null
+    managerName?: string | null
+    managerPhone?: string | null
     model: string | null
     serialNumber: string | null
     routerOsVersion: string | null
@@ -1639,6 +1651,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       apiPort: router.apiPort,
       connectionMode: router.connectionMode,
       siteLabel: router.siteLabel,
+      locationText: router.locationText,
+      ispName: router.ispName,
+      managerName: router.managerName,
+      managerPhone: router.managerPhone,
       model: router.model,
       serialNumber: router.serialNumber,
       routerOsVersion: router.routerOsVersion,

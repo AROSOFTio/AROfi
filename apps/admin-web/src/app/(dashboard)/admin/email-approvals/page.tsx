@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
+import ReviewActionModal from '@/components/ReviewActionModal'
 
 type EmailChangeRequest = {
   id: string
@@ -26,6 +27,7 @@ export default function EmailApprovalsPage() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
+  const [pendingAction, setPendingAction] = useState<{ id: string; email: string; approve: boolean } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -43,13 +45,14 @@ export default function EmailApprovalsPage() {
     void load()
   }, [load])
 
-  async function review(id: string, approve: boolean) {
-    const note = approve ? undefined : window.prompt('Reason for rejecting (sent to the user):') ?? undefined
-    if (!approve && note === undefined) return
+  async function confirmReview(note: string) {
+    if (!pendingAction) return
+    const { id, approve } = pendingAction
     setBusyId(id)
     setError('')
     try {
-      await clientPostApi(`/auth/email-change-requests/${id}/review`, { approve, note })
+      await clientPostApi(`/auth/email-change-requests/${id}/review`, { approve, note: note || undefined })
+      setPendingAction(null)
       await load()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review failed.')
@@ -120,10 +123,10 @@ export default function EmailApprovalsPage() {
                   <td>
                     {request.status === 'PENDING' ? (
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => void review(request.id, true)} disabled={busyId === request.id}>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => setPendingAction({ id: request.id, email: request.requestedEmail, approve: true })} disabled={busyId === request.id}>
                           Approve
                         </button>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void review(request.id, false)} disabled={busyId === request.id}>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPendingAction({ id: request.id, email: request.requestedEmail, approve: false })} disabled={busyId === request.id}>
                           Reject
                         </button>
                       </div>
@@ -137,6 +140,23 @@ export default function EmailApprovalsPage() {
           </table>
         </div>
       </div>
+
+      <ReviewActionModal
+        open={Boolean(pendingAction)}
+        title={pendingAction?.approve ? `Approve change to ${pendingAction.email}` : `Reject change to ${pendingAction?.email ?? ''}`}
+        description={
+          pendingAction?.approve
+            ? 'The sign-in email updates immediately, the user is signed out everywhere, and both addresses are notified.'
+            : 'The user keeps their current email and receives your note by email.'
+        }
+        confirmLabel={pendingAction?.approve ? 'Approve' : 'Reject'}
+        danger={!pendingAction?.approve}
+        noteRequired={!pendingAction?.approve}
+        noteLabel="Note to the user"
+        busy={Boolean(pendingAction && busyId === pendingAction.id)}
+        onConfirm={(note) => void confirmReview(note)}
+        onClose={() => setPendingAction(null)}
+      />
     </>
   )
 }

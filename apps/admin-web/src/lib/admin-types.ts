@@ -813,6 +813,10 @@ export type RouterItem = {
   apiPort: number
   connectionMode: string
   siteLabel?: string | null
+  locationText?: string | null
+  ispName?: string | null
+  managerName?: string | null
+  managerPhone?: string | null
   model?: string | null
   serialNumber?: string | null
   routerOsVersion?: string | null

@@ -76,6 +76,22 @@ export class CreateRouterDto {
 
   @IsOptional()
   @IsString()
+  locationText?: string
+
+  @IsOptional()
+  @IsString()
+  ispName?: string
+
+  @IsOptional()
+  @IsString()
+  managerName?: string
+
+  @IsOptional()
+  @IsString()
+  managerPhone?: string
+
+  @IsOptional()
+  @IsString()
   model?: string
 
   @IsOptional()

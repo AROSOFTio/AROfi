@@ -6,6 +6,7 @@ import {
   TenantOverviewResponse,
   VouchersOverviewResponse,
   PackageCatalogResponse,
+  PlatformWithdrawalsResponse,
 } from '@/lib/admin-types'
 import OnboardingWizard from '@/components/OnboardingWizard'
 import { fetchApi } from '@/lib/api'
@@ -15,7 +16,7 @@ import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
-import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -32,143 +33,239 @@ export default async function DashboardHome({ searchParams }: { searchParams?: D
 }
 
 async function PlatformDashboard() {
-  const [tenants, routers, payoutProfile] = await Promise.all([
+  const [tenants, routers, payoutProfile, billing, withdrawals, complianceQueue, emailQueue] = await Promise.all([
     fetchApi<TenantOverviewResponse>('/tenants'),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<any>('/wallets/payouts/profile/me'),
+    fetchApi<BillingOverviewResponse>('/billing/overview'),
+    fetchApi<PlatformWithdrawalsResponse>('/wallets/withdrawals/all'),
+    fetchApi<Array<{ id: string }>>('/compliance/requests?status=PENDING_REVIEW').catch(() => null),
+    fetchApi<Array<{ id: string }>>('/auth/email-change-requests?status=PENDING').catch(() => null),
   ])
 
   const tenantItems = tenants?.items ?? []
   const routerItems = routers?.routers ?? []
-  const recentHealthChecks = routers?.recentHealthChecks ?? []
   const totalActiveSessions = routerItems.reduce((sum, r) => sum + (r.activeSessions ?? 0), 0)
   const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((r) => r.liveState === 'LIVE').length
   const totalRouters = routers?.summary.totalRouters ?? routerItems.length
 
-  const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []
-  const primaryNumber = verifiedNumbers.find((item: any) => item.isPrimary) ?? verifiedNumbers[0] ?? null
+  const pendingCompliance = complianceQueue?.length ?? 0
+  const pendingEmailChanges = emailQueue?.length ?? 0
+  const pendingPayouts =
+    (withdrawals?.summary.pendingReview ?? 0) +
+    (withdrawals?.summary.pendingPayoutNumbers ?? 0) +
+    (withdrawals?.summary.pendingNumberChanges ?? 0)
+  const pendingTotal = pendingCompliance + pendingEmailChanges + pendingPayouts
+
   const availableUgx = payoutProfile?.wallet?.balanceUgx ?? 0
-  const minimumPayoutUgx = payoutProfile?.rules?.minimumPayoutUgx ?? 0
+  const platformFeesUgx = billing?.summary.platformFeesUgx ?? 0
+  const todayGrossUgx = billing?.summary.todayGrossSalesUgx ?? 0
+  const monthGrossUgx = billing?.summary.monthGrossSalesUgx ?? 0
+
+  const recentBusinesses = [...tenantItems]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10)
+  const routersByTenant = new Map<string, typeof routerItems>()
+  for (const router of routerItems) {
+    const key = router.tenant?.id ?? 'unknown'
+    const bucket = routersByTenant.get(key) ?? []
+    bucket.push(router)
+    routersByTenant.set(key, bucket)
+  }
 
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Developer Admin Dashboard</h1>
-          <p className="page-subtitle">Platform overview — all live data.</p>
+          <h1 className="page-title">Developer Admin</h1>
+          <p className="page-subtitle">Platform control center — approvals, businesses, routers, and commission at a glance.</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <a href="/support" className="btn btn-ghost">Support Queue</a>
-          <a href="/tenants" className="btn btn-primary">Add Vendor</a>
+          <a href="/admin/compliance-reviews" className="btn btn-ghost">Compliance Reviews</a>
+          <a href="/tenants" className="btn btn-primary">Businesses</a>
         </div>
       </div>
 
-      {/* KPI Strip */}
+      {/* KPI strip */}
       <div className="stats-grid" style={{ marginBottom: 14 }}>
-        <Stat label="Live Routers" value={`${liveRouters} / ${totalRouters}`} color="green" note="Currently sending signals" />
-        <Stat label="Active Sessions" value={`${totalActiveSessions}`} color="blue" note="Users online right now" />
-        <Stat label="Vendors" value={`${tenants?.summary.totalTenants ?? 0}`} color="purple" note="Business workspaces" />
-        <Stat label="Platform Balance" value={formatCurrency(availableUgx)} color="amber" note="Available to withdraw" />
+        <Stat label="Pending Approvals" value={`${pendingTotal}`} color={pendingTotal > 0 ? 'amber' : 'green'} note="Compliance, email & payout reviews" />
+        <Stat label="Businesses" value={`${tenants?.summary.totalTenants ?? 0}`} color="purple" note="Active workspaces" />
+        <Stat label="Routers Live" value={`${liveRouters} / ${totalRouters}`} color="green" note="Sending signals right now" />
+        <Stat label="Active Sessions" value={`${totalActiveSessions}`} color="blue" note="Users online" />
+        <Stat label="Sales Today" value={formatCurrency(todayGrossUgx)} color="blue" note={`This month: ${formatCurrency(monthGrossUgx)}`} />
+        <Stat label="Commission Earned" value={formatCurrency(platformFeesUgx)} color="amber" note={`Wallet: ${formatCurrency(availableUgx)}`} />
       </div>
 
-      {/* Platform Wallet Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 14 }}>
-        {/* Visual Credit Card Style Wallet Card */}
-        <div style={{
-          background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-          borderRadius: 14,
-          padding: '24px 26px',
-          color: '#ffffff',
-          position: 'relative',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: 228,
-          boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.35), 0 8px 10px -6px rgba(16, 185, 129, 0.35)',
-        }}>
-          <div style={{ position: 'absolute', top: -24, right: -24, width: 148, height: 148, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -44, left: -24, width: 168, height: 168, borderRadius: '50%', background: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Wallet size={18} />
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', opacity: 0.9 }}>PLATFORM WALLET</span>
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.75)', mixBlendMode: 'overlay' }} />
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.45)', marginLeft: -9, mixBlendMode: 'overlay' }} />
-            </div>
-          </div>
-          <div style={{ zIndex: 2, marginTop: 10 }}>
-            <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 500 }}>Platform Revenue Balance</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, letterSpacing: '-0.02em' }}>{formatCurrency(availableUgx)}</div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 2, marginTop: 10 }}>
-            <div>
-              <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Owner</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>Dev Admin</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payout Network</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                {primaryNumber ? `${primaryNumber.network} Line` : 'None Configured'}
-              </div>
-            </div>
-          </div>
+      {/* Action Center — every pending queue, one click deep */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-header">
+          <span className="card-title">Action Center</span>
+          <span className={`badge ${pendingTotal > 0 ? 'badge-warning' : 'badge-success'}`}>
+            {pendingTotal > 0 ? `${pendingTotal} item${pendingTotal === 1 ? '' : 's'} need attention` : 'All clear'}
+          </span>
         </div>
+        <div className="action-center-grid">
+          <a href="/admin/compliance-reviews" className="action-center-item">
+            <ShieldCheck size={20} />
+            <div>
+              <strong>{pendingCompliance}</strong>
+              <span>Compliance submissions</span>
+            </div>
+          </a>
+          <a href="/disbursements" className="action-center-item">
+            <Wallet size={20} />
+            <div>
+              <strong>{pendingPayouts}</strong>
+              <span>Payout &amp; withdrawal reviews</span>
+            </div>
+          </a>
+          <a href="/admin/email-approvals" className="action-center-item">
+            <Users size={20} />
+            <div>
+              <strong>{pendingEmailChanges}</strong>
+              <span>Email change requests</span>
+            </div>
+          </a>
+          <a href="/support" className="action-center-item">
+            <Database size={20} />
+            <div>
+              <strong>Support</strong>
+              <span>Open ticket queue</span>
+            </div>
+          </a>
+        </div>
+      </div>
 
-        {/* Withdrawal Settings */}
-        <div className="card" style={{ padding: 15, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Platform Withdrawal Settings</span>
-              <a href="/earnings" style={{ color: 'var(--green)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>Manage</a>
-            </div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
-                <span style={{ color: 'var(--text-2)' }}>Primary payout number</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-1)', fontFamily: 'monospace' }}>
-                  {primaryNumber ? `${primaryNumber.network} - ${primaryNumber.normalizedPhone}` : <span style={{ color: '#ef4444' }}>Not set</span>}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
-                <span style={{ color: 'var(--text-2)' }}>Secret key verification</span>
-                <span>
-                  {payoutProfile?.profile?.secretConfigured ? (
-                    <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}><CheckCircle2 size={14} /> Set</span>
-                  ) : (
-                    <span style={{ color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}><AlertCircle size={14} /> Setup needed</span>
-                  )}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-2)' }}>Minimum withdrawable</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>{minimumPayoutUgx > 0 ? formatCurrency(minimumPayoutUgx) : 'None'}</span>
-              </div>
-            </div>
+      {/* Businesses — each with its routers, locations, ISPs and site managers */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-header">
+          <span className="card-title">Businesses &amp; Their Routers</span>
+          <a href="/tenants" className="btn btn-ghost btn-sm">Manage Businesses</a>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Business</th>
+                <th>Contact</th>
+                <th>Wallet</th>
+                <th>Routers (location · ISP · site manager)</th>
+                <th>Status</th>
+                <th>Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentBusinesses.length === 0 && <EmptyRow colSpan={6} text="No businesses have been onboarded yet." />}
+              {recentBusinesses.map((tenant) => {
+                const tenantRouters = routersByTenant.get(tenant.id) ?? []
+                return (
+                  <tr key={tenant.id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{tenant.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{tenant.domain ?? 'No domain'}</div>
+                    </td>
+                    <td style={{ fontSize: 12.5 }}>
+                      <div>{tenant.supportPhone ?? '—'}</div>
+                      <div style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{tenant.supportEmail ?? ''}</div>
+                    </td>
+                    <td>{formatCurrency(tenant.wallet?.balanceUgx ?? 0)}</td>
+                    <td>
+                      {tenantRouters.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>No routers yet</span>}
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {tenantRouters.slice(0, 3).map((router) => (
+                          <div key={router.id} style={{ fontSize: 12, lineHeight: 1.45 }}>
+                            <span style={{ fontWeight: 600 }}>{router.name}</span>
+                            <span style={{ color: router.liveState === 'LIVE' ? 'var(--success-fg)' : router.liveState === 'OFFLINE' ? 'var(--danger-fg)' : 'var(--warn-fg)', fontWeight: 700, marginLeft: 6, fontSize: 10.5 }}>
+                              {router.liveState ?? 'PENDING'}
+                            </span>
+                            <div style={{ color: 'var(--text-2)' }}>
+                              {[router.locationText ?? router.siteLabel, router.ispName, router.managerName ? `${router.managerName}${router.managerPhone ? ` (${router.managerPhone})` : ''}` : null]
+                                .filter(Boolean)
+                                .join(' · ') || 'Location, ISP & manager not set'}
+                            </div>
+                          </div>
+                        ))}
+                        {tenantRouters.length > 3 && (
+                          <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>+{tenantRouters.length - 3} more router(s)</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span className={getStatusBadgeClass(tenant.status?.accountActive === false ? 'failed' : 'success')}>
+                          {tenant.status?.accountActive === false ? 'suspended' : 'active'}
+                        </span>
+                        {tenant.status?.fraudHold && <span className={getStatusBadgeClass('failed')}>fraud hold</span>}
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 12 }}>{formatDate(tenant.createdAt)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Platform wallet + payout settings row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 14 }}>
+        <div className="card" style={{ margin: 0, padding: 20, background: 'var(--brand)', color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 190 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Wallet size={17} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '0.07em' }}>PLATFORM WALLET</span>
           </div>
-          <a href="/earnings" className="btn btn-primary btn-block" style={{ marginTop: 14, display: 'inline-flex', gap: 6 }}>
-            Withdraw Platform Fees <ArrowUpRight size={16} />
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>Commission balance available to withdraw</div>
+            <div style={{ fontSize: 30, fontWeight: 800, marginTop: 4, letterSpacing: '-0.02em' }}>{formatCurrency(availableUgx)}</div>
+          </div>
+          <a href="/earnings" className="btn" style={{ background: '#fff', color: 'var(--brand)', fontWeight: 700, justifyContent: 'center' }}>
+            Withdraw Platform Fees <ArrowUpRight size={15} />
           </a>
         </div>
 
-        {/* Withdrawal History */}
-        <div className="card" style={{ padding: 15, margin: 0, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Platform Withdrawals</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto', maxHeight: 150 }}>
+        <div className="card" style={{ padding: 16, margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>Payout Configuration</span>
+            <a href="/earnings" style={{ color: 'var(--green)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>Manage</a>
+          </div>
+          <div style={{ display: 'grid', gap: 9, fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-2)' }}>Primary payout number</span>
+              <span style={{ fontWeight: 600 }}>
+                {payoutProfile?.numbers?.find((n: any) => n.isPrimary && n.status === 'VERIFIED')
+                  ? `${payoutProfile.numbers.find((n: any) => n.isPrimary && n.status === 'VERIFIED').network} line`
+                  : <span style={{ color: 'var(--danger-fg)' }}>Not set</span>}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-2)' }}>Withdrawal secret</span>
+              <span style={{ fontWeight: 600 }}>
+                {payoutProfile?.profile?.secretConfigured
+                  ? <span style={{ color: 'var(--success-fg)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={14} /> Set</span>
+                  : <span style={{ color: 'var(--warn-fg)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><AlertCircle size={14} /> Setup needed</span>}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-2)' }}>Completed payouts</span>
+              <span style={{ fontWeight: 600 }}>{formatCurrency(withdrawals?.summary.completedAmountUgx ?? 0)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 16, margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>Recent Platform Withdrawals</span>
+            <a href="/disbursements" style={{ color: 'var(--green)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>All</a>
+          </div>
+          <div style={{ display: 'grid', gap: 8, maxHeight: 140, overflowY: 'auto' }}>
             {(!payoutProfile?.recentWithdrawals || payoutProfile.recentWithdrawals.length === 0) ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13, padding: '20px 0', gap: 6 }}>
-                <CreditCard size={24} style={{ opacity: 0.4 }} />
-                <span>No payout history found</span>
-              </div>
+              <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>No payout history yet.</span>
             ) : (
-              payoutProfile.recentWithdrawals.map((item: any) => (
-                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, paddingBottom: 8, borderBottom: '1px solid var(--border-soft)' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{formatCurrency(item.amountUgx)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(item.createdAt)}</div>
-                  </div>
-                  <span className={getStatusBadgeClass(item.status)} style={{ fontSize: 11 }}>{item.status.toLowerCase()}</span>
+              payoutProfile.recentWithdrawals.slice(0, 5).map((item: any) => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5 }}>
+                  <span style={{ fontWeight: 600 }}>{formatCurrency(item.amountUgx)}</span>
+                  <span style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{formatDate(item.createdAt)}</span>
+                  <span className={getStatusBadgeClass(item.status)} style={{ fontSize: 10.5 }}>{item.status.toLowerCase()}</span>
                 </div>
               ))
             )}
@@ -176,120 +273,49 @@ async function PlatformDashboard() {
         </div>
       </div>
 
-      {/* Router Network Live Grid */}
-      <div className="card" style={{ marginBottom: 14 }}>
+      {/* Router fleet */}
+      <div className="card">
         <div className="card-header">
-          <span className="card-title">Router Network</span>
-          <a href="/admin/router" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Observability</a>
+          <span className="card-title">Router Fleet</span>
+          <a href="/admin/router" className="btn btn-ghost btn-sm">Observability</a>
         </div>
-        {routerItems.length === 0 ? (
-          <div className="empty-state" style={{ padding: 18 }}><p>No routers registered yet.</p></div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, padding: '0 20px 20px' }}>
-            {routerItems.map((router) => {
-              const stateColor = router.liveState === 'LIVE' ? '#16a34a' : router.liveState === 'STALE' ? '#f59e0b' : router.liveState === 'OFFLINE' ? '#ef4444' : '#9aa3b2'
-              const stateBg = router.liveState === 'LIVE' ? 'rgba(22,163,74,0.1)' : router.liveState === 'STALE' ? 'rgba(245,158,11,0.1)' : router.liveState === 'OFFLINE' ? 'rgba(239,68,68,0.1)' : 'rgba(156,163,175,0.1)'
-              return (
-                <a key={router.id} href="/admin/router" style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--surface)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)', lineHeight: 1.3, flex: 1, marginRight: 8 }}>{router.name}</div>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: stateBg, color: stateColor, flexShrink: 0 }}>
-                        {router.liveState ?? 'PENDING'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }}>{router.tenant?.name ?? '—'}</div>
-                    <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
-                      <div>
-                        <div style={{ color: 'var(--text-3)', fontSize: 10, textTransform: 'uppercase' }}>Users</div>
-                        <div style={{ fontWeight: 700, color: 'var(--text-1)' }}>{router.activeSessions ?? 0}</div>
-                      </div>
-                      <div>
-                        <div style={{ color: 'var(--text-3)', fontSize: 10, textTransform: 'uppercase' }}>Latency</div>
-                        <div style={{ fontWeight: 700, color: 'var(--text-1)' }}>
-                          {router.latestHealthCheck?.latencyMs != null ? `${router.latestHealthCheck.latencyMs}ms` : '—'}
-                        </div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ color: 'var(--text-3)', fontSize: 10, textTransform: 'uppercase' }}>Last Signal</div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-2)', fontSize: 11 }}>
-                          {router.lastSignalAt ? formatDate(router.lastSignalAt) : '—'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </a>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Tables */}
-      <div className="charts-grid">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Vendor Workspaces</span>
-            <a href="/tenants" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>Manage</a>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Vendor</th>
-                  <th>Routers</th>
-                  <th>Users</th>
-                  <th>Status</th>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Router</th>
+                <th>Business</th>
+                <th>Location</th>
+                <th>ISP</th>
+                <th>Site Manager</th>
+                <th>State</th>
+                <th>Users</th>
+                <th>Last Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {routerItems.length === 0 && <EmptyRow colSpan={8} text="No routers registered yet." />}
+              {routerItems.slice(0, 20).map((router) => (
+                <tr key={router.id}>
+                  <td style={{ fontWeight: 600 }}>{router.name}</td>
+                  <td style={{ fontSize: 12.5 }}>{router.tenant?.name ?? '—'}</td>
+                  <td style={{ fontSize: 12.5 }}>{router.locationText ?? router.siteLabel ?? '—'}</td>
+                  <td style={{ fontSize: 12.5 }}>{router.ispName ?? '—'}</td>
+                  <td style={{ fontSize: 12.5 }}>
+                    {router.managerName ?? '—'}
+                    {router.managerPhone && <div style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{router.managerPhone}</div>}
+                  </td>
+                  <td>
+                    <span className={getStatusBadgeClass(router.liveState === 'LIVE' ? 'success' : router.liveState === 'OFFLINE' ? 'failed' : 'pending')}>
+                      {(router.liveState ?? 'PENDING').toLowerCase()}
+                    </span>
+                  </td>
+                  <td>{router.activeSessions ?? 0}</td>
+                  <td style={{ fontSize: 12 }}>{router.lastSignalAt ? formatDate(router.lastSignalAt) : '—'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {tenantItems.length === 0 && <EmptyRow colSpan={4} text="No vendors have been onboarded yet." />}
-                {tenantItems.slice(0, 8).map((tenant) => (
-                  <tr key={tenant.id}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{tenant.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{tenant.domain ?? 'No domain'}</div>
-                    </td>
-                    <td>{tenant.counts.routers}</td>
-                    <td>{tenant.counts.users}</td>
-                    <td><span className={getStatusBadgeClass(tenant.domain ? 'success' : 'pending')}>{tenant.domain ? 'ready' : 'setup needed'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Recent Health Checks</span>
-            <a href="/admin/router" className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}>All Routers</a>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Router</th>
-                  <th>Vendor</th>
-                  <th>Status</th>
-                  <th>Latency</th>
-                  <th>Checked</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentHealthChecks.length === 0 && <EmptyRow colSpan={5} text="No router health checks yet." />}
-                {recentHealthChecks.slice(0, 8).map((check) => (
-                  <tr key={check.id}>
-                    <td>{check.router.name}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{check.tenant.name}</td>
-                    <td><span className={getStatusBadgeClass(check.status)}>{check.status.toLowerCase()}</span></td>
-                    <td style={{ fontSize: 12 }}>{check.latencyMs != null ? `${check.latencyMs}ms` : '—'}</td>
-                    <td style={{ fontSize: 12 }}>{formatDate(check.checkedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>

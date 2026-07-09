@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
+import ReviewActionModal from '@/components/ReviewActionModal'
 
 type ComplianceRow = {
   id: string
@@ -36,6 +37,7 @@ export default function ComplianceReviewsPage() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
+  const [pendingAction, setPendingAction] = useState<{ id: string; businessName: string; verdict: 'APPROVED' | 'REJECTED' | 'NEEDS_INFO' } | null>(null)
 
   const load = useCallback(async (status: (typeof STATUS_FILTERS)[number]) => {
     setLoading(true)
@@ -54,16 +56,14 @@ export default function ComplianceReviewsPage() {
     void load(filter)
   }, [filter, load])
 
-  async function review(id: string, verdict: 'APPROVED' | 'REJECTED' | 'NEEDS_INFO') {
-    const note =
-      verdict === 'APPROVED'
-        ? window.prompt('Optional note to the business (leave blank to skip):') ?? undefined
-        : window.prompt(`Note to the business explaining "${verdict.replace('_', ' ').toLowerCase()}":`) ?? undefined
-    if (verdict !== 'APPROVED' && note === undefined) return
+  async function confirmReview(note: string) {
+    if (!pendingAction) return
+    const { id, verdict } = pendingAction
     setBusyId(id)
     setError('')
     try {
       await clientPostApi(`/compliance/requests/${id}/review`, { verdict, note: note || undefined })
+      setPendingAction(null)
       await load(filter)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Review failed.')
@@ -143,16 +143,16 @@ export default function ComplianceReviewsPage() {
                           {expandedId === row.id ? 'Hide' : 'Details'}
                         </button>
                         {row.status !== 'APPROVED' && (
-                          <button type="button" className="btn btn-primary btn-sm" onClick={() => void review(row.id, 'APPROVED')} disabled={busyId === row.id}>
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => setPendingAction({ id: row.id, businessName: row.businessName, verdict: 'APPROVED' })} disabled={busyId === row.id}>
                             Approve
                           </button>
                         )}
                         {row.status === 'PENDING_REVIEW' && (
                           <>
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void review(row.id, 'NEEDS_INFO')} disabled={busyId === row.id}>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPendingAction({ id: row.id, businessName: row.businessName, verdict: 'NEEDS_INFO' })} disabled={busyId === row.id}>
                               Needs Info
                             </button>
-                            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger-fg)' }} onClick={() => void review(row.id, 'REJECTED')} disabled={busyId === row.id}>
+                            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger-fg)' }} onClick={() => setPendingAction({ id: row.id, businessName: row.businessName, verdict: 'REJECTED' })} disabled={busyId === row.id}>
                               Reject
                             </button>
                           </>
@@ -180,6 +180,28 @@ export default function ComplianceReviewsPage() {
           </table>
         </div>
       </div>
+
+      <ReviewActionModal
+        open={Boolean(pendingAction)}
+        title={
+          pendingAction?.verdict === 'APPROVED'
+            ? `Approve ${pendingAction.businessName}`
+            : pendingAction?.verdict === 'REJECTED'
+              ? `Reject ${pendingAction.businessName}`
+              : `Request more information from ${pendingAction?.businessName ?? ''}`
+        }
+        description={
+          pendingAction?.verdict === 'APPROVED'
+            ? 'The business will be marked approved for live hotspot billing features and notified by email.'
+            : 'The business will be notified by email with your note and can update their details and resubmit.'
+        }
+        confirmLabel={pendingAction?.verdict === 'APPROVED' ? 'Approve' : pendingAction?.verdict === 'REJECTED' ? 'Reject' : 'Request Info'}
+        danger={pendingAction?.verdict === 'REJECTED'}
+        noteRequired={pendingAction?.verdict !== 'APPROVED'}
+        busy={Boolean(pendingAction && busyId === pendingAction.id)}
+        onConfirm={(note) => void confirmReview(note)}
+        onClose={() => setPendingAction(null)}
+      />
     </>
   )
 }

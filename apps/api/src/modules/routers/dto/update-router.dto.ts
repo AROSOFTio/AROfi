@@ -12,4 +12,20 @@ export class UpdateRouterDto {
   @IsOptional()
   @IsString()
   siteLabel?: string
+
+  @IsOptional()
+  @IsString()
+  locationText?: string
+
+  @IsOptional()
+  @IsString()
+  ispName?: string
+
+  @IsOptional()
+  @IsString()
+  managerName?: string
+
+  @IsOptional()
+  @IsString()
+  managerPhone?: string
 }

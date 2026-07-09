@@ -10,6 +10,7 @@ import {
 } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientDeleteApi, clientFetchApi, clientPostApi } from '@/lib/client-api'
+import ReviewActionModal from '@/components/ReviewActionModal'
 import { formatCurrency, formatDate, formatDuration, getStatusBadgeClass } from '@/lib/format'
 
 type TemplateFormState = {
@@ -359,14 +360,13 @@ export default function VouchersManager() {
     window.setTimeout(() => void loadData(), 1200)
   }
 
+  const [deleteBatchTarget, setDeleteBatchTarget] = useState<VouchersOverviewResponse['batches'][number] | null>(null)
+
   async function handleDeleteBatch(batch: VouchersOverviewResponse['batches'][number]) {
     setError(null)
     setSuccess(null)
     if (batch.redeemedCount > 0) {
       setError('This batch has redeemed/sold vouchers and cannot be deleted.')
-      return
-    }
-    if (!window.confirm(`Delete batch ${batch.batchNumber} and its ${batch.quantity} unused voucher(s)? This cannot be undone.`)) {
       return
     }
     try {
@@ -685,7 +685,7 @@ export default function VouchersManager() {
                           type="button"
                           className="btn btn-ghost"
                           style={{ color: '#dc2626' }}
-                          onClick={() => void handleDeleteBatch(batch)}
+                          onClick={() => setDeleteBatchTarget(batch)}
                         >
                           Delete
                         </button>
@@ -836,6 +836,22 @@ export default function VouchersManager() {
           </div>
         </div>
       )}
+
+      <ReviewActionModal
+        open={Boolean(deleteBatchTarget)}
+        title={`Delete batch ${deleteBatchTarget?.batchNumber ?? ''}`}
+        description={`This deletes the batch and its ${deleteBatchTarget?.quantity ?? 0} unused voucher(s). This cannot be undone.`}
+        confirmLabel="Delete Batch"
+        danger
+        showNote={false}
+        onConfirm={() => {
+          if (!deleteBatchTarget) return
+          const target = deleteBatchTarget
+          setDeleteBatchTarget(null)
+          void handleDeleteBatch(target)
+        }}
+        onClose={() => setDeleteBatchTarget(null)}
+      />
     </>
   )
 }
