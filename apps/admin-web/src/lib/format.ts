@@ -122,3 +122,26 @@ export function formatTransactionType(type: string) {
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(' ')
 }
+
+// Role names are stored/looked-up in the database as-is (e.g. "VendorAdmin")
+// so existing role assignments and onboarding lookups never break — this is
+// a display-only mapping to friendlier, non-technical labels.
+const ROLE_DISPLAY: Record<string, { label: string; description: string }> = {
+  SuperAdmin: { label: 'Dev Admin', description: 'Full platform control across every business.' },
+  VendorAdmin: { label: 'Business Admin', description: "Full control of this business's workspace — routers, sales, staff, and settings." },
+  WifiAdmin: { label: 'WiFi Administrator', description: 'Manages routers, hotspots, and packages day to day.' },
+  VoucherAgent: { label: 'Voucher Agent', description: 'Sells and manages vouchers only.' },
+  FinanceManager: { label: 'Finance Manager', description: 'Views sales, manages payouts, float, and withdrawals.' },
+  Finance: { label: 'Finance Manager', description: 'Views sales, manages payouts, float, and withdrawals.' },
+  Support: { label: 'Support Agent', description: 'Handles support tickets and views live sessions.' },
+  ReadOnlySupport: { label: 'Read-Only Support', description: 'View-only access for support and reporting.' },
+  NetworkOperator: { label: 'Network Operator', description: 'Manages router and network infrastructure settings.' },
+}
+
+export function formatRoleName(name: string) {
+  return ROLE_DISPLAY[name]?.label ?? formatTransactionType(name.replace(/([a-z])([A-Z])/g, '$1_$2'))
+}
+
+export function getRoleDescription(name: string) {
+  return ROLE_DISPLAY[name]?.description ?? ''
+}

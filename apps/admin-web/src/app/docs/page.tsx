@@ -63,10 +63,9 @@ const categories: DocCategory[] = [
     description: 'Set up your MikroTik router and connect it to AROFi cloud billing.',
     icon: Wifi,
     pages: [
-      { title: 'Getting started checklist', slug: 'getting-started', keywords: 'register mikrotik, first setup, connection guide, instant disconnect' },
-      { title: 'Remote WinBox Access (SSTP VPN)', slug: 'remote-winbox', keywords: 'remote winbox, sstp vpn tunnel, open port, bypass cgnat, remote setup' },
+      { title: 'Getting started checklist', slug: 'getting-started', keywords: 'register mikrotik, first setup, connection guide' },
+      { title: 'Remote WinBox Access', slug: 'remote-winbox', keywords: 'remote winbox, open port, remote setup' },
       { title: 'Winbox setup & login configuration', slug: 'winbox-setup', keywords: 'winbox download, routeros terminal, change admin password' },
-      { title: 'Router onboarding step-by-step', slug: 'router-onboarding', keywords: 'router api port, secure api, register routeros' }
     ]
   },
   {

@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
+import { formatRoleName } from '@/lib/format'
 import ThemeToggle from './ThemeToggle'
 
 type NavItem = {
@@ -323,7 +324,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>
           <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Business' : 'Platform'} - {user.role}</span>
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Business' : 'Platform'} - {formatRoleName(user.role)}</span>
             {isVendor && user.tenantName && (
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
             )}

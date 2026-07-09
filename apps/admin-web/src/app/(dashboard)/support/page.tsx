@@ -12,11 +12,13 @@ type Ticket = SupportTicketResponse['items'][number]
 const categories = ['Router setup', 'Payment issue', 'Customer connection', 'Voucher issue', 'Wallet withdrawal', 'Other']
 const priorities = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
 const statuses = ['OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED']
+const statusFilters = ['ALL', 'OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED'] as const
 
 export default function SupportPage() {
   const [session, setSession] = useState<AdminSessionResponse | null>(null)
   const [data, setData] = useState<SupportTicketResponse | null>(null)
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<(typeof statusFilters)[number]>('ALL')
   const [createOpen, setCreateOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -27,7 +29,11 @@ export default function SupportPage() {
   const [error, setError] = useState('')
 
   const isVendor = isVendorWorkspace(session?.user)
-  const tickets = data?.items ?? []
+  const allTickets = data?.items ?? []
+  const tickets = useMemo(
+    () => (statusFilter === 'ALL' ? allTickets : allTickets.filter((ticket) => ticket.status === statusFilter)),
+    [allTickets, statusFilter],
+  )
   const selectedTicket = useMemo(
     () => tickets.find((ticket) => ticket.id === selectedTicketId) ?? tickets[0] ?? null,
     [selectedTicketId, tickets],
@@ -78,8 +84,8 @@ export default function SupportPage() {
       if (body) {
         setProcessText('Adding the first ticket message.')
         await clientPostApi(`/system/support-tickets/${ticket.id}/messages`, {
-          authorName: session?.user.displayName ?? session?.user.email ?? 'Vendor',
-          authorRole: isVendor ? 'Vendor' : 'Developer Admin',
+          authorName: session?.user.displayName ?? session?.user.email ?? 'Business',
+          authorRole: isVendor ? 'Business' : 'Developer Admin',
           body,
           isInternal: false,
         })
@@ -113,7 +119,7 @@ export default function SupportPage() {
     try {
       await clientPostApi(`/system/support-tickets/${selectedTicket.id}/messages`, {
         authorName: session?.user.displayName ?? session?.user.email ?? 'Support',
-        authorRole: isVendor ? 'Vendor' : 'Developer Admin',
+        authorRole: isVendor ? 'Business' : 'Developer Admin',
         body: form.get('body'),
         isInternal: !isVendor && form.get('isInternal') === 'on',
       })
@@ -172,7 +178,7 @@ export default function SupportPage() {
           <p className="page-subtitle">
             {isVendor
               ? 'Submit router, payment, wallet, voucher, and customer connection issues for developer admin support.'
-              : 'Attend vendor tickets, assign ownership, update status, and reply with clear next steps.'}
+              : 'Attend business tickets, assign ownership, update status, and reply with clear next steps.'}
           </p>
         </div>
         {isVendor && <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Submit Ticket</button>}
@@ -194,105 +200,118 @@ export default function SupportPage() {
         <Stat label="Critical" value={`${data?.summary.critical ?? 0}`} color="green" />
       </div>
 
-      <div className="charts-grid">
-        <div className="card">
-          <div className="card-header"><span className="card-title">{isVendor ? 'My Tickets' : 'Ticket Queue'}</span></div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Reference</th>
-                  {!isVendor && <th>Vendor</th>}
-                  <th>Subject</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Latest</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && <tr><td colSpan={isVendor ? 5 : 6}><div className="empty-state"><p>Loading tickets...</p></div></td></tr>}
-                {!loading && tickets.length === 0 && <tr><td colSpan={isVendor ? 5 : 6}><div className="empty-state"><p>No support tickets yet.</p></div></td></tr>}
-                {tickets.map((ticket) => (
-                  <tr key={ticket.id} onClick={() => setSelectedTicketId(ticket.id)} style={{ cursor: 'pointer', background: selectedTicket?.id === ticket.id ? 'var(--bg-hover)' : undefined }}>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{ticket.reference}</td>
-                    {!isVendor && <td>{ticket.tenant?.name ?? 'N/A'}</td>}
-                    <td>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{ticket.subject}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ticket.category}</div>
-                    </td>
-                    <td><span className={getStatusBadgeClass(ticket.priority)}>{ticket.priority.toLowerCase()}</span></td>
-                    <td><span className={getStatusBadgeClass(ticket.status)}>{ticket.status.toLowerCase()}</span></td>
-                    <td style={{ fontSize: 12 }}>{formatDate(ticket.latestResponseAt ?? ticket.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="support-layout">
+        <div className="card" style={{ margin: 0 }}>
+          <div className="card-header">
+            <span className="card-title">{isVendor ? 'My Tickets' : 'Ticket Queue'}</span>
+          </div>
+          <div className="support-filter-bar">
+            {statusFilters.map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                className={`support-filter-chip ${statusFilter === filter ? 'active' : ''}`}
+                onClick={() => setStatusFilter(filter)}
+              >
+                {filter === 'ALL' ? 'All' : filter.toLowerCase().replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+          <div className="support-ticket-list">
+            {loading && <div className="empty-state"><p>Loading tickets...</p></div>}
+            {!loading && tickets.length === 0 && <div className="empty-state"><p>No tickets match this filter.</p></div>}
+            {tickets.map((ticket) => (
+              <div
+                key={ticket.id}
+                className={`support-ticket-row ${selectedTicket?.id === ticket.id ? 'active' : ''}`}
+                onClick={() => setSelectedTicketId(ticket.id)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                  <strong style={{ fontSize: 13.5, color: 'var(--text-1)', lineHeight: 1.3 }}>{ticket.subject}</strong>
+                  <span className={getStatusBadgeClass(ticket.priority)} style={{ flexShrink: 0 }}>{ticket.priority.toLowerCase()}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{ticket.reference}</div>
+                {!isVendor && <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{ticket.tenant?.name ?? 'N/A'}</div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                  <span className={getStatusBadgeClass(ticket.status)}>{ticket.status.toLowerCase().replace('_', ' ')}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(ticket.latestResponseAt ?? ticket.createdAt)}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
 
-      {selectedTicket && (
-        <div className="charts-grid">
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">{selectedTicket.reference} Conversation</span>
-              <span className={getStatusBadgeClass(selectedTicket.status)}>{selectedTicket.status.toLowerCase()}</span>
-            </div>
-            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-              {selectedTicket.messages.length === 0 && <div className="empty-state"><p>No replies yet.</p></div>}
-              {selectedTicket.messages
-                .filter((item) => isVendor ? !item.isInternal : true)
-                .map((item) => (
-                  <div key={item.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: item.isInternal ? 'var(--bg-app)' : 'var(--bg-card)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>{item.authorName}</strong>
-                      <span className={getStatusBadgeClass(item.isInternal ? 'WARNING' : 'INFO')}>{item.isInternal ? 'internal' : item.authorRole}</span>
+        {selectedTicket ? (
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="card" style={{ margin: 0 }}>
+              <div className="card-header">
+                <span className="card-title">{selectedTicket.reference} - {selectedTicket.subject}</span>
+                <span className={getStatusBadgeClass(selectedTicket.status)}>{selectedTicket.status.toLowerCase().replace('_', ' ')}</span>
+              </div>
+              <div style={{ padding: 20, display: 'grid', gap: 12, maxHeight: 420, overflowY: 'auto' }}>
+                {selectedTicket.messages.length === 0 && <div className="empty-state"><p>No replies yet.</p></div>}
+                {selectedTicket.messages
+                  .filter((item) => isVendor ? !item.isInternal : true)
+                  .map((item) => (
+                    <div key={item.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: item.isInternal ? 'var(--bg-app)' : 'var(--bg-card)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <strong style={{ color: 'var(--text-primary)' }}>{item.authorName}</strong>
+                        <span className={getStatusBadgeClass(item.isInternal ? 'WARNING' : 'INFO')}>{item.isInternal ? 'internal' : item.authorRole}</span>
+                      </div>
+                      <p style={{ marginTop: 8, color: 'var(--text-secondary)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{item.body}</p>
+                      <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 12 }}>{formatDate(item.createdAt)}</div>
                     </div>
-                    <p style={{ marginTop: 8, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{item.body}</p>
-                    <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 12 }}>{formatDate(item.createdAt)}</div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="card" style={{ margin: 0 }}>
+              <div className="card-header"><span className="card-title">{isVendor ? 'Reply to Support' : 'Attend Ticket'}</span></div>
+              {!isVendor && (
+                <form onSubmit={updateTicketStatus} style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, borderBottom: '1px solid var(--border)', alignItems: 'end' }}>
+                  <Field label="Status">
+                    <select name="status" className="form-input" defaultValue={selectedTicket.status}>
+                      {statuses.map((status) => <option key={status} value={status}>{status.toLowerCase().replace('_', ' ')}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Priority">
+                    <select name="priority" className="form-input" defaultValue={selectedTicket.priority}>
+                      {priorities.map((priority) => <option key={priority} value={priority}>{priority.toLowerCase()}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Assigned to"><input name="assignedTo" className="form-input" defaultValue={selectedTicket.assignedTo ?? session?.user.displayName ?? ''} /></Field>
+                  <button className="btn btn-ghost" disabled={submitting} style={{ height: 38 }}>{submitting && submittingAction === 'status' ? 'Updating...' : 'Update Status'}</button>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <FormProcessStatus busy={submittingAction === 'status'} error={submittingAction === 'status' ? formError : null} text={processText} />
                   </div>
-                ))}
+                </form>
+              )}
+              <form onSubmit={updateTicket} style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <Field label="Reply"><textarea name="body" className="form-input" rows={4} required maxLength={4000} /></Field>
+                {!isVendor && (
+                  <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                    <input name="isInternal" type="checkbox" /> Internal developer note
+                  </label>
+                )}
+                <FormProcessStatus busy={submittingAction === 'reply'} error={submittingAction === 'reply' ? formError : null} text={processText || 'Sending reply.'} />
+                <button className="btn btn-primary" disabled={submitting} style={{ justifySelf: 'start' }}>{submitting && submittingAction === 'reply' ? 'Sending reply...' : 'Send Reply'}</button>
+              </form>
             </div>
           </div>
-
-          <div className="card">
-            <div className="card-header"><span className="card-title">{isVendor ? 'Reply to Support' : 'Attend Ticket'}</span></div>
-            {!isVendor && (
-              <form onSubmit={updateTicketStatus} style={{ padding: 20, display: 'grid', gap: 12, borderBottom: '1px solid var(--border)' }}>
-                <Field label="Status">
-                  <select name="status" className="form-input" defaultValue={selectedTicket.status}>
-                    {statuses.map((status) => <option key={status} value={status}>{status.toLowerCase()}</option>)}
-                  </select>
-                </Field>
-                <Field label="Priority">
-                  <select name="priority" className="form-input" defaultValue={selectedTicket.priority}>
-                    {priorities.map((priority) => <option key={priority} value={priority}>{priority.toLowerCase()}</option>)}
-                  </select>
-                </Field>
-                <Field label="Assigned to"><input name="assignedTo" className="form-input" defaultValue={selectedTicket.assignedTo ?? session?.user.displayName ?? ''} /></Field>
-                <FormProcessStatus busy={submittingAction === 'status'} error={submittingAction === 'status' ? formError : null} text={processText || 'Updating this ticket.'} />
-                <button className="btn btn-ghost" disabled={submitting}>{submitting ? 'Updating status...' : 'Update Status'}</button>
-              </form>
-            )}
-            <form onSubmit={updateTicket} style={{ padding: 20, display: 'grid', gap: 12 }}>
-              <Field label="Reply"><textarea name="body" className="form-input" rows={5} required maxLength={4000} /></Field>
-              {!isVendor && (
-                <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                  <input name="isInternal" type="checkbox" /> Internal developer note
-                </label>
-              )}
-              <FormProcessStatus busy={submittingAction === 'reply'} error={submittingAction === 'reply' ? formError : null} text={processText || 'Sending reply.'} />
-              <button className="btn btn-primary" disabled={submitting}>{submitting ? 'Sending reply...' : 'Send Reply'}</button>
-            </form>
+        ) : (
+          <div className="card" style={{ margin: 0 }}>
+            <div className="empty-state">
+              <p>Select a ticket from the list to see its conversation.</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {isVendor && createOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
-            <div className="modal-kicker">Vendor support</div>
+            <div className="modal-kicker">Business support</div>
             <h2 className="modal-title">Submit Ticket</h2>
             <form onSubmit={async (event) => { if (await createTicket(event)) setCreateOpen(false) }} style={{ marginTop: 20, display: 'grid', gap: 12 }}>
               <Field label="Subject"><input name="subject" className="form-input" required maxLength={180} /></Field>

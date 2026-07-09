@@ -610,14 +610,18 @@ export class VouchersService {
       where: {
         packageId: dto.packageId,
         ...(tenantId ? { tenantId } : {}),
-        status: VoucherStatus.GENERATED,
+        // PRINTED vouchers are still unsold stock — a batch is commonly
+        // printed onto physical cards for distribution before any of it is
+        // actually sold, so restricting this to GENERATED only would make
+        // the whole batch invisible to point-of-sale the moment it's printed.
+        status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] },
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
       orderBy: { createdAt: 'asc' },
     })
 
     if (!voucher) {
-      throw new BadRequestException('No available vouchers for this package. Generate a new voucher batch first.')
+      throw new BadRequestException('No available vouchers for this package. Generate or print a new voucher batch first.')
     }
 
     return this.recordSale(

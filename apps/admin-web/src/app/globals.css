@@ -4533,5 +4533,59 @@ pre, code.block {
   .site-footer-inner { grid-template-columns: 1fr; }
 }
 
+/* ═══════════════════════════════════════════════
+   SUPPORT — inbox-style two-column layout
+═══════════════════════════════════════════════ */
+.support-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+@media (max-width: 1024px) {
+  .support-layout { grid-template-columns: 1fr; }
+}
+.support-ticket-list {
+  max-height: 680px;
+  overflow-y: auto;
+}
+.support-ticket-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.support-ticket-row:last-child { border-bottom: none; }
+.support-ticket-row:hover { background: var(--bg-hover); }
+.support-ticket-row.active { background: var(--green-light); }
+.support-filter-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.support-filter-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.support-filter-chip:hover { background: var(--bg-hover); }
+.support-filter-chip.active {
+  background: var(--green-light);
+  border-color: var(--green-mid);
+  color: var(--green-dark);
+}
+
 
 

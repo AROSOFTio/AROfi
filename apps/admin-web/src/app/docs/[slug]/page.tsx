@@ -18,90 +18,37 @@ type DocPage = {
 export const docs: Record<string, DocPage> = {
   'getting-started': {
     title: 'Getting started',
-    intro: 'Move from router registration to a working MikroTik captive portal in four steps: register the router in AROFi, paste the generated one-run command in WinBox, wait for the provisioning callback, then verify the redirect on a real device.',
+    intro: 'Four steps from a brand-new router to a working, paid WiFi hotspot: register the router, run one setup command, wait for it to connect, then test it on a phone.',
     sections: [
       {
-        heading: '1. Sign in and prepare AROFi',
+        heading: '1. Set up your business first',
         body: [
-          'Sign in to your business workspace as the operator/vendor admin.',
-          'Create or confirm the hotspot site and at least one customer package before registering a router — the provisioning script needs a package to exist so it can build the checkout screen.',
-          'Open Routers, click Register Router, enter the router display name, site label, HotSpot server name, and choose either "Add a fresh customer hotspot" (builds a new isolated hotspot) or "Wire an existing hotspot to AROFi RADIUS" if the router already has a working HotSpot you don\'t want touched.',
-          'If you want to set the WinBox admin password from AROFi, open the router\'s Advanced Settings and enter Router Admin Password before generating the command — the script applies it during setup.',
+          'Sign in to your dashboard. Before registering a router, create at least one package (e.g. "1 Hour - UGX 1,000") — customers need something to buy the moment the hotspot goes live.',
+          'Open Routers and click Register Router. Enter a name for the router and the site (e.g. the shop or estate it\'s at), and choose whether this is a brand-new hotspot or an existing one you just want connected to AROFi billing.',
         ],
       },
       {
-        heading: '2. Connect to MikroTik before running the command',
+        heading: '2. Run the setup command',
         body: [
-          'Plug the upstream/ISP internet connection into ether1 on the MikroTik (or whatever port already carries your WAN — the script auto-detects it either way).',
-          'Connect your laptop to any other Ethernet port, or to WinBox via Neighbors/MAC discovery.',
-          'Open WinBox and log in with the router\'s current admin credentials (blank password on a factory-reset router).',
-          'Open New Terminal, paste the one-run command from the router\'s AROFi page, and wait for the success message.',
+          'Connect your laptop to the MikroTik and open it in WinBox using its admin login.',
+          'Copy the setup command from the router\'s page in AROFi, open New Terminal in WinBox, paste it, and press Enter.',
+          'Wait for the success message — this usually takes under a minute. The command is unique to that router, so always copy it fresh from the router\'s own page.',
         ],
       },
       {
-        heading: '3. What the one-run command actually does',
+        heading: '3. Confirm it worked',
         body: [
-          'The exact command is generated per router (it embeds your unique registration key) and does more than a single fetch: it first makes sure the router has working DNS and a correct system clock — both are silently broken on many factory-reset or power-cycled routers and will make every HTTPS request fail without an obvious error.',
-          'It then downloads the real provisioning script over plain HTTP first (works even if the clock is wrong), falling back to HTTPS, retrying up to three rounds with a 5-second pause between attempts. If all three rounds fail it prints a clear diagnostic instead of doing nothing — check WAN connectivity, that ports 80 and 443 are not blocked, and the router\'s system clock.',
-          'Once downloaded, it imports and safely deletes the temporary script file. Nothing about your admin login is touched — the script never changes your WinBox username or password.',
-        ],
-        commandBlocks: [
-          {
-            title: 'What you actually paste (shape, not a literal example)',
-            commands: [
-              '# The real command is generated on your router\'s page in AROFi and is',
-              '# unique to that router — always copy it from there, not from docs.',
-              '# It fetches https://<your-domain>/api/mikrotik/script/<your-registration-key>',
-            ],
-          },
+          'Back in AROFi, the router\'s status updates automatically once it connects — no need to refresh manually, though a "Check Now" button is there if you want to confirm sooner.',
+          'On a phone, connect to the WiFi network and open any website — you should land on your AROFi checkout screen with your packages listed.',
+          'If nothing happens, the most common cause is the internet connection into the router not being live yet, or the setup command not being pasted in full. Re-copy the command and try again, or contact support.',
         ],
       },
       {
-        heading: '4. What the script configures on the router',
+        heading: '4. What happens automatically',
         body: [
-          'For a fresh customer hotspot, the script builds everything on an isolated bridge and subnet (10.55.0.0/24) chosen specifically to avoid clashing with your existing LAN or management network — it does not touch your existing addressing.',
-          'It auto-detects your WAN interface (default route, then PPPoE, then LTE, then any interface with a real IP that isn\'t the hotspot bridge) and excludes it from the hotspot bridge, configures NAT masquerade against it, and adds firewall rules that block WinBox/API access from the hotspot subnet — so customers on the guest network can never reach your router\'s management interface.',
-          'It registers your RADIUS server(s) for HotSpot authentication and accounting, and separately registers the AROFi VPN tunnel gateway addresses so Disconnect-Request (CoA) packets — the mechanism that instantly logs a device out when its package expires — are accepted rather than silently dropped. See the RADIUS_COA_SOURCE_IPS section below.',
-          'It sets DHCP, the HotSpot login redirect, and the walled-garden hosts customers need to reach before they\'ve paid (AROFi\'s own domain plus the active payment provider\'s API host) automatically — nothing to configure by hand.',
-        ],
-      },
-      {
-        heading: '5. Verify the redirect',
-        body: [
-          'Disconnect and reconnect a real customer device to the MikroTik Wi-Fi. It should receive an address in the 10.55.0.x range for a fresh hotspot (or your existing subnet if you used the "wire an existing hotspot" mode).',
-          'Open http://neverssl.com from the customer device — it should redirect to the AROFi captive portal.',
-          'If redirect fails, check HotSpot hosts, active sessions, DHCP leases, and the router\'s login.html from WinBox.',
-        ],
-        commandBlocks: [
-          {
-            title: 'Verification commands',
-            commands: [
-              '/ip address print',
-              '/ip route print',
-              '/ip hotspot print detail',
-              '/ip hotspot host print',
-              '/ip hotspot active print',
-              '/ip dhcp-server lease print',
-              '/ping 8.8.8.8 count=4',
-              '/ping arofi.net count=4',
-            ],
-          },
-        ],
-      },
-      {
-        heading: '6. Why devices disconnect instantly at expiry (RADIUS_COA_SOURCE_IPS)',
-        body: [
-          'When a package expires, AROFi sends the router a RADIUS Disconnect-Request (CoA) so the device is logged out immediately — not just cut off from the internet while staying "logged in" until a session timeout eventually fires.',
-          'RouterOS silently drops incoming Disconnect-Requests whose source IP isn\'t in its own /radius list. Because those packets travel down the AROFi VPN tunnel, the router sees them arriving from the VPS-side tunnel address, not the public RADIUS host it already trusts — so the provisioning script also registers the tunnel gateway address(es) as additional /radius entries specifically for this purpose. This is automatic on every router provisioned by the current script.',
-          'If you provisioned a router before this was added, instant disconnect may not work until you re-run the one-run command, or add the tunnel gateway manually via WinBox as directed by support.',
-        ],
-      },
-      {
-        heading: '7. Important limits',
-        body: [
-          'The script configures everything RouterOS allows it to configure, but it cannot create upstream internet where none exists.',
-          'Remote WinBox/API access from AROFi still requires the SSTP remote-access tunnel to be installed and its port opened — see the Remote WinBox Access guide.',
-          'The correct firewall inspection command is /ip firewall filter print, not firewall filter print.',
+          'Once a customer pays or redeems a voucher, they\'re connected to the internet automatically — no manual approval needed.',
+          'When their package expires, they\'re disconnected automatically too, so no one keeps free access after their time or data runs out.',
+          'Everything customers need to reach the payment screen is opened up for them automatically — you don\'t need to configure anything extra for payments to work.',
         ],
       },
     ],
@@ -139,11 +86,11 @@ export const docs: Record<string, DocPage> = {
       {
         heading: '4. Registering and Onboarding on AROFi',
         body: [
-          'AROFi is a hotspot billing platform built so you don\'t need to run your own billing server or configure RADIUS by hand.',
+          'AROFi is a hotspot billing platform, so you don\'t need to run your own billing server or manage payments by hand.',
           '1. Create an account at arofi.net.',
           '2. Register your router from the Routers page and choose a hotspot mode.',
-          '3. Copy the generated one-run script, paste it into WinBox New Terminal, and wait for the success message.',
-          'The script configures RADIUS auth, walled-garden entries for the active payment provider, and redirects clients to your branded captive portal automatically.',
+          '3. Copy the generated setup command, paste it into WinBox New Terminal, and wait for the success message.',
+          'Your branded checkout screen and payment setup are configured automatically — see Getting Started for the full walkthrough.',
         ],
       },
       {
@@ -159,7 +106,7 @@ export const docs: Record<string, DocPage> = {
         body: [
           'When a customer connects to your WiFi, a captive portal loads automatically on their phone.',
           'They pick a package, choose MTN or Airtel, enter their phone number, and pay — a Mobile Money PIN prompt appears on their phone.',
-          'Once payment is confirmed by the provider, AROFi activates the session, provisions RADIUS credentials, and the device is connected — the customer never sees which payment gateway processed the transaction.',
+          'Once payment is confirmed, the device is connected automatically — customers never see any payment-processing detail beyond "Pay".',
           'You can request a withdrawal from your AROFi wallet to a verified MTN or Airtel number once your account has completed the compliance review — see the Business Compliance and Disbursements guides.',
         ],
       },
@@ -178,30 +125,15 @@ export const docs: Record<string, DocPage> = {
         ],
       },
       {
-        heading: '2. Who actually processes the payment',
+        heading: '2. Nothing to configure for payments',
         body: [
-          'Both MTN and Airtel collections are currently routed through a single Mobile Money aggregator (Yo! Uganda) — you do not need separate MTN and Airtel merchant accounts to accept both networks.',
-          'The customer only ever sees "MTN" or "Airtel" as their network choice; gateway/aggregator names are never shown on the checkout screen.',
-          'This is a platform-level setting, not something each business configures — nothing for you to set up here beyond having a business account in good standing.',
+          'You don\'t need a separate MTN or Airtel merchant account — accepting both networks works out of the box on every business account in good standing.',
+          'Customers only ever see "MTN" or "Airtel" as their network choice on the checkout screen.',
+          'Everything a customer\'s phone needs to reach the payment screen before they\'ve paid is opened up automatically the moment your router connects — there\'s nothing for you to configure.',
         ],
       },
       {
-        heading: '3. Walled garden (automatic)',
-        body: [
-          'Before a customer pays, their phone has no internet access — except to the small set of hosts needed to complete payment (AROFi\'s own domain and the active payment provider\'s API host).',
-          'These hosts are added to the MikroTik HotSpot walled garden automatically by the provisioning script. You do not need to add them by hand; use the command below only to verify they\'re present if a customer reports a payment page that won\'t load.',
-        ],
-        commandBlocks: [
-          {
-            title: 'Verify walled-garden entries (read-only)',
-            commands: [
-              '/ip hotspot walled-garden print',
-            ],
-          },
-        ],
-      },
-      {
-        heading: '4. Withdrawing what you collect',
+        heading: '3. Withdrawing what you collect',
         body: [
           'All collected revenue accumulates in your AROFi wallet. To withdraw:',
           '1. Complete business compliance review — withdrawals are blocked until your account is verified. See Business Compliance.',
@@ -228,25 +160,15 @@ export const docs: Record<string, DocPage> = {
       {
         heading: '2. Single session per login',
         body: [
-          'The script sets every HotSpot user profile to Shared Users = 1, so one set of login credentials can only be active on one device at a time.',
-          'Important: the keepalive timeout is deliberately set very long (30 days), not 30 seconds. An earlier, shorter keepalive value caused a real production bug — MikroTik\'s own ARP-based keepalive probe was force-disconnecting customers whose phone screen simply locked or went briefly idle, even though the device never actually left the network. Session limits are enforced by Shared Users plus RADIUS session control, not by an aggressive keepalive.',
-          'Do not manually shorten this value — it will reintroduce the false-disconnect bug for paying customers.',
-        ],
-        commandBlocks: [
-          {
-            title: 'What the script sets (reference only)',
-            commands: [
-              '/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30d',
-            ],
-          },
+          'Every login is limited to one active device at a time automatically — nothing to configure.',
+          'If you ever see this setting in WinBox, leave the keepalive timeout alone: it\'s deliberately set long so a phone\'s screen locking or going briefly idle doesn\'t get mistaken for the customer leaving the network and disconnected by mistake.',
         ],
       },
       {
-        heading: '3. The TTL Mangle Block (Anti-Tethering)',
+        heading: '3. Anti-tethering protection',
         body: [
-          'Shared Users = 1 alone doesn\'t stop a customer from turning on their phone\'s own hotspot/tethering — the MikroTik still only sees one device (the phone), so it can\'t tell it\'s being shared.',
-          'AROFi applies a TTL (Time To Live) mangle rule automatically during provisioning: every packet leaving the hotspot interface gets its TTL set to 1. The customer\'s phone can process that packet locally, but if it tries to forward it to a tethered device, the TTL hits 0 and the packet is dropped by the phone\'s own network stack.',
-          'This makes WiFi sharing, tethering, and hotspot apps effectively useless on the client device, without needing any client-side software.',
+          'Even with one device per login enforced, a customer could still try to share their connection using their phone\'s own hotspot or tethering feature.',
+          'AROFi blocks this automatically for every hotspot it provisions — a shared/tethered device simply can\'t get a working connection, without needing any app or setup on the customer\'s side.',
         ],
       },
       {
@@ -268,29 +190,21 @@ export const docs: Record<string, DocPage> = {
         heading: 'Customer checkout',
         body: [
           'Customers select a package, choose MTN or Airtel, enter their phone number, and press Pay.',
-          'Gateway/aggregator names are never shown to customers — the frontend only ever sends packageId, network, and phone number. The backend loads the real package price from the database and validates the phone prefix against the selected network.',
-        ],
-      },
-      {
-        heading: 'Who processes the payment today',
-        body: [
-          'Both MTN and Airtel collection, and all vendor disbursements, currently route through a single Mobile Money aggregator (Yo! Uganda) rather than direct per-network merchant APIs.',
-          'Direct MTN MoMo and Airtel Money API integrations, and a Pesapal aggregator route, exist in the codebase and remain fully built, but are not the active path today — they can be re-enabled by a platform admin if the business ever needs to switch providers, without any change to the customer-facing checkout screen.',
+          'Nothing about how the payment is processed is ever shown to the customer — just their package, network, and phone number.',
         ],
       },
       {
         heading: 'Activation rule',
         body: [
-          'Internet access is activated only after the provider confirms the payment succeeded.',
+          'Internet access is activated only after the payment is confirmed successful.',
           'Pending and failed payments never create an active session or increase withdrawable wallet balance.',
         ],
       },
       {
         heading: 'Auto-connect and expiry',
         body: [
-          'After a successful payment, AROFi creates an activation, provisions RADIUS credentials, and the captive portal reconnects the customer through MikroTik login automatically.',
-          'The RADIUS reply includes a Session-Timeout based on the package duration. Expiry is driven primarily by a real-time Postgres notification bridge and the admin event stream, not by polling — a background sweep (every 2 seconds by default) exists purely as a fallback in case a real-time event is missed.',
-          'When a package expires, AROFi sends a RADIUS Disconnect-Request (CoA) so the device is logged out immediately — not just cut off from data while remaining logged in. This is on by default; see the CoA source-IP note in Getting Started if a specific router doesn\'t disconnect instantly.',
+          'The moment a payment is confirmed, the customer is connected automatically — no manual approval step, day or night.',
+          'When a package\'s time or data runs out, the customer is disconnected automatically too. If a specific router doesn\'t disconnect a device promptly, contact support — it\'s usually fixed by re-running that router\'s setup command.',
         ],
       },
     ],
@@ -327,7 +241,7 @@ export const docs: Record<string, DocPage> = {
         heading: 'Making a withdrawal',
         body: [
           'Open Wallet, click Withdraw. Choose your verified payout number, enter an amount (no less than the platform\'s configured minimum), and the screen shows the fee and the amount you\'ll actually receive before you confirm — both are platform-configurable and may be zero.',
-          'You must confirm two things: that you physically have the destination phone with you right now, and that you accept the final disbursement terms. Both are required, not just a formality — the backend rejects the request if either is missing.',
+          'You must confirm two things before submitting: that you physically have the destination phone with you right now, and that you accept the final disbursement terms. Both are required, not just a formality.',
           'Enter your withdrawal secret code to confirm.',
         ],
       },
@@ -336,7 +250,7 @@ export const docs: Record<string, DocPage> = {
         body: [
           'Depending on platform settings, a withdrawal is either processed instantly, or flagged for manual review — for example, a business\'s very first withdrawal, or any withdrawal above a configured amount, can require Dev Admin approval before it\'s sent.',
           'Your wallet balance is reserved the moment you submit, before the payout provider is even contacted, so the same funds can\'t be double-spent by a second withdrawal request. If the provider rejects the payout before accepting it, the reserved amount is released back to your balance automatically.',
-          'Once the payout provider accepts the transfer, it is treated as final on the AROFi side — completion is then confirmed by the provider\'s own webhook or status check, same as the payment collection side.',
+          'Once the transfer is accepted, it\'s treated as final — you\'ll see it marked complete on your Wallet page shortly after.',
         ],
       },
     ],
@@ -362,76 +276,38 @@ export const docs: Record<string, DocPage> = {
       },
     ],
   },
-  'router-onboarding': {
-    title: 'Router onboarding',
-    intro: 'Router onboarding is honest automation: AROFi configures every supported MikroTik setting it can, but the network still has to physically work.',
-    sections: [
-      {
-        heading: 'What the script can do',
-        body: [
-          'Configures RADIUS, the HotSpot profile, captive portal redirect, walled-garden entries for the active payment provider, an isolated hotspot bridge and subnet that won\'t clash with your existing network, WAN auto-detection, NAT, anti-tethering, and a callback so AROFi learns the router is live.',
-          'For routers set to "wire an existing hotspot" mode, the script only adds RADIUS auth/accounting to your current HotSpot — it does not rebuild your network.',
-        ],
-      },
-      {
-        heading: 'What the script cannot do',
-        body: [
-          'It cannot create internet connectivity where none exists, fix a broken ISP link, bypass ISP-side NAT for remote access, or choose the correct physical cable for you.',
-          'Remote WinBox only works once the SSTP remote-access tunnel (a separate install step) is installed and its port is opened — see Remote WinBox Access.',
-        ],
-      },
-    ],
-  },
   'remote-winbox': {
-    title: 'Remote WinBox Access (SSTP VPN)',
-    intro: 'AROFi Remote Access uses an outbound SSTP VPN tunnel from the MikroTik router to AROFi\'s VPN gateway, so operators and support can reach routers behind CGNAT, firewalls, or dynamic WAN IPs without any port forwarding on your side.',
+    title: 'Remote WinBox Access',
+    intro: 'Reach your router\'s WinBox from anywhere, even when it\'s on a home or mobile internet connection that doesn\'t normally allow remote access — no networking setup required on your side.',
     sections: [
       {
-        heading: '1. How It Works (Bypassing CGNAT)',
+        heading: '1. What it\'s for',
         body: [
-          'Most residential/small-business ISP connections in Uganda assign private IPs behind CGNAT, which makes direct remote WinBox access (TCP 8291) impossible from outside.',
-          'To bypass this, the router dials an outbound SSTP VPN connection to AROFi\'s VPN gateway — the connection is initiated by the router, so no inbound port forwarding is needed on your ISP connection.',
-          'Once connected, the router gets a static address inside the 10.8.0.0/24 tunnel network. When you open a remote port, AROFi maps a dedicated public port (from the 31000-31100 range) through the tunnel to the router\'s WinBox port (8291).',
+          'Most internet connections don\'t allow you to reach a router remotely by default. Remote Access solves this by having the router connect out to AROFi itself, so there\'s nothing to configure on your internet connection or home network.',
+          'It works on any MikroTik router, regardless of model.',
         ],
       },
       {
-        heading: '2. Supported Devices',
+        heading: '2. Installing it',
         body: [
-          'Because SSTP is a native RouterOS feature, remote access works on any MikroTik regardless of hardware architecture — from low-end home routers to CCR-series and Cloud Hosted Routers (CHR).',
-          'Some RouterOS 7 boards ship with SSTP client access restricted by default; the install script switches the router to "enterprise" device-mode automatically when needed.',
+          'Open the router\'s page in AROFi and go to Remote Access.',
+          'Copy the installation script, paste it into WinBox New Terminal (connected locally), and press Enter.',
+          'Wait a few seconds for the connection status to show as connected.',
         ],
       },
       {
-        heading: '3. Step-by-Step Installation',
+        heading: '3. Using it',
         body: [
-          'Step 1: Open the router\'s detail page in AROFi and go to Remote Access.',
-          'Step 2: Copy the generated installation script.',
-          'Step 3: Open WinBox, connect to the router locally, go to New Terminal, paste the script, and press Enter.',
-          'The script creates an SSTP client interface named AROFI_REMOTE. Wait a few seconds for it to show as connected.',
+          'Click Open Port when you need to connect — this makes the router briefly reachable from outside.',
+          'Click Close Port as soon as you\'re done. Leaving it open when you don\'t need it isn\'t necessary and isn\'t recommended.',
         ],
       },
       {
-        heading: '4. Opening and Closing Ports',
+        heading: '4. Security',
         body: [
-          'From the Remote Access panel:',
-          '• Open Port maps your dedicated public port through to the router\'s WinBox port. The status changes to Connected.',
-          '• Close Port immediately tears the mapping down once you\'re done.',
-          'Dev/Platform Admin accounts have an "Enable All Remote Ports" action for turning on every already-provisioned router\'s port at once — useful for support sweeps, not something a single business needs day to day.',
-        ],
-      },
-      {
-        heading: '5. VPN Server Configuration',
-        body: [
-          'The SSTP VPN server runs on the AROFi host and listens on a configurable port (4443 by default, set via VPN_SERVER_PORT) — this is an AROFi platform-side setting, not something a business configures.',
-          'Traffic forwarding for the 31000-31100 public port range is handled automatically by the AROFi API container.',
-        ],
-      },
-      {
-        heading: '6. Security Best Practices',
-        body: [
-          'Close your remote port as soon as you\'re done with a maintenance task — a port left open indefinitely is a brute-force target.',
-          'Make sure your MikroTik has a real admin password set; don\'t leave it blank in production.',
-          'AROFi\'s provisioning script already blocks WinBox/API access from the customer-facing hotspot subnet at the firewall level, so guests can never reach router management even without the VPN.',
+          'Close your remote port as soon as you finish what you were doing.',
+          'Make sure your MikroTik has a real admin password set — never leave it blank in production.',
+          'Customers on your hotspot WiFi can never reach your router\'s management screen, remote access or not — that\'s blocked automatically.',
         ],
       },
     ],
@@ -458,21 +334,13 @@ export const docs: Record<string, DocPage> = {
   },
   'captive-portal': {
     title: 'Captive portal',
-    intro: 'The captive portal is optimized for weak WiFi/captive-network conditions, since that\'s exactly the environment it always runs in.',
+    intro: 'The screen your customers see the moment they connect to your WiFi — built to load fast even on a weak, just-connected signal.',
     sections: [
-      {
-        heading: 'Loading behavior',
-        body: [
-          'The portal renders a lightweight shell first and fetches packages after first paint, so it stays usable on a slow or just-connected hotspot link.',
-          'Static assets are cacheable; the portal HTML itself is served without caching where captive-network correctness requires it.',
-        ],
-      },
       {
         heading: 'Customer flow',
         body: [
-          'Customer selects a package, chooses MTN or Airtel, enters a phone number, taps Pay, approves on their phone, then waits for confirmed activation.',
-          'The portal polls payment status and shows retry/pending/success states without ever exposing the backend payment provider\'s name.',
-          'The walled-garden hosts a customer needs before paying (AROFi\'s domain plus the active payment provider\'s API host) are added automatically during router provisioning — see Getting Started.',
+          'Customer selects a package, chooses MTN or Airtel, enters a phone number, taps Pay, approves on their phone, then gets connected automatically once payment is confirmed.',
+          'The portal shows clear waiting/success states the whole time, so customers always know their payment is being processed.',
         ],
       },
     ],
@@ -619,28 +487,28 @@ export const docs: Record<string, DocPage> = {
   },
   troubleshooting: {
     title: 'Troubleshooting',
-    intro: 'Troubleshooting starts with the actual state: payment, activation, RADIUS, router callback, and accounting — not guesswork.',
+    intro: 'The most common issues businesses run into, and what to check first before contacting support.',
     sections: [
       {
-        heading: 'Paid but not connected',
+        heading: 'Customer paid but isn\'t connected',
         body: [
-          'Check payment status, the activation record, RADIUS credential creation, the router\'s provisioning callback, walled-garden entries, and the last accounting packet, in that order.',
-          'Do not manually activate internet access unless the payment is confirmed successful, or a controlled support override is being used deliberately.',
+          'Ask the customer to confirm the Mobile Money payment actually completed on their phone — a cancelled or pending payment never connects a customer.',
+          'Check the Transactions page for that payment\'s status. If it shows as successful there but the customer still isn\'t online, contact support with the reference.',
         ],
       },
       {
-        heading: 'Device stays "logged in" after expiry but has no internet',
+        heading: 'A device stays "connected" after its package expires but has no internet',
         body: [
-          'This means the RADIUS Disconnect-Request (CoA) that should log the device out instantly isn\'t reaching the router — usually because the router was provisioned before CoA source-IP registration was added to the script.',
-          'Re-run the router\'s one-run command to pick up the current script, or ask support to add the tunnel gateway address manually via WinBox. See the RADIUS_COA_SOURCE_IPS section in Getting Started.',
+          'This can happen on a router that was set up a while ago. Re-running that router\'s setup command from its AROFi page usually fixes it — it\'s the same command from Getting Started.',
+          'If it keeps happening after that, contact support with the router name and we\'ll take a look.',
         ],
       },
       {
-        heading: 'Router not live',
+        heading: 'Router shows as offline',
         body: [
-          'Check the router\'s internet, DNS, system clock, WAN interface selection, RADIUS reachability, and whether the provisioning callback actually reached AROFi.',
-          'If pings to 8.8.8.8 and arofi.net fail from the MikroTik terminal, fix WAN connectivity first — nothing downstream of that will work.',
-          'If remote WinBox/API fails, check that the SSTP remote-access tunnel is installed and its port is open — see Remote WinBox Access.',
+          'Confirm the router has a working internet connection — this is the most common cause.',
+          'Check the router\'s system clock is correct (WinBox → System → Clock) — a wrong date/time can silently break connectivity to AROFi.',
+          'If it\'s still offline after that, re-run the setup command, or contact support.',
         ],
       },
     ],
@@ -650,15 +518,15 @@ export const docs: Record<string, DocPage> = {
     intro: 'Common questions from businesses and platform operators.',
     sections: [
       {
-        heading: 'Can the one-run script make a router instantly live on its own?',
+        heading: 'Can the setup command make a router instantly live on its own?',
         body: [
-          'No guarantee. It configures every supported setting, but the router still needs working internet, DNS, a correct clock, and the right WAN interface selected.',
+          'No guarantee. It configures everything it can, but the router still needs a working internet connection and a correct clock to come online.',
         ],
       },
       {
-        heading: 'Can I use the copied remote address to connect to WinBox from anywhere?',
+        heading: 'Can I connect to WinBox from anywhere right away?',
         body: [
-          'Only once the SSTP remote-access tunnel is installed on that router and its port is opened from the Remote Access panel — see Remote WinBox Access.',
+          'Only after Remote Access is installed on that router and its port is opened from the Remote Access panel — see Remote WinBox Access.',
         ],
       },
       {

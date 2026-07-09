@@ -271,11 +271,17 @@ export class SystemService {
       tenantData.portalTemplate = dto.portalTemplate.trim()
       settingsData.portalTemplate = dto.portalTemplate.trim()
     }
-    if (dto.supportPhone !== undefined) {
+    // Support contact email/phone double as the business's verified identity
+    // details (the same ones captured during onboarding), so — like the
+    // sign-in email — a vendor can't silently change them here. Only Dev
+    // Admin can apply them directly; vendors file a request via the Support
+    // Hub instead (see SupportContactChangePanel on the frontend) and a
+    // reviewer applies the change.
+    if (canManageFees && dto.supportPhone !== undefined) {
       tenantData.supportPhone = this.nullableTrim(dto.supportPhone)
       settingsData.supportPhone = this.nullableTrim(dto.supportPhone)
     }
-    if (dto.supportEmail !== undefined) {
+    if (canManageFees && dto.supportEmail !== undefined) {
       tenantData.supportEmail = this.nullableTrim(dto.supportEmail)
       settingsData.supportEmail = this.nullableTrim(dto.supportEmail)
     }

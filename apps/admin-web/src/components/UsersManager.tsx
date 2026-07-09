@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import type { UsersOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
+import { formatCurrency, formatDate, formatMegabytes, formatRoleName, getRoleDescription, getStatusBadgeClass } from '@/lib/format'
+import CustomerDetailModal from '@/components/CustomerDetailModal'
 
 type UserFormState = {
   firstName: string
@@ -15,7 +16,7 @@ type UserFormState = {
   roleName: string
 }
 
-const preferredTenantRoles = ['WifiAdmin', 'VoucherAgent', 'FinanceManager', 'ReadOnlySupport', 'Support', 'NetworkOperator', 'Finance', 'VendorAdmin']
+const preferredTenantRoles = ['VendorAdmin', 'WifiAdmin', 'VoucherAgent', 'FinanceManager', 'Support', 'ReadOnlySupport', 'NetworkOperator']
 
 type CustomerDirectory = {
   summary: {
@@ -43,6 +44,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   const [customers, setCustomers] = useState<CustomerDirectory | null>(null)
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [detailReference, setDetailReference] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [processText, setProcessText] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -127,7 +129,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
       <div className="page-header">
         <div>
           <h1 className="page-title">Users & Roles</h1>
-          <p className="page-subtitle">Create tenant staff accounts with scoped access for WiFi admins, voucher agents, finance, and support.</p>
+          <p className="page-subtitle">Create staff accounts with scoped access for WiFi admins, voucher agents, finance, and support.</p>
         </div>
         <button className="primary-button" type="button" onClick={() => { setError(null); setProcessText(''); setIsModalOpen(true) }}>
           + Add User
@@ -160,7 +162,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
 
       {activeTab === 'staff' && <div className="card">
         <div className="card-header">
-          <span className="card-title">Tenant User Directory</span>
+          <span className="card-title">Staff Directory</span>
         </div>
         <div className="table-wrap">
           <table>
@@ -178,7 +180,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                 <tr>
                   <td colSpan={5}>
                     <div className="empty-state">
-                      <p>No tenant staff users have been created yet.</p>
+                      <p>No staff users have been created yet.</p>
                     </div>
                   </td>
                 </tr>
@@ -191,7 +193,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                     </div>
                     <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{user.email}</div>
                   </td>
-                  <td>{user.role.name}</td>
+                  <td>{formatRoleName(user.role.name)}</td>
                   <td>{user.role.permissions.includes('ALL') ? 'All permissions' : `${user.role.permissions.length} permissions`}</td>
                   <td><span className={getStatusBadgeClass(user.isActive ? 'ACTIVE' : 'INACTIVE')}>{user.isActive ? 'active' : 'inactive'}</span></td>
                   <td style={{ fontSize: 12 }}>{formatDate(user.createdAt)}</td>
@@ -218,12 +220,13 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                 <th>Data Used</th>
                 <th>Status</th>
                 <th>Last Seen</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {(customers?.items.length ?? 0) === 0 && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className="empty-state">
                       <p>No customers yet. Customer records appear after payment, voucher redemption, or network sessions.</p>
                     </div>
@@ -234,7 +237,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                 <tr key={customer.id}>
                   <td>
                     <div style={{ fontWeight: 800 }}>{customer.phoneNumber || customer.customerReference || 'Customer'}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{customer.customerReference ?? 'No reference'}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{customer.customerReference && customer.customerReference !== customer.phoneNumber ? customer.customerReference : 'Identified by phone number'}</div>
                   </td>
                   <td>{customer.activePackage?.name ?? 'None active'}</td>
                   <td>
@@ -246,6 +249,15 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                   <td>{formatMegabytes(customer.dataUsedMb)}</td>
                   <td><span className={getStatusBadgeClass(customer.status)}>{customer.status}</span></td>
                   <td style={{ fontSize: 12 }}>{customer.lastSeen ? formatDate(customer.lastSeen) : 'Never'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setDetailReference(customer.phoneNumber || customer.customerReference || customer.id)}
+                    >
+                      View Details
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -257,7 +269,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
             <button className="modal-close" type="button" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Close</button>
-            <div className="modal-kicker">Tenant Access</div>
+            <div className="modal-kicker">Business Access</div>
             <h2 className="modal-title">Add Staff User</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-grid">
@@ -265,13 +277,37 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                 <Field label="Last Name" value={form.lastName} onChange={(value) => setForm((previous) => ({ ...previous, lastName: value }))} required />
                 <Field label="Email" type="email" value={form.email} onChange={(value) => setForm((previous) => ({ ...previous, email: value }))} required />
                 <Field label="Temporary Password" type="password" value={form.password} onChange={(value) => setForm((previous) => ({ ...previous, password: value }))} required />
-                <div className="form-group">
-                  <label className="form-label">Role</label>
-                  <select className="form-input" value={form.roleName} onChange={(event) => setForm((previous) => ({ ...previous, roleName: event.target.value }))}>
-                    {roles.filter((role) => role.name !== 'SuperAdmin').map((role) => (
-                      <option key={role.id} value={role.name}>{role.name}</option>
-                    ))}
-                  </select>
+              </div>
+              <div className="form-group" style={{ marginTop: 14 }}>
+                <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Role</label>
+                <div style={{ display: 'grid', gap: 8, maxHeight: 280, overflowY: 'auto', paddingRight: 2 }}>
+                  {roles.filter((role) => role.name !== 'SuperAdmin').map((role) => {
+                    const selected = form.roleName === role.name
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => setForm((previous) => ({ ...previous, roleName: role.name }))}
+                        style={{
+                          textAlign: 'left',
+                          padding: '12px 14px',
+                          borderRadius: 10,
+                          border: selected ? '2px solid var(--primary, #3b82f6)' : '1px solid var(--border)',
+                          background: selected ? 'rgba(59, 130, 246, 0.06)' : 'var(--bg-card)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 3,
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <strong style={{ fontSize: 13.5, color: 'var(--text-1)' }}>{formatRoleName(role.name)}</strong>
+                          {selected && <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, flexShrink: 0 }}>✓</span>}
+                        </span>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>{getRoleDescription(role.name)}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <FormProcessStatus busy={isSubmitting} error={error} text={processText || 'Creating user. This modal closes after the account is saved.'} />
@@ -283,6 +319,8 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
           </div>
         </div>
       )}
+
+      {detailReference && <CustomerDetailModal reference={detailReference} onClose={() => setDetailReference(null)} />}
     </>
   )
 }

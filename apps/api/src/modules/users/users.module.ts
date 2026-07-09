@@ -6,6 +6,7 @@ import {
   Get,
   Injectable,
   Module,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -273,6 +274,74 @@ export class UsersService {
     }
   }
 
+  // Customers on a hotspot are never named anywhere in the checkout flow —
+  // they're only ever identified by phone number / customerReference. This
+  // pulls every record tied to one identifier into a single detail view
+  // instead of just the flat summary row on the directory list.
+  async getCustomerDetail(reference: string, scopedTenantId: string | undefined) {
+    const matches = (field: string) => ({
+      OR: [
+        { [field]: reference },
+        { customerReference: reference },
+      ],
+    })
+
+    const [payments, activations, sessions, redemptions] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: {
+          ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+          OR: [{ phoneNumber: reference }, { normalizedPhone: reference }, { customerReference: reference }],
+        },
+        include: { package: { select: { id: true, name: true, code: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.packageActivation.findMany({
+        where: {
+          ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+          ...matches('accessPhoneNumber'),
+        },
+        include: { package: { select: { id: true, name: true, code: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.networkSession.findMany({
+        where: {
+          ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+          ...matches('phoneNumber'),
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.voucherRedemption.findMany({
+        where: {
+          ...(scopedTenantId ? { tenantId: scopedTenantId } : {}),
+          customerReference: reference,
+        },
+        include: {
+          voucher: { select: { code: true, faceValueUgx: true } },
+          package: { select: { id: true, name: true, code: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+    ])
+
+    return {
+      reference,
+      summary: {
+        totalPayments: payments.length,
+        totalSpentUgx: payments.filter((p) => p.status === 'COMPLETED').reduce((total, p) => total + p.amountUgx, 0),
+        totalSessions: sessions.length,
+        totalRedemptions: redemptions.length,
+      },
+      payments,
+      activations,
+      sessions,
+      redemptions,
+    }
+  }
+
   private toPublicUser(user: {
     id: string
     email: string
@@ -342,6 +411,17 @@ export class UsersController {
   ) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.usersService.listCustomers(scopedTenantId, { search, from, to })
+  }
+
+  @RequirePermissions(PERMISSIONS.usersRead)
+  @Get('customers/:reference')
+  getCustomerDetail(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('reference') reference: string,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.usersService.getCustomerDetail(reference, scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.usersManage)

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import EmailChangeRequestCard from './EmailChangeRequestCard'
+import SupportContactChangePanel from './SupportContactChangePanel'
 
 type AdminUser = {
   permissions: string[]
@@ -340,11 +341,17 @@ export default function SettingsManager({
       if (activeTab === 'Business Profile') {
         Object.assign(payload, {
           businessName: stringValue(form, 'businessName'),
-          supportPhone: stringValue(form, 'supportPhone'),
-          supportEmail: stringValue(form, 'supportEmail'),
           logoUrl: stringValue(form, 'logoUrl'),
           brandColor: stringValue(form, 'brandColor'),
           portalTemplate: stringValue(form, 'portalTemplate'),
+          // Support phone/email are Dev-Admin-only here — vendors request
+          // changes via SupportContactChangePanel instead (see below).
+          ...(isDevAdmin
+            ? {
+                supportPhone: stringValue(form, 'supportPhone'),
+                supportEmail: stringValue(form, 'supportEmail'),
+              }
+            : {}),
         })
       }
       if (activeTab === 'Payment & Fees' && isDevAdmin) {
@@ -506,8 +513,17 @@ export default function SettingsManager({
               {activeTab === 'Business Profile' && (
                 <>
                   <Input name="businessName" label="Business Name" defaultValue={tenantForm.businessName ?? tenant?.tenant.name ?? ''} />
-                  <Input name="supportPhone" label="Support Phone" defaultValue={tenantForm.supportPhone ?? tenant?.tenant.supportPhone ?? ''} />
-                  <Input name="supportEmail" label="Support Email" defaultValue={tenantForm.supportEmail ?? tenant?.tenant.supportEmail ?? ''} />
+                  {isDevAdmin ? (
+                    <>
+                      <Input name="supportPhone" label="Support Phone" defaultValue={tenantForm.supportPhone ?? tenant?.tenant.supportPhone ?? ''} />
+                      <Input name="supportEmail" label="Support Email" defaultValue={tenantForm.supportEmail ?? tenant?.tenant.supportEmail ?? ''} />
+                    </>
+                  ) : (
+                    <>
+                      <ReadOnly label="Support Phone" value={tenantForm.supportPhone ?? tenant?.tenant.supportPhone ?? 'Not set'} />
+                      <ReadOnly label="Support Email" value={tenantForm.supportEmail ?? tenant?.tenant.supportEmail ?? 'Not set'} />
+                    </>
+                  )}
                   <Input name="logoUrl" label="Logo URL" defaultValue={tenantForm.logoUrl ?? tenant?.tenant.logoUrl ?? ''} />
                   <Input name="brandColor" label="Brand Color" defaultValue={tenantForm.brandColor ?? tenant?.tenant.brandColor ?? ''} />
                   <Select name="portalTemplate" label="Portal Template" defaultValue={tenantForm.portalTemplate ?? tenant?.tenant.portalTemplate ?? 'classic'} options={portalTemplates} />
@@ -560,6 +576,13 @@ export default function SettingsManager({
       </div>
 
       {activeTab === 'Security' && <EmailChangeRequestCard />}
+
+      {activeTab === 'Business Profile' && !isDevAdmin && tenant && (
+        <SupportContactChangePanel
+          currentEmail={tenant.settings.supportEmail ?? tenant.tenant.supportEmail ?? ''}
+          currentPhone={tenant.settings.supportPhone ?? tenant.tenant.supportPhone ?? ''}
+        />
+      )}
 
       {activeTab === 'Subscription Plan' && tenant && (
         <div className="card" style={{ padding: '24px 32px', animation: 'fadeIn 0.2s ease-out' }}>

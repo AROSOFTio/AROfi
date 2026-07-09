@@ -60,16 +60,6 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.auditRead,
     PERMISSIONS.featureLimitsRead,
   ],
-  Finance: [
-    PERMISSIONS.billingRead,
-    PERMISSIONS.billingWrite,
-    PERMISSIONS.paymentsRead,
-    PERMISSIONS.disbursementsRead,
-    PERMISSIONS.disbursementsManage,
-    PERMISSIONS.agentsRead,
-    PERMISSIONS.reportsRead,
-    PERMISSIONS.tenantsRead,
-  ],
   Support: [
     PERMISSIONS.supportRead,
     PERMISSIONS.supportWrite,
