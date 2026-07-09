@@ -46,19 +46,19 @@ const STATUS_PRESENTATION: Record<string, { label: string; tone: string; icon: t
     label: 'Not Submitted',
     tone: 'badge-warning',
     icon: Info,
-    text: 'Submit your business and hotspot details below so our team can verify your operation.',
+    text: 'Optional for now — add your business and hotspot details below so our team has them on file. This does not limit any feature.',
   },
   PENDING_REVIEW: {
     label: 'Pending Review',
     tone: 'badge-info',
     icon: Clock3,
-    text: 'Your hotspot setup has been submitted for review. Some live selling features may remain limited until approval is completed.',
+    text: 'Your submission is waiting on a reviewer. Everything on your dashboard keeps working as normal in the meantime.',
   },
   APPROVED: {
     label: 'Approved',
     tone: 'badge-success',
     icon: BadgeCheck,
-    text: 'Your business has been reviewed and approved for live hotspot billing features.',
+    text: 'Your business details have been reviewed and confirmed.',
   },
   REJECTED: {
     label: 'Rejected',

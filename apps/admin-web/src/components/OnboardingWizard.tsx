@@ -63,12 +63,14 @@ export default function OnboardingWizard({
   const [pollingActive, setPollingActive] = useState(false)
   const [copiedText, setCopiedText] = useState(false)
   // Counts unverified check attempts (auto-poll ticks + manual "Check Now"
-  // clicks). "Skip script validation" only unlocks after a few real attempts,
-  // so a new user can't bail out of step 2 before the router has even had a
-  // fair chance to call back -- they'd land in the dashboard with the
-  // hotspot/RADIUS setup never having actually run.
+  // clicks). Skip unlocks after a couple of real attempts OR after standing
+  // on this step for a minute, whichever comes first — enough to give the
+  // router a fair chance to call back without forcing anyone to wait it out.
   const [checkAttempts, setCheckAttempts] = useState(0)
-  const REQUIRED_CHECK_ATTEMPTS = 3
+  const REQUIRED_CHECK_ATTEMPTS = 2
+  const SKIP_UNLOCK_SECONDS = 60
+  const [stepTwoEnteredAt, setStepTwoEnteredAt] = useState<number | null>(null)
+  const [elapsedOnStepTwo, setElapsedOnStepTwo] = useState(0)
 
   // Step 3 states
   const [packageForm, setPackageForm] = useState({
@@ -109,6 +111,7 @@ export default function OnboardingWizard({
       setRegisteredRouter(initialRouter)
       setSetupCommand(resolveOneRunCommand(initialRouter))
       setCurrentStep(2)
+      setStepTwoEnteredAt(Date.now())
       setPollingActive(true)
     } else if (!initialHasPackage) {
       setRegisteredRouter(initialRouter)
@@ -149,6 +152,17 @@ export default function OnboardingWizard({
     return () => clearInterval(intervalId)
   }, [pollingActive, registeredRouter?.id, currentStep])
 
+  // Drives the "you can skip in Ns" countdown on Step 2.
+  useEffect(() => {
+    if (currentStep !== 2 || !stepTwoEnteredAt) return
+    const tick = () => setElapsedOnStepTwo(Math.floor((Date.now() - stepTwoEnteredAt) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [currentStep, stepTwoEnteredAt])
+
+  const canSkipConnect = checkAttempts >= REQUIRED_CHECK_ATTEMPTS || elapsedOnStepTwo >= SKIP_UNLOCK_SECONDS
+
   // Step 1: Register Router Submission
   const handleRegisterRouter = async (e: FormEvent) => {
     e.preventDefault()
@@ -185,6 +199,7 @@ export default function OnboardingWizard({
         setSetupCommand(resolveOneRunCommand(setup))
         setSuccess('Router registered successfully!')
         setCurrentStep(2)
+        setStepTwoEnteredAt(Date.now())
         setPollingActive(true)
       } else {
         throw new Error('No router details returned from API.')
@@ -426,16 +441,20 @@ export default function OnboardingWizard({
         border: '1px solid var(--border, #e2e8f0)',
         borderRadius: 16,
         width: 'min(720px, 100%)',
+        maxHeight: '92vh',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), var(--shadow-lg)',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
         animation: 'fadeIn 0.2s ease-out'
       }} className="onboarding-modal-card">
         {/* Top Header */}
         <div style={{
           background: 'linear-gradient(135deg, #2563eb 0%, #0f172a 100%)',
-          padding: 'clamp(16px, 4vw, 24px) clamp(16px, 5vw, 32px)',
+          padding: 'clamp(14px, 3vw, 20px) clamp(16px, 5vw, 32px)',
           color: '#ffffff',
-          position: 'relative'
+          position: 'relative',
+          flexShrink: 0
         }}>
           <button
             type="button"
@@ -484,9 +503,9 @@ export default function OnboardingWizard({
             </span>
             <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#93c5fd' }}>Self Onboarding Wizard</span>
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, marginTop: 8, letterSpacing: '-0.02em', color: '#fff' }}>Get Your Hotspot Billing Live</h2>
-          <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>
-            Follow these 4 simple steps to connect your MikroTik router, configure your first internet plan, and create print-ready vouchers.
+          <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 6, letterSpacing: '-0.02em', color: '#fff' }}>Get Your Hotspot Billing Live</h2>
+          <p style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>
+            4 quick steps — skip anything, anytime, and finish later from your dashboard.
           </p>
         </div>
 
@@ -495,7 +514,8 @@ export default function OnboardingWizard({
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-muted)'
+          background: 'var(--bg-muted)',
+          flexShrink: 0
         }}>
           {[
             { step: 1, icon: <Wifi size={14} />, label: 'Register' },
@@ -555,7 +575,7 @@ export default function OnboardingWizard({
         </div>
 
         {/* Content Box */}
-        <div style={{ padding: 'clamp(16px, 4vw, 24px) clamp(14px, 5vw, 32px)' }}>
+        <div style={{ padding: 'clamp(14px, 4vw, 22px) clamp(14px, 5vw, 32px)', overflowY: 'auto', flex: 1 }}>
           {error && (
             <div style={{
               background: 'rgba(239, 68, 68, 0.05)',
@@ -698,9 +718,9 @@ export default function OnboardingWizard({
           {currentStep === 2 && registeredRouter && (
             <div style={{ display: 'grid', gap: 16 }}>
               <div style={{ display: 'grid', gap: 4 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-1)' }}>Step 2: Copy & Run Setup Script</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-1)' }}>Step 2: Run one command in WinBox</h3>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  Connect your computer to the MikroTik router. Run this one-line WinBox terminal command to install the hotspot and billing setup.
+                  Copy this command, paste it into your router's WinBox terminal, and press Enter.
                 </p>
               </div>
 
@@ -708,33 +728,35 @@ export default function OnboardingWizard({
                 background: '#090d16',
                 border: '1px solid #1e293b',
                 borderRadius: 12,
-                padding: 16,
+                padding: 12,
                 position: 'relative',
                 display: 'grid',
-                gap: 12
+                gap: 8
               }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>WINBOX TERMINAL COMMAND</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>WinBox Terminal Command</span>
                 <pre style={{
                   fontFamily: 'monospace',
-                  fontSize: 12,
+                  fontSize: 11.5,
                   color: '#38bdf8',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-all',
                   margin: 0,
-                  paddingRight: 40,
-                  lineHeight: 1.6
+                  paddingRight: 36,
+                  lineHeight: 1.5,
+                  maxHeight: 96,
+                  overflowY: 'auto'
                 }}>
                   {setupCommand || 'Generating MikroTik setup command...'}
                 </pre>
-                
+
                 <button
                   type="button"
                   onClick={handleCopyScript}
                   disabled={!setupCommand}
                   style={{
                     position: 'absolute',
-                    top: 14,
-                    right: 14,
+                    top: 10,
+                    right: 10,
                     background: '#1e293b',
                     border: '1px solid #334155',
                     borderRadius: 6,
@@ -753,51 +775,25 @@ export default function OnboardingWizard({
                 </button>
               </div>
 
-              <div style={{
+              <details style={{
                 background: 'var(--bg-muted)',
                 borderRadius: 10,
-                padding: '14px 16px',
-                fontSize: 13,
-                display: 'grid',
-                gap: 8,
+                padding: '10px 14px',
+                fontSize: 12.5,
                 borderLeft: '4px solid var(--primary, #3b82f6)'
               }}>
-                <div style={{ fontWeight: 700, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Info size={16} className="text-primary" /> Setup Instructions
-                </div>
-                <div style={{ fontSize: 12.5, color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, margin: '2px 0' }}>
-                  ⚠️ Critical: You must already be logged into your MikroTik router (via WinBox) as an administrator. If you are starting with a fresh or locked router, please reset it first.
-                </div>
-                <ol style={{ margin: '4px 0 8px 0', paddingLeft: 16, display: 'grid', gap: 6, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  <li>Open the WinBox desktop utility on your PC and log in to your router as admin.</li>
-                  <li>Click <strong>New Terminal</strong> from the side menu of WinBox.</li>
-                  <li>Right-click inside the terminal window, choose <strong>Paste</strong>, and press <strong>Enter</strong>.</li>
-                  <li>Wait 10-15 seconds. The script will apply the cloud configuration automatically.</li>
+                <summary style={{ fontWeight: 700, color: 'var(--text-1)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, listStyle: 'none' }}>
+                  <Info size={15} className="text-primary" /> How to paste this in WinBox
+                </summary>
+                <ol style={{ margin: '8px 0 4px 0', paddingLeft: 16, display: 'grid', gap: 4, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  <li>Open WinBox and log in to your router as admin (reset the router first if it's locked or you don't know the password).</li>
+                  <li>Click <strong>New Terminal</strong>, right-click and choose <strong>Paste</strong>, then press <strong>Enter</strong>.</li>
+                  <li>Wait 10-15 seconds — the script applies the setup automatically.</li>
                 </ol>
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
-                  <a
-                    href="https://arofi.net/docs/mikrotik-setup-video"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-ghost"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: 'var(--primary, #3b82f6)',
-                      padding: '6px 12px',
-                      height: 'auto',
-                      background: 'rgba(59, 130, 246, 0.05)',
-                      borderRadius: 6,
-                      textDecoration: 'none'
-                    }}
-                  >
-                    🎥 Watch Video: How to Reset & Configure MikroTik
-                  </a>
-                </div>
-              </div>
+                <a href="/docs/getting-started" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary, #3b82f6)' }}>
+                  Read the full setup guide →
+                </a>
+              </details>
 
               {/* Status Indicator */}
               <div style={{
@@ -856,26 +852,20 @@ export default function OnboardingWizard({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trouble connecting? Paste command exactly.</span>
-                {checkAttempts >= REQUIRED_CHECK_ATTEMPTS ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 14, flexWrap: 'wrap', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trouble connecting? Paste the command exactly as shown.</span>
+                {canSkipConnect ? (
                   <button
                     type="button"
                     onClick={handleNextFromScript}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-muted)',
-                      fontSize: 12,
-                      textDecoration: 'underline',
-                      cursor: 'pointer'
-                    }}
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12.5, fontWeight: 600, padding: '8px 14px', height: 'auto' }}
                   >
-                    Skip script validation for now
+                    Skip for now — I&apos;ll finish this later
                   </button>
                 ) : (
                   <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    Skip unlocks after {REQUIRED_CHECK_ATTEMPTS - checkAttempts} more check{REQUIRED_CHECK_ATTEMPTS - checkAttempts === 1 ? '' : 's'} — use &quot;Check Now&quot; above.
+                    You can skip this in {Math.max(SKIP_UNLOCK_SECONDS - elapsedOnStepTwo, 0)}s, or after {Math.max(REQUIRED_CHECK_ATTEMPTS - checkAttempts, 0)} more check{Math.max(REQUIRED_CHECK_ATTEMPTS - checkAttempts, 0) === 1 ? '' : 's'}.
                   </span>
                 )}
               </div>

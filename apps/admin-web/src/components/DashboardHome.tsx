@@ -9,6 +9,7 @@ import {
   PlatformWithdrawalsResponse,
 } from '@/lib/admin-types'
 import OnboardingWizard from '@/components/OnboardingWizard'
+import ComplianceBanner from '@/components/ComplianceBanner'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -392,28 +393,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         <h1 className="page-title">Dashboard</h1>
       </div>
 
-      {complianceStatus !== 'APPROVED' && (
-        <a href="/compliance" className={`compliance-banner ${complianceStatus === 'REJECTED' ? 'danger' : ''}`}>
-          <strong>
-            Compliance Status:{' '}
-            {complianceStatus === 'NOT_SUBMITTED'
-              ? 'Not Submitted'
-              : complianceStatus === 'PENDING_REVIEW'
-                ? 'Pending Review'
-                : complianceStatus === 'NEEDS_INFO'
-                  ? 'Needs More Information'
-                  : 'Rejected'}
-          </strong>
-          <span>
-            {complianceStatus === 'NOT_SUBMITTED'
-              ? 'Submit your business and hotspot details for verification — AROFi is built for authorised, compliant operators.'
-              : complianceStatus === 'PENDING_REVIEW'
-                ? 'Your hotspot setup has been submitted for review. Some live selling features may remain limited until approval is completed.'
-                : 'Action needed — open the Compliance page to see the reviewer note and resubmit.'}
-          </span>
-          <span className="compliance-banner-cta">Open Compliance →</span>
-        </a>
-      )}
+      <ComplianceBanner status={complianceStatus as any} tenantId={session?.user.tenantId} />
 
       {/* Quick Actions — the day-to-day operator tasks, one click deep. */}
       <div className="card" style={{ marginBottom: 14 }}>
