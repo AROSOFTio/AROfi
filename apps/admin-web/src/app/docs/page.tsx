@@ -2,20 +2,37 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { 
-  BookOpen, 
-  Search, 
-  Wifi, 
-  CreditCard, 
-  ArrowLeft, 
-  HelpCircle, 
-  Settings, 
+import {
+  BookOpen,
+  Search,
+  Wifi,
+  CreditCard,
+  ArrowLeft,
+  HelpCircle,
+  Settings,
   ShieldAlert,
-  Building
+  Building,
+  ShieldCheck,
 } from 'lucide-react'
 
-// Define the categorized documentation pages
-const categories = [
+type DocLink = {
+  title: string
+  slug: string
+  keywords: string
+  badge?: string
+}
+
+type DocCategory = {
+  title: string
+  description: string
+  icon: typeof Building
+  pages: DocLink[]
+}
+
+// Define the categorized documentation pages. Keep this in sync with the
+// `docs` object in [slug]/page.tsx — every slug here must exist there, and
+// every slug there should be reachable from here (or intentionally hidden).
+const categories: DocCategory[] = [
   {
     title: 'WiFi Business & Startups',
     description: 'Learn how to launch and scale a wireless hotspot business in Uganda.',
@@ -28,10 +45,10 @@ const categories = [
         keywords: 'start wifi business uganda, sell internet kampala, hotspot business guide'
       },
       {
-        title: 'How to Setup MTN MoMo & Airtel Money WiFi Billing',
+        title: 'How to Accept MTN MoMo & Airtel Money on Your Hotspot',
         slug: 'setup-mtn-airtel-wifi-billing',
-        badge: 'Technical Guide',
-        keywords: 'setup mtn wifi billing, airtel mobile money billing, mikrotik momo'
+        badge: 'Billing Guide',
+        keywords: 'setup mtn wifi billing, airtel mobile money billing, mikrotik momo, withdraw wallet'
       },
       {
         title: 'How to Block Hotspot Sharing/Tethering on MikroTik RouterOS',
@@ -46,7 +63,7 @@ const categories = [
     description: 'Set up your MikroTik router and connect it to AROFi cloud billing.',
     icon: Wifi,
     pages: [
-      { title: 'Getting started checklist', slug: 'getting-started', keywords: 'register mikrotik, first setup, connection guide' },
+      { title: 'Getting started checklist', slug: 'getting-started', keywords: 'register mikrotik, first setup, connection guide, instant disconnect' },
       { title: 'Remote WinBox Access (SSTP VPN)', slug: 'remote-winbox', keywords: 'remote winbox, sstp vpn tunnel, open port, bypass cgnat, remote setup' },
       { title: 'Winbox setup & login configuration', slug: 'winbox-setup', keywords: 'winbox download, routeros terminal, change admin password' },
       { title: 'Router onboarding step-by-step', slug: 'router-onboarding', keywords: 'router api port, secure api, register routeros' }
@@ -54,14 +71,23 @@ const categories = [
   },
   {
     title: 'Billing & Mobile Money',
-    description: 'Accept MTN MoMo and Airtel Money, manage wallets and payouts.',
+    description: 'Accept Mobile Money, manage wallets, withdrawals, and commissions.',
     icon: CreditCard,
     pages: [
-      { title: 'Payments system overview', slug: 'payments', keywords: 'payment status checks, automated activation, redirect gateway' },
-      { title: 'MTN MoMo payments configuration', slug: 'mtn-payments', keywords: 'momo api client, subscription key, target environment' },
-      { title: 'Airtel Money integration guide', slug: 'airtel-payments', keywords: 'airtel developer client, client secret, public key' },
-      { title: 'Disbursements & vendor withdrawals', slug: 'disbursements', keywords: 'disburse to phone, wallet withdraw, payout limits' },
+      { title: 'Payments system overview', slug: 'payments', keywords: 'payment status checks, automated activation, yo uganda, radius disconnect' },
+      { title: 'Disbursements & vendor withdrawals', slug: 'disbursements', keywords: 'disburse to phone, wallet withdraw, payout limits, withdrawal secret' },
       { title: 'Commissions and platform rates', slug: 'commissions', keywords: 'agent commission, platform fee, accrued revenue' }
+    ]
+  },
+  {
+    title: 'Compliance & Operations',
+    description: 'Business verification, reseller point of sale, notifications, and reports.',
+    icon: ShieldCheck,
+    pages: [
+      { title: 'Business Compliance', slug: 'business-compliance', keywords: 'kyc, business verification, compliance review, approved rejected' },
+      { title: 'Agent PoS & Resellers', slug: 'agent-pos', keywords: 'register agent, sell voucher, point of sale, reseller commission' },
+      { title: 'Notifications', slug: 'notifications', keywords: 'notification bell, attachments, dev admin broadcast' },
+      { title: 'Reports', slug: 'reports', keywords: 'export csv excel pdf, sales report, disbursement report, voucher report' }
     ]
   },
   {
@@ -69,7 +95,7 @@ const categories = [
     description: 'Customize the user checkout screen and hotspot packages.',
     icon: Settings,
     pages: [
-      { title: 'Captive portal customization', slug: 'captive-portal', keywords: 'walled garden hosts, pesapal testing, light shell loading' },
+      { title: 'Captive portal customization', slug: 'captive-portal', keywords: 'walled garden hosts, light shell loading' },
       { title: 'Packages and voucher printing', slug: 'packages-and-vouchers', keywords: 'speed limits, data limits, print pdf vouchers, voucher batch' }
     ]
   },
@@ -78,8 +104,8 @@ const categories = [
     description: 'Diagnose connection failures, accounting logs, and offline routers.',
     icon: ShieldAlert,
     pages: [
-      { title: 'Troubleshooting guide', slug: 'troubleshooting', keywords: 'paid but not connected, dns resolving error, status check fail' },
-      { title: 'Frequently Asked Questions (FAQ)', slug: 'faq', keywords: 'winbox password lost, check callback url, radius server host' }
+      { title: 'Troubleshooting guide', slug: 'troubleshooting', keywords: 'paid but not connected, dns resolving error, status check fail, stuck logged in' },
+      { title: 'Frequently Asked Questions (FAQ)', slug: 'faq', keywords: 'winbox password lost, check callback url, radius server host, withdrawal blocked' }
     ]
   }
 ]
@@ -125,7 +151,7 @@ export default function DocsIndexPage() {
           WiFi Billing, Payments &amp; MikroTik Setup
         </h1>
         <p className="mt-4 text-base md:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          Learn how to set up automated MTN MoMo &amp; Airtel Money billing, configure MikroTik RADIUS servers, print vouchers, and start a profitable wireless hotspot business in Uganda.
+          Learn how automated Mobile Money billing, MikroTik RADIUS setup, voucher printing, business compliance, and reseller point of sale actually work on AROFi.
         </p>
 
         {/* Search bar */}
@@ -209,13 +235,13 @@ export default function DocsIndexPage() {
 
       {/* SEO Uganda Search Keywords Section */}
       <div className="sr-only" aria-hidden="true">
-        <h2>Start WiFi Internet Hotspot Business in Kampala, Uganda</h2>
+        <h2>Start a WiFi Internet Hotspot Business in Kampala, Uganda</h2>
         <p>
-          AROFi makes starting a WiFi reseller business simple. Register a free account, connect your MikroTik router (RB951, hEX S, CCR2004) to our cloud platform using a single console command. Sell WiFi vouchers and collect money automatically via MTN MoMo and Airtel Money.
+          AROFi makes starting a WiFi hotspot business simple. Register a free account, connect your MikroTik router (RB951, hEX S, CCR2004) to AROFi using a single generated setup command, then sell WiFi access and collect payment automatically via MTN Mobile Money and Airtel Money.
         </p>
-        <h3>How to Setup MikroTik Mobile Money Billing</h3>
+        <h3>How to Set Up MikroTik Mobile Money Billing</h3>
         <p>
-          Integrate MTN Mobile Money collection APIs with your MikroTik HotSpot captive portal. Customers type their telephone numbers, complete USSD STK PIN popups, and get authenticated via AROFi RADIUS servers automatically.
+          AROFi connects Mobile Money collection to your MikroTik HotSpot captive portal. Customers enter their phone number, confirm on a Mobile Money PIN prompt, and are connected to the internet automatically once payment is confirmed.
         </p>
       </div>
     </main>
