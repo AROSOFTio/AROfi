@@ -16,7 +16,7 @@ import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
-import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react'
+import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck, Store, Ticket, FileBarChart, Router } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -414,6 +414,43 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           <span className="compliance-banner-cta">Open Compliance →</span>
         </a>
       )}
+
+      {/* Quick Actions — the day-to-day operator tasks, one click deep. */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-header">
+          <span className="card-title">Quick Actions</span>
+        </div>
+        <div className="action-center-grid">
+          <a href="/agents" className="action-center-item">
+            <Store size={20} />
+            <div>
+              <strong>Sell</strong>
+              <span>Sell a voucher to a walk-in customer</span>
+            </div>
+          </a>
+          <a href="/vouchers" className="action-center-item">
+            <Ticket size={20} />
+            <div>
+              <strong>Vouchers</strong>
+              <span>Generate a new voucher batch</span>
+            </div>
+          </a>
+          <a href="/reports" className="action-center-item">
+            <FileBarChart size={20} />
+            <div>
+              <strong>Reports</strong>
+              <span>Export sales, vouchers &amp; payouts</span>
+            </div>
+          </a>
+          <a href="/admin/settings/routers?add=true" className="action-center-item">
+            <Router size={20} />
+            <div>
+              <strong>Add Router</strong>
+              <span>Register a new hotspot router</span>
+            </div>
+          </a>
+        </div>
+      </div>
 
       {/* System Insights (with the date filter at its top) and the money KPI
           boxes sit in one row. Platform Fees is intentionally omitted here —

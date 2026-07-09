@@ -399,6 +399,7 @@ model Tenant {
   disconnectionAttempts DisconnectionAttempt[]
   kycDocuments        KycDocument[]
   complianceProfile   ComplianceProfile?
+  notifications       Notification[]
 }
 
 enum KycDocumentType {
@@ -542,6 +543,8 @@ model User {
   blogPosts              BlogPost[]
   passwordResetTokens    PasswordResetToken[]
   emailChangeRequests    EmailChangeRequest[]
+  sentNotifications      Notification[]      @relation("NotificationSender")
+  notificationReads      NotificationRead[]
 }
 
 model PasswordResetToken {
@@ -1768,4 +1771,55 @@ model BlogImage {
   inlinePost   BlogPost? @relation("BlogPostInline", fields: [inlinePostId], references: [id])
 
   @@index([inlinePostId])
+}
+
+enum NotificationAudience {
+  ALL_BUSINESSES
+  SINGLE_BUSINESS
+}
+
+// Dev Admin -> business in-app notifications (never browser push). A
+// SINGLE_BUSINESS notification targets one tenant; ALL_BUSINESSES broadcasts
+// to every business and read state is tracked per-user via NotificationRead
+// since there's no single tenant to key off.
+model Notification {
+  id          String                @id @default(uuid())
+  title       String
+  body        String
+  audience    NotificationAudience  @default(SINGLE_BUSINESS)
+  tenantId    String?
+  tenant      Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?                 @relation("NotificationSender", fields: [createdById], references: [id])
+  attachments NotificationAttachment[]
+  reads       NotificationRead[]
+  createdAt   DateTime              @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([audience, createdAt])
+}
+
+model NotificationAttachment {
+  id             String       @id @default(uuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  fileName       String
+  mimeType       String
+  fileSize       Int
+  fileData       Bytes
+  createdAt      DateTime     @default(now())
+
+  @@index([notificationId])
+}
+
+model NotificationRead {
+  id             String       @id @default(uuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@unique([notificationId, userId])
+  @@index([userId, readAt])
 }

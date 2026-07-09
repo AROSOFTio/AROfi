@@ -10,6 +10,7 @@ import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
+import { SellVoucherDto } from './dto/sell-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VouchersService } from './vouchers.service'
 
@@ -105,6 +106,13 @@ export class VouchersController {
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.vouchersService.recordSale(voucherId, dto, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.vouchersManage)
+  @Post('sell')
+  sellVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: SellVoucherDto) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.vouchersService.sellNextAvailable(dto, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)

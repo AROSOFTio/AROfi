@@ -21,6 +21,7 @@ import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
+import { SellVoucherDto } from './dto/sell-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
 import { VoucherCodeFormat, VoucherCodeService } from './voucher-code.service'
 import PDFDocument = require('pdfkit')
@@ -598,6 +599,32 @@ export class VouchersService {
         voucher: updatedVoucher,
       }
     })
+  }
+
+  // Point-of-sale: staff/agents pick a package, not a specific voucher code —
+  // this assigns the oldest unexpired GENERATED voucher for that package and
+  // records the sale against it (optionally attributed to an agent so
+  // commission accrues automatically).
+  async sellNextAvailable(dto: SellVoucherDto, tenantId?: string) {
+    const voucher = await this.prisma.voucher.findFirst({
+      where: {
+        packageId: dto.packageId,
+        ...(tenantId ? { tenantId } : {}),
+        status: VoucherStatus.GENERATED,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    if (!voucher) {
+      throw new BadRequestException('No available vouchers for this package. Generate a new voucher batch first.')
+    }
+
+    return this.recordSale(
+      voucher.id,
+      { customerReference: dto.customerReference, agentId: dto.agentId },
+      tenantId,
+    )
   }
 
   // Delete a whole batch of GENERATED vouchers. Refuses if ANY voucher in the

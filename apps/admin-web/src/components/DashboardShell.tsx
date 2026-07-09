@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
+import NotificationBell from './NotificationBell'
 import Sidebar from './Sidebar'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
 
@@ -75,7 +76,9 @@ export default function DashboardShell({ children, initials, session, workspaceT
             </button>
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
-          <div className="topbar-actions" style={{ position: 'relative' }}>
+          <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <NotificationBell />
+            <div style={{ position: 'relative' }}>
             <button
               type="button"
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
@@ -164,6 +167,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
                 </div>
               </>
             )}
+            </div>
           </div>
         </header>
         <WorkspaceRouteGuard user={session.user}>

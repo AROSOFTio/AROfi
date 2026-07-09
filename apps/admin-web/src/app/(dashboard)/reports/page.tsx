@@ -6,7 +6,7 @@ export default function ReportsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Reports</h1>
-          <p className="page-subtitle">Export financial data for reconciliation, accounting, or tax filing. Use the Sales, Payments, Sessions, and Billing screens for live filtered views.</p>
+          <p className="page-subtitle">Filter sales, disbursements, and vouchers, preview the results, then export to CSV, Excel, or PDF.</p>
         </div>
       </div>
       <ReportsExportPanel />

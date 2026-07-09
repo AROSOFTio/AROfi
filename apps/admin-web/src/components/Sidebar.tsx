@@ -4,22 +4,31 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useMemo, type ReactNode } from 'react'
 import {
   Activity,
+  Banknote,
   BarChart3,
+  Bell,
   Building2,
   CreditCard,
+  FileBarChart,
   FileText,
   Gauge,
   Globe,
   LayoutDashboard,
+  LayoutTemplate,
   LifeBuoy,
+  Lock,
   Mail,
   PenLine,
   Percent,
+  PiggyBank,
   RadioTower,
   Router,
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Store,
+  Ticket,
+  UserCircle,
   Users,
   Wallet,
   Wifi,
@@ -44,57 +53,119 @@ type NavGroup = {
 };
 
 const navItems: NavGroup[] = [
+  // Business (vendor) navigation is flat too, same as platform below: every
+  // destination is a direct single-item link, nothing folds/expands, and
+  // "Register Router" was dropped as a separate entry since it only opens a
+  // modal on the Routers page rather than a distinct destination.
   {
     label: 'Routers',
     icon: <Router size={17} />,
-    items: [
-      { href: '/admin/settings/routers', label: 'Routers', required: ['routers.read'], tenantOnly: true },
-      { href: '/admin/router', label: 'Router Observability', required: ['routers.read'], tenantOnly: true },
-      { href: '/admin/settings/routers?add=true', label: 'Register Router', required: ['routers.manage'], tenantOnly: true },
-      { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true },
-      { href: '/hotspots', label: 'Hotspots', required: ['hotspots.read'], tenantOnly: true },
-      { href: '/sessions', label: 'Usage Analytics', required: ['sessions.read'], tenantOnly: true },
-    ]
+    items: [{ href: '/admin/settings/routers', label: 'Routers', required: ['routers.read'], tenantOnly: true }]
   },
   {
-    label: 'Sales',
+    label: 'Router Observability',
+    icon: <Gauge size={17} />,
+    items: [{ href: '/admin/router', label: 'Router Observability', required: ['routers.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Remote Access',
+    icon: <Globe size={17} />,
+    items: [{ href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Hotspots',
+    icon: <Wifi size={17} />,
+    items: [{ href: '/hotspots', label: 'Hotspots', required: ['hotspots.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Usage Analytics',
+    icon: <RadioTower size={17} />,
+    items: [{ href: '/sessions', label: 'Usage Analytics', required: ['sessions.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Packages',
     icon: <ShoppingCart size={17} />,
-    items: [
-      { href: '/packages', label: 'Packages', required: ['packages.read'], tenantOnly: true },
-      { href: '/vouchers', label: 'Vouchers', required: ['vouchers.read'], tenantOnly: true },
-      { href: '/sales', label: 'Sales Reports', required: ['billing.read'], tenantOnly: true },
-      { href: '/transactions', label: 'Transactions', required: ['billing.read'], tenantOnly: true },
-    ]
+    items: [{ href: '/packages', label: 'Packages', required: ['packages.read'], tenantOnly: true }]
   },
   {
-    label: 'Earnings',
+    label: 'Vouchers',
+    icon: <Ticket size={17} />,
+    items: [{ href: '/vouchers', label: 'Vouchers', required: ['vouchers.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Sales Reports',
+    icon: <BarChart3 size={17} />,
+    items: [{ href: '/sales', label: 'Sales Reports', required: ['billing.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Transactions',
+    icon: <CreditCard size={17} />,
+    items: [{ href: '/transactions', label: 'Transactions', required: ['billing.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Reports',
+    icon: <FileBarChart size={17} />,
+    items: [{ href: '/reports', label: 'Reports', required: ['reports.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Wallet',
     icon: <Wallet size={17} />,
-    items: [
-      { href: '/earnings', label: 'Wallet', required: ['billing.read'] },
-      { href: '/float', label: 'Settlement Balance', required: ['agents.read'], tenantOnly: true },
-      { href: '/disbursements', label: 'Withdrawals', required: ['disbursements.read'], tenantOnly: true },
-    ]
+    items: [{ href: '/earnings', label: 'Wallet', required: ['billing.read'] }]
   },
   {
-    label: 'Users',
+    label: 'Settlement Balance',
+    icon: <PiggyBank size={17} />,
+    items: [{ href: '/float', label: 'Settlement Balance', required: ['agents.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Withdrawals',
+    icon: <Banknote size={17} />,
+    items: [{ href: '/disbursements', label: 'Withdrawals', required: ['disbursements.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Staff',
     icon: <Users size={17} />,
-    items: [
-      { href: '/users?tab=staff', label: 'Staff', required: ['users.read'], tenantOnly: true },
-      { href: '/users?tab=customers', label: 'Customers', required: ['users.read'], tenantOnly: true },
-      { href: '/agents', label: 'Agent PoS', required: ['agents.read'], tenantOnly: true },
-    ]
+    items: [{ href: '/users?tab=staff', label: 'Staff', required: ['users.read'], tenantOnly: true }]
   },
   {
-    label: 'Settings',
+    label: 'Customers',
+    icon: <UserCircle size={17} />,
+    items: [{ href: '/users?tab=customers', label: 'Customers', required: ['users.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Agent PoS',
+    icon: <Store size={17} />,
+    items: [{ href: '/agents', label: 'Agent PoS', required: ['agents.read'], tenantOnly: true }]
+  },
+  {
+    label: 'General Settings',
     icon: <Settings size={17} />,
-    items: [
-      { href: '/settings?tab=Business%20Profile', label: 'General', tenantOnly: true },
-      { href: '/admin/settings/templates', label: 'Captive Templates', tenantOnly: true },
-      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Gateways', tenantOnly: true },
-      { href: '/settings?tab=Security', label: 'Advanced', tenantOnly: true },
-      { href: '/support', label: 'Support Hub', required: ['support.read'], tenantOnly: true },
-      { href: '/docs', label: 'Docs', tenantOnly: true },
-    ]
+    items: [{ href: '/settings?tab=Business%20Profile', label: 'General Settings', tenantOnly: true }]
+  },
+  {
+    label: 'Captive Templates',
+    icon: <LayoutTemplate size={17} />,
+    items: [{ href: '/admin/settings/templates', label: 'Captive Templates', tenantOnly: true }]
+  },
+  {
+    label: 'Payment Gateways',
+    icon: <CreditCard size={17} />,
+    items: [{ href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Gateways', tenantOnly: true }]
+  },
+  {
+    label: 'Advanced Settings',
+    icon: <Lock size={17} />,
+    items: [{ href: '/settings?tab=Security', label: 'Advanced Settings', tenantOnly: true }]
+  },
+  {
+    label: 'Support Hub',
+    icon: <LifeBuoy size={17} />,
+    items: [{ href: '/support', label: 'Support Hub', required: ['support.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Docs',
+    icon: <FileText size={17} />,
+    items: [{ href: '/docs', label: 'Docs', tenantOnly: true }]
   },
   {
     label: 'Compliance',
@@ -140,6 +211,16 @@ const navItems: NavGroup[] = [
     label: 'Sales by Business',
     icon: <BarChart3 size={17} />,
     items: [{ href: '/sales-by-tenant', label: 'Sales by Business', required: ['billing.read'], platformOnly: true }]
+  },
+  {
+    label: 'Reports',
+    icon: <FileBarChart size={17} />,
+    items: [{ href: '/reports', label: 'Reports', required: ['reports.read'], platformOnly: true }]
+  },
+  {
+    label: 'Notifications',
+    icon: <Bell size={17} />,
+    items: [{ href: '/admin/notifications', label: 'Notifications', required: ['settings.manage'], platformOnly: true }]
   },
   {
     label: 'Routers',

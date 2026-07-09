@@ -26,6 +26,8 @@ import { ComplianceModule } from './modules/compliance/compliance.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { MailModule } from './modules/mail/mail.module';
 import { EventsModule } from './modules/events/events.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Controller('health')
 export class HealthController {
@@ -68,6 +70,8 @@ export class HealthController {
     SubscriptionModule,
     MailModule,
     BlogModule,
+    NotificationsModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
   providers: [
