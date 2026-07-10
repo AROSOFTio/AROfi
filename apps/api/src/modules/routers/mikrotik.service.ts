@@ -518,18 +518,14 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
-    // 2s production default: the router itself knows customer connect /
-    // disconnect state immediately, so send the active HotSpot user count on
-    // every beat and keep the dashboard under a couple of seconds behind
-    // reality even before RADIUS interim updates arrive.
+    // 2s production default: liveness recovers within a few seconds even for
+    // routers behind NAT. Active user counts still come from RADIUS/accounting.
     const intervalSeconds = 2
-    // URLs contain no spaces, so they need no inner quoting inside the script
-    // source — this keeps the generated .rsc free of fragile nested escapes.
+    // Static URL only: RouterOS 7.23 can choke on saved url=("..." . $var)
+    // heartbeat scripts.
     const source =
-      `:local arofiActiveUsers 0; ` +
-      `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={ :set arofiActiveUsers 0 }; ` +
-      `:do { /tool fetch url=("${heartbeatUrl}" . "?activeUsers=" . $arofiActiveUsers) check-certificate=no mode=https keep-result=no } ` +
-      `on-error={ :do { /tool fetch url=("${fallbackHeartbeatUrl}" . "?activeUsers=" . $arofiActiveUsers) mode=http keep-result=no } on-error={} }`
+      `:do { /tool fetch url=${heartbeatUrl} check-certificate=no keep-result=no } ` +
+      `on-error={ :do { /tool fetch url=${fallbackHeartbeatUrl} keep-result=no } on-error={} }`
     return [
       `/system script remove [find name="arofi-heartbeat"]`,
       `/system script add name="arofi-heartbeat" source="${this.escape(source)}"`,
@@ -1163,9 +1159,9 @@ export class MikrotikService {
     }
 
     const host =
-      this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
+      this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
       'arofi.net'
 
     // Strip scheme and any port suffix — use plain HTTP port 80 which is

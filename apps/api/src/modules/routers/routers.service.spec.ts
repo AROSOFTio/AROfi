@@ -289,6 +289,9 @@ describe('RoutersService', () => {
       const script = await service.getRemoteAccessInstallScript('token-1')
 
       expect(script).toContain('add-default-route=no')
+      expect(script).toContain('connect-to="arofi.net"')
+      expect(script).toContain('port=4443')
+      expect(script).not.toContain('connect-to="arofi.net:4443"')
       expect(script).not.toContain('use-peer-dns=')
       expect(script).not.toContain('/system script add')
     })
