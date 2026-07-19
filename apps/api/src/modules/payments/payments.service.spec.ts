@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common'
+import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { PaymentNetwork, PaymentStatus } from '@prisma/client'
 import { PhoneNumberService } from './phone-number.service'
 import { PaymentsService } from './payments.service'
@@ -71,6 +71,21 @@ describe('PaymentsService', () => {
         },
       ),
     ).toEqual([PaymentNetwork.MTN, PaymentNetwork.AIRTEL])
+  })
+
+  it('does not guess a tenant for the public portal without tenant or router context', async () => {
+    const scopedService = new PaymentsService(
+      { tenant: { findUnique: jest.fn() } } as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    )
+
+    await expect((scopedService as any).resolvePortalTenant()).rejects.toThrow(NotFoundException)
   })
 })
 

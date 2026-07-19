@@ -140,17 +140,18 @@ describe('MikrotikService', () => {
   it('serves a MikroTik login page that forwards captive portal parameters to AROFi', () => {
     const service = new MikrotikService(new ConfigService({ PORTAL_PUBLIC_HOST: 'wifi.example.com' }))
 
-    const html = service.buildLoginHtml('router-key-123')
+    const html = service.buildLoginHtml('router-key-123', 'http://tenantname.wifi/login')
 
     expect(html).toContain('var API="https://wifi.example.com"')
     expect(html).toContain('RKEY="router-key-123"')
-    expect(html).toContain('CONNECTED="https://wifi.example.com/portal?connected=1"')
+    expect(html).toContain('CONNECTED="http://tenantname.wifi/login?connected=1"')
     expect(html).toContain('mac="$(mac)"')
     expect(html).toContain('ip="$(ip)"')
     expect(html).toContain('lo="$(link-login-only)"')
     expect(html).toContain('srv="$(server-name)"')
     expect(html).toContain('var dst=CONNECTED')
     expect(html).toContain('encodeURIComponent(CONNECTED)')
+    expect(html).not.toContain('CONNECTED="https://wifi.example.com/portal?connected=1"')
     expect(html).not.toContain('neverssl.com')
     expect(html).not.toContain('http://google.com')
     expect(html).toContain('id="multiSection"')

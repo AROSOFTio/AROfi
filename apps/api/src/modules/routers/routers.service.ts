@@ -1047,9 +1047,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
         ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
         mode: router.lastScriptMode,
-        portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.net'}/portal`,
+        portalBaseUrl: this.buildTenantWifiLoginUrl(router.tenant),
         hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,
-        dnsName: `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`,
+        dnsName: this.buildTenantWifiHost(router.tenant),
         remoteClientName: router.remoteClientName,
       }),
       setupDiagnostics: await this.getSetupDiagnostics(router.id),
@@ -1114,11 +1114,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
       ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
       mode: router.lastScriptMode,
-      portalBaseUrl: `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.net'}/portal`,
+      portalBaseUrl: this.buildTenantWifiLoginUrl(router.tenant),
       hotspotNetworkName: router.siteLabel ?? router.name,
-      dnsName: router.tenant
-        ? `${router.tenant.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.wifi`
-        : null,
+      dnsName: this.buildTenantWifiHost(router.tenant),
       remoteClientName: router.remoteClientName,
     })
   }
@@ -1148,6 +1146,14 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   async getMikrotikLoginHtmlByKey(key: string) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
+      include: {
+        tenant: {
+          select: {
+            name: true,
+            domain: true,
+          },
+        },
+      },
     })
 
     if (!router) {
@@ -1156,7 +1162,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     return this.mikrotikService.buildLoginHtml(
       router.registrationKey,
-      `https://${process.env.PORTAL_PUBLIC_HOST ?? 'arofi.net'}/portal`,
+      this.buildTenantWifiLoginUrl(router.tenant),
     )
   }
 
@@ -1526,6 +1532,26 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
   private isPendingSelfServiceHost(host: string) {
     return /^pending-[a-z0-9-]+\.self-service$/i.test(host)
+  }
+
+  private buildTenantWifiLoginUrl(tenant?: { name?: string | null; domain?: string | null } | null) {
+    return `http://${this.buildTenantWifiHost(tenant)}/login`
+  }
+
+  private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
+    const label = this.buildTenantWifiLabel(tenant?.domain || tenant?.name || 'arofi')
+    return `${label}.wifi`
+  }
+
+  private buildTenantWifiLabel(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/\.wifi$/, '')
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 40) || 'arofi'
   }
 
   private getRouterNasCandidates(router: {

@@ -667,7 +667,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       routerId: params.get('routerId') ?? '',
       routerKey: params.get('routerKey') ?? '',
       hotspotServerName: params.get('server') ?? params.get('hotspot') ?? '',
-      tenantDomain: tenantDomain || (typeof window !== 'undefined' ? localStorage.getItem('arofi.tenantDomain') ?? '' : ''),
+      tenantDomain,
     }
   }
 
@@ -1107,10 +1107,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       const target = new URL(loginUrl, window.location.href)
       target.searchParams.set('username', reconnect.username)
       target.searchParams.set('password', reconnect.password)
-      // After a successful hotspot login the router redirects the browser to
-      // dst. Landing back on the portal with ?connected=1 confirms the
-      // connection to the customer and re-shows any stashed companion codes.
-      target.searchParams.set('dst', `${window.location.origin}${window.location.pathname}?connected=1`)
+      // After a successful hotspot login, keep the customer on the router's
+      // own login host (tenantname.wifi / router gateway), never the public
+      // online portal. The local login page can then show connected state and
+      // avoids leaking users back to arofi.net/portal.
+      const connectedDst = new URL(target.toString())
+      connectedDst.search = ''
+      connectedDst.hash = ''
+      connectedDst.searchParams.set('connected', '1')
+      target.searchParams.set('dst', connectedDst.toString())
       target.searchParams.set('popup', 'false')
       window.location.href = target.toString()
     } catch {

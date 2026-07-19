@@ -1239,22 +1239,7 @@ export class PaymentsService {
       }
     }
 
-    const tenant = await this.prisma.tenant.findFirst({
-      where: {
-        packages: {
-          some: {
-            status: PackageStatus.ACTIVE,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    if (!tenant) {
-      throw new NotFoundException('No tenant with an active package catalog was found')
-    }
-
-    return tenant
+    throw new NotFoundException('Tenant portal context is required')
   }
 
   private async resolveRouterContext(tenantId: string, routerId?: string, routerKey?: string) {
