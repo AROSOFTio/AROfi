@@ -53,7 +53,7 @@ Notes:
 | Use | Light | Dark |
 | --- | --- | --- |
 | page background | `#f2f5f9` | `#18191c` |
-| sidebar background | `rgba(242,245,249,.6)` / classic `#353d44` | `transparent` / classic `#202020` |
+| sidebar background | `rgba(242,245,249,.6)` | `#202020` |
 | top-bar background | `#fff` | `#202020` |
 | panel background | `#fff` | `#202020` |
 | card background | `#fff` | `#202020` |
@@ -115,7 +115,7 @@ Notes:
 
 | Component | Extracted styling |
 | --- | --- |
-| sidebar | classic `#353d44`, `200px`, fixed height, `44px` rows, left active border `#20a53a` |
+| sidebar | light theme uses `rgba(242,245,249,.6)` with dark text; dark theme uses `#202020`; `200px`, fixed height, `44px` rows, active state `#20a53a` |
 | collapsed sidebar | `50px` target, icon-only compact state not fully verified in demo |
 | top bar | `50px`, `#fff` light / `#202020` dark, bottom border `#dcdfe6` / `#434343` |
 | cards | `#fff` / `#202020`, `1px` border, `4px` radius target, `0 0 8px rgba(0,0,0,.06)` |
