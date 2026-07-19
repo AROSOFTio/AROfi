@@ -280,6 +280,58 @@ const navItems: NavGroup[] = [
   },
 ]
 
+const tenantNavItems: NavGroup[] = [
+  {
+    label: 'Sell Internet',
+    icon: <ShoppingCart size={17} />,
+    items: [
+      { href: '/agents', label: 'Sell Voucher', required: ['agents.read'], tenantOnly: true },
+      { href: '/packages', label: 'Internet Plans', required: ['packages.read'], tenantOnly: true },
+      { href: '/vouchers', label: 'Vouchers', required: ['vouchers.read'], tenantOnly: true },
+      { href: '/users?tab=customers', label: 'Customers', required: ['users.read'], tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Money',
+    icon: <Wallet size={17} />,
+    items: [
+      { href: '/sales', label: 'Sales', required: ['billing.read'], tenantOnly: true },
+      { href: '/transactions', label: 'Transactions', required: ['billing.read'], tenantOnly: true },
+      { href: '/earnings', label: 'Wallet', required: ['billing.read'], tenantOnly: true },
+      { href: '/disbursements', label: 'Withdraw Money', required: ['disbursements.read'], tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Network',
+    icon: <Wifi size={17} />,
+    items: [
+      { href: '/admin/settings/routers', label: 'Routers', required: ['routers.read'], tenantOnly: true },
+      { href: '/hotspots', label: 'Access Points', required: ['hotspots.read'], tenantOnly: true },
+      { href: '/sessions', label: 'Online Users', required: ['sessions.read'], tenantOnly: true },
+      { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Business',
+    icon: <Store size={17} />,
+    items: [
+      { href: '/settings?tab=Business%20Profile', label: 'Business Details', tenantOnly: true },
+      { href: '/users?tab=staff', label: 'Staff & Roles', required: ['users.read'], tenantOnly: true },
+      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Settings', tenantOnly: true },
+      { href: '/admin/settings/templates', label: 'WiFi Login Page', tenantOnly: true },
+      { href: '/settings?tab=Security', label: 'Security', tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Help',
+    icon: <LifeBuoy size={17} />,
+    items: [
+      { href: '/docs/getting-started', label: 'Setup Guide', tenantOnly: true },
+      { href: '/support', label: 'Get Support', required: ['support.read'], tenantOnly: true },
+    ],
+  },
+]
+
 type SidebarUser = AdminSessionResponse['user']
 
 function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: boolean, tenantOnly?: boolean) {
@@ -307,12 +359,13 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   const isVendor = isVendorWorkspace(user)
   const currentQuery = searchParams.toString()
   const currentHref = currentQuery ? `${pathname}?${currentQuery}` : pathname
-  const visibleGroups = useMemo(() => navItems
+  const navigationGroups = isVendor ? tenantNavItems : navItems
+  const visibleGroups = useMemo(() => navigationGroups
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly, item.tenantOnly)),
     }))
-    .filter((group) => group.items.length > 0), [user])
+    .filter((group) => group.items.length > 0), [navigationGroups, user])
 
   const workspaceLabel = isVendor ? 'Business Dashboard' : 'Platform Admin'
 
@@ -339,7 +392,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
         >
           <span className="sidebar-group-label">
             <LayoutDashboard size={17} />
-            Dashboard
+            {isVendor ? 'Home' : 'Dashboard'}
           </span>
         </Link>
       </div>
@@ -361,7 +414,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
                 {group.label}
               </span>
             </Link>
-            {isInSection && group.items.length > 1 && (
+            {(isVendor || isInSection) && group.items.length > 1 && (
               <div className="sidebar-group-items">
                 {group.items.map((item) => (
                   <Link
