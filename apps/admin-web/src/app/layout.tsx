@@ -197,6 +197,25 @@ export const viewport: Viewport = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const themeScript = `
+    (function () {
+      try {
+        var mode = localStorage.getItem('arofi-theme');
+        var accent = localStorage.getItem('arofi-accent-theme');
+        if (mode !== 'dark' && mode !== 'light') {
+          mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        if (accent !== 'green' && accent !== 'white' && accent !== 'blue') {
+          accent = 'blue';
+        }
+        document.documentElement.setAttribute('data-theme', mode);
+        document.documentElement.setAttribute('data-accent-theme', accent);
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-accent-theme', 'blue');
+      }
+    })();
+  `
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -258,6 +277,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} ${inter.variable}`}>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href="/logo.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
         {/* Resource hints */}

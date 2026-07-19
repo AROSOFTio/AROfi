@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import EmailChangeRequestCard from './EmailChangeRequestCard'
 import SupportContactChangePanel from './SupportContactChangePanel'
+import ThemeToggle from './ThemeToggle'
 
 type AdminUser = {
   permissions: string[]
@@ -110,7 +112,7 @@ const PLAN_CARD_META: Record<string, { price: string; desc: string; color: strin
   PRO: {
     price: 'UGX 20,000 / Month',
     desc: 'For growing ISPs wanting lower fees and branding control.',
-    color: '#3b82f6',
+    color: 'var(--green)',
     badge: 'Recommended',
   },
   ENTERPRISE: {
@@ -120,7 +122,7 @@ const PLAN_CARD_META: Record<string, { price: string; desc: string; color: strin
   },
 }
 
-const tabs = ['Business Profile', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security', 'Subscription Plan'] as const
+const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security', 'Subscription Plan'] as const
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const portalTemplates = ['classic', 'fresh', 'midnight', 'sunrise', 'minimal']
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
@@ -421,7 +423,35 @@ export default function SettingsManager({
       {error && <div className="badge badge-danger" style={{ marginBottom: 14 }}>{error}</div>}
 
       <div className="settings-grid">
-        {isDevAdmin && platformForm && activeTab !== 'Subscription Plan' && (
+        {activeTab === 'Appearance' && (
+          <>
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">Admin Appearance</span>
+                <span className="badge badge-info">This device</span>
+              </div>
+              <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
+                Choose the aaPanel-style surface mode and the AROFi accent used by buttons, links, selected navigation, sign in, password reset, and admin controls.
+              </p>
+              <ThemeToggle variant="settings" />
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">WiFi Login Page Theme</span>
+                <span className="badge badge-success">Customer portal</span>
+              </div>
+              <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
+                Select the captive portal theme customers see when buying access, redeeming vouchers, logging in, or checking session usage.
+              </p>
+              <Link href="/admin/settings/templates" className="btn btn-primary">
+                Open WiFi Login Page Themes
+              </Link>
+            </div>
+          </>
+        )}
+
+        {isDevAdmin && platformForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && (
           <form className="card" onSubmit={savePlatform}>
             <div className="card-header">
               <span className="card-title">Dev Admin Platform Controls</span>
@@ -503,7 +533,7 @@ export default function SettingsManager({
           </form>
         )}
 
-        {tenantForm && activeTab !== 'Subscription Plan' && (
+        {tenantForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && (
           <form className="card" onSubmit={saveTenant}>
             <div className="card-header">
               <span className="card-title">Vendor Settings</span>

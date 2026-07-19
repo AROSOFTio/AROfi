@@ -4682,6 +4682,84 @@ pre, code.block {
   --aa-sidebar-active-text: var(--aa-selected-nav-text);
 }
 
+:root,
+:root[data-accent-theme="blue"],
+:root:not([data-accent-theme]) {
+  --arofi-theme-accent: #2563eb;
+  --arofi-theme-accent-hover: #1d4ed8;
+  --arofi-theme-accent-soft: #eff6ff;
+  --arofi-theme-accent-soft-2: #f3f7ff;
+  --arofi-theme-accent-border: #bfdbfe;
+  --arofi-theme-accent-text: #1d4ed8;
+}
+
+:root[data-accent-theme="green"] {
+  --arofi-theme-accent: #20a53a;
+  --arofi-theme-accent-hover: #16822c;
+  --arofi-theme-accent-soft: #e8f7ec;
+  --arofi-theme-accent-soft-2: #f3fbf5;
+  --arofi-theme-accent-border: #b9e8c4;
+  --arofi-theme-accent-text: #16822c;
+}
+
+:root[data-accent-theme="white"] {
+  --arofi-theme-accent: #3a424d;
+  --arofi-theme-accent-hover: #131313;
+  --arofi-theme-accent-soft: #f5f6f7;
+  --arofi-theme-accent-soft-2: #fafafa;
+  --arofi-theme-accent-border: #dcdfe6;
+  --arofi-theme-accent-text: #131313;
+}
+
+:root[data-theme="dark"][data-accent-theme="blue"],
+:root[data-theme="dark"]:not([data-accent-theme]) {
+  --arofi-theme-accent: #60a5fa;
+  --arofi-theme-accent-hover: #93c5fd;
+  --arofi-theme-accent-soft: rgba(96, 165, 250, 0.14);
+  --arofi-theme-accent-soft-2: rgba(96, 165, 250, 0.09);
+  --arofi-theme-accent-border: rgba(96, 165, 250, 0.32);
+  --arofi-theme-accent-text: #93c5fd;
+}
+
+:root[data-theme="dark"][data-accent-theme="green"] {
+  --arofi-theme-accent: #25c348;
+  --arofi-theme-accent-hover: #5ee377;
+  --arofi-theme-accent-soft: rgba(37, 195, 72, 0.14);
+  --arofi-theme-accent-soft-2: rgba(37, 195, 72, 0.09);
+  --arofi-theme-accent-border: rgba(37, 195, 72, 0.34);
+  --arofi-theme-accent-text: #76e28b;
+}
+
+:root[data-theme="dark"][data-accent-theme="white"] {
+  --arofi-theme-accent: #d9d9d9;
+  --arofi-theme-accent-hover: #ffffff;
+  --arofi-theme-accent-soft: rgba(255, 255, 255, 0.12);
+  --arofi-theme-accent-soft-2: rgba(255, 255, 255, 0.08);
+  --arofi-theme-accent-border: rgba(255, 255, 255, 0.26);
+  --arofi-theme-accent-text: #ffffff;
+}
+
+:root,
+[data-theme="light"],
+[data-theme="dark"] {
+  --green: var(--arofi-theme-accent);
+  --green-light: var(--arofi-theme-accent-soft);
+  --green-mid: var(--arofi-theme-accent-border);
+  --green-dark: var(--arofi-theme-accent-text);
+  --green-soft: var(--arofi-theme-accent-soft-2);
+  --brand: var(--arofi-theme-accent);
+  --brand-2: var(--arofi-theme-accent-hover);
+  --arofi-brand: var(--arofi-theme-accent);
+  --arofi-brand-hover: var(--arofi-theme-accent-hover);
+  --success-bg: var(--arofi-theme-accent-soft);
+  --success-fg: var(--arofi-theme-accent-text);
+  --info-bg: var(--arofi-theme-accent-soft);
+  --info-fg: var(--arofi-theme-accent-text);
+  --aa-sidebar-hover-text: var(--arofi-theme-accent-text);
+  --aa-sidebar-active-bg: var(--arofi-theme-accent-soft);
+  --aa-sidebar-active-text: var(--arofi-theme-accent-text);
+}
+
 html,
 body {
   background: var(--aa-page-bg);
@@ -5013,6 +5091,74 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
 .theme-toggle:hover {
   background: var(--aa-navigation-hover-bg);
   color: var(--aa-navigation-hover-text);
+}
+
+.appearance-settings {
+  display: grid;
+  gap: 18px;
+}
+
+.appearance-mode-switch {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.appearance-accent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.appearance-accent-card {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--aa-radius-sm);
+  background: var(--bg-card);
+  color: var(--text-2);
+  padding: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.appearance-accent-card:hover {
+  border-color: var(--green-mid);
+}
+
+.appearance-accent-card.active {
+  border-color: var(--green);
+  background: var(--green-soft);
+  box-shadow: 0 0 0 3px var(--green-light);
+}
+
+.appearance-accent-card strong,
+.appearance-accent-card small {
+  display: block;
+}
+
+.appearance-accent-card strong {
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.appearance-accent-card small {
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.appearance-accent-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.58);
 }
 
 .badge {

@@ -99,6 +99,13 @@ const portalTemplateStyles: Record<
     buyPill: string
     accept: string
     support: string
+    activeNav: string
+    notice: string
+    noticeText: string
+    iconText: string
+    logoRing: string
+    connectedPanel: string
+    connectedMetric: string
   }
 > = {
   classic: {
@@ -114,6 +121,13 @@ const portalTemplateStyles: Record<
     buyPill: 'border-blue-700/50 bg-blue-600 text-white',
     accept: 'border-blue-200 bg-white',
     support: 'text-blue-600',
+    activeNav: 'border-blue-500 bg-blue-50 text-blue-700',
+    notice: 'border-blue-200 bg-blue-50 text-blue-700',
+    noticeText: 'text-blue-700',
+    iconText: 'text-blue-600',
+    logoRing: 'border-blue-500/20 bg-blue-500/10',
+    connectedPanel: 'border-blue-200 bg-gradient-to-b from-blue-50 to-white',
+    connectedMetric: 'border-blue-100 bg-white text-blue-700',
   },
   fresh: {
     shell: 'rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 shadow-[0_8px_32px_rgba(5,150,105,0.10)] sm:px-6',
@@ -128,6 +142,13 @@ const portalTemplateStyles: Record<
     buyPill: 'border-emerald-700/50 bg-emerald-600 text-white',
     accept: 'border-emerald-200 bg-white',
     support: 'text-emerald-600',
+    activeNav: 'border-emerald-500 bg-emerald-50 text-emerald-700',
+    notice: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    noticeText: 'text-emerald-700',
+    iconText: 'text-emerald-600',
+    logoRing: 'border-emerald-500/20 bg-emerald-500/10',
+    connectedPanel: 'border-emerald-200 bg-gradient-to-b from-emerald-50 to-white',
+    connectedMetric: 'border-emerald-100 bg-white text-emerald-700',
   },
   midnight: {
     shell: 'rounded-2xl border border-sky-900 bg-slate-950 px-5 py-5 shadow-[0_22px_70px_rgba(2,6,23,0.25)] sm:px-6',
@@ -142,6 +163,13 @@ const portalTemplateStyles: Record<
     buyPill: 'border-sky-300 bg-sky-400 text-slate-950',
     accept: 'border-sky-800 bg-slate-900 text-white',
     support: 'text-sky-300',
+    activeNav: 'border-sky-500 bg-sky-950 text-sky-200',
+    notice: 'border-sky-800 bg-slate-900 text-sky-200',
+    noticeText: 'text-sky-200',
+    iconText: 'text-sky-300',
+    logoRing: 'border-sky-700 bg-slate-900',
+    connectedPanel: 'border-sky-900 bg-gradient-to-b from-slate-900 to-slate-950 text-white',
+    connectedMetric: 'border-sky-800 bg-slate-950 text-sky-300',
   },
   sunrise: {
     shell: 'rounded-2xl border border-amber-200 bg-orange-50 px-5 py-5 shadow-[0_18px_60px_rgba(245,158,11,0.14)] sm:px-6',
@@ -156,6 +184,13 @@ const portalTemplateStyles: Record<
     buyPill: 'border-amber-700 bg-amber-500 text-white',
     accept: 'border-amber-200 bg-white',
     support: 'text-amber-700',
+    activeNav: 'border-amber-500 bg-amber-50 text-amber-700',
+    notice: 'border-amber-200 bg-amber-50 text-amber-800',
+    noticeText: 'text-amber-700',
+    iconText: 'text-amber-600',
+    logoRing: 'border-amber-500/20 bg-amber-500/10',
+    connectedPanel: 'border-amber-200 bg-gradient-to-b from-amber-50 to-white',
+    connectedMetric: 'border-amber-100 bg-white text-amber-700',
   },
   minimal: {
     shell: 'rounded-none border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6',
@@ -170,6 +205,13 @@ const portalTemplateStyles: Record<
     buyPill: 'border-slate-950 bg-slate-950 text-white',
     accept: 'border-slate-200 bg-white',
     support: 'text-slate-950',
+    activeNav: 'border-slate-950 bg-slate-100 text-slate-950',
+    notice: 'border-slate-200 bg-slate-50 text-slate-700',
+    noticeText: 'text-slate-700',
+    iconText: 'text-slate-950',
+    logoRing: 'border-slate-200 bg-slate-50',
+    connectedPanel: 'border-slate-200 bg-gradient-to-b from-slate-50 to-white',
+    connectedMetric: 'border-slate-200 bg-white text-slate-950',
   },
 }
 
@@ -1091,15 +1133,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   return (
     <div className="flex flex-1 flex-col gap-6">
       {initialView !== 'home' && (
-      <section className="rounded-[28px] border border-emerald-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6">
+      <section className={`rounded-[28px] border bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6 ${portalStyle.panel}`}>
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10">
+              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${portalStyle.logoRing}`}>
                 <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-emerald-700">AROFi Customer Portal</p>
+                <p className={`text-xs uppercase tracking-[0.22em] ${portalStyle.support}`}>AROFi Customer Portal</p>
                 <h1 className="mt-2 text-2xl font-semibold text-slate-950 sm:text-3xl">
                   {context?.tenant.name ?? 'AROFi Hotspot Access'}
                 </h1>
@@ -1121,7 +1163,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </div>
             </div>
 
-            <div className={`hidden rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] sm:block ${statusTone(activeActivation ? 'ACTIVE' : currentPayment?.status)}`}>
+            <div className={`hidden rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] sm:block ${activeActivation ? portalStyle.activeNav : statusTone(currentPayment?.status)}`}>
               {activeActivation ? 'Connected' : currentPayment?.status ?? 'Portal Ready'}
             </div>
           </div>
@@ -1130,10 +1172,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             <Link href="/" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
               Buy Access
             </Link>
-            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+            <Link href="/login" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'login' ? portalStyle.activeNav : 'border-slate-200 bg-white text-slate-600'}`}>
               Login
             </Link>
-            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+            <Link href="/session" className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${initialView === 'session' ? portalStyle.activeNav : 'border-slate-200 bg-white text-slate-600'}`}>
               Session
             </Link>
             <Link href="/support" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
@@ -1161,15 +1203,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       <>
           {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
-          {!checkoutOpen && statusMessage && !pendingStatuses.includes(currentPayment?.status ?? '') && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div>}
-          {connectionStatus === 'reconnecting' && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Connecting to internet...</span></div>}
+          {!checkoutOpen && statusMessage && !pendingStatuses.includes(currentPayment?.status ?? '') && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}>{statusMessage}</div>}
+          {connectionStatus === 'reconnecting' && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}><span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Connecting to internet...</span></div>}
           {context?.returningDevice?.existingActiveAccess && connectionStatus !== 'reconnecting' && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            <div className={`rounded-2xl border p-4 text-sm ${portalStyle.notice}`}>
               <div className="font-semibold">Welcome back — your package is still active.</div>
-              <div className="mt-1 text-emerald-700">
+              <div className={`mt-1 ${portalStyle.noticeText}`}>
                 {context.returningDevice.activation?.package.name ?? 'Active package'} · expires {formatDate(context.returningDevice.activation?.endsAt)}.
               </div>
-              <button type="button" onClick={connectNow} className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
+              <button type="button" onClick={connectNow} className={`mt-3 inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold ${portalStyle.button}`}>
                 <Wifi className="h-4 w-4" />
                 Connect Now
               </button>
@@ -1180,7 +1222,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             <section className={`mx-auto w-full max-w-[540px] ${portalStyle.shell}`}>
               <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>
               <div className="text-center flex flex-col items-center justify-center">
-              <div className="mb-2 text-emerald-500 animate-pulse flex justify-center items-center">
+              <div className={`mb-2 animate-pulse flex justify-center items-center ${portalStyle.iconText}`}>
                 <Wifi className="h-12 w-12" />
               </div>
               <div className={`mx-auto mb-2 w-fit ${portalStyle.logoBox}`}>
@@ -1311,12 +1353,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
                     {/* PIN prompt — shown while polling after payment sent */}
                     {statusMessage && pendingStatuses.includes(currentPayment?.status ?? '') && (
-                      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+                      <div className={`mt-3 rounded-lg border px-3 py-3 text-sm ${portalStyle.notice}`}>
                         <div className="flex items-center gap-2 font-semibold">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           {statusMessage}
                         </div>
-                        <div className="mt-1 text-xs text-emerald-600">This page will auto-connect once approved.</div>
+                        <div className={`mt-1 text-xs ${portalStyle.noticeText}`}>This page will auto-connect once approved.</div>
                       </div>
                     )}
 
@@ -1336,7 +1378,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                             placeholder="07XX XXX XXX"
                             inputMode="tel"
                             autoFocus
-                            className="w-full rounded-lg border border-slate-300 bg-white pl-4 pr-24 py-3 text-base text-slate-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            className={`w-full rounded-lg border bg-white pl-4 pr-24 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
                           />
                           {detectNetwork(phoneNumber) && (
                             <div className="absolute right-2.5">
@@ -1353,7 +1395,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       <button
                         type="submit"
                         disabled={isPaymentLoading || pendingStatuses.includes(currentPayment?.status ?? '')}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3.5 text-sm font-extrabold text-white transition hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500"
+                        className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-sm font-extrabold transition disabled:bg-slate-300 disabled:text-slate-500 ${portalStyle.button}`}
                       >
                         {isPaymentLoading ? (
                           <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
@@ -1374,17 +1416,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             <section className="mx-auto w-full max-w-md">
               {portalSession?.summary.hasActiveAccess ? (
                 // Already signed in with active access — celebrate + route to session.
-                <div className="rounded-[28px] border border-blue-200 bg-gradient-to-b from-blue-50 to-white p-6 text-center shadow-sm sm:p-8">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white">
+                <div className={`rounded-[28px] border p-6 text-center shadow-sm sm:p-8 ${portalStyle.connectedPanel}`}>
+                  <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${portalStyle.button}`}>
                     <Wifi className="h-7 w-7" />
                   </div>
                   <h2 className="mt-4 text-2xl font-bold text-slate-950">You’re connected</h2>
                   <p className="mt-1 text-sm text-slate-600">{portalSession.activeActivation?.package.name ?? 'Active plan'}</p>
-                  <div className="mt-5 rounded-2xl border border-blue-100 bg-white p-4">
-                    <div className="text-3xl font-extrabold tracking-tight text-blue-700">{portalSession.summary.activeMinutesRemaining} min</div>
+                  <div className={`mt-5 rounded-2xl border p-4 ${portalStyle.connectedMetric}`}>
+                    <div className="text-3xl font-extrabold tracking-tight">{portalSession.summary.activeMinutesRemaining} min</div>
                     <div className="mt-1 text-xs font-medium uppercase tracking-wider text-slate-400">time remaining</div>
                   </div>
-                  <Link href="/session" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+                  <Link href="/session" className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-semibold transition ${portalStyle.button}`}>
                     Open my session
                     <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -1392,7 +1434,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               ) : (
                 // The "already bought" sign-in: one number, one big button.
                 <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${portalStyle.link}`}>
                     <LogIn className="h-6 w-6" />
                   </div>
                   <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-950">Already bought access?</h2>
@@ -1406,9 +1448,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       placeholder="07XX XXX XXX"
                       inputMode="tel"
                       autoFocus
-                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-lg text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      className={`w-full rounded-2xl border bg-white px-4 py-3.5 text-lg text-slate-950 outline-none transition focus:ring-4 ${portalStyle.input}`}
                     />
-                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-base font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500">
+                    <button type="submit" disabled={isLoginLoading} className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-base font-semibold transition disabled:bg-slate-300 disabled:text-slate-500 ${portalStyle.button}`}>
                       {isLoginLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
                       {isLoginLoading ? 'Reconnecting…' : 'Sign in & reconnect'}
                     </button>
@@ -1422,7 +1464,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
                   <div className="mt-6 border-t border-slate-100 pt-5 text-center text-sm text-slate-500">
                     Haven’t bought yet?{' '}
-                    <Link href="/" className="font-semibold text-blue-600 hover:text-blue-700">Buy access</Link>
+                    <Link href="/" className={`font-semibold ${portalStyle.support}`}>Buy access</Link>
                   </div>
                 </div>
               )}
@@ -1462,8 +1504,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   </div>
                 ) : (
                   <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-emerald-500" />
-                    <button type="submit" disabled={isLoginLoading} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-500">
+                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className={`w-full rounded-2xl border bg-white px-4 py-3 text-slate-950 outline-none ${portalStyle.input}`} />
+                    <button type="submit" disabled={isLoginLoading} className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold disabled:bg-slate-300 disabled:text-slate-500 ${portalStyle.button}`}>
                       {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
                       {isLoginLoading ? 'Signing in...' : 'Load session'}
                     </button>
@@ -1536,7 +1578,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       onClick={() => handleCopyVoucherCode(code)}
                       className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                     >
-                      {copiedVoucherCode === code ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedVoucherCode === code ? <Check className={`h-3.5 w-3.5 ${portalStyle.iconText}`} /> : <Copy className="h-3.5 w-3.5" />}
                       {copiedVoucherCode === code ? 'Copied' : 'Copy'}
                     </button>
                   </div>
@@ -1551,7 +1593,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 <button
                   type="button"
                   onClick={handleShareVoucherCodes}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white"
+                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold ${portalStyle.button}`}
                 >
                   <Share2 className="h-4 w-4" /> Share
                 </button>
