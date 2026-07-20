@@ -57,6 +57,12 @@ export default function ChatWidget() {
     aiMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [aiMessages, aiLoading])
 
+  useEffect(() => {
+    const openChat = () => setIsOpen(true)
+    window.addEventListener('arofi:open-chat', openChat)
+    return () => window.removeEventListener('arofi:open-chat', openChat)
+  }, [])
+
   const handleSendAiMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     const text = aiInput.trim()

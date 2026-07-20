@@ -5199,6 +5199,32 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   font-weight: 600;
 }
 
+.topbar-ai-support {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--arofi-theme-accent-border);
+  border-radius: var(--aa-radius-sm);
+  background: var(--arofi-theme-accent-soft);
+  color: var(--arofi-theme-accent-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.topbar-ai-support:hover {
+  background: var(--arofi-theme-accent-soft-2);
+  border-color: var(--arofi-theme-accent);
+}
+
+@media (max-width: 520px) {
+  .topbar-ai-support span { display: none; }
+  .topbar-ai-support { width: 30px; padding: 0; justify-content: center; }
+}
+
 .badge {
   border-radius: var(--aa-radius-sm);
   font-size: 12px;
