@@ -94,6 +94,24 @@ export class MailService {
     return this.sendMail({ to: input.to, subject, html: this.renderLayout(body), text })
   }
 
+  async sendBusinessNotificationEmail(input: { to: string; title: string; message: string }): Promise<boolean> {
+    const safeTitle = this.escapeHtml(input.title)
+    const safeMessage = this.escapeHtml(input.message).replace(/\r?\n/g, '<br/>')
+    const body = `
+      <h2 style="color:#2563EB; margin-top:0;">${safeTitle}</h2>
+      <p style="color:#0f172a; line-height:1.65;">${safeMessage}</p>
+      <p style="margin-top:24px; color:#64748b; font-size:13px;">This announcement is also available from the notification bell in your AROFi dashboard.</p>
+    `
+    const text = `${input.title}\n\n${input.message}\n\nThis announcement is also available from the notification bell in your AROFi dashboard.`
+
+    return this.sendMail({
+      to: input.to,
+      subject: `AROFi: ${input.title}`,
+      html: this.renderLayout(body),
+      text,
+    })
+  }
+
   async sendSaleReceiptEmail(input: {
     to: string
     tenantName: string

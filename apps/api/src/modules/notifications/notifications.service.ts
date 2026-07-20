@@ -1,13 +1,21 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { NotificationAudience } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { MailService } from '../mail/mail.service'
+import { WhatsAppService } from '../whatsapp/whatsapp.service'
 import { CreateNotificationDto } from './dto/create-notification.dto'
 
 const MAX_ATTACHMENTS_PER_NOTIFICATION = 5
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NotificationsService.name)
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+    private readonly whatsAppService: WhatsAppService,
+  ) {}
 
   async listForUser(userId: string, tenantId?: string | null) {
     const notifications = await this.prisma.notification.findMany({
@@ -95,14 +103,26 @@ export class NotificationsService {
       throw new BadRequestException('Select a business to notify')
     }
 
-    if (dto.audience === NotificationAudience.SINGLE_BUSINESS && dto.tenantId) {
-      const tenant = await this.prisma.tenant.findUnique({ where: { id: dto.tenantId } })
-      if (!tenant) {
-        throw new NotFoundException('Business not found')
-      }
+    const businesses = await this.prisma.tenant.findMany({
+      where: dto.audience === NotificationAudience.SINGLE_BUSINESS ? { id: dto.tenantId } : undefined,
+      select: {
+        id: true,
+        name: true,
+        supportEmail: true,
+        supportPhone: true,
+        complianceProfile: { select: { email: true, phoneNumber: true } },
+        users: {
+          where: { isActive: true },
+          select: { email: true },
+        },
+      },
+    })
+
+    if (dto.audience === NotificationAudience.SINGLE_BUSINESS && businesses.length === 0) {
+      throw new NotFoundException('Business not found')
     }
 
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         title: dto.title.trim(),
         body: dto.body.trim(),
@@ -114,6 +134,80 @@ export class NotificationsService {
         tenant: { select: { id: true, name: true } },
         attachments: { select: { id: true, fileName: true, mimeType: true, fileSize: true } },
       },
+    })
+
+    const emailAddresses = this.uniqueContacts(
+      businesses.flatMap((business) => [
+        business.supportEmail,
+        business.complianceProfile?.email,
+        ...business.users.map((user) => user.email),
+      ]),
+      true,
+    )
+    const phoneNumbers = this.uniqueContacts(
+      businesses.flatMap((business) => [business.supportPhone, business.complianceProfile?.phoneNumber]),
+    )
+    const businessesWithEmail = businesses.filter((business) =>
+      Boolean(business.supportEmail || business.complianceProfile?.email || business.users.some((user) => user.email)),
+    ).length
+    const businessesWithPhone = businesses.filter((business) =>
+      Boolean(business.supportPhone || business.complianceProfile?.phoneNumber),
+    ).length
+
+    const [emailResults, whatsAppResults] = await Promise.all([
+      Promise.all(
+        emailAddresses.map((to) =>
+          this.mailService.sendBusinessNotificationEmail({
+            to,
+            title: notification.title,
+            message: notification.body,
+          }),
+        ),
+      ),
+      Promise.all(
+        phoneNumbers.map((phoneNumber) =>
+          this.whatsAppService.sendTextMessage(
+            phoneNumber,
+            `AROFi notification\n\n${notification.title}\n\n${notification.body}\n\nOpen your AROFi dashboard to view this notification.`,
+          ),
+        ),
+      ),
+    ])
+
+    const delivery = {
+      inbox: { businesses: businesses.length },
+      email: {
+        businesses: businessesWithEmail,
+        attempted: emailAddresses.length,
+        delivered: emailResults.filter(Boolean).length,
+        failed: emailResults.filter((result) => !result).length,
+      },
+      whatsapp: {
+        businesses: businessesWithPhone,
+        attempted: phoneNumbers.length,
+        delivered: whatsAppResults.filter(Boolean).length,
+        failed: whatsAppResults.filter((result) => !result).length,
+      },
+    }
+
+    if (delivery.email.failed > 0 || delivery.whatsapp.failed > 0) {
+      this.logger.warn(
+        `Notification ${notification.id} saved in-app, with external delivery failures: email ${delivery.email.delivered}/${delivery.email.attempted}, WhatsApp ${delivery.whatsapp.delivered}/${delivery.whatsapp.attempted}`,
+      )
+    }
+
+    return { ...notification, delivery }
+  }
+
+  private uniqueContacts(values: Array<string | null | undefined>, caseInsensitive = false) {
+    const contacts = values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))
+    const seen = new Set<string>()
+
+    return contacts.filter((contact) => {
+      const key = caseInsensitive ? contact.toLowerCase() : contact.replace(/\D/g, '')
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
     })
   }
 

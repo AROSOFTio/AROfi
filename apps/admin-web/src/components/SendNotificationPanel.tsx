@@ -22,6 +22,22 @@ type SentNotification = {
   _count: { reads: number }
 }
 
+type DeliveryChannel = {
+  businesses: number
+  attempted: number
+  delivered: number
+  failed: number
+}
+
+type CreateNotificationResponse = {
+  id: string
+  delivery: {
+    inbox: { businesses: number }
+    email: DeliveryChannel
+    whatsapp: DeliveryChannel
+  }
+}
+
 export default function SendNotificationPanel() {
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
   const [sent, setSent] = useState<SentNotification[]>([])
@@ -85,7 +101,7 @@ export default function SendNotificationPanel() {
 
     setIsSubmitting(true)
     try {
-      const notification = await clientPostApi<{ id: string }>('/notifications', {
+      const notification = await clientPostApi<CreateNotificationResponse>('/notifications', {
         title: title.trim(),
         body: body.trim(),
         audience,
@@ -98,7 +114,19 @@ export default function SendNotificationPanel() {
         await clientUploadApi(`/notifications/${notification.id}/attachments`, formData)
       }
 
-      setSuccess('Notification sent successfully.')
+      const { inbox, email, whatsapp } = notification.delivery
+      const deliveryMessage = `Dashboard: ${inbox.businesses}/${inbox.businesses} businesses. Email: ${email.delivered}/${email.attempted} contacts (${email.businesses}/${inbox.businesses} businesses covered). WhatsApp: ${whatsapp.delivered}/${whatsapp.attempted} contacts (${whatsapp.businesses}/${inbox.businesses} businesses covered).`
+      const hasDeliveryProblem =
+        email.failed > 0 ||
+        whatsapp.failed > 0 ||
+        email.businesses < inbox.businesses ||
+        whatsapp.businesses < inbox.businesses
+
+      if (hasDeliveryProblem) {
+        setError(`Notification saved, but some contacts were missing or could not be reached. ${deliveryMessage}`)
+      } else {
+        setSuccess(`Notification delivered. ${deliveryMessage}`)
+      }
       setTitle('')
       setBody('')
       setFiles([])
@@ -176,6 +204,10 @@ export default function SendNotificationPanel() {
               </div>
             )}
           </div>
+
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+            Delivery uses each business&apos;s saved contact email, active account emails, and saved WhatsApp phone number. Duplicate contacts receive one copy.
+          </p>
 
           {error && <p style={{ color: 'var(--danger-fg)', fontSize: 13, margin: 0 }}>{error}</p>}
           {success && <p style={{ color: 'var(--success-fg)', fontSize: 13, margin: 0 }}>{success}</p>}

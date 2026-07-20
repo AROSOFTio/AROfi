@@ -106,11 +106,11 @@ services:
       - "3005:3000"
     environment:
       - WAHA_PRINT_QR=true
-      - WAHA_SECURITY_API_KEY=${WHATSAPP_GATEWAY_API_KEY:-}
+      - WAHA_API_KEY=${WHATSAPP_GATEWAY_API_KEY:-}
     volumes:
       - wa-sessions-local:/app/.sessions
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "wget --header='X-Api-Key: $${WAHA_API_KEY}' -qO- http://localhost:3000/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -430,13 +430,14 @@ export const docs: Record<string, DocPage> = {
   },
   notifications: {
     title: 'Notifications',
-    intro: 'In-app notifications from AROFi to your business — never a browser pop-up, and never something you need to opt into separately.',
+    intro: 'AROFi announcements appear in your dashboard inbox and are also delivered to the email addresses and WhatsApp phone number saved for your business.',
     sections: [
       {
         heading: 'How you see them',
         body: [
           'Every signed-in user has a notification bell in the top bar showing an unread count. Opening it lists your notifications, newest first, and you can mark one or all as read.',
           'Notifications are checked automatically about once a minute while you have the dashboard open — there\'s no separate "enable notifications" step or browser permission prompt.',
+          'Email and WhatsApp copies are sent automatically when valid contact details are saved for the business.',
         ],
       },
       {
@@ -538,7 +539,7 @@ export const docs: Record<string, DocPage> = {
       {
         heading: 'Do I need to configure anything for notifications to work?',
         body: [
-          'No — every signed-in user automatically has a notification bell in the top bar. There\'s no browser permission prompt and nothing to enable.',
+          'The dashboard inbox works automatically. Keep the business contact email and WhatsApp phone number up to date in Settings so external copies reach you too.',
         ],
       },
     ],

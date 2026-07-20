@@ -8,7 +8,7 @@ export default function AdminNotificationsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Notifications</h1>
-          <p className="page-subtitle">Send in-app updates and files to one business or every business. No browser pop-ups — businesses see these in their notification inbox.</p>
+          <p className="page-subtitle">Send announcements to the dashboard inbox, saved email addresses, and saved WhatsApp phone numbers.</p>
         </div>
       </div>
       <SendNotificationPanel />
