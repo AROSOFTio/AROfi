@@ -1215,6 +1215,7 @@ export class VouchersService {
     //   - On-network scans are intercepted by MikroTik; login.html recovers the
     //     nested voucher code from dst/link-orig and auto-redeems it there.
     const portalHost = this.getVoucherPortalHost()
+    const tenantHotspotDomain = batch.tenant.domain?.trim() || portalHost
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
@@ -1222,7 +1223,7 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-      const qrPng = await this.generateVoucherQrPng(voucher.code)
+      const qrPng = await this.generateVoucherQrPng(voucher.code, tenantHotspotDomain)
 
       this.drawVoucherCard(doc, {
         x,
@@ -1552,8 +1553,8 @@ export class VouchersService {
     doc.restore()
   }
 
-  private async generateVoucherQrPng(voucherCode: string) {
-    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode), {
+  private async generateVoucherQrPng(voucherCode: string, hotspotDomain?: string) {
+    const dataUrl = await QRCode.toDataURL(this.buildVoucherPortalUrl(voucherCode, hotspotDomain), {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 112,
@@ -1565,8 +1566,10 @@ export class VouchersService {
     return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64')
   }
 
-  private buildVoucherPortalUrl(voucherCode: string) {
-    const baseUrl = this.getVoucherQrBaseUrl()
+  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
+    const baseUrl = hotspotDomain
+      ? `http://${hotspotDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/login`
+      : this.getVoucherQrBaseUrl()
     const separator = baseUrl.includes('?') ? '&' : '?'
     return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
   }
