@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Check, Loader2, AlertCircle } from 'lucide-react'
 import { clientFetchApi, clientPatchApi } from '@/lib/client-api'
 
-type PortalTemplateId = 'classic' | 'fresh' | 'midnight' | 'sunrise' | 'minimal'
+type PortalTemplateId = 'classic'
 
 type TemplateDefinition = {
   id: PortalTemplateId
@@ -29,97 +29,25 @@ type TemplateDefinition = {
 const TEMPLATES: TemplateDefinition[] = [
   {
     id: 'classic',
-    name: 'AROFi Blue',
-    description: 'The default portal — bright blue on white, exactly as seen at the captive portal. Loads fast on any device.',
+    name: 'Business Theme',
+    description: 'A clean portal using the saved business accent. Loads quickly on any device.',
     isPro: false,
-    pageBg: '#eff6ff',
+    pageBg: 'var(--arofi-theme-accent-soft)',
     cardBg: '#ffffff',
-    cardBorder: '#bfdbfe',
-    cardShadow: '0 8px 32px rgba(37,99,235,.10)',
+    cardBorder: 'var(--arofi-theme-accent-border)',
+    cardShadow: '0 8px 32px var(--arofi-theme-accent-soft)',
     tabsBg: '#f1f5f9',
-    accentColor: '#2563EB',
-    titleColor: '#2563EB',
+    accentColor: 'var(--arofi-theme-accent)',
+    titleColor: 'var(--arofi-theme-accent-text)',
     subtitleColor: '#64748b',
     inputBg: '#f8fafc',
     inputBorder: '#e2e8f0',
-    buttonBg: '#2563EB',
-    buttonText: '#ffffff',
-  },
-  {
-    id: 'midnight',
-    name: 'Midnight',
-    description: 'Dark mode — deep navy background with electric blue accents. Great for evening and night venues.',
-    isPro: true,
-    pageBg: '#0a0f1e',
-    cardBg: '#0f172a',
-    cardBorder: '#1e3a5f',
-    cardShadow: '0 8px 32px rgba(0,0,0,.5)',
-    tabsBg: '#162033',
-    accentColor: '#3b82f6',
-    titleColor: '#60a5fa',
-    subtitleColor: '#94a3b8',
-    inputBg: '#1e293b',
-    inputBorder: '#334155',
-    buttonBg: '#2563EB',
-    buttonText: '#ffffff',
-  },
-  {
-    id: 'fresh',
-    name: 'Forest',
-    description: 'Calm green tones — natural and trustworthy feel, popular for community and rural hotspots.',
-    isPro: true,
-    pageBg: '#ecfdf5',
-    cardBg: '#ffffff',
-    cardBorder: '#a7f3d0',
-    cardShadow: '0 8px 32px rgba(5,150,105,.10)',
-    tabsBg: '#f0fdf4',
-    accentColor: '#059669',
-    titleColor: '#059669',
-    subtitleColor: '#64748b',
-    inputBg: '#f8fafc',
-    inputBorder: '#d1fae5',
-    buttonBg: '#059669',
-    buttonText: '#ffffff',
-  },
-  {
-    id: 'sunrise',
-    name: 'Sunrise',
-    description: 'Warm amber and orange tones — energetic feel, great for cafés and outdoor hotspots.',
-    isPro: true,
-    pageBg: '#fffbeb',
-    cardBg: '#ffffff',
-    cardBorder: '#fde68a',
-    cardShadow: '0 8px 32px rgba(245,158,11,.10)',
-    tabsBg: '#fef3c7',
-    accentColor: '#d97706',
-    titleColor: '#d97706',
-    subtitleColor: '#78350f',
-    inputBg: '#fffbeb',
-    inputBorder: '#fde68a',
-    buttonBg: '#f59e0b',
-    buttonText: '#ffffff',
-  },
-  {
-    id: 'minimal',
-    name: 'Minimal',
-    description: 'Pure black and white — maximum readability, zero distraction.',
-    isPro: true,
-    pageBg: '#f8fafc',
-    cardBg: '#ffffff',
-    cardBorder: '#e2e8f0',
-    cardShadow: '0 2px 8px rgba(0,0,0,.08)',
-    tabsBg: '#f1f5f9',
-    accentColor: '#0f172a',
-    titleColor: '#0f172a',
-    subtitleColor: '#64748b',
-    inputBg: '#f8fafc',
-    inputBorder: '#e2e8f0',
-    buttonBg: '#0f172a',
+    buttonBg: 'var(--arofi-theme-accent)',
     buttonText: '#ffffff',
   },
 ]
 
-const AVAILABLE_TEMPLATES = TEMPLATES.filter((template) => template.id === 'classic')
+const AVAILABLE_TEMPLATES = TEMPLATES
 
 // Faithfully recreates the login.html captive portal structure at miniature scale
 function PortalMockup({ t }: { t: TemplateDefinition }) {
@@ -301,7 +229,7 @@ export default function HotspotTemplatesPage() {
         </div>
       )}
       {success && (
-        <div style={{ background: 'var(--success-bg,#f0fdf4)', border: '1px solid var(--success-border,#86efac)', borderRadius: 8, padding: '10px 14px', color: 'var(--success-fg,#15803d)', fontSize: 13, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', color: 'var(--arofi-theme-accent-text)', fontSize: 13, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} /> {success}
         </div>
       )}

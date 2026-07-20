@@ -36,7 +36,7 @@ export function RouterOnboardingSteps({ onboardingStatus }: { onboardingStatus: 
     <div
       style={{
         border: '1px solid var(--arofi-theme-accent-border)',
-        background: 'var(--blue-bg, #eff6ff)',
+        background: 'var(--arofi-theme-accent-soft)',
         borderRadius: 8,
         padding: '12px 16px',
         marginTop: 10,

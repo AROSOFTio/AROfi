@@ -448,7 +448,7 @@ export default function SettingsManager({
               <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
                 Choose one accent for the public website, sign-in pages, and dashboard.
               </p>
-              <ThemeToggle variant="settings" />
+              <ThemeToggle />
             </div>
 
             <div className="card">

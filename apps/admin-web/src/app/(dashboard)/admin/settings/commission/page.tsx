@@ -142,7 +142,7 @@ export default function CommissionRatesPage() {
 
   const tierPill = (plan: string) => {
     const color = plan === 'ENTERPRISE' ? '#7c3aed' : plan === 'PRO' ? 'var(--arofi-theme-accent)' : '#6b7280'
-    const bg = plan === 'ENTERPRISE' ? 'rgba(124,58,237,0.1)' : plan === 'PRO' ? 'rgba(37,99,235,0.1)' : 'rgba(107,114,128,0.1)'
+    const bg = plan === 'ENTERPRISE' ? 'rgba(124,58,237,0.1)' : plan === 'PRO' ? 'var(--arofi-theme-accent-soft)' : 'rgba(107,114,128,0.1)'
     return (
       <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: bg, color, textTransform: 'uppercase' }}>
         {plan}

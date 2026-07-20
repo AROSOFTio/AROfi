@@ -160,7 +160,7 @@ export default function NotificationBell() {
                 style={{
                   padding: '12px 14px',
                   borderBottom: '1px solid var(--border)',
-                  background: item.isRead ? 'transparent' : 'rgba(37, 99, 235, 0.07)',
+                  background: item.isRead ? 'transparent' : 'var(--arofi-theme-accent-soft-2)',
                   cursor: item.isRead ? 'default' : 'pointer',
                 }}
               >

@@ -4598,12 +4598,12 @@ pre, code.block {
   --bg-hover: var(--aa-navigation-hover-bg);
   --border: var(--aa-border);
   --border-soft: var(--aa-border-soft);
-  --text-1: var(--aa-text-strong);
-  --text-2: var(--aa-text);
-  --text-3: var(--aa-text-muted);
-  --text-primary: var(--aa-text-strong);
-  --text-secondary: var(--aa-text);
-  --text-muted: var(--aa-text-muted);
+  --text-1: #131313;
+  --text-2: #3a424d;
+  --text-3: #667085;
+  --text-primary: #131313;
+  --text-secondary: #3a424d;
+  --text-muted: #667085;
   --green: var(--aa-primary);
   --green-light: var(--aa-selected-nav-bg);
   --green-mid: var(--aa-primary);
@@ -4642,12 +4642,12 @@ pre, code.block {
   --bg-hover: var(--aa-navigation-hover-bg);
   --border: var(--aa-border);
   --border-soft: var(--aa-border-soft);
-  --text-1: var(--aa-text-strong);
-  --text-2: var(--aa-text);
-  --text-3: var(--aa-text-muted);
-  --text-primary: var(--aa-text-strong);
-  --text-secondary: var(--aa-text);
-  --text-muted: var(--aa-text-muted);
+  --text-1: #f1f5f9;
+  --text-2: #cbd5e1;
+  --text-3: #a7b0bf;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #a7b0bf;
   --green: var(--aa-primary);
   --green-light: var(--aa-selected-nav-bg);
   --green-mid: var(--aa-primary);
@@ -4761,11 +4761,21 @@ pre, code.block {
   --aa-success: var(--arofi-theme-accent);
   --aa-info: var(--arofi-theme-accent);
   --aa-link: var(--arofi-theme-accent-text);
+  --aa-selected-nav-bg: var(--arofi-theme-accent-soft);
+  --aa-selected-nav-text: var(--arofi-theme-accent-text);
+  --aa-navigation-hover-bg: var(--arofi-theme-accent-soft-2);
+  --aa-navigation-hover-text: var(--arofi-theme-accent-text);
+  --aa-table-row-hover: var(--arofi-theme-accent-soft-2);
   --aa-focus-shadow: 0 0 0 3px var(--arofi-theme-accent-soft);
   --success-bg: var(--arofi-theme-accent-soft);
   --success-fg: var(--arofi-theme-accent-text);
   --info-bg: var(--arofi-theme-accent-soft);
   --info-fg: var(--arofi-theme-accent-text);
+  --success-border: var(--arofi-theme-accent-border);
+  --blue-light: var(--arofi-theme-accent-soft);
+  --blue-mid: var(--arofi-theme-accent-border);
+  --blue-bg: var(--arofi-theme-accent-soft);
+  --blue-fg: var(--arofi-theme-accent-text);
   --aa-text: var(--text-1);
   --aa-text-strong: var(--text-1);
   --aa-text-muted: var(--text-2);
@@ -5249,6 +5259,227 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   .content { padding: 12px; }
   .topbar { padding: 0 12px; }
 }
+
+/* Final theme authority. These selectors intentionally outrank older UI
+   layers so a saved accent controls every shared button, link, state, and
+   surface instead of allowing an earlier fixed blue or green token to win. */
+html[data-theme="light"][data-accent-theme] {
+  --bg-app: #f2f5f9;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --border: #dcdfe6;
+  --border-soft: #eaecf0;
+  --text-1: #101828;
+  --text-2: #344054;
+  --text-3: #667085;
+  --text-primary: #101828;
+  --text-secondary: #344054;
+  --text-muted: #667085;
+  --aa-page-bg: #f2f5f9;
+  --aa-surface: #ffffff;
+  --aa-card-bg: #ffffff;
+  --aa-input-bg: #ffffff;
+  --aa-border: #dcdfe6;
+  --aa-border-soft: #eaecf0;
+  --aa-text: #344054;
+  --aa-text-strong: #101828;
+  --aa-text-muted: #667085;
+  --aa-text-subtle: #475467;
+  --aa-placeholder: #667085;
+}
+
+html[data-theme="dark"][data-accent-theme] {
+  --bg-app: #18191c;
+  --bg-card: #202124;
+  --bg-sidebar: #202124;
+  --border: #45484f;
+  --border-soft: #363940;
+  --text-1: #f8fafc;
+  --text-2: #d0d5dd;
+  --text-3: #a7b0bf;
+  --text-primary: #f8fafc;
+  --text-secondary: #d0d5dd;
+  --text-muted: #a7b0bf;
+  --aa-page-bg: #18191c;
+  --aa-surface: #202124;
+  --aa-card-bg: #202124;
+  --aa-input-bg: #202124;
+  --aa-border: #45484f;
+  --aa-border-soft: #363940;
+  --aa-text: #d0d5dd;
+  --aa-text-strong: #f8fafc;
+  --aa-text-muted: #a7b0bf;
+  --aa-text-subtle: #d0d5dd;
+  --aa-placeholder: #a7b0bf;
+}
+
+html[data-theme="light"][data-accent-theme="blue"] {
+  --arofi-theme-accent: #2563eb;
+  --arofi-theme-accent-hover: #1d4ed8;
+  --arofi-theme-accent-soft: #eff6ff;
+  --arofi-theme-accent-soft-2: #f3f7ff;
+  --arofi-theme-accent-border: #bfdbfe;
+  --arofi-theme-accent-text: #1d4ed8;
+  --arofi-logo-filter: none;
+  --primary: 221 83% 53%;
+  --ring: 221 83% 53%;
+}
+
+html[data-theme="light"][data-accent-theme="green"] {
+  --arofi-theme-accent: #208a37;
+  --arofi-theme-accent-hover: #176c2a;
+  --arofi-theme-accent-soft: #eaf7ed;
+  --arofi-theme-accent-soft-2: #f3faf5;
+  --arofi-theme-accent-border: #adddb8;
+  --arofi-theme-accent-text: #176c2a;
+  --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
+  --primary: 132 62% 33%;
+  --ring: 132 62% 33%;
+}
+
+html[data-theme="light"][data-accent-theme="white"] {
+  --arofi-theme-accent: #3a424d;
+  --arofi-theme-accent-hover: #101828;
+  --arofi-theme-accent-soft: #f2f4f7;
+  --arofi-theme-accent-soft-2: #f8f9fa;
+  --arofi-theme-accent-border: #cfd4dc;
+  --arofi-theme-accent-text: #101828;
+  --arofi-logo-filter: grayscale(1) contrast(1.12);
+  --primary: 214 14% 26%;
+  --ring: 214 14% 26%;
+}
+
+html[data-theme="dark"][data-accent-theme="blue"] {
+  --arofi-theme-accent: #60a5fa;
+  --arofi-theme-accent-hover: #93c5fd;
+  --arofi-theme-accent-soft: rgba(96, 165, 250, 0.16);
+  --arofi-theme-accent-soft-2: rgba(96, 165, 250, 0.10);
+  --arofi-theme-accent-border: rgba(96, 165, 250, 0.38);
+  --arofi-theme-accent-text: #bfdbfe;
+  --arofi-logo-filter: none;
+  --primary: 213 94% 68%;
+  --ring: 213 94% 68%;
+}
+
+html[data-theme="dark"][data-accent-theme="green"] {
+  --arofi-theme-accent: #3bd260;
+  --arofi-theme-accent-hover: #72e58d;
+  --arofi-theme-accent-soft: rgba(59, 210, 96, 0.16);
+  --arofi-theme-accent-soft-2: rgba(59, 210, 96, 0.10);
+  --arofi-theme-accent-border: rgba(59, 210, 96, 0.38);
+  --arofi-theme-accent-text: #8aeba1;
+  --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
+  --primary: 134 62% 53%;
+  --ring: 134 62% 53%;
+}
+
+html[data-theme="dark"][data-accent-theme="white"] {
+  --arofi-theme-accent: #e4e7ec;
+  --arofi-theme-accent-hover: #ffffff;
+  --arofi-theme-accent-soft: rgba(255, 255, 255, 0.14);
+  --arofi-theme-accent-soft-2: rgba(255, 255, 255, 0.09);
+  --arofi-theme-accent-border: rgba(255, 255, 255, 0.30);
+  --arofi-theme-accent-text: #ffffff;
+  --arofi-logo-filter: grayscale(1) brightness(1.5);
+  --primary: 220 17% 91%;
+  --ring: 220 17% 91%;
+}
+
+html[data-theme][data-accent-theme] {
+  --green: var(--arofi-theme-accent);
+  --green-light: var(--arofi-theme-accent-soft);
+  --green-mid: var(--arofi-theme-accent-border);
+  --green-dark: var(--arofi-theme-accent-text);
+  --green-soft: var(--arofi-theme-accent-soft-2);
+  --brand: var(--arofi-theme-accent);
+  --brand-2: var(--arofi-theme-accent-hover);
+  --arofi-brand: var(--arofi-theme-accent);
+  --arofi-brand-hover: var(--arofi-theme-accent-hover);
+  --aa-primary: var(--arofi-theme-accent);
+  --aa-primary-soft: var(--arofi-theme-accent-soft);
+  --aa-primary-hover: var(--arofi-theme-accent-hover);
+  --aa-primary-pressed: var(--arofi-theme-accent-hover);
+  --aa-success: var(--arofi-theme-accent);
+  --aa-info: var(--arofi-theme-accent);
+  --aa-link: var(--arofi-theme-accent-text);
+  --aa-selected-nav-bg: var(--arofi-theme-accent-soft);
+  --aa-selected-nav-text: var(--arofi-theme-accent-text);
+  --aa-navigation-hover-bg: var(--arofi-theme-accent-soft-2);
+  --aa-navigation-hover-text: var(--arofi-theme-accent-text);
+  --aa-table-row-hover: var(--arofi-theme-accent-soft-2);
+  --bg-hover: var(--arofi-theme-accent-soft-2);
+  --success-bg: var(--arofi-theme-accent-soft);
+  --success-fg: var(--arofi-theme-accent-text);
+  --success-border: var(--arofi-theme-accent-border);
+  --info-bg: var(--arofi-theme-accent-soft);
+  --info-fg: var(--arofi-theme-accent-text);
+  --blue-light: var(--arofi-theme-accent-soft);
+  --blue-mid: var(--arofi-theme-accent-border);
+  --blue-bg: var(--arofi-theme-accent-soft);
+  --blue-fg: var(--arofi-theme-accent-text);
+}
+
+.appearance-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.appearance-actions .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.appearance-actions .appearance-save-status { margin: 0; }
+
+html[data-theme][data-accent-theme] .btn-primary,
+html[data-theme][data-accent-theme] .primary-button,
+html[data-theme][data-accent-theme] .chat-btn-primary {
+  background: var(--arofi-theme-accent);
+  border-color: var(--arofi-theme-accent);
+}
+
+html[data-theme][data-accent-theme] .btn-primary:hover,
+html[data-theme][data-accent-theme] .primary-button:hover,
+html[data-theme][data-accent-theme] .chat-btn-primary:hover {
+  background: var(--arofi-theme-accent-hover);
+  border-color: var(--arofi-theme-accent-hover);
+}
+
+html[data-theme][data-accent-theme] .content a:not(.btn):not(.nav-item):not(.compliance-banner),
+html[data-theme][data-accent-theme] .login-card a,
+html[data-theme][data-accent-theme] .link-button {
+  color: var(--arofi-theme-accent-text);
+}
+
+html[data-theme][data-accent-theme] .pulse-dot,
+html[data-theme][data-accent-theme] .live-dot,
+html[data-theme][data-accent-theme] .live-dot-mini {
+  background: var(--arofi-theme-accent);
+  box-shadow: 0 0 0 0 var(--arofi-theme-accent-border);
+  animation: themeAccentPulse 1.6s infinite;
+}
+
+@keyframes themeAccentPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.82); }
+}
+
+html[data-theme][data-accent-theme] .home-live,
+html[data-theme][data-accent-theme] .live-pill.is-live,
+html[data-theme][data-accent-theme] .live-pill-mini.is-live,
+html[data-theme][data-accent-theme] .sale-redeemed {
+  background: var(--arofi-theme-accent-soft);
+  color: var(--arofi-theme-accent-text);
+}
+
+html[data-theme][data-accent-theme] .home-live { background: transparent; }
+html[data-theme][data-accent-theme] .chat-bubble { box-shadow: 0 4px 12px var(--arofi-theme-accent-border); }
+html[data-theme][data-accent-theme] .msg-bubble.admin {
+  background: var(--arofi-theme-accent-soft);
+  color: var(--arofi-theme-accent-text);
+  border-color: var(--arofi-theme-accent-border);
+}
+
+html[data-theme][data-accent-theme] .chat-link-chip { color: #ffffff; }
 
 
 

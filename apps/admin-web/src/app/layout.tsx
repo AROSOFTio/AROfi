@@ -200,8 +200,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const themeScript = `
     (function () {
       try {
-        var mode = localStorage.getItem('arofi-theme');
-        var accent = localStorage.getItem('arofi-accent-theme');
+        var cookies = document.cookie.split('; ').reduce(function (values, item) {
+          var parts = item.split('=');
+          values[parts[0]] = parts.slice(1).join('=');
+          return values;
+        }, {});
+        var mode = null;
+        var accent = null;
+        try {
+          mode = localStorage.getItem('arofi-theme');
+          accent = localStorage.getItem('arofi-accent-theme');
+        } catch (storageError) {}
+        mode = mode || cookies['arofi-theme'];
+        accent = accent || cookies['arofi-accent-theme'];
         if (mode !== 'dark' && mode !== 'light') {
           mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }

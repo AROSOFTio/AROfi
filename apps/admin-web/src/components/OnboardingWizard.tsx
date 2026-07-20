@@ -488,7 +488,7 @@ export default function OnboardingWizard({
             width: 120,
             height: 120,
             borderRadius: '50%',
-            background: 'rgba(59, 130, 246, 0.1)',
+            background: 'var(--arofi-theme-accent-soft)',
             pointerEvents: 'none'
           }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -497,7 +497,7 @@ export default function OnboardingWizard({
               color: '#fff',
               padding: 6,
               borderRadius: 8,
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+              boxShadow: '0 4px 12px var(--arofi-theme-accent-border)'
             }}>
               <Sparkles size={18} />
             </span>
@@ -549,12 +549,12 @@ export default function OnboardingWizard({
                   fontSize: 11,
                   fontWeight: 700,
                   background: completed 
-                    ? '#10b981' 
+                    ? 'var(--arofi-theme-accent)'
                     : active 
                       ? 'var(--arofi-theme-accent)'
                       : 'var(--border, #cbd5e1)',
                   color: completed || active ? '#ffffff' : 'var(--text-muted, #64748b)',
-                  boxShadow: active ? '0 0 0 4px rgba(59, 130, 246, 0.15)' : 'none'
+                  boxShadow: active ? '0 0 0 4px var(--arofi-theme-accent-soft)' : 'none'
                 }}>
                   {completed ? <Check size={12} /> : item.icon}
                 </div>
@@ -564,7 +564,7 @@ export default function OnboardingWizard({
                   color: active 
                     ? 'var(--text-1)' 
                     : completed 
-                      ? '#10b981' 
+                      ? 'var(--arofi-theme-accent-text)'
                       : 'var(--text-muted)'
                 }}>
                   {item.label}
@@ -604,7 +604,7 @@ export default function OnboardingWizard({
               display: 'flex',
               gap: 10,
               alignItems: 'flex-start',
-              color: '#10b981',
+              color: 'var(--arofi-theme-accent-text)',
               fontSize: 13
             }}>
               <CheckCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -659,7 +659,7 @@ export default function OnboardingWizard({
                       padding: 14,
                       borderRadius: 10,
                       border: routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
-                      background: routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' ? 'rgba(59, 130, 246, 0.05)' : 'var(--bg-card)',
+                      background: routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' ? 'var(--arofi-theme-accent-soft-2)' : 'var(--bg-card)',
                       textAlign: 'left',
                       cursor: 'pointer',
                       display: 'grid',
@@ -682,7 +682,7 @@ export default function OnboardingWizard({
                       padding: 14,
                       borderRadius: 10,
                       border: routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
-                      background: routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' ? 'rgba(59, 130, 246, 0.05)' : 'var(--bg-card)',
+                      background: routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' ? 'var(--arofi-theme-accent-soft-2)' : 'var(--bg-card)',
                       textAlign: 'left',
                       cursor: 'pointer',
                       display: 'grid',
@@ -737,7 +737,7 @@ export default function OnboardingWizard({
                 <pre style={{
                   fontFamily: 'monospace',
                   fontSize: 11.5,
-                  color: '#38bdf8',
+                  color: 'var(--arofi-theme-accent-text)',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-all',
                   margin: 0,
@@ -771,7 +771,7 @@ export default function OnboardingWizard({
                   }}
                   title="Copy command"
                 >
-                  {copiedText ? <Check size={14} style={{ color: '#10b981' }} /> : <Copy size={14} />}
+                  {copiedText ? <Check size={14} style={{ color: 'var(--arofi-theme-accent-text)' }} /> : <Copy size={14} />}
                 </button>
               </div>
 
@@ -812,7 +812,7 @@ export default function OnboardingWizard({
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
-                    backgroundColor: registeredRouter.provisioningCallbackReceived || registeredRouter.onboardingStatus === 'VERIFIED_ONLINE' ? '#10b981' : '#f59e0b',
+                    backgroundColor: registeredRouter.provisioningCallbackReceived || registeredRouter.onboardingStatus === 'VERIFIED_ONLINE' ? 'var(--arofi-theme-accent)' : '#f59e0b',
                     animation: registeredRouter.provisioningCallbackReceived ? 'none' : 'pulse 1.5s infinite'
                   }} />
                   <div style={{ display: 'grid', gap: 2 }}>
@@ -937,7 +937,7 @@ export default function OnboardingWizard({
                         padding: '12px 10px',
                         borderRadius: 8,
                         border: packageForm.speedOption === opt.value ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
-                        background: packageForm.speedOption === opt.value ? 'rgba(59, 130, 246, 0.05)' : 'var(--bg-card)',
+                        background: packageForm.speedOption === opt.value ? 'var(--arofi-theme-accent-soft-2)' : 'var(--bg-card)',
                         textAlign: 'left',
                         cursor: 'pointer',
                         display: 'grid',

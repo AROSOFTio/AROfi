@@ -293,7 +293,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                           padding: '12px 14px',
                           borderRadius: 10,
                           border: selected ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
-                          background: selected ? 'rgba(59, 130, 246, 0.06)' : 'var(--bg-card)',
+                          background: selected ? 'var(--arofi-theme-accent-soft-2)' : 'var(--bg-card)',
                           cursor: 'pointer',
                           display: 'flex',
                           flexDirection: 'column',

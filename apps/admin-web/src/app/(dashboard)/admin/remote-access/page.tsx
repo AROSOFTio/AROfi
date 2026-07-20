@@ -409,17 +409,17 @@ export default function RemoteAccessPage() {
             {/* SSTP info banner */}
             <div style={{
               padding: 14,
-              border: '1px solid #bbf7d0',
+              border: '1px solid var(--arofi-theme-accent-border)',
               borderRadius: 10,
-              background: '#f0fdf4',
+              background: 'var(--arofi-theme-accent-soft)',
               display: 'flex',
               gap: 10,
               alignItems: 'flex-start',
             }}>
               <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
               <div style={{ display: 'grid', gap: 4 }}>
-                <strong style={{ fontSize: 13, color: '#166534' }}>SSTP — works on RouterOS 6 and 7</strong>
-                <span style={{ fontSize: 12.5, color: '#15803d', lineHeight: 1.5 }}>
+                <strong style={{ fontSize: 13, color: 'var(--arofi-theme-accent-text)' }}>SSTP — works on RouterOS 6 and 7</strong>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
                   AROFi uses an SSTP tunnel for remote access. RouterOS 6 connects directly. On some RouterOS 7
                   consumer boards SSTP is blocked by device-mode — the install script detects this and prints the
                   one-time <code>/system device-mode update mode=enterprise</code> step (then press the reset button).

@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 
 type ModeTheme = 'light' | 'dark'
 type AccentTheme = 'blue' | 'green' | 'white'
-type Variant = 'icon' | 'segmented' | 'settings'
 
 const accentThemes: Array<{ key: AccentTheme; label: string; description: string; swatch: string }> = [
   { key: 'blue', label: 'Blue', description: 'Blue buttons, links, navigation, and logo.', swatch: '#2563eb' },
@@ -11,47 +10,67 @@ const accentThemes: Array<{ key: AccentTheme; label: string; description: string
   { key: 'white', label: 'Neutral', description: 'Black, white, and grey throughout.', swatch: '#3a424d' },
 ]
 
-export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant }) {
+export default function ThemeToggle() {
   const [mode, setMode] = useState<ModeTheme>('light')
   const [accent, setAccent] = useState<AccentTheme>('blue')
+  const [savedMode, setSavedMode] = useState<ModeTheme>('light')
+  const [savedAccent, setSavedAccent] = useState<AccentTheme>('blue')
   const [mounted, setMounted] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
 
   useEffect(() => {
-    const saved = localStorage.getItem('arofi-theme')
-    const savedAccent = localStorage.getItem('arofi-accent-theme')
+    const cookieValues = document.cookie.split('; ').reduce<Record<string, string>>((values, item) => {
+      const [key, ...parts] = item.split('=')
+      values[key] = parts.join('=')
+      return values
+    }, {})
+    let saved: string | null = null
+    let savedAccent: string | null = null
+    try {
+      saved = localStorage.getItem('arofi-theme')
+      savedAccent = localStorage.getItem('arofi-accent-theme')
+    } catch {
+      // Cookie persistence below still works when browser storage is restricted.
+    }
+    saved ||= cookieValues['arofi-theme'] ?? null
+    savedAccent ||= cookieValues['arofi-accent-theme'] ?? null
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     const nextMode: ModeTheme = saved === 'dark' || saved === 'light' ? saved : prefersDark ? 'dark' : 'light'
     const nextAccent: AccentTheme = savedAccent === 'green' || savedAccent === 'white' || savedAccent === 'blue' ? savedAccent : 'blue'
     setMode(nextMode)
     setAccent(nextAccent)
+    setSavedMode(nextMode)
+    setSavedAccent(nextAccent)
     setMounted(true)
     document.documentElement.setAttribute('data-theme', nextMode)
     document.documentElement.setAttribute('data-accent-theme', nextAccent)
   }, [])
 
-  function applyMode(nextMode: ModeTheme) {
-    setMode(nextMode)
+  function saveTheme(nextMode = mode, nextAccent = accent) {
+    let localStorageAvailable = true
+    try {
+      localStorage.setItem('arofi-theme', nextMode)
+      localStorage.setItem('arofi-accent-theme', nextAccent)
+    } catch {
+      localStorageAvailable = false
+    }
+    document.cookie = `arofi-theme=${nextMode}; Max-Age=31536000; Path=/; SameSite=Lax`
+    document.cookie = `arofi-accent-theme=${nextAccent}; Max-Age=31536000; Path=/; SameSite=Lax`
     document.documentElement.setAttribute('data-theme', nextMode)
-    localStorage.setItem('arofi-theme', nextMode)
-    showSaved()
-  }
-
-  function applyAccent(nextAccent: AccentTheme) {
-    setAccent(nextAccent)
     document.documentElement.setAttribute('data-accent-theme', nextAccent)
-    localStorage.setItem('arofi-accent-theme', nextAccent)
-    showSaved()
+    setMode(nextMode)
+    setAccent(nextAccent)
+    setSavedMode(nextMode)
+    setSavedAccent(nextAccent)
+    setSavedMessage(localStorageAvailable
+      ? 'Theme saved for the public website and dashboard.'
+      : 'Theme saved with browser cookies for this device.')
   }
 
-  function showSaved() {
-    setSavedMessage('Saved. This theme now applies to the website and dashboard.')
-    window.setTimeout(() => setSavedMessage(''), 3500)
-  }
+  const hasUnsavedChanges = mounted && (mode !== savedMode || accent !== savedAccent)
 
-  if (variant === 'settings') {
-    return (
-      <div className="appearance-settings">
+  return (
+    <div className="appearance-settings">
         <div>
           <div className="form-subheading">Mode</div>
           <div className="theme-switch appearance-mode-switch" role="group" aria-label="Admin color mode">
@@ -59,7 +78,7 @@ export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant })
               type="button"
               className={`theme-switch-option ${mounted && mode === 'light' ? 'active' : ''}`}
               aria-pressed={mounted && mode === 'light'}
-              onClick={() => applyMode('light')}
+              onClick={() => { setMode('light'); setSavedMessage('') }}
             >
               <SunIcon />
               <span>Light</span>
@@ -68,7 +87,7 @@ export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant })
               type="button"
               className={`theme-switch-option ${mounted && mode === 'dark' ? 'active' : ''}`}
               aria-pressed={mounted && mode === 'dark'}
-              onClick={() => applyMode('dark')}
+              onClick={() => { setMode('dark'); setSavedMessage('') }}
             >
               <MoonIcon />
               <span>Dark</span>
@@ -85,7 +104,7 @@ export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant })
                 type="button"
                 className={`appearance-accent-card ${mounted && accent === theme.key ? 'active' : ''}`}
                 aria-pressed={mounted && accent === theme.key}
-                onClick={() => applyAccent(theme.key)}
+                onClick={() => { setAccent(theme.key); setSavedMessage('') }}
               >
                 <span className="appearance-accent-swatch" style={{ background: theme.swatch }} />
                 <span>
@@ -96,47 +115,15 @@ export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant })
             ))}
           </div>
         </div>
-        <p className="appearance-save-status" role="status" aria-live="polite">
-          {savedMessage || 'Changes save automatically on this device.'}
-        </p>
-      </div>
-    )
-  }
-
-  if (variant === 'segmented') {
-    return (
-      <div className="theme-switch" role="group" aria-label="Admin color mode">
-        <button
-          type="button"
-          className={`theme-switch-option ${mounted && mode === 'light' ? 'active' : ''}`}
-          aria-pressed={mounted && mode === 'light'}
-          onClick={() => applyMode('light')}
-        >
-          <SunIcon />
-          <span>Light</span>
-        </button>
-        <button
-          type="button"
-          className={`theme-switch-option ${mounted && mode === 'dark' ? 'active' : ''}`}
-          aria-pressed={mounted && mode === 'dark'}
-          onClick={() => applyMode('dark')}
-        >
-          <MoonIcon />
-          <span>Dark</span>
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <button
-      onClick={() => applyMode(mode === 'dark' ? 'light' : 'dark')}
-      className="theme-toggle"
-      title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      aria-label="Toggle theme"
-    >
-      {mode === 'dark' ? <SunIcon /> : <MoonIcon />}
-    </button>
+        <div className="appearance-actions">
+          <button type="button" className="btn btn-primary" onClick={() => saveTheme()} disabled={!hasUnsavedChanges}>
+            Save theme
+          </button>
+          <p className="appearance-save-status" role="status" aria-live="polite">
+            {savedMessage || (hasUnsavedChanges ? 'Unsaved changes.' : 'Saved theme loaded.')}
+          </p>
+        </div>
+    </div>
   )
 }
 
