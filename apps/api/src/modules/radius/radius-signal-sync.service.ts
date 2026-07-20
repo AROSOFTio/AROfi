@@ -412,26 +412,20 @@ export class RadiusSignalSyncService {
       return null
     }
 
+    const normalizedUsername = username.trim()
     const cred = await this.prisma.radiusCredential.findFirst({
-      where: { username },
+      where: { username: normalizedUsername },
       select: { routerId: true, tenantId: true, activationId: true },
     })
     const activationFromUsername =
       cred
         ? null
         : await this.prisma.packageActivation.findFirst({
-            where: { radiusUsername: { equals: username, mode: 'insensitive' } },
+            where: { radiusUsername: { equals: normalizedUsername, mode: 'insensitive' } },
             select: { id: true, tenantId: true, routerId: true },
           })
 
     const tenantId = cred?.tenantId ?? activationFromUsername?.tenantId ?? null
-
-    if (!cred && !activationFromUsername) {
-      this.logger.warn(
-        `resolveRouter: no credential for username "${username}" (nasIp=${nasIp ?? 'none'}) — accounting row dropped`,
-      )
-      return null
-    }
 
     let routerId = cred?.routerId ?? activationFromUsername?.routerId ?? null
 
@@ -443,6 +437,18 @@ export class RadiusSignalSyncService {
         select: { routerId: true },
       })
       routerId = activation?.routerId ?? null
+    }
+
+    // Router-generated accounting rows sometimes use the router UUID as the
+    // username (for example, when MikroTik reports this as a NAS client).
+    // In that case, the row still belongs to the router that originated it,
+    // even if there is no RadiusCredential row.
+    if (!routerId && normalizedUsername.startsWith('router-')) {
+      const routerByUsername = await this.prisma.router.findFirst({
+        where: { id: normalizedUsername.slice('router-'.length) },
+        select: { id: true },
+      })
+      routerId = routerByUsername?.id ?? null
     }
 
     // Last resort: if the credential's tenant has exactly ONE router, the
