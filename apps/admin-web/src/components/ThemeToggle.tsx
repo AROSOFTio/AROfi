@@ -6,15 +6,16 @@ type AccentTheme = 'blue' | 'green' | 'white'
 type Variant = 'icon' | 'segmented' | 'settings'
 
 const accentThemes: Array<{ key: AccentTheme; label: string; description: string; swatch: string }> = [
-  { key: 'blue', label: 'Blue', description: 'AROFi blue for brand-led screens and primary actions.', swatch: '#2563eb' },
-  { key: 'green', label: 'Green', description: 'aaPanel-style green throughout buttons, links, and selected states.', swatch: '#20a53a' },
-  { key: 'white', label: 'Neutral', description: 'Black, slate, and grey controls with no blue or green accent.', swatch: '#3a424d' },
+  { key: 'blue', label: 'Blue', description: 'Blue buttons, links, navigation, and logo.', swatch: '#2563eb' },
+  { key: 'green', label: 'Green', description: 'Green buttons, links, navigation, and logo.', swatch: '#20a53a' },
+  { key: 'white', label: 'Neutral', description: 'Black, white, and grey throughout.', swatch: '#3a424d' },
 ]
 
 export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant }) {
   const [mode, setMode] = useState<ModeTheme>('light')
   const [accent, setAccent] = useState<AccentTheme>('blue')
   const [mounted, setMounted] = useState(false)
+  const [savedMessage, setSavedMessage] = useState('')
 
   useEffect(() => {
     const saved = localStorage.getItem('arofi-theme')
@@ -33,12 +34,19 @@ export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant })
     setMode(nextMode)
     document.documentElement.setAttribute('data-theme', nextMode)
     localStorage.setItem('arofi-theme', nextMode)
+    showSaved()
   }
 
   function applyAccent(nextAccent: AccentTheme) {
     setAccent(nextAccent)
     document.documentElement.setAttribute('data-accent-theme', nextAccent)
     localStorage.setItem('arofi-accent-theme', nextAccent)
+    showSaved()
+  }
+
+  function showSaved() {
+    setSavedMessage('Saved. This theme now applies to the website and dashboard.')
+    window.setTimeout(() => setSavedMessage(''), 3500)
   }
 
   if (variant === 'settings') {
@@ -88,6 +96,9 @@ export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant })
             ))}
           </div>
         </div>
+        <p className="appearance-save-status" role="status" aria-live="polite">
+          {savedMessage || 'Changes save automatically on this device.'}
+        </p>
       </div>
     )
   }

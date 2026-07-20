@@ -141,7 +141,7 @@ export default function CommissionRatesPage() {
   }
 
   const tierPill = (plan: string) => {
-    const color = plan === 'ENTERPRISE' ? '#7c3aed' : plan === 'PRO' ? '#2563eb' : '#6b7280'
+    const color = plan === 'ENTERPRISE' ? '#7c3aed' : plan === 'PRO' ? 'var(--arofi-theme-accent)' : '#6b7280'
     const bg = plan === 'ENTERPRISE' ? 'rgba(124,58,237,0.1)' : plan === 'PRO' ? 'rgba(37,99,235,0.1)' : 'rgba(107,114,128,0.1)'
     return (
       <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: bg, color, textTransform: 'uppercase' }}>
@@ -169,7 +169,7 @@ export default function CommissionRatesPage() {
         </div>
       )}
       {success && (
-        <div style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#16a34a', fontSize: 13 }}>
+        <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: 'var(--arofi-theme-accent-text)', fontSize: 13 }}>
           {success}
         </div>
       )}

@@ -90,7 +90,7 @@ const printTemplates = [
     id: 'receipt',
     name: 'Clean Receipt',
     description: 'Receipt-like print with clear amount, duration, help contact, and QR code.',
-    color: '#2563EB',
+    color: 'var(--arofi-theme-accent)',
     dark: '#1E3A8A',
     bg: '#EEF2FF',
     ink: '#0F172A',

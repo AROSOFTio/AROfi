@@ -8,7 +8,7 @@ function fmtK(value: number) {
   return String(value)
 }
 
-const COLORS = ["#2563EB", "#16a34a", "#f59e0b", "#8b5cf6"]
+const COLORS = ["var(--arofi-theme-accent)", "#8b5cf6", "#f59e0b", "#ec4899"]
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null

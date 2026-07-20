@@ -35,7 +35,7 @@ export function RouterOnboardingSteps({ onboardingStatus }: { onboardingStatus: 
   return (
     <div
       style={{
-        border: '1px solid var(--blue-mid, #3b82f6)',
+        border: '1px solid var(--arofi-theme-accent-border)',
         background: 'var(--blue-bg, #eff6ff)',
         borderRadius: 8,
         padding: '12px 16px',
@@ -46,7 +46,7 @@ export function RouterOnboardingSteps({ onboardingStatus }: { onboardingStatus: 
         style={{
           fontSize: 11,
           fontWeight: 700,
-          color: 'var(--blue-fg, #1d4ed8)',
+          color: 'var(--arofi-theme-accent-text)',
           marginBottom: 10,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
@@ -73,9 +73,9 @@ export function RouterOnboardingSteps({ onboardingStatus }: { onboardingStatus: 
                   fontSize: 11,
                   fontWeight: 700,
                   background: done
-                    ? 'var(--success-fg, #16a34a)'
+                    ? 'var(--arofi-theme-accent-text)'
                     : active
-                      ? 'var(--blue-fg, #1d4ed8)'
+                      ? 'var(--arofi-theme-accent-text)'
                       : 'var(--border, #e2e8f0)',
                   color: done || active ? '#fff' : 'var(--text-3, #94a3b8)',
                 }}
@@ -99,7 +99,7 @@ export function RouterOnboardingSteps({ onboardingStatus }: { onboardingStatus: 
                   {step.label}
                 </p>
                 {active && (
-                  <p style={{ fontSize: 12, color: 'var(--blue-fg, #1d4ed8)', margin: '2px 0 0' }}>
+                  <p style={{ fontSize: 12, color: 'var(--arofi-theme-accent-text)', margin: '2px 0 0' }}>
                     {step.description}
                   </p>
                 )}

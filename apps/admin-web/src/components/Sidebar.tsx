@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Activity,
   Banknote,
   BarChart3,
   Bell,
   Building2,
+  ChevronDown,
   CreditCard,
   FileBarChart,
   FileText,
@@ -38,7 +39,6 @@ import {
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
 import { formatRoleName } from '@/lib/format'
-import ThemeToggle from './ThemeToggle'
 
 type NavItem = {
   href: string;
@@ -329,14 +329,26 @@ const tenantNavItems: NavGroup[] = [
     ],
   },
   {
-    label: 'Business',
-    icon: <Store size={17} />,
+    label: 'Staff',
+    icon: <Users size={17} />,
     items: [
-      { href: '/settings?tab=Business%20Profile', label: 'Business Details', tenantOnly: true },
-      { href: '/users?tab=staff', label: 'Staff & Roles', required: ['users.read'], tenantOnly: true },
-      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Settings', tenantOnly: true },
-      { href: '/admin/settings/templates', label: 'WiFi Login Page', tenantOnly: true },
+      { href: '/users?tab=staff', label: 'Staff', required: ['users.read'], tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Settings',
+    icon: <Settings size={17} />,
+    items: [
+      { href: '/settings?tab=Business%20Profile', label: 'Profile', tenantOnly: true },
+      { href: '/settings?tab=Appearance', label: 'Themes', tenantOnly: true },
+      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment', tenantOnly: true },
+      { href: '/settings?tab=Withdrawals', label: 'Withdrawals', tenantOnly: true },
+      { href: '/settings?tab=Router%20%26%20Portal', label: 'Router & Portal', tenantOnly: true },
+      { href: '/settings?tab=Voucher%20Printing', label: 'Voucher Printing', tenantOnly: true },
+      { href: '/settings?tab=Password', label: 'Password', tenantOnly: true },
       { href: '/settings?tab=Security', label: 'Security', tenantOnly: true },
+      { href: '/settings?tab=Subscription%20Plan', label: 'Plan', tenantOnly: true },
+      { href: '/support', label: 'Support', required: ['support.read'], tenantOnly: true },
     ],
   },
   {
@@ -351,7 +363,6 @@ const tenantNavItems: NavGroup[] = [
     icon: <LifeBuoy size={17} />,
     items: [
       { href: '/docs/getting-started', label: 'Setup Guide', tenantOnly: true },
-      { href: '/support', label: 'Get Support', required: ['support.read'], tenantOnly: true },
     ],
   },
 ]
@@ -390,6 +401,12 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
       items: group.items.filter((item) => canAccess(user, item.required, item.platformOnly, item.tenantOnly)),
     }))
     .filter((group) => group.items.length > 0), [navigationGroups, user])
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+
+  useEffect(() => {
+    const activeGroup = visibleGroups.find((group) => group.items.length > 1 && group.items.some((item) => isActiveHref(currentHref, item.href)))
+    if (activeGroup) setOpenGroup(activeGroup.label)
+  }, [currentHref, visibleGroups])
 
   const workspaceLabel = isVendor ? 'Business Dashboard' : 'Platform Admin'
 
@@ -421,24 +438,23 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
         </Link>
       </div>
       {visibleGroups.map((group) => {
-        // A single click on a section navigates straight to its main page —
-        // no expand/collapse step required, which is what made the sidebar
-        // feel scattered. The sub-links for that section only appear once
-        // you're actually inside it (based on the current route), so nothing
-        // is lost — you just don't see every section's internals at once.
+        // Multi-page sections are accordions; direct destinations stay links.
         const isInSection = group.items.some((item) => isActiveHref(currentHref, item.href))
+        const isFoldable = group.items.length > 1
+        const isOpen = openGroup === group.label
         return (
           <div key={group.label} className="sidebar-section">
-            <Link
-              href={group.items[0].href}
-              className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`}
-            >
-              <span className="sidebar-group-label">
-                {group.icon}
-                {group.label}
-              </span>
-            </Link>
-            {(isVendor || isInSection) && group.items.length > 1 && (
+            {isFoldable ? (
+              <button type="button" className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`} aria-expanded={isOpen} onClick={() => setOpenGroup(isOpen ? null : group.label)}>
+                <span className="sidebar-group-label">{group.icon}{group.label}</span>
+                <ChevronDown className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true" />
+              </button>
+            ) : (
+              <Link href={group.items[0].href} className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`}>
+                <span className="sidebar-group-label">{group.icon}{group.label}</span>
+              </Link>
+            )}
+            {isFoldable && isOpen && (
               <div className="sidebar-group-items">
                 {group.items.map((item) => (
                   <Link
@@ -454,18 +470,18 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           </div>
         )
       })}
-      <div className="sidebar-footer">
-        <span className="sidebar-footer-label">Appearance</span>
-        <ThemeToggle variant="segmented" />
-      </div>
     </aside>
   )
 }
 
 function isActiveHref(currentHref: string, href: string) {
-  if (href.includes('?')) {
-    return currentHref === href
-  }
-  return currentHref.split('?')[0] === href
+  const [currentPath, currentQuery = ''] = currentHref.split('?')
+  const [targetPath, targetQuery = ''] = href.split('?')
+  if (currentPath !== targetPath) return false
+  if (!targetQuery) return true
+
+  const currentParams = new URLSearchParams(currentQuery)
+  const targetParams = new URLSearchParams(targetQuery)
+  return Array.from(targetParams.entries()).every(([key, value]) => currentParams.get(key) === value)
 }
 

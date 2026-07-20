@@ -182,26 +182,15 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-shell">
-        <div className="login-pitch">
-          <img src="/logo.png" alt="AROFi" />
-          <h2>Run your WiFi like a business.</h2>
-          <p>Sign in to manage routers, packages, vouchers, and Mobile Money collections from one console.</p>
-          <ul>
-            <li>RADIUS-billed MikroTik hotspots</li>
-            <li>MTN MoMo &amp; Airtel Money collection</li>
-            <li>Vouchers, wallets &amp; payouts</li>
-            <li>Self-onboarding, nationwide</li>
-          </ul>
-        </div>
         <div className="login-card">
         <div className="login-brand">
           <img
             src="/logo.png"
-            alt="AROFi Logo"
-            style={{ width: '160px', height: 'auto', margin: '0 auto 10px', display: 'block' }}
+            alt="AROFi"
+            className="brand-logo login-logo"
           />
-          <p>Hotspot Billing & Network Management</p>
-          <p style={{ marginTop: 4, fontSize: 11 }}>AROSOFT Innovations Ltd</p>
+          <h1>Sign in to AROFi</h1>
+          <p>Manage your WiFi business.</p>
         </div>
 
         {error && (
@@ -221,17 +210,7 @@ export default function LoginPage() {
         )}
 
         {info && !error && (
-          <div
-            style={{
-              background: 'rgba(37,99,235,0.1)',
-              border: '1px solid rgba(37,99,235,0.3)',
-              borderRadius: 8,
-              padding: '10px 14px',
-              fontSize: 13,
-              color: '#60a5fa',
-              marginBottom: 18,
-            }}
-          >
+          <div className="login-notice">
             {info}
           </div>
         )}
@@ -239,7 +218,7 @@ export default function LoginPage() {
         {step === 'credentials' ? (
           <form onSubmit={handleCredentialsSubmit}>
             <div className="form-group">
-              <label className="form-label">Email Address</label>
+              <label className="form-label">Email</label>
               <input
                 className="form-input"
                 type="email"
@@ -281,8 +260,8 @@ export default function LoginPage() {
                 style={{ marginTop: 2 }}
               />
               <span>
-                <strong style={{ color: 'var(--text-primary)' }}>Remember this device for 30 days.</strong>
-                {' '}Use this only on a private phone or computer.
+                <strong style={{ color: 'var(--text-primary)' }}>Remember this device for 30 days</strong>
+                <small className="login-remember-note">Skip email verification on this private device.</small>
               </span>
             </label>
             <button
@@ -301,7 +280,7 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={handleOtpSubmit}>
             <div className="form-group">
-              <label className="form-label">Verification Code</label>
+              <label className="form-label">Verification code</label>
               <input
                 className="form-input"
                 type="text"
@@ -326,7 +305,7 @@ export default function LoginPage() {
               style={{ marginTop: 8 }}
               disabled={loading || otp.length !== 6}
             >
-              {loading ? 'Verifying...' : 'Verify & Sign In'}
+              {loading ? 'Verifying...' : 'Verify and sign in'}
             </button>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
               <button
@@ -360,12 +339,12 @@ export default function LoginPage() {
           </form>
         )}
 
-        <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-          Need a business workspace? <a href="/?register=1" style={{ color: 'var(--green)', fontWeight: 700 }}>Create one here</a>.
+        <p className="login-signup">
+          New to AROFi? <a href="/?register=1">Create a business account</a>
         </p>
 
-        <p style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-          AROFi v1.0 | &copy; 2026 AROSOFT Innovations Ltd
+        <p className="login-footer">
+          &copy; 2026 AROSOFT Innovations Ltd
         </p>
         </div>
       </div>

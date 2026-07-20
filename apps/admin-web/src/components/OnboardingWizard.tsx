@@ -450,7 +450,7 @@ export default function OnboardingWizard({
       }} className="onboarding-modal-card">
         {/* Top Header */}
         <div style={{
-          background: 'linear-gradient(135deg, #2563eb 0%, #0f172a 100%)',
+          background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, #0f172a 100%)',
           padding: 'clamp(14px, 3vw, 20px) clamp(16px, 5vw, 32px)',
           color: '#ffffff',
           position: 'relative',
@@ -493,7 +493,7 @@ export default function OnboardingWizard({
           }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+              background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, var(--arofi-theme-accent-hover) 100%)',
               color: '#fff',
               padding: 6,
               borderRadius: 8,
@@ -501,7 +501,7 @@ export default function OnboardingWizard({
             }}>
               <Sparkles size={18} />
             </span>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#93c5fd' }}>Self Onboarding Wizard</span>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--arofi-theme-accent-border)' }}>Setup</span>
           </div>
           <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 6, letterSpacing: '-0.02em', color: '#fff' }}>Get Your Hotspot Billing Live</h2>
           <p style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>
@@ -534,7 +534,7 @@ export default function OnboardingWizard({
                   flexDirection: 'column',
                   alignItems: 'center',
                   gap: 4,
-                  borderBottom: active ? '3px solid var(--primary, #3b82f6)' : '3px solid transparent',
+                  borderBottom: active ? '3px solid var(--arofi-theme-accent)' : '3px solid transparent',
                   background: active ? 'var(--bg-card)' : 'transparent',
                   transition: 'all 0.2s ease'
                 }}
@@ -551,7 +551,7 @@ export default function OnboardingWizard({
                   background: completed 
                     ? '#10b981' 
                     : active 
-                      ? 'var(--primary, #3b82f6)' 
+                      ? 'var(--arofi-theme-accent)'
                       : 'var(--border, #cbd5e1)',
                   color: completed || active ? '#ffffff' : 'var(--text-muted, #64748b)',
                   boxShadow: active ? '0 0 0 4px rgba(59, 130, 246, 0.15)' : 'none'
@@ -658,7 +658,7 @@ export default function OnboardingWizard({
                     style={{
                       padding: 14,
                       borderRadius: 10,
-                      border: routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' ? '2px solid var(--primary, #3b82f6)' : '1px solid var(--border)',
+                      border: routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
                       background: routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' ? 'rgba(59, 130, 246, 0.05)' : 'var(--bg-card)',
                       textAlign: 'left',
                       cursor: 'pointer',
@@ -669,7 +669,7 @@ export default function OnboardingWizard({
                   >
                     <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       Create customer Wi-Fi
-                      {routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' && <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9 }}>✓</span>}
+                      {routerForm.scriptMode === 'FRESH_FULL_CAPTIVE_WIFI' && <span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--arofi-theme-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9 }}>✓</span>}
                     </div>
                     <span style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.3 }}>
                       Builds a brand new open SSID + captive portal on isolated bridge. Safe & isolated.
@@ -681,7 +681,7 @@ export default function OnboardingWizard({
                     style={{
                       padding: 14,
                       borderRadius: 10,
-                      border: routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' ? '2px solid var(--primary, #3b82f6)' : '1px solid var(--border)',
+                      border: routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
                       background: routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' ? 'rgba(59, 130, 246, 0.05)' : 'var(--bg-card)',
                       textAlign: 'left',
                       cursor: 'pointer',
@@ -692,7 +692,7 @@ export default function OnboardingWizard({
                   >
                     <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       Existing hotspot setup
-                      {routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' && <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9 }}>✓</span>}
+                      {routerForm.scriptMode === 'SAFE_EXISTING_ROUTER' && <span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--arofi-theme-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9 }}>✓</span>}
                     </div>
                     <span style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.3 }}>
                       I already have an active hotspot configured. Just link it to the cloud billing console.
@@ -780,7 +780,7 @@ export default function OnboardingWizard({
                 borderRadius: 10,
                 padding: '10px 14px',
                 fontSize: 12.5,
-                borderLeft: '4px solid var(--primary, #3b82f6)'
+                borderLeft: '4px solid var(--arofi-theme-accent)'
               }}>
                 <summary style={{ fontWeight: 700, color: 'var(--text-1)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, listStyle: 'none' }}>
                   <Info size={15} className="text-primary" /> How to paste this in WinBox
@@ -790,7 +790,7 @@ export default function OnboardingWizard({
                   <li>Click <strong>New Terminal</strong>, right-click and choose <strong>Paste</strong>, then press <strong>Enter</strong>.</li>
                   <li>Wait 10-15 seconds — the script applies the setup automatically.</li>
                 </ol>
-                <a href="/docs/getting-started" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary, #3b82f6)' }}>
+                <a href="/docs/getting-started" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: 'var(--arofi-theme-accent-text)' }}>
                   Read the full setup guide →
                 </a>
               </details>
@@ -936,7 +936,7 @@ export default function OnboardingWizard({
                       style={{
                         padding: '12px 10px',
                         borderRadius: 8,
-                        border: packageForm.speedOption === opt.value ? '2px solid var(--primary, #3b82f6)' : '1px solid var(--border)',
+                        border: packageForm.speedOption === opt.value ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
                         background: packageForm.speedOption === opt.value ? 'rgba(59, 130, 246, 0.05)' : 'var(--bg-card)',
                         textAlign: 'left',
                         cursor: 'pointer',

@@ -67,7 +67,7 @@ export function RouterUsageChart({ data }: { data: RouterUsage[] }) {
         <Tooltip content={<CustomTooltip />} />
         <Bar dataKey="totalDataMb" name="Data Used" radius={[4, 4, 0, 0]}>
           {sorted.map((_, index) => (
-            <Cell key={index} fill={index === 0 ? "#2563EB" : `hsl(221, 83%, ${53 + index * 5}%)`} />
+            <Cell key={index} fill={index === 0 ? "var(--arofi-theme-accent)" : `hsl(270, 65%, ${48 + index * 6}%)`} />
           ))}
         </Bar>
       </BarChart>

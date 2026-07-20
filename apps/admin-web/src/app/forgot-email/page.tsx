@@ -49,12 +49,12 @@ export default function ForgotEmailPage() {
           </div>
 
           {maskedEmail && (
-            <div style={{ background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)', borderRadius: 8, padding: '12px 14px', fontSize: 14, color: '#60a5fa', marginBottom: 18, textAlign: 'center', fontWeight: 700 }}>
+            <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '12px 14px', fontSize: 14, color: 'var(--arofi-theme-accent-text)', marginBottom: 18, textAlign: 'center', fontWeight: 700 }}>
               {maskedEmail}
             </div>
           )}
           {message && !maskedEmail && (
-            <div style={{ background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#60a5fa', marginBottom: 18 }}>
+            <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>
               {message}
             </div>
           )}

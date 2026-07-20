@@ -144,7 +144,7 @@ export default function NotificationBell() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
               <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)' }}>Notifications</span>
               {unreadCount > 0 && (
-                <button type="button" onClick={() => void markAllRead()} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+                <button type="button" onClick={() => void markAllRead()} style={{ background: 'none', border: 'none', color: 'var(--arofi-theme-accent-text)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
                   Mark all read
                 </button>
               )}
@@ -166,7 +166,7 @@ export default function NotificationBell() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>{item.title}</span>
-                  {!item.isRead && <span style={{ width: 8, height: 8, borderRadius: 4, background: '#2563eb', flexShrink: 0, marginTop: 4 }} />}
+                  {!item.isRead && <span style={{ width: 8, height: 8, borderRadius: 4, background: 'var(--arofi-theme-accent)', flexShrink: 0, marginTop: 4 }} />}
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--text-2)', margin: '4px 0', whiteSpace: 'pre-wrap' }}>{item.body}</p>
                 {item.attachments.length > 0 && (
@@ -177,7 +177,7 @@ export default function NotificationBell() {
                         href={`${browserApiBase}/notifications/attachments/${attachment.id}/file`}
                         target="_blank"
                         rel="noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#2563eb' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--arofi-theme-accent-text)' }}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <Paperclip size={12} /> {attachment.fileName}

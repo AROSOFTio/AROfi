@@ -117,6 +117,16 @@ class PasswordResetConfirmDto {
   password: string
 }
 
+class ChangePasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string
+
+  @IsString()
+  @MinLength(8)
+  newPassword: string
+}
+
 class ForgotEmailDto {
   @IsString()
   @IsNotEmpty()
@@ -710,6 +720,26 @@ export class AuthService {
     return { ok: true, message: 'Password updated. You can now sign in with your new password.' }
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const account = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!account || !(await bcrypt.compare(currentPassword, account.password))) {
+      throw new UnauthorizedException('Current password is incorrect.')
+    }
+    if (await bcrypt.compare(newPassword, account.password)) {
+      throw new BadRequestException('Choose a new password that is different from your current password.')
+    }
+
+    const now = new Date()
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { password: passwordHash } }),
+      this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } }),
+      this.prisma.adminTrustedDevice.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } }),
+        this.prisma.adminLoginOtp.deleteMany({ where: { userId } }),
+    ])
+    return { ok: true, message: 'Password changed. Sign in again on this device.' }
+  }
+
   // ── Forgot email (reveal masked account email by registration phone) ─────
 
   async revealEmailByPhone(phoneNumber: string) {
@@ -1244,6 +1274,13 @@ export class AuthController {
     return {
       user: request.user,
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 300_000, limit: 5 } })
+  @Post('password/change')
+  changePassword(@Req() request: AuthenticatedRequest, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(request.user.id, dto.currentPassword, dto.newPassword)
   }
 
   // ── Account recovery (public) ─────────────────────────────────────────────

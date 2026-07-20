@@ -56,6 +56,10 @@ function buildHarness(options: {
   const roleCatalogService = { ensureStandardRoles: jest.fn().mockResolvedValue(undefined) }
   const mailService = { sendAdminLoginOtpEmail: jest.fn().mockResolvedValue(true) }
   const prisma = {
+    user: {
+      findUnique: jest.fn().mockResolvedValue(user),
+      update: jest.fn().mockResolvedValue(user),
+    },
     adminLoginOtp: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       create: jest.fn().mockResolvedValue({ id: 'otp-1' }),
@@ -79,7 +83,9 @@ function buildHarness(options: {
         : jest.fn().mockResolvedValue({}),
       findUnique: jest.fn().mockResolvedValue(options.refreshTokenRecord ?? null),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    $transaction: jest.fn(async (operations: Array<Promise<unknown>>) => Promise.all(operations)),
   }
 
   const service = new AuthService(
@@ -109,6 +115,25 @@ function buildChallenge(overrides: Record<string, unknown> = {}) {
 }
 
 describe('AuthService email OTP login', () => {
+  it('changes the password and revokes other sessions and remembered devices', async () => {
+    const { service, prisma } = buildHarness()
+
+    await expect(service.changePassword('user-1', PASSWORD, 'a-new-secure-password')).resolves.toEqual(
+      expect.objectContaining({ ok: true }),
+    )
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' }, data: { password: expect.any(String) } }),
+    )
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', revokedAt: null } }),
+    )
+    expect(prisma.adminTrustedDevice.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', revokedAt: null } }),
+    )
+    expect(prisma.adminLoginOtp.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } })
+  })
+
   it('startLogin verifies credentials, stores a hashed OTP and emails the code', async () => {
     const { service, prisma, mailService } = buildHarness()
 

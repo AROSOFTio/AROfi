@@ -467,7 +467,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 4 }}>
         {/* Visual Credit Card Style Wallet Card */}
         <div style={{
-          background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+          background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, var(--arofi-theme-accent-hover) 100%)',
           borderRadius: 14,
           padding: '24px 26px',
           color: '#ffffff',
@@ -477,7 +477,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           flexDirection: 'column',
           justifyContent: 'space-between',
           minHeight: 228,
-          boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.35), 0 8px 10px -6px rgba(37, 99, 235, 0.35)',
+          boxShadow: '0 10px 25px -8px var(--arofi-theme-accent-border)',
         }}>
           {/* Card background shape accents */}
           <div style={{
@@ -555,7 +555,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
                 <span style={{ color: 'var(--text-2)' }}>Secret key verification</span>
                 <span>
                   {payoutProfile?.profile?.secretConfigured ? (
-                    <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                    <span style={{ color: 'var(--arofi-theme-accent-text)', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
                       <CheckCircle2 size={14} /> Set
                     </span>
                   ) : (
@@ -767,7 +767,7 @@ function SystemInsights({
       <div className="system-insights-head">
         <span className="system-insights-title">System Insights</span>
         <span className={`live-pill ${live ? 'is-live' : 'is-offline'}`}>
-          <span className="live-dot" style={{ background: live ? '#16a34a' : statusColor }} />
+          <span className="live-dot" style={{ background: live ? 'var(--arofi-theme-accent)' : statusColor }} />
           {live ? 'Live' : 'Offline'}
         </span>
       </div>
@@ -801,7 +801,7 @@ function SystemInsightsCompact({
       <div className="system-insights-card-head">
         <span className="system-insights-card-title">System Insights</span>
         <span className={`live-pill-mini ${live ? 'is-live' : 'is-offline'}`}>
-          <span className="live-dot-mini" style={{ background: live ? '#16a34a' : statusColor }} />
+          <span className="live-dot-mini" style={{ background: live ? 'var(--arofi-theme-accent)' : statusColor }} />
           {live ? 'Live' : 'Offline'}
         </span>
       </div>

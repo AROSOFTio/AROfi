@@ -99,7 +99,7 @@ export default async function SessionsPage() {
                         width: `${width}%`,
                         height: '100%',
                         borderRadius: 999,
-                        background: 'linear-gradient(90deg, #3b82f6, #34d399)',
+                        background: 'var(--arofi-theme-accent)',
                       }}
                     />
                   </div>
@@ -117,7 +117,7 @@ export default async function SessionsPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)', borderRadius: 12, padding: 16 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Accepted Today</div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#34d399' }}>{data?.summary.acceptedAuthToday ?? 0}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--arofi-theme-accent)' }}>{data?.summary.acceptedAuthToday ?? 0}</div>
               </div>
               <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: 12, padding: 16 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Rejected Today</div>

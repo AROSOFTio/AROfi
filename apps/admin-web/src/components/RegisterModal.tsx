@@ -53,7 +53,7 @@ const PLAN_CARDS = [
     name: 'Pro Plan',
     price: 'UGX 20,000 / Month',
     desc: 'For growing ISPs wanting lower fees and branding control.',
-    color: '#3b82f6',
+    color: 'var(--arofi-theme-accent)',
     badge: 'Recommended',
   },
   {

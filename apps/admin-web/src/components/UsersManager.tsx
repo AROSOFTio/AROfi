@@ -292,7 +292,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                           textAlign: 'left',
                           padding: '12px 14px',
                           borderRadius: 10,
-                          border: selected ? '2px solid var(--primary, #3b82f6)' : '1px solid var(--border)',
+                          border: selected ? '2px solid var(--arofi-theme-accent)' : '1px solid var(--border)',
                           background: selected ? 'rgba(59, 130, 246, 0.06)' : 'var(--bg-card)',
                           cursor: 'pointer',
                           display: 'flex',
@@ -302,7 +302,7 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                       >
                         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                           <strong style={{ fontSize: 13.5, color: 'var(--text-1)' }}>{formatRoleName(role.name)}</strong>
-                          {selected && <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, flexShrink: 0 }}>✓</span>}
+                          {selected && <span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--arofi-theme-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, flexShrink: 0 }}>✓</span>}
                         </span>
                         <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>{getRoleDescription(role.name)}</span>
                       </button>

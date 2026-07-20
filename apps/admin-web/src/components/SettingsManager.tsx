@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import EmailChangeRequestCard from './EmailChangeRequestCard'
+import PasswordChangeCard from './PasswordChangeCard'
 import SupportContactChangePanel from './SupportContactChangePanel'
 import ThemeToggle from './ThemeToggle'
 
@@ -122,7 +123,29 @@ const PLAN_CARD_META: Record<string, { price: string; desc: string; color: strin
   },
 }
 
-const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security', 'Subscription Plan'] as const
+const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Password', 'Security', 'Subscription Plan'] as const
+const tabLabels: Record<(typeof tabs)[number], string> = {
+  'Business Profile': 'Profile',
+  Appearance: 'Themes',
+  'Payment & Fees': 'Payment',
+  Withdrawals: 'Withdrawals',
+  'Router & Portal': 'Router & Portal',
+  'Voucher Printing': 'Voucher Printing',
+  Password: 'Password',
+  Security: 'Security',
+  'Subscription Plan': 'Plan',
+}
+const tabDescriptions: Record<(typeof tabs)[number], string> = {
+  'Business Profile': 'Business identity, branding, and support contacts.',
+  Appearance: 'Dashboard appearance and customer WiFi login page themes.',
+  'Payment & Fees': 'Payment methods, collection routes, and applicable fees.',
+  Withdrawals: 'Payout limits, fees, approval rules, and safety controls.',
+  'Router & Portal': 'Router connection behavior and customer portal defaults.',
+  'Voucher Printing': 'Default voucher layout and redemption behavior.',
+  Password: 'Change your account password and close other remembered sessions.',
+  Security: 'Account email, device binding, verification, and operating terms.',
+  'Subscription Plan': 'View or change the plan for this business.',
+}
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const portalTemplates = ['classic']
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
@@ -406,17 +429,9 @@ export default function SettingsManager({
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Audited platform and business configuration for fees, withdrawals, router auto-connect, and voucher printing.</p>
+          <h1 className="page-title">Settings / {tabLabels[activeTab]}</h1>
+          <p className="page-subtitle">{tabDescriptions[activeTab]}</p>
         </div>
-      </div>
-
-      <div className="tabs-bar" style={{ marginBottom: 18 }}>
-        {tabs.map((tab) => (
-          <button key={tab} type="button" className={`tab-button ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
-            {tab}
-          </button>
-        ))}
       </div>
 
       {message && <div className="badge badge-success" style={{ marginBottom: 14 }}>{message}</div>}
@@ -427,11 +442,11 @@ export default function SettingsManager({
           <>
             <div className="card">
               <div className="card-header">
-                <span className="card-title">Admin Appearance</span>
+                <span className="card-title">Theme</span>
                 <span className="badge badge-info">This device</span>
               </div>
               <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
-                Choose the aaPanel-style surface mode and the AROFi accent used by buttons, links, selected navigation, sign in, password reset, and admin controls.
+                Choose one accent for the public website, sign-in pages, and dashboard.
               </p>
               <ThemeToggle variant="settings" />
             </div>
@@ -451,7 +466,7 @@ export default function SettingsManager({
           </>
         )}
 
-        {isDevAdmin && platformForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && (
+        {isDevAdmin && platformForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && activeTab !== 'Password' && (
           <form className="card" onSubmit={savePlatform}>
             <div className="card-header">
               <span className="card-title">Dev Admin Platform Controls</span>
@@ -533,7 +548,7 @@ export default function SettingsManager({
           </form>
         )}
 
-        {tenantForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && (
+        {tenantForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && activeTab !== 'Password' && (
           <form className="card" onSubmit={saveTenant}>
             <div className="card-header">
               <span className="card-title">Business Settings</span>
@@ -604,6 +619,8 @@ export default function SettingsManager({
           </form>
         )}
       </div>
+
+      {activeTab === 'Password' && <PasswordChangeCard />}
 
       {activeTab === 'Security' && <EmailChangeRequestCard />}
 
