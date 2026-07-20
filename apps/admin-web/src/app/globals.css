@@ -3756,7 +3756,7 @@ pre, code.block {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px var(--arofi-theme-accent-border);
   transition: transform 0.2s ease, background 0.2s ease;
 }
 .chat-bubble:hover {
@@ -3771,8 +3771,8 @@ pre, code.block {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
-  color: var(--brand);
+  background: var(--bg-card);
+  color: var(--arofi-theme-accent);
   display: grid;
   place-items: center;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
@@ -3781,12 +3781,12 @@ pre, code.block {
   position: absolute;
   bottom: 72px;
   right: 0;
-  width: 340px;
-  height: 460px;
-  background: #1a1f2c;
-  border: 1px solid #2d3748;
+  width: min(360px, calc(100vw - 32px));
+  height: min(460px, calc(100vh - 120px));
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3836,14 +3836,14 @@ pre, code.block {
   margin: 8px auto 0;
   background: transparent;
   border: 0;
-  color: var(--arofi-theme-accent-border);
+  color: var(--arofi-theme-accent-text);
   font-size: 11px;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
   padding: 0;
 }
-.chat-escalate-link:hover { color: #fff; }
+.chat-escalate-link:hover { color: var(--arofi-theme-accent-hover); }
 .chat-typing { display: inline-flex; gap: 4px; padding: 2px; }
 .chat-typing span {
   width: 6px;
@@ -3869,23 +3869,25 @@ pre, code.block {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  color: #e2e8f0;
-  background: #111827;
+  color: var(--text-1);
+  background: var(--bg-card);
 }
 .chat-input-field {
-  background: #1f2937;
-  border: 1px solid #374151;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
-  color: white;
+  color: var(--text-1);
   font-size: 13px;
   outline: none;
   width: 100%;
   box-sizing: border-box;
 }
 .chat-input-field:focus {
-  border-color: var(--brand);
+  border-color: var(--arofi-theme-accent);
+  box-shadow: 0 0 0 2px var(--arofi-theme-accent-soft);
 }
+.chat-input-field::placeholder { color: var(--text-3); opacity: 1; }
 .chat-btn-primary {
   background: var(--brand);
   color: white;
@@ -3901,7 +3903,9 @@ pre, code.block {
   background: var(--green-dark);
 }
 .chat-btn-primary:disabled {
-  background: #4b5563;
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-3);
   cursor: not-allowed;
 }
 .msg-bubble {
@@ -3913,38 +3917,38 @@ pre, code.block {
   word-break: break-word;
 }
 .msg-bubble.visitor {
-  background: #2d3748;
-  color: #f7fafc;
+  background: var(--arofi-theme-accent);
+  color: #ffffff;
   align-self: flex-end;
   border-bottom-right-radius: 2px;
 }
 .msg-bubble.admin {
-  background: #1e3a8a;
-  color: #eff6ff;
+  background: var(--arofi-theme-accent-soft);
+  color: var(--arofi-theme-accent-text);
   align-self: flex-start;
   border-bottom-left-radius: 2px;
-  border: 1px solid #1e40af;
+  border: 1px solid var(--arofi-theme-accent-border);
 }
 .chat-link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chat-link-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--arofi-theme-accent-soft-2);
+  border: 1px solid var(--arofi-theme-accent-border);
   border-radius: 999px;
   padding: 5px 10px;
   font-size: 11.5px;
   font-weight: 700;
-  color: #eff6ff;
+  color: var(--arofi-theme-accent-text);
   text-decoration: none;
   transition: background 0.15s, border-color 0.15s;
 }
-.chat-link-chip:hover { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.4); }
+.chat-link-chip:hover { background: var(--arofi-theme-accent-soft); border-color: var(--arofi-theme-accent); }
 .chat-footer {
   padding: 12px;
-  background: #1a1f2c;
-  border-top: 1px solid #2d3748;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
 }
 .chat-input-row {
   display: flex;
@@ -3952,6 +3956,7 @@ pre, code.block {
 }
 .chat-input-row input {
   flex: 1;
+  min-width: 0;
 }
 /* ═══════════════════════════════════════════════
    RESPONSIVE DESIGN ADDITIONS & MOCKUP FIXES
@@ -5472,14 +5477,43 @@ html[data-theme][data-accent-theme] .sale-redeemed {
 }
 
 html[data-theme][data-accent-theme] .home-live { background: transparent; }
-html[data-theme][data-accent-theme] .chat-bubble { box-shadow: 0 4px 12px var(--arofi-theme-accent-border); }
+html[data-theme][data-accent-theme] .chat-bubble {
+  background: var(--arofi-theme-accent);
+  box-shadow: 0 4px 12px var(--arofi-theme-accent-border);
+}
+html[data-theme][data-accent-theme] .chat-bubble:hover { background: var(--arofi-theme-accent-hover); }
+html[data-theme][data-accent-theme] .chat-window,
+html[data-theme][data-accent-theme] .chat-body,
+html[data-theme][data-accent-theme] .chat-footer {
+  background: var(--bg-card);
+  color: var(--text-1);
+  border-color: var(--border);
+}
+html[data-theme][data-accent-theme] .chat-header,
+html[data-theme][data-accent-theme] .chat-btn-primary {
+  background: var(--arofi-theme-accent);
+  border-color: var(--arofi-theme-accent);
+}
+html[data-theme][data-accent-theme] .chat-input-field {
+  background: var(--bg-app);
+  border-color: var(--border);
+  color: var(--text-1);
+}
+html[data-theme][data-accent-theme] .msg-bubble.visitor {
+  background: var(--arofi-theme-accent);
+  color: #ffffff;
+}
 html[data-theme][data-accent-theme] .msg-bubble.admin {
   background: var(--arofi-theme-accent-soft);
   color: var(--arofi-theme-accent-text);
   border-color: var(--arofi-theme-accent-border);
 }
 
-html[data-theme][data-accent-theme] .chat-link-chip { color: #ffffff; }
+html[data-theme][data-accent-theme] .chat-link-chip,
+html[data-theme][data-accent-theme] .chat-escalate-link {
+  color: var(--arofi-theme-accent-text);
+}
+html[data-theme=dark][data-accent-theme=white] .msg-bubble.visitor { color: #101828; }
 
 
 
