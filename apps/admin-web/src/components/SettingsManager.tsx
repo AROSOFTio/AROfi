@@ -465,10 +465,12 @@ export default function SettingsManager({
                 <span className="card-title">Theme</span>
                 <span className="badge badge-info">This device</span>
               </div>
-              <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
-                Choose one accent for the public website, sign-in pages, and dashboard.
-              </p>
-              <ThemeToggle />
+              <div className="settings-card-body">
+                <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 20px' }}>
+                  Choose one accent for the public website, sign-in pages, and dashboard.
+                </p>
+                <ThemeToggle />
+              </div>
             </div>
 
             <div className="card">
@@ -476,12 +478,14 @@ export default function SettingsManager({
                 <span className="card-title">WiFi Login Page Theme</span>
                 <span className="badge badge-success">Customer portal</span>
               </div>
-              <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
-                Select the captive portal theme customers see when buying access, redeeming vouchers, logging in, or checking session usage.
-              </p>
-              <Link href="/admin/settings/templates" className="btn btn-primary">
-                Open WiFi Login Page Themes
-              </Link>
+              <div className="settings-card-body">
+                <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 20px' }}>
+                  Select the captive portal theme customers see when buying access, redeeming vouchers, logging in, or checking session usage.
+                </p>
+                <Link href="/admin/settings/templates" className="btn btn-primary">
+                  Open WiFi Login Page Themes
+                </Link>
+              </div>
             </div>
           </>
         )}

@@ -5630,5 +5630,46 @@ html[data-theme=dark][data-accent-theme=white] .msg-bubble.visitor { color: #101
   }
 }
 
+.settings-card-body {
+  padding: 20px 22px 24px;
+}
+
+.settings-card-body .appearance-settings {
+  gap: 22px;
+}
+
+.settings-card-body .appearance-accent-card {
+  padding: 14px;
+}
+
+/* The AI launcher is the AROFi mark itself, without a colored plate or badge. */
+.chat-bubble,
+.chat-bubble:hover,
+html[data-theme][data-accent-theme] .chat-bubble,
+html[data-theme][data-accent-theme] .chat-bubble:hover {
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-bubble-logo {
+  width: 58px;
+  height: 58px;
+}
+
+@media (max-width: 640px) {
+  .settings-card-body {
+    padding: 18px 16px 22px;
+  }
+
+  .settings-card-body .appearance-accent-card {
+    padding: 13px;
+  }
+}
+
 
 

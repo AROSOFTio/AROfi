@@ -148,7 +148,6 @@ export default function ChatWidget() {
       ) : (
         <div className="chat-bubble" onClick={() => setIsOpen(true)} role="button" aria-label="Chat with Aria, AROFi's AI assistant">
           <img src="/logo.png" alt="" className="chat-bubble-logo" />
-          <span className="chat-bubble-spark"><Sparkles size={13} /></span>
         </div>
       )}
     </div>
