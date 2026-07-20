@@ -2,7 +2,7 @@ import RegisterAgentPanel from '@/components/RegisterAgentPanel'
 import SellVoucherPanel from '@/components/SellVoucherPanel'
 import { AdminSessionResponse, AgentsOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
-import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { formatBasisPoints, formatBusinessTerminology, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
@@ -177,7 +177,7 @@ export default async function AgentsPage() {
               )}
               {recentDisbursements.map((disbursement) => (
                 <tr key={disbursement.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{disbursement.reference}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(disbursement.reference)}</td>
                   <td>{disbursement.agent?.name ?? 'Business wallet'}</td>
                   <td>{disbursement.settlement?.reference ?? 'Ad hoc'}</td>
                   <td>{formatTransactionType(disbursement.method)}</td>

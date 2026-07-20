@@ -498,7 +498,7 @@ export class WalletsService {
     }
 
     const provider = this.paymentRouterService.resolveDisbursement(payoutNumber.network)
-    const reference = `VENDOR-WD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
+    const reference = `BUSINESS-WD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
     const fee = this.calculateWithdrawalFee(dto.amountUgx, platformSettings)
     const totalDebitUgx = dto.amountUgx + fee.feeAmountUgx
     const minimumPayoutUgx = platformSettings.minimumWithdrawalUgx
@@ -1617,7 +1617,7 @@ export class WalletsService {
       throw new NotFoundException('Wallet not found')
     }
 
-    const reference = `TENANT-TOPUP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
+    const reference = `BUSINESS-TOPUP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
 
     const billingTransaction = await this.prisma.billingTransaction.create({
       data: {

@@ -706,7 +706,7 @@ export class PaymentsService {
     })
 
     if (!payment) {
-      if (extracted.externalReference?.startsWith('TENANT-TOPUP-')) {
+      if (extracted.externalReference?.startsWith('BUSINESS-TOPUP-') || extracted.externalReference?.startsWith('TENANT-TOPUP-')) {
         const txRecord = await this.prisma.billingTransaction.findUnique({
           where: { externalReference: extracted.externalReference },
         })
@@ -1554,7 +1554,7 @@ export class PaymentsService {
   // Called by POST/GET /payments/webhooks/yo-uganda/disbursement
   // Yo Uganda sends this when a vendor payout (acwithdrawfunds) completes or fails.
   // The payload contains:
-  //   external_ref         → our disbursement.reference (VENDOR-WD-...)
+  //   external_ref         → our disbursement reference
   //   transaction_reference → Yo's internal ref
   //   status / transaction_status → SUCCEEDED | FAILED | PENDING | CANCELLED
   async handleYoDisbursementWebhook(

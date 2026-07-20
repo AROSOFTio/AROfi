@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PlatformWithdrawalsResponse } from '@/lib/admin-types'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import { formatBusinessTerminology, formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import ReviewActionModal from '@/components/ReviewActionModal'
 
 export default function PlatformWithdrawalsPanel({ initialData }: { initialData: PlatformWithdrawalsResponse | null }) {
@@ -172,7 +172,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
               {pendingWithdrawals.map((withdrawal) => (
                 <tr key={withdrawal.id}>
                   <td>{withdrawal.tenant.name}<Small>{withdrawal.tenant.domain ?? 'No domain'}</Small></td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{withdrawal.reference}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(withdrawal.reference)}</td>
                   <td>{formatCurrency(withdrawal.amountUgx)}</td>
                   <td>{withdrawal.network ?? 'Mobile Money'} {withdrawal.destinationReference ? maskPhone(withdrawal.destinationReference) : ''}</td>
                   <td><span className={getStatusBadgeClass(withdrawal.status)}>{formatStatus(withdrawal.status)}</span></td>
@@ -184,7 +184,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
                       onApprove={() => run(`approve-withdrawal-${withdrawal.id}`, 'Withdrawal approved and sent to provider.', () => clientPostApi(`/wallets/withdrawals/${withdrawal.id}/approve`, {}, { timeoutMs: 30000 }))}
                       onReject={() => setPendingReject({
                         actionId: `reject-withdrawal-${withdrawal.id}`,
-                        title: `Reject withdrawal ${withdrawal.reference}`,
+                        title: `Reject withdrawal ${formatBusinessTerminology(withdrawal.reference)}`,
                         success: 'Withdrawal rejected and reserve released.',
                         path: `/wallets/withdrawals/${withdrawal.id}/reject`,
                       })}
@@ -217,7 +217,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
               {withdrawals.slice(0, 80).map((withdrawal) => (
                 <tr key={withdrawal.id}>
                   <td>{withdrawal.tenant.name}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{withdrawal.reference}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(withdrawal.reference)}</td>
                   <td>{formatCurrency(withdrawal.amountUgx)}</td>
                   <td>{withdrawal.network ?? 'Mobile Money'} {withdrawal.destinationReference ? maskPhone(withdrawal.destinationReference) : ''}</td>
                   <td><span className={getStatusBadgeClass(withdrawal.status)}>{formatStatus(withdrawal.status)}</span></td>

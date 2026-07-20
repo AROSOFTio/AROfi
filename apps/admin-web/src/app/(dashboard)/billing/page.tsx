@@ -99,7 +99,7 @@ export default async function BillingPage() {
               {ledgerEntries.map((entry) => (
                 <tr key={entry.id}>
                   <td>
-                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{entry.ledgerTransaction.reference}</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(entry.ledgerTransaction.reference)}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{formatTransactionType(entry.ledgerTransaction.type)}</div>
                   </td>
                   <td>{entry.accountCode}</td>

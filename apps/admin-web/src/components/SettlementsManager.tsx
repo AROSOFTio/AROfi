@@ -5,7 +5,7 @@ import { Modal } from '@/components/Modal'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientPostApi } from '@/lib/client-api'
 import ReviewActionModal from '@/components/ReviewActionModal'
-import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import { formatBusinessTerminology, formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import type { DisbursementOverviewResponse } from '@/lib/admin-types'
 
 type AgentOption = { id: string; code: string; name: string }
@@ -141,7 +141,7 @@ export default function SettlementsManager({
 
               return (
                 <tr key={settlement.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{settlement.reference}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(settlement.reference)}</td>
                   <td>
                     <div>{settlement.agent.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{settlement.agent.code}</div>

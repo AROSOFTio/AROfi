@@ -1,6 +1,6 @@
 import { AdminSessionResponse, DisbursementOverviewResponse, PlatformWithdrawalsResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
-import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { formatBusinessTerminology, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 import VendorWithdrawalsPanel from '@/components/VendorWithdrawalsPanel'
 import PlatformWithdrawalsPanel from '@/components/PlatformWithdrawalsPanel'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -75,7 +75,7 @@ export default async function DisbursementsPage() {
               )}
               {settlements.map((settlement) => (
                 <tr key={settlement.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{settlement.reference}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(settlement.reference)}</td>
                   <td>
                     <div>{settlement.agent.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{settlement.agent.code}</div>
@@ -124,7 +124,7 @@ export default async function DisbursementsPage() {
               {disbursements.map((disbursement) => (
                 <tr key={disbursement.id}>
                   <td>
-                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{disbursement.reference}</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatBusinessTerminology(disbursement.reference)}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {disbursement.billingTransaction?.externalReference ?? disbursement.settlement?.reference ?? 'No source ref'}
                     </div>
