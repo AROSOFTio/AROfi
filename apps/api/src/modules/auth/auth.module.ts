@@ -1192,7 +1192,7 @@ export class AuthController {
       requestMeta(request),
       extractTrustedDeviceCookie(request),
     )
-    return result.otpRequired ? result : applyLoginCookies(response, result, request)
+    return 'access_token' in result ? applyLoginCookies(response, result, request) : result
   }
 
   // Step 2 — OTP check, issues the session as HttpOnly cookies.
