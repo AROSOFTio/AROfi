@@ -267,7 +267,7 @@ services:
       - wa-sessions:/app/.sessions
     mem_limit: 384m
     healthcheck:
-      test: ["CMD-SHELL", "wget --header='X-Api-Key: $${WAHA_API_KEY}' -qO- http://localhost:3000/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget --header=X-Api-Key:$${WAHA_API_KEY} -qO- http://localhost:3000/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
