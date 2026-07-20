@@ -6,9 +6,9 @@ import type { AdminSessionResponse } from '@/lib/admin-types'
 import { isVendorWorkspace } from '@/lib/workspace'
 
 const tenantOnlyPaths = new Set([
-  '/agents',
   '/billing',
   '/customers',
+  '/feedback',
   '/float',
   '/hotspots',
   '/packages',

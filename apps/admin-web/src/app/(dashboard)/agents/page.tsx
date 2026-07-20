@@ -1,13 +1,18 @@
 import RegisterAgentPanel from '@/components/RegisterAgentPanel'
 import SellVoucherPanel from '@/components/SellVoucherPanel'
-import { AgentsOverviewResponse } from '@/lib/admin-types'
+import { AdminSessionResponse, AgentsOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AgentsPage() {
-  const data = await fetchApi<AgentsOverviewResponse>('/agents/overview')
+  const [data, session] = await Promise.all([
+    fetchApi<AgentsOverviewResponse>('/agents/overview'),
+    fetchApi<AdminSessionResponse>('/auth/me'),
+  ])
+  const canManageBusinessAgents = isVendorWorkspace(session?.user)
   const agents = data?.agents ?? []
   const recentCommissions = data?.recentCommissions ?? []
   const recentDisbursements = data?.recentDisbursements ?? []
@@ -19,10 +24,10 @@ export default async function AgentsPage() {
           <h1 className="page-title">Agents</h1>
           <p className="page-subtitle">Resellers, field float positions, accrued commissions, and payout history across your business operations.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {canManageBusinessAgents && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <SellVoucherPanel />
           <RegisterAgentPanel />
-        </div>
+        </div>}
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>

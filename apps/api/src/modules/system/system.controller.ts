@@ -9,6 +9,7 @@ import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto'
+import { CreateFeedbackDto } from './dto/create-feedback.dto'
 import { ReviewKycDocumentDto } from './dto/review-kyc-document.dto'
 import { UpdateFeatureLimitDto } from './dto/update-feature-limit.dto'
 import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto'
@@ -157,6 +158,24 @@ export class SystemController {
   getSupportTickets(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.systemService.getSupportTickets(scopedTenantId)
+  }
+
+  @Post('feedback')
+  async createFeedback(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateFeedbackDto) {
+    const tenantId = this.accessScope.requireTenantScope(user)
+    const ticket = await this.systemService.createSupportTicket({
+      tenantId,
+      subject: `[Feedback] ${dto.title}`,
+      category: `Product feedback - ${dto.type}`,
+      email: user.email,
+      openedBy: user.displayName,
+    })
+    return this.systemService.addSupportTicketMessage(ticket.id, {
+      authorName: user.displayName,
+      authorRole: 'Business user',
+      body: `Feedback type: ${dto.type}\nRating: ${dto.rating ? `${dto.rating}/5` : 'Not provided'}\n\n${dto.details}`,
+      isInternal: false,
+    }, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.supportWrite)

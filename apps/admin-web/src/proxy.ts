@@ -20,6 +20,7 @@ const PROTECTED_PREFIXES = [
   '/disbursements',
   '/earnings',
   '/feature-limits',
+  '/feedback',
   '/float',
   '/hotspots',
   '/packages',

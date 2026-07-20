@@ -31,6 +31,7 @@ export default function robots(): MetadataRoute.Robots {
           '/sales-by-tenant',
           '/sales-by-business',
           '/feature-limits',
+          '/feedback',
           '/audit-logs',
           '/sessions',
           '/hotspots',

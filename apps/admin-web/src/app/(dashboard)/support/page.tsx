@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AdminSessionResponse, SupportTicketResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
@@ -15,6 +16,7 @@ const statuses = ['OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED
 const statusFilters = ['ALL', 'OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED'] as const
 
 export default function SupportPage() {
+  const searchParams = useSearchParams()
   const [session, setSession] = useState<AdminSessionResponse | null>(null)
   const [data, setData] = useState<SupportTicketResponse | null>(null)
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
@@ -30,9 +32,10 @@ export default function SupportPage() {
 
   const isVendor = isVendorWorkspace(session?.user)
   const allTickets = data?.items ?? []
+  const feedbackOnly = searchParams.get('view') === 'feedback'
   const tickets = useMemo(
-    () => (statusFilter === 'ALL' ? allTickets : allTickets.filter((ticket) => ticket.status === statusFilter)),
-    [allTickets, statusFilter],
+    () => allTickets.filter((ticket) => (!feedbackOnly || ticket.category.startsWith('Product feedback')) && (statusFilter === 'ALL' || ticket.status === statusFilter)),
+    [allTickets, feedbackOnly, statusFilter],
   )
   const selectedTicket = useMemo(
     () => tickets.find((ticket) => ticket.id === selectedTicketId) ?? tickets[0] ?? null,
@@ -174,11 +177,13 @@ export default function SupportPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isVendor ? 'Support Tickets' : 'Developer Support Queue'}</h1>
+          <h1 className="page-title">{isVendor ? 'Support Tickets' : feedbackOnly ? 'Feedback & Reviews' : 'Developer Support Queue'}</h1>
           <p className="page-subtitle">
             {isVendor
               ? 'Submit router, payment, wallet, voucher, and customer connection issues for developer admin support.'
-              : 'Attend business tickets, assign ownership, update status, and reply with clear next steps.'}
+              : feedbackOnly
+                ? 'Review product suggestions, improvement recommendations, ratings, and user comments.'
+                : 'Attend business tickets, assign ownership, update status, and reply with clear next steps.'}
           </p>
         </div>
         {isVendor && <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Submit Ticket</button>}
@@ -231,6 +236,7 @@ export default function SupportPage() {
                   <span className={getStatusBadgeClass(ticket.priority)} style={{ flexShrink: 0 }}>{ticket.priority.toLowerCase()}</span>
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{ticket.reference}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{ticket.category}</div>
                 {!isVendor && <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{ticket.tenant?.name ?? 'N/A'}</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
                   <span className={getStatusBadgeClass(ticket.status)}>{ticket.status.toLowerCase().replace('_', ' ')}</span>

@@ -5,9 +5,11 @@ import { usePathname } from 'next/navigation'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
+import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import Sidebar from './Sidebar'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
+import { isVendorWorkspace } from '@/lib/workspace'
 
 // The access token expires in 1h; refreshing every 45min while the tab stays
 // open means an active user never sees a forced logout, and it keeps the
@@ -173,6 +175,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
         <WorkspaceRouteGuard user={session.user}>
           <div className="content">{children}</div>
         </WorkspaceRouteGuard>
+        <FeedbackPrompt enabled={isVendorWorkspace(session.user)} />
       </div>
     </div>
   )

@@ -18,6 +18,7 @@ import {
   LifeBuoy,
   Lock,
   Mail,
+  MessageSquarePlus,
   PenLine,
   Percent,
   PiggyBank,
@@ -254,6 +255,16 @@ const navItems: NavGroup[] = [
     items: [{ href: '/admin/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true }]
   },
   {
+    label: 'Feedback & Reviews',
+    icon: <MessageSquarePlus size={17} />,
+    items: [{ href: '/support?view=feedback', label: 'Feedback & Reviews', required: ['support.read'], platformOnly: true }]
+  },
+  {
+    label: 'Agents',
+    icon: <Store size={17} />,
+    items: [{ href: '/agents', label: 'Agents', required: ['agents.read'], platformOnly: true }]
+  },
+  {
     label: 'Support Tickets',
     icon: <LifeBuoy size={17} />,
     items: [{ href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true }]
@@ -282,10 +293,16 @@ const navItems: NavGroup[] = [
 
 const tenantNavItems: NavGroup[] = [
   {
+    label: 'Agents',
+    icon: <Store size={17} />,
+    items: [
+      { href: '/agents', label: 'Agents', required: ['agents.read'], tenantOnly: true },
+    ],
+  },
+  {
     label: 'Sell Internet',
     icon: <ShoppingCart size={17} />,
     items: [
-      { href: '/agents', label: 'Sell Voucher', required: ['agents.read'], tenantOnly: true },
       { href: '/packages', label: 'Internet Plans', required: ['packages.read'], tenantOnly: true },
       { href: '/vouchers', label: 'Vouchers', required: ['vouchers.read'], tenantOnly: true },
       { href: '/users?tab=customers', label: 'Customers', required: ['users.read'], tenantOnly: true },
@@ -320,6 +337,13 @@ const tenantNavItems: NavGroup[] = [
       { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment Settings', tenantOnly: true },
       { href: '/admin/settings/templates', label: 'WiFi Login Page', tenantOnly: true },
       { href: '/settings?tab=Security', label: 'Security', tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Feedback & Reviews',
+    icon: <MessageSquarePlus size={17} />,
+    items: [
+      { href: '/feedback', label: 'Feedback & Reviews', tenantOnly: true },
     ],
   },
   {
