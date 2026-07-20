@@ -573,8 +573,8 @@ export default function SettingsManager({
               Payment provider routes are securely managed by AROFi, so there is nothing to configure here.
             </p>
             <div className="form-grid">
-              <ReadOnly label="MTN Mobile Money" value={tenant.payment?.acceptedNetworks.includes('MTN') ? 'Enabled' : 'Unavailable'} />
-              <ReadOnly label="Airtel Money" value={tenant.payment?.acceptedNetworks.includes('AIRTEL') ? 'Enabled' : 'Unavailable'} />
+              <ReadOnly label="MTN Mobile Money" value={tenant?.payment?.acceptedNetworks.includes('MTN') ? 'Enabled' : 'Unavailable'} />
+              <ReadOnly label="Airtel Money" value={tenant?.payment?.acceptedNetworks.includes('AIRTEL') ? 'Enabled' : 'Unavailable'} />
               <ReadOnly label="Mobile Money Service Fee" value={String(effectiveMobileFee) + '% per successful payment'} />
               <ReadOnly label="Voucher Service Fee" value={String(effectiveVoucherFee) + '% per redeemed voucher'} />
             </div>
