@@ -1215,13 +1215,13 @@ export class VouchersService {
     //   - On-network scans are intercepted by MikroTik; login.html recovers the
     //     nested voucher code from dst/link-orig and auto-redeems it there.
     const portalHost = this.getVoucherPortalHost()
-    const configuredTenantDomain = batch.tenant.domain?.trim().replace(/^https?:\/\//, '').replace(/\/$/, '')
     const tenantSlug = batch.tenant.name
+      .replace(/^arofi(?:\s+wifi)?[\s:_-]*/i, '')
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '')
-    const tenantHotspotDomain = configuredTenantDomain || (tenantSlug ? `${tenantSlug}.wifi` : portalHost)
+    const tenantHotspotDomain = tenantSlug ? `${tenantSlug}.wifi` : portalHost
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
