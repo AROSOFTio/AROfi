@@ -68,7 +68,7 @@ export default function PrivacyPage() {
           <p>
             Payments are processed through licensed mobile money providers and aggregators; card or wallet PINs never touch our systems.
             Each operator&apos;s data is isolated per business workspace, transport is encrypted (HTTPS/TLS), withdrawals require a separate secret code,
-            and administrative access is protected with one-time email verification codes.
+            and administrative access on new or unrecognized devices is protected with one-time email verification codes.
           </p>
 
           <h2>Retention and your rights</h2>

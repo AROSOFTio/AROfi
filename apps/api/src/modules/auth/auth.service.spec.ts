@@ -44,6 +44,7 @@ function buildHarness(options: {
   failureCount?: number
   refreshCreateError?: Error
   refreshTokenRecord?: Record<string, unknown> | null
+  trustedDeviceRecord?: Record<string, unknown> | null
 } = {}) {
   const user = options.user === undefined ? buildUser() : options.user
 
@@ -60,6 +61,13 @@ function buildHarness(options: {
       create: jest.fn().mockResolvedValue({ id: 'otp-1' }),
       findFirst: jest.fn().mockResolvedValue(options.challenge ?? null),
       update: jest.fn().mockResolvedValue({}),
+    },
+    adminTrustedDevice: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      create: jest.fn().mockResolvedValue({ id: 'trusted-1' }),
+      findUnique: jest.fn().mockResolvedValue(options.trustedDeviceRecord ?? null),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     auditLog: {
       create: jest.fn().mockResolvedValue({}),
@@ -132,6 +140,35 @@ describe('AuthService email OTP login', () => {
     )
   })
 
+  it('skips email verification when the password and remembered-device token are valid', async () => {
+    const { service, prisma, mailService } = buildHarness({
+      trustedDeviceRecord: {
+        id: 'trusted-1',
+        userId: 'user-1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+        userAgent: 'Test browser',
+      },
+    })
+
+    const result = await service.startLogin(
+      'admin@arofi.net',
+      PASSWORD,
+      { userAgent: 'Test browser' },
+      'raw-trusted-token',
+    )
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        otpRequired: false,
+        trusted_device_token: expect.any(String),
+      }),
+    )
+    expect(prisma.adminTrustedDevice.update).toHaveBeenCalled()
+    expect(prisma.adminLoginOtp.create).not.toHaveBeenCalled()
+    expect(mailService.sendAdminLoginOtpEmail).not.toHaveBeenCalled()
+  })
+
   it('locks the account after too many recent failures regardless of source IP', async () => {
     const { service } = buildHarness({ failureCount: 8 })
 
@@ -162,6 +199,24 @@ describe('AuthService email OTP login', () => {
     )
     expect(prisma.adminLoginOtp.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { attempts: { increment: 1 } } }),
+    )
+  })
+
+  it('remembers the device only after a correct verification code', async () => {
+    const { service, prisma } = buildHarness({ challenge: buildChallenge() })
+
+    const session = await service.verifyLogin(
+      'admin@arofi.net',
+      '123456',
+      { userAgent: 'Test browser' },
+      true,
+    )
+
+    expect(session.trusted_device_token).toEqual(expect.any(String))
+    expect(prisma.adminTrustedDevice.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: 'user-1', userAgent: 'Test browser' }),
+      }),
     )
   })
 

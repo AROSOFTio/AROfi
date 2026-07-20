@@ -43,7 +43,9 @@ export { AccessScopeService, PermissionsGuard, RoleCatalogService }
 
 export const ACCESS_COOKIE_NAME = 'arofi_admin_token'
 const REFRESH_COOKIE_NAME = 'arofi_admin_refresh'
+const TRUSTED_DEVICE_COOKIE_NAME = 'arofi_admin_trusted_device'
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const TRUSTED_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 // Must match the JWT expiresIn below — the cookie should die with the token.
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000
@@ -89,6 +91,10 @@ class LoginVerifyDto {
   @IsString()
   @Length(OTP_LENGTH, OTP_LENGTH)
   otp: string
+
+  @IsOptional()
+  @IsBoolean()
+  rememberDevice?: boolean
 }
 
 class LoginResendDto {
@@ -196,7 +202,12 @@ export class AuthService {
   ) {}
 
   // ── Step 1: email + password → OTP email ─────────────────────────────────
-  async startLogin(email: string, password: string, meta: RequestMeta = {}) {
+  async startLogin(
+    email: string,
+    password: string,
+    meta: RequestMeta = {},
+    rawTrustedDeviceToken?: string | null,
+  ) {
     await this.roleCatalogService.ensureStandardRoles()
     await this.assertNotLockedOut(email)
 
@@ -215,6 +226,27 @@ export class AuthService {
         meta,
       })
       throw new UnauthorizedException('Invalid credentials')
+    }
+
+    const rotatedTrustedDeviceToken = rawTrustedDeviceToken
+      ? await this.rotateTrustedDevice(user.id, rawTrustedDeviceToken, meta)
+      : null
+
+    if (rotatedTrustedDeviceToken) {
+      const session = await this.issueSessionForUserId(user.id)
+      await this.recordAuthAudit({
+        action: 'auth.login.succeeded',
+        email: user.email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        message: 'Admin login completed on a remembered device',
+        meta,
+      })
+      return {
+        ...session,
+        otpRequired: false as const,
+        trusted_device_token: rotatedTrustedDeviceToken,
+      }
     }
 
     const otp = this.generateOtp()
@@ -260,7 +292,12 @@ export class AuthService {
   }
 
   // ── Step 2: OTP → session tokens ──────────────────────────────────────────
-  async verifyLogin(email: string, otp: string, meta: RequestMeta = {}) {
+  async verifyLogin(
+    email: string,
+    otp: string,
+    meta: RequestMeta = {},
+    rememberDevice = false,
+  ) {
     await this.assertNotLockedOut(email)
 
     const user = await this.usersService.findOneByEmail(email)
@@ -349,6 +386,9 @@ export class AuthService {
     return {
       access_token: await this.signAccessToken(authenticatedUser),
       refresh_token: await this.issueRefreshToken(authenticatedUser.id),
+      trusted_device_token: rememberDevice
+        ? await this.issueTrustedDevice(authenticatedUser.id, meta)
+        : null,
       user: authenticatedUser,
     }
   }
@@ -501,6 +541,74 @@ export class AuthService {
     return rawToken
   }
 
+  private async issueTrustedDevice(
+    userId: string,
+    meta: RequestMeta,
+  ): Promise<string | null> {
+    const rawToken = randomBytes(48).toString('hex')
+    const now = new Date()
+    try {
+      await this.prisma.adminTrustedDevice.deleteMany({
+        where: {
+          userId,
+          OR: [{ expiresAt: { lte: now } }, { revokedAt: { not: null } }],
+        },
+      })
+      await this.prisma.adminTrustedDevice.create({
+        data: {
+          userId,
+          tokenHash: this.hashToken(rawToken),
+          userAgent: meta.userAgent ?? null,
+          expiresAt: new Date(now.getTime() + TRUSTED_DEVICE_TTL_MS),
+        },
+      })
+      return rawToken
+    } catch (error) {
+      this.logger.error(
+        `Trusted-device storage unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      return null
+    }
+  }
+
+  private async rotateTrustedDevice(
+    userId: string,
+    rawToken: string,
+    meta: RequestMeta,
+  ): Promise<string | null> {
+    try {
+      const record = await this.prisma.adminTrustedDevice.findUnique({
+        where: { tokenHash: this.hashToken(rawToken) },
+      })
+      const now = new Date()
+      if (!record || record.userId !== userId || record.revokedAt || record.expiresAt <= now) {
+        if (record && !record.revokedAt) {
+          await this.prisma.adminTrustedDevice.update({
+            where: { id: record.id },
+            data: { revokedAt: now },
+          })
+        }
+        return null
+      }
+
+      const rotatedToken = randomBytes(48).toString('hex')
+      await this.prisma.adminTrustedDevice.update({
+        where: { id: record.id },
+        data: {
+          tokenHash: this.hashToken(rotatedToken),
+          lastUsedAt: now,
+          userAgent: meta.userAgent ?? record.userAgent,
+        },
+      })
+      return rotatedToken
+    } catch (error) {
+      this.logger.error(
+        `Trusted-device validation unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      return null
+    }
+  }
+
   private hashToken(rawToken: string) {
     return createHash('sha256').update(rawToken).digest('hex')
   }
@@ -591,6 +699,10 @@ export class AuthService {
         data: { usedAt: new Date() },
       }),
       this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.adminTrustedDevice.updateMany({
         where: { userId: record.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
@@ -726,6 +838,10 @@ export class AuthService {
       }),
       // Email is the login identifier — force re-authentication everywhere.
       this.prisma.refreshToken.updateMany({
+        where: { userId: request.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.adminTrustedDevice.updateMany({
         where: { userId: request.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
@@ -906,6 +1022,20 @@ function extractRefreshCookie(request: Request) {
   return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : null
 }
 
+function extractTrustedDeviceCookie(request: Request) {
+  const rawCookie = request.headers.cookie
+  if (!rawCookie) {
+    return null
+  }
+
+  const cookie = rawCookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${TRUSTED_DEVICE_COOKIE_NAME}=`))
+
+  return cookie ? decodeURIComponent(cookie.split('=').slice(1).join('=')) : null
+}
+
 // The session cookie must be scoped to the parent domain (".arofi.net") so
 // it stays valid across every subdomain of the site — without it, a cookie
 // set on one host never reaches another and the dashboard's SSR auth check
@@ -962,6 +1092,20 @@ export function setRefreshCookie(response: Response, token: string | null, domai
   })
 }
 
+export function setTrustedDeviceCookie(response: Response, token: string | null, domain?: string) {
+  if (!token) {
+    return
+  }
+  response.cookie(TRUSTED_DEVICE_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: TRUSTED_DEVICE_TTL_MS,
+    path: '/api/auth',
+    ...(domain ? { domain } : {}),
+  })
+}
+
 // The access token is delivered ONLY as an HttpOnly cookie. It must never be
 // readable from JavaScript (XSS cannot exfiltrate it) and never appear in a
 // response body. CSRF is mitigated by SameSite=Lax plus the locked-down
@@ -997,6 +1141,25 @@ export function applySessionCookies<
   return rest
 }
 
+export function applyLoginCookies<
+  T extends {
+    access_token: string
+    refresh_token: string | null
+    trusted_device_token?: string | null
+  },
+>(
+  response: Response,
+  session: T,
+  request?: Request,
+): Omit<T, 'access_token' | 'refresh_token' | 'trusted_device_token'> {
+  const { access_token, refresh_token, trusted_device_token, ...rest } = session
+  const domain = resolveCookieDomain(request)
+  setAdminAccessCookie(response, access_token, domain)
+  setRefreshCookie(response, refresh_token, domain)
+  setTrustedDeviceCookie(response, trusted_device_token ?? null, domain)
+  return rest
+}
+
 function requestMeta(request: Request): RequestMeta {
   const forwardedFor = request.headers['x-forwarded-for']
   const firstForwarded = Array.isArray(forwardedFor)
@@ -1018,8 +1181,18 @@ export class AuthController {
   // silently receiving a session without OTP.
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post(['login', 'login/start'])
-  async loginStart(@Body() dto: LoginStartDto, @Req() request: Request) {
-    return this.authService.startLogin(dto.email, dto.password, requestMeta(request))
+  async loginStart(
+    @Body() dto: LoginStartDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.startLogin(
+      dto.email,
+      dto.password,
+      requestMeta(request),
+      extractTrustedDeviceCookie(request),
+    )
+    return result.otpRequired ? result : applyLoginCookies(response, result, request)
   }
 
   // Step 2 — OTP check, issues the session as HttpOnly cookies.
@@ -1030,8 +1203,13 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const session = await this.authService.verifyLogin(dto.email, dto.otp, requestMeta(request))
-    return applySessionCookies(response, session, request)
+    const session = await this.authService.verifyLogin(
+      dto.email,
+      dto.otp,
+      requestMeta(request),
+      dto.rememberDevice ?? false,
+    )
+    return applyLoginCookies(response, session, request)
   }
 
   @Throttle({ default: { ttl: 300_000, limit: 3 } })

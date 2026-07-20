@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
+  const [rememberDevice, setRememberDevice] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -93,6 +94,10 @@ export default function LoginPage() {
       }
 
       const data = await res.json()
+      if (data?.otpRequired === false) {
+        window.location.href = nextPath
+        return
+      }
       setStep('otp')
       setOtp('')
       setInfo(`We emailed a 6-digit verification code to ${email}. It expires in a few minutes.`)
@@ -115,7 +120,7 @@ export default function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: code }),
+        body: JSON.stringify({ email, otp: code, rememberDevice }),
       })
 
       if (!res.ok) {
@@ -257,6 +262,29 @@ export default function LoginPage() {
                 autoComplete="current-password"
               />
             </div>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 9,
+                margin: '2px 0 14px',
+                color: 'var(--text-muted)',
+                fontSize: 12,
+                lineHeight: 1.45,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(event) => setRememberDevice(event.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <strong style={{ color: 'var(--text-primary)' }}>Remember this device for 30 days.</strong>
+                {' '}Use this only on a private phone or computer.
+              </span>
+            </label>
             <button
               type="submit"
               className="btn btn-primary btn-block"

@@ -540,6 +540,7 @@ model User {
   voucherRedemptions     VoucherRedemption[] @relation("VoucherRedemptionActor")
   refreshTokens          RefreshToken[]
   adminLoginOtps         AdminLoginOtp[]
+  adminTrustedDevices    AdminTrustedDevice[]
   blogPosts              BlogPost[]
   passwordResetTokens    PasswordResetToken[]
   emailChangeRequests    EmailChangeRequest[]
@@ -611,6 +612,20 @@ model AdminLoginOtp {
 
   @@index([userId, verifiedAt, expiresAt])
   @@index([createdAt])
+}
+
+model AdminTrustedDevice {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  userAgent   String?
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, revokedAt, expiresAt])
 }
 
 model Agent {
