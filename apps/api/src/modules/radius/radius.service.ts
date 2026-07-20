@@ -128,7 +128,7 @@ export class RadiusService {
     let router = await this.resolveRouter(dto.routerId, dto.nasIpAddress)
 
     if (router && router.tenantId !== dto.tenantId) {
-      throw new BadRequestException('Router does not belong to the tenant')
+      throw new BadRequestException('Router does not belong to the business')
     }
 
     // Auto-learn NAS IP from the first real RADIUS packet when no router matched
@@ -249,7 +249,7 @@ export class RadiusService {
       const router = await this.resolveRouterInTransaction(tx, dto.routerId, dto.nasIpAddress)
 
       if (router && router.tenantId !== dto.tenantId) {
-        throw new BadRequestException('Router does not belong to the tenant')
+        throw new BadRequestException('Router does not belong to the business')
       }
 
       const hotspot = dto.hotspotId
@@ -257,7 +257,7 @@ export class RadiusService {
         : null
 
       if (hotspot && hotspot.tenantId !== dto.tenantId) {
-        throw new BadRequestException('Hotspot does not belong to the tenant')
+        throw new BadRequestException('Hotspot does not belong to the business')
       }
 
       const linkage = await this.resolveSessionLinkage(tx, dto)
@@ -476,7 +476,7 @@ export class RadiusService {
             status: 'REJECTED',
           },
         })
-        throw new BadRequestException('Device binding resets are disabled for this tenant')
+        throw new BadRequestException('Device binding resets are disabled for this business')
       }
 
       if (
@@ -560,7 +560,7 @@ export class RadiusService {
       })
 
       if (!activation || activation.tenantId !== dto.tenantId) {
-        throw new NotFoundException('Package activation not found for the tenant')
+        throw new NotFoundException('Package activation not found for the business')
       }
 
       return {

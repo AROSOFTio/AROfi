@@ -2,10 +2,6 @@
 const nextConfig = {
     reactStrictMode: true,
     basePath: '/portal',
-    // TypeScript errors are caught in CI; skip slow type-check during Docker build.
-    typescript: {
-        ignoreBuildErrors: true,
-    },
     compress: true,
     // Force a single build worker. Next's default (cpu-count - 1) spawns
     // multiple webpack/SWC worker processes that each carry their own memory

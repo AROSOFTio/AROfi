@@ -88,7 +88,7 @@ export class WalletsController {
   @Post('withdrawals/:disbursementId/approve')
   approveWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('disbursementId') disbursementId: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
-      throw new ForbiddenException('Only Dev Admin can approve vendor withdrawals')
+      throw new ForbiddenException('Only Dev Admin can approve business withdrawals')
     }
     const scopedTenantId = this.accessScope.resolveTenantScope(user)
     return this.walletsService.approveWithdrawal(disbursementId, user.id, scopedTenantId)
@@ -102,7 +102,7 @@ export class WalletsController {
     @Body() body: { reason?: string },
   ) {
     if (!this.accessScope.isSuperAdmin(user)) {
-      throw new ForbiddenException('Only Dev Admin can reject vendor withdrawals')
+      throw new ForbiddenException('Only Dev Admin can reject business withdrawals')
     }
     const scopedTenantId = this.accessScope.resolveTenantScope(user)
     return this.walletsService.rejectWithdrawal(disbursementId, user.id, body.reason?.trim() || 'Rejected by Dev Admin', scopedTenantId)
@@ -112,7 +112,7 @@ export class WalletsController {
   @Post('withdrawals/:disbursementId/retry')
   retryWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('disbursementId') disbursementId: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
-      throw new ForbiddenException('Only Dev Admin can retry vendor withdrawals')
+      throw new ForbiddenException('Only Dev Admin can retry business withdrawals')
     }
     const scopedTenantId = this.accessScope.resolveTenantScope(user)
     return this.walletsService.retryFailedWithdrawal(disbursementId, scopedTenantId)

@@ -115,7 +115,7 @@ export default function RemoteAccessPage() {
     try {
       setOpeningPort(true)
       setError(null)
-      await clientPostApi(`/routers/${selectedRouter.id}/remote-access/open`)
+      await clientPostApi(`/routers/${selectedRouter.id}/remote-access/open`, {})
       await loadSetup(selectedRouter.id)
       await handleTestConnection(selectedRouter.id)
     } catch (err) {
@@ -131,7 +131,7 @@ export default function RemoteAccessPage() {
     try {
       setClosingPort(true)
       setError(null)
-      await clientPostApi(`/routers/${selectedRouter.id}/remote-access/close`)
+      await clientPostApi(`/routers/${selectedRouter.id}/remote-access/close`, {})
       await loadSetup(selectedRouter.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to close remote port')
@@ -188,7 +188,7 @@ export default function RemoteAccessPage() {
       {/* Header with selection */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ p: 10, background: 'var(--blue-light)', color: 'var(--primary)', borderRadius: 10 }}>
+          <div style={{ padding: 10, background: 'var(--blue-light)', color: 'var(--primary)', borderRadius: 10 }}>
             <Globe size={24} />
           </div>
           <div style={{ display: 'grid', gap: 2 }}>

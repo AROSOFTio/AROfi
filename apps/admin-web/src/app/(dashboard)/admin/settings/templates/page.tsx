@@ -119,6 +119,8 @@ const TEMPLATES: TemplateDefinition[] = [
   },
 ]
 
+const AVAILABLE_TEMPLATES = TEMPLATES.filter((template) => template.id === 'classic')
+
 // Faithfully recreates the login.html captive portal structure at miniature scale
 function PortalMockup({ t }: { t: TemplateDefinition }) {
   return (
@@ -244,9 +246,10 @@ export default function HotspotTemplatesPage() {
   useEffect(() => {
     clientFetchApi<{ tenant: { portalTemplate?: string | null } }>('/system/tenant-settings')
       .then((data) => {
-        const tpl = (data.tenant?.portalTemplate ?? 'classic') as PortalTemplateId
-        setActiveTemplate(tpl)
-        setSelectedId(tpl)
+        const savedTemplate = (data.tenant?.portalTemplate ?? 'classic') as PortalTemplateId
+        const template = AVAILABLE_TEMPLATES.some((item) => item.id === savedTemplate) ? savedTemplate : 'classic'
+        setActiveTemplate(template)
+        setSelectedId(template)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -260,7 +263,7 @@ export default function HotspotTemplatesPage() {
     try {
       await clientPatchApi('/system/tenant-settings', { portalTemplate: selectedId })
       setActiveTemplate(selectedId)
-      const name = TEMPLATES.find(t => t.id === selectedId)?.name ?? selectedId
+      const name = AVAILABLE_TEMPLATES.find(t => t.id === selectedId)?.name ?? selectedId
       setSuccess(`${name} is now your active portal template.`)
       setTimeout(() => setSuccess(null), 4000)
     } catch (e) {
@@ -270,7 +273,7 @@ export default function HotspotTemplatesPage() {
     }
   }
 
-  const selected = TEMPLATES.find(t => t.id === selectedId) ?? TEMPLATES[0]
+  const selected = AVAILABLE_TEMPLATES.find(t => t.id === selectedId) ?? AVAILABLE_TEMPLATES[0]
   const isAlreadyActive = selectedId === activeTemplate
 
   if (loading) {
@@ -307,7 +310,7 @@ export default function HotspotTemplatesPage() {
 
         {/* Template list */}
         <div style={{ display: 'grid', gap: 10 }}>
-          {TEMPLATES.map((t) => {
+          {AVAILABLE_TEMPLATES.map((t) => {
             const isSelected = t.id === selectedId
             const isCurrent = t.id === activeTemplate
             return (

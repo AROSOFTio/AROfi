@@ -625,11 +625,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (group && group.tenantId !== dto.tenantId) {
-      throw new BadRequestException('Router group does not belong to the tenant')
+      throw new BadRequestException('Router group does not belong to the business')
     }
 
     if (hotspot && hotspot.tenantId !== dto.tenantId) {
-      throw new BadRequestException('Hotspot does not belong to the tenant')
+      throw new BadRequestException('Hotspot does not belong to the business')
     }
 
     await this.enforceRouterLimit(dto.tenantId)
@@ -738,7 +738,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         return new BadRequestException(`A router with the same ${target} already exists for this tenant.`)
       }
       if (error.code === 'P2003' || error.code === 'P2025') {
-        return new BadRequestException('A referenced tenant, group, or hotspot no longer exists. Refresh and try again.')
+        return new BadRequestException('A referenced business, group, or hotspot no longer exists. Refresh and try again.')
       }
       this.logger.error(`Router create failed (${error.code}): ${error.message}`)
       return new BadRequestException(`Router could not be saved (database error ${error.code}: ${error.message}).`)
@@ -924,7 +924,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           ? [
               `Provisioning callback received from ${normalizedSourceIp}.`,
               managementHost === router.host && shouldReplaceManagementHost
-                ? 'Management host kept as pending value because learned IP is already assigned in this tenant.'
+                ? 'Management host kept as pending value because learned IP is already assigned in this business.'
                 : 'RADIUS NAS IP learned.',
               'Restart FreeRADIUS if this is the first time this NAS IP was learned.',
             ].join(' ')
@@ -2290,8 +2290,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private async sendRouterAlert(router: any, state: 'ONLINE' | 'OFFLINE', secondsOffline: number | null) {
     const timeString = new Date().toLocaleString()
     const message = state === 'OFFLINE'
-      ? `🚨 [ALERT] Router "${router.name}" (Tenant: ${router.tenant.name}) has gone OFFLINE!\nLast seen: ${router.lastSeenAt ? router.lastSeenAt.toLocaleString() : 'Never'}\nTime: ${timeString}`
-      : `✅ [RECOVERY] Router "${router.name}" (Tenant: ${router.tenant.name}) is back ONLINE.\nTime: ${timeString}`
+      ? `🚨 [ALERT] Router "${router.name}" (Business: ${router.tenant.name}) has gone OFFLINE!\nLast seen: ${router.lastSeenAt ? router.lastSeenAt.toLocaleString() : 'Never'}\nTime: ${timeString}`
+      : `✅ [RECOVERY] Router "${router.name}" (Business: ${router.tenant.name}) is back ONLINE.\nTime: ${timeString}`
 
     this.logger.warn(`[ROUTER ALERT] ${message}`)
 

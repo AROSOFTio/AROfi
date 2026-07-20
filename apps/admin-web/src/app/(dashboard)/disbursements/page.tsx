@@ -129,7 +129,7 @@ export default async function DisbursementsPage() {
                       {disbursement.billingTransaction?.externalReference ?? disbursement.settlement?.reference ?? 'No source ref'}
                     </div>
                   </td>
-                  <td>{disbursement.agent?.name ?? 'Vendor wallet'}</td>
+                  <td>{disbursement.agent?.name ?? 'Business wallet'}</td>
                   <td>{formatTransactionType(disbursement.method)}</td>
                   <td>{disbursement.destinationReference ?? 'Manual'}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(disbursement.amountUgx)}</td>

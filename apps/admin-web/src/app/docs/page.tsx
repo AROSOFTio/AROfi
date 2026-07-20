@@ -74,7 +74,7 @@ const categories: DocCategory[] = [
     icon: CreditCard,
     pages: [
       { title: 'Payments system overview', slug: 'payments', keywords: 'payment status checks, automated activation, yo uganda, radius disconnect' },
-      { title: 'Disbursements & vendor withdrawals', slug: 'disbursements', keywords: 'disburse to phone, wallet withdraw, payout limits, withdrawal secret' },
+      { title: 'Disbursements & business withdrawals', slug: 'disbursements', keywords: 'disburse to phone, wallet withdraw, payout limits, withdrawal secret' },
       { title: 'Commissions and platform rates', slug: 'commissions', keywords: 'agent commission, platform fee, accrued revenue' }
     ]
   },

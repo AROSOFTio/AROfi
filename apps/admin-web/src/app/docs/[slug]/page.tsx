@@ -211,7 +211,7 @@ export const docs: Record<string, DocPage> = {
   },
   disbursements: {
     title: 'Disbursements & Withdrawals',
-    intro: 'Vendor withdrawals are controlled wallet debits to a verified payout number, with several safety checks that must all pass before money moves.',
+    intro: 'Business withdrawals are controlled wallet debits to a verified payout number, with several safety checks that must all pass before money moves.',
     sections: [
       {
         heading: 'Before you can withdraw at all',
@@ -271,7 +271,7 @@ export const docs: Record<string, DocPage> = {
         body: [
           'Registered agents/resellers can have a commission rate (set as a percentage when the agent is registered). Commission accrues automatically whenever a sale is attributed to that agent — for example, through the Sell Voucher point-of-sale flow. See Agent PoS &amp; Resellers.',
           'Pending or failed customer payments never generate a commission — only a completed sale accrues one.',
-          'Accrued commission is settled through the same controlled disbursement flow as vendor withdrawals, not paid out ad hoc.',
+          'Accrued commission is settled through the same controlled disbursement flow as business withdrawals, not paid out ad hoc.',
         ],
       },
     ],
@@ -423,7 +423,7 @@ export const docs: Record<string, DocPage> = {
         heading: 'Agent float and settlement',
         body: [
           'Agents can be loaded with float from the business wallet and can return unused float, both as controlled, ledgered transfers.',
-          'Accrued commission is settled and paid out through the same disbursement flow used for vendor withdrawals, not paid ad hoc — see Commissions and Disbursements &amp; Withdrawals.',
+          'Accrued commission is settled and paid out through the same disbursement flow used for business withdrawals, not paid ad hoc — see Commissions and Disbursements &amp; Withdrawals.',
         ],
       },
     ],

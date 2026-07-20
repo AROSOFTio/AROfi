@@ -171,7 +171,7 @@ export default function OnboardingWizard({
 
     const tenantId = session.user.tenantId
     if (!tenantId) {
-      setError('Unable to find tenant workspace context.')
+      setError('Unable to find the business workspace.')
       setLoading(false)
       return
     }
@@ -260,7 +260,7 @@ export default function OnboardingWizard({
 
     const tenantId = session.user.tenantId
     if (!tenantId) {
-      setError('Unable to find tenant context.')
+      setError('Unable to find the business workspace.')
       setLoading(false)
       return
     }
@@ -315,7 +315,7 @@ export default function OnboardingWizard({
 
     const tenantId = session.user.tenantId
     if (!tenantId) {
-      setError('Unable to find tenant context.')
+      setError('Unable to find the business workspace.')
       setLoading(false)
       return
     }

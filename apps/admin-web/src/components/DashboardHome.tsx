@@ -83,7 +83,7 @@ async function PlatformDashboard() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <a href="/admin/compliance-reviews" className="btn btn-ghost">Compliance Reviews</a>
-          <a href="/tenants" className="btn btn-primary">Businesses</a>
+          <a href="/businesses" className="btn btn-primary">Businesses</a>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ async function PlatformDashboard() {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-header">
           <span className="card-title">Businesses &amp; Their Routers</span>
-          <a href="/tenants" className="btn btn-ghost btn-sm">Manage Businesses</a>
+          <a href="/businesses" className="btn btn-ghost btn-sm">Manage Businesses</a>
         </div>
         <div className="table-wrap">
           <table>
@@ -525,7 +525,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 2, marginTop: 10 }}>
             <div>
               <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Owner</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{session?.user.tenantName || 'Tenant'}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{session?.user.tenantName || 'Business'}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payout Network</div>

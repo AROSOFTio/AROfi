@@ -124,7 +124,7 @@ const PLAN_CARD_META: Record<string, { price: string; desc: string; color: strin
 
 const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Security', 'Subscription Plan'] as const
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
-const portalTemplates = ['classic', 'fresh', 'midnight', 'sunrise', 'minimal']
+const portalTemplates = ['classic']
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
 
 export default function SettingsManager({
@@ -391,7 +391,7 @@ export default function SettingsManager({
       const tenantQuery = isDevAdmin ? `?tenantId=${tenant.tenant.id}` : ''
       const saved = await clientPatchApi<TenantSettings>(`/system/tenant-settings${tenantQuery}`, payload)
       setTenant(saved)
-      setMessage('Vendor settings saved and audit logged.')
+      setMessage('Business settings saved and audit logged.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not save settings')
     } finally {
@@ -407,7 +407,7 @@ export default function SettingsManager({
       <div className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Audited platform and vendor configuration for fees, withdrawals, router auto-connect, and voucher printing.</p>
+          <p className="page-subtitle">Audited platform and business configuration for fees, withdrawals, router auto-connect, and voucher printing.</p>
         </div>
       </div>
 
@@ -536,7 +536,7 @@ export default function SettingsManager({
         {tenantForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && (
           <form className="card" onSubmit={saveTenant}>
             <div className="card-header">
-              <span className="card-title">Vendor Settings</span>
+              <span className="card-title">Business Settings</span>
               <span className="badge badge-success">Persisted</span>
             </div>
             <div className="form-grid">
@@ -563,8 +563,8 @@ export default function SettingsManager({
                 <>
                   <ReadOnly label="Effective Mobile Money Fee" value={`${effectiveMobileFee}%`} />
                   <ReadOnly label="Effective Voucher Fee" value={`${effectiveVoucherFee}%`} />
-                  {isDevAdmin && <Input name="tenantMobileMoneyFeePercent" label="Tenant Mobile Money Override %" defaultValue={tenantForm.tenantMobileMoneyFeePercent ?? ''} />}
-                  {isDevAdmin && <Input name="tenantVoucherFeePercent" label="Tenant Voucher Override %" defaultValue={tenantForm.tenantVoucherFeePercent ?? ''} />}
+                  {isDevAdmin && <Input name="tenantMobileMoneyFeePercent" label="Business Mobile Money Override %" defaultValue={tenantForm.tenantMobileMoneyFeePercent ?? ''} />}
+                  {isDevAdmin && <Input name="tenantVoucherFeePercent" label="Business Voucher Override %" defaultValue={tenantForm.tenantVoucherFeePercent ?? ''} />}
                 </>
               )}
               {activeTab === 'Router & Portal' && (
@@ -587,20 +587,20 @@ export default function SettingsManager({
                   {isDevAdmin && (
                     <>
                       <FormSubheading text="Dev Admin Account Controls" />
-                      <Check name="kycCompleted" label="Vendor KYC complete" defaultChecked={tenantForm.kycCompleted ?? true} />
-                      <Check name="accountActive" label="Vendor account active" defaultChecked={tenantForm.accountActive ?? true} />
-                      <Check name="fraudHold" label="Put vendor withdrawals on fraud hold" defaultChecked={tenantForm.fraudHold ?? false} />
+                      <Check name="kycCompleted" label="Business verification complete" defaultChecked={tenantForm.kycCompleted ?? true} />
+                      <Check name="accountActive" label="Business account active" defaultChecked={tenantForm.accountActive ?? true} />
+                      <Check name="fraudHold" label="Put business withdrawals on fraud hold" defaultChecked={tenantForm.fraudHold ?? false} />
                     </>
                   )}
                   <FormSubheading text="Terms" />
-                  <Check name="termsAccepted" label="Accept current vendor operating terms" defaultChecked={Boolean(tenantForm.termsAcceptedAt)} />
+                  <Check name="termsAccepted" label="Accept current business operating terms" defaultChecked={Boolean(tenantForm.termsAcceptedAt)} />
                 </>
               )}
               {activeTab === 'Withdrawals' && (
                 <ReadOnly label="Withdrawal Safety" value="Registered payout number, secret key, balance, minimum amount, and approval policy are enforced by the backend." />
               )}
             </div>
-            <button className="btn btn-primary" disabled={saving} style={{ marginTop: 18 }}>{saving ? 'Saving...' : 'Save Vendor Settings'}</button>
+            <button className="btn btn-primary" disabled={saving} style={{ marginTop: 18 }}>{saving ? 'Saving...' : 'Save Business Settings'}</button>
           </form>
         )}
       </div>
@@ -623,7 +623,7 @@ export default function SettingsManager({
             </p>
             {!isVendor && (
               <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
-                Viewing this tenant's plan as DevAdmin. Plan changes and payment must be initiated by the tenant from their own dashboard.
+                Viewing this business&apos;s plan as DevAdmin. Plan changes and payment must be initiated by the business owner from their own dashboard.
               </p>
             )}
           </div>

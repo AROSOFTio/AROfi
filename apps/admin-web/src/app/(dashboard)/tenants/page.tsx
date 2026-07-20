@@ -1,7 +1,5 @@
-import TenantsManager from '@/components/TenantsManager'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
-export default function TenantsPage() {
-  return <TenantsManager />
+export default function LegacyBusinessesPage() {
+  redirect('/businesses')
 }

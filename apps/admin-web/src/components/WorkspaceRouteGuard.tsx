@@ -24,6 +24,7 @@ const platformOnlyPaths = new Set([
   '/audit-logs',
   '/feature-limits',
   '/tenants',
+  '/businesses',
 ])
 
 export default function WorkspaceRouteGuard({

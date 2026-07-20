@@ -14,7 +14,7 @@ const DEFAULT_FEATURE_LIMITS = [
     code: 'packages',
     name: 'Package Catalog',
     category: FeatureLimitCategory.CATALOG,
-    description: 'Maximum number of package SKUs available to the tenant.',
+    description: 'Maximum number of package SKUs available to the business.',
     unit: 'packages',
     isEnabled: true,
     limitValue: 50,
@@ -80,7 +80,7 @@ const DEFAULT_FEATURE_LIMITS = [
     code: 'open_support_tickets',
     name: 'Open Support Tickets',
     category: FeatureLimitCategory.SUPPORT,
-    description: 'Target open support queue size for the tenant.',
+    description: 'Target open support queue size for the business.',
     unit: 'tickets',
     isEnabled: true,
     limitValue: 15,
@@ -176,7 +176,7 @@ export class OnboardingService {
     }
 
     if (!role) {
-      throw new BadRequestException('Vendor admin role is not configured yet')
+      throw new BadRequestException('Business admin role is not configured yet')
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10)
@@ -207,7 +207,7 @@ export class OnboardingService {
           tenantId: tenant.id,
           name: 'Primary Site',
           code: 'PRIMARY',
-          description: 'Automatically provisioned during tenant onboarding.',
+          description: 'Automatically provisioned during business onboarding.',
           region: 'Main location',
         },
       })
@@ -349,8 +349,8 @@ export class OnboardingService {
       onboarding: {
         checklist: [
           {
-            title: 'Open the tenant console',
-            description: 'Your workspace is ready immediately with your vendor admin account.',
+            title: 'Open the business console',
+            description: 'Your workspace is ready immediately with your business admin account.',
             path: '/dashboard',
           },
           {
@@ -380,12 +380,12 @@ export class OnboardingService {
       : this.slugify(tenantName)
 
     if (!normalizedBase) {
-      throw new BadRequestException('A valid tenant domain could not be generated')
+      throw new BadRequestException('A valid business domain could not be generated')
     }
 
     const baseDomain = normalizedBase.includes('.')
       ? normalizedBase
-      : `${normalizedBase}.tenant.arofi`
+      : `${normalizedBase}.wifi.arofi`
 
     let candidate = baseDomain
     let suffix = 2

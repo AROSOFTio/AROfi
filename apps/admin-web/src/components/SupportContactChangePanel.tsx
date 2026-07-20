@@ -31,7 +31,7 @@ export default function SupportContactChangePanel({ currentEmail, currentPhone }
       })
       await clientPostApi(`/system/support-tickets/${ticket.id}/messages`, {
         authorName: 'Business owner',
-        authorRole: 'Vendor',
+        authorRole: 'Business',
         body: `Requesting to change ${fieldLabel} from "${currentValue}" to "${newValue}".\n\nReason: ${reason}`,
       })
       setMessage(`Request submitted (ticket ${ticket.reference}). Our team will apply the change after review.`)

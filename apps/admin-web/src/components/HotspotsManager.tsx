@@ -100,7 +100,7 @@ export default function HotspotsManager() {
     setSuccess(null)
 
     if (!formState.tenantId) {
-      const failure = 'Select a tenant before creating a hotspot site'
+      const failure = 'Select a business before creating a hotspot site'
       setError(failure)
       setFormError(failure)
       return
@@ -141,12 +141,12 @@ export default function HotspotsManager() {
         <div>
           <h1 className="page-title">Hotspots</h1>
           <p className="page-subtitle">
-            Build captive portal sites, anchor NAS identities, and prepare tenant locations before router rollout.
+            Build captive portal sites, anchor NAS identities, and prepare business locations before router rollout.
           </p>
         </div>
         {tenantWorkspace && (
           <span className="badge badge-info" style={{ padding: '8px 12px' }}>
-            {session?.user.tenantName ?? 'Tenant workspace'}
+            {session?.user.tenantName ?? 'Business workspace'}
           </span>
         )}
         <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setCreateOpen(true) }}>
@@ -165,7 +165,7 @@ export default function HotspotsManager() {
               <div className="stats-grid" style={{ marginBottom: 12 }}>
                 {showTenantSelector && (
                   <div className="form-group">
-                    <label className="form-label">Tenant</label>
+                    <label className="form-label">Business</label>
                     <select
                       className="form-input"
                       value={formState.tenantId}
@@ -177,7 +177,7 @@ export default function HotspotsManager() {
                       }
                       required
                     >
-                      <option value="">Select tenant</option>
+                      <option value="">Select business</option>
                       {tenants.map((tenant) => (
                         <option key={tenant.id} value={tenant.id}>
                           {tenant.name}
@@ -304,7 +304,7 @@ export default function HotspotsManager() {
             <thead>
               <tr>
                 <th>Hotspot</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>NAS & Secret</th>
                 <th>Routers</th>
                 <th>Sessions</th>

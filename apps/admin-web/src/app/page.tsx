@@ -46,12 +46,12 @@ const features = [
   { icon: Clock, title: '24/7 Support', text: 'Real people on chat, WhatsApp, phone and email — every day, all day.' },
   { icon: Bell, title: 'Instant Alerts', text: 'Get an email the moment a router goes offline, so you fix it before customers notice.' },
   { icon: Layers, title: 'Multi-Device Bundles', text: 'Sell packages that cover several devices per customer on one payment.' },
-  { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated tenants, and secret-key protected withdrawals.' },
+  { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated business workspaces, and secret-key protected withdrawals.' },
   { icon: Zap, title: 'Instant Withdrawals', text: 'Cash out to your approved mobile money number the moment you need it.' },
   { icon: Router, title: 'Add Multiple Routers', text: 'Run one hotspot or fifty — every MikroTik router lives in one dashboard.' },
   { icon: Wifi, title: 'Remote Router Access', text: 'Reach any router from anywhere over our secure VPN tunnel — no port forwarding, no static IP.' },
   { icon: Timer, title: 'Live Session Tracking', text: 'See who is online, for how long, and how much they have paid — in real time.' },
-  { icon: Users, title: 'Multi-Tenant · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
+  { icon: Users, title: 'Independent Business Workspaces · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
 ]
 
 const faqs = [
@@ -77,7 +77,7 @@ const faqs = [
   },
   {
     q: 'Is my money and customer data safe?',
-    a: 'Every tenant is fully isolated, payments are encrypted end-to-end, and withdrawals require a separate secret code on top of your login — so a leaked password alone can’t move funds.',
+    a: 'Every business workspace is fully isolated, payments are encrypted end-to-end, and withdrawals require a separate secret code on top of your login — so a leaked password alone can’t move funds.',
   },
   {
     q: 'How many routers or hotspot sites can I run?',
@@ -517,8 +517,8 @@ export default function RootPage() {
         <p>Paste one RouterOS command and AROFi handles RADIUS authentication, captive portal redirect, session tracking, and billing automatically. Works with RB951Ui, hAP ac², CCR, CHR, and all RouterOS-based devices.</p>
         <h3>How to Start a WiFi Business in Uganda</h3>
         <p>Register free → Add your MikroTik router → Set packages → Start collecting MTN MoMo and Airtel Money. No upfront cost. AROFi earns a small commission only when you do.</p>
-        <h3>Multi-Tenant WiFi for Operators &amp; Resellers Kampala Uganda</h3>
-        <p>Run a WiFi reseller business across Kampala and Uganda. Each tenant gets their own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
+        <h3>Business WiFi for Operators &amp; Resellers in Kampala and Uganda</h3>
+        <p>Run a WiFi reseller business across Kampala and Uganda. Each business gets its own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
       </div>
 
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />

@@ -108,7 +108,7 @@ export default function KycDocumentsPanel({
         <table>
           <thead>
             <tr>
-              {isSuperAdmin && <th>Tenant</th>}
+              {isSuperAdmin && <th>Business</th>}
               <th>Type</th>
               <th>File</th>
               <th>Status</th>

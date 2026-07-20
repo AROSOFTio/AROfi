@@ -152,7 +152,7 @@ export class PaymentsService {
     })
 
     const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
-    const headers = ['date', 'tenant', 'phoneNumber', 'package', 'provider', 'network', 'status', 'amountUgx', 'externalReference', 'providerReference']
+    const headers = ['date', 'business', 'phoneNumber', 'package', 'provider', 'network', 'status', 'amountUgx', 'externalReference', 'providerReference']
     const rows = payments.map((payment) =>
       [
         payment.createdAt.toISOString(),
@@ -393,7 +393,7 @@ export class PaymentsService {
     }
 
     if (dto.tenantDomain && pkg.tenant.domain !== dto.tenantDomain) {
-      throw new BadRequestException('Package does not belong to the requested tenant portal')
+      throw new BadRequestException('Package does not belong to the requested business portal')
     }
 
     const activePrice = pkg.prices.find((price) => price.endsAt === null) ?? pkg.prices[0]
@@ -1222,7 +1222,7 @@ export class PaymentsService {
       })
 
       if (!tenant) {
-        throw new NotFoundException('Tenant portal not found')
+        throw new NotFoundException('Business portal not found')
       }
 
       return tenant
@@ -1239,7 +1239,7 @@ export class PaymentsService {
       }
     }
 
-    throw new NotFoundException('Tenant portal context is required')
+    throw new NotFoundException('Business portal context is required')
   }
 
   private async resolveRouterContext(tenantId: string, routerId?: string, routerKey?: string) {
@@ -1260,7 +1260,7 @@ export class PaymentsService {
     }
 
     if (router.tenantId !== tenantId) {
-      throw new BadRequestException('Router registration context does not belong to this tenant portal')
+      throw new BadRequestException('Router registration context does not belong to this business portal')
     }
 
     if (routerId && routerId !== router.id) {
@@ -1700,7 +1700,7 @@ export class PaymentsService {
             reference: `YO-IPN-REVERSAL-${disbursement.reference}`,
             type: LedgerTransactionType.DISBURSEMENT,
             channel: BillingChannel.DISBURSEMENT,
-            description: 'Vendor withdrawal reversed — Yo Uganda payout failed',
+            description: 'Business withdrawal reversed — Yo Uganda payout failed',
             grossAmountUgx: totalDebitUgx,
             feeAmountUgx: 0,
             netAmountUgx: totalDebitUgx,

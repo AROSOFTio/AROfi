@@ -43,7 +43,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
           <h1 className="page-title">Developer Withdrawal Control</h1>
-          <p className="page-subtitle">Approve payout numbers, review flagged withdrawals, and monitor vendor settlement risk across the platform.</p>
+          <p className="page-subtitle">Approve payout numbers, review flagged withdrawals, and monitor business settlement risk across the platform.</p>
         </div>
         <button className="btn btn-ghost" onClick={() => run('reload', 'Refreshed withdrawal control data.', reload)} disabled={busy === 'reload'}>
           {busy === 'reload' ? 'Refreshing...' : 'Refresh'}
@@ -70,7 +70,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
           <table>
             <thead>
               <tr>
-                <th>Vendor</th>
+                <th>Business</th>
                 <th>Network</th>
                 <th>Phone</th>
                 <th>Owner</th>
@@ -115,7 +115,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
           <table>
             <thead>
               <tr>
-                <th>Vendor</th>
+                <th>Business</th>
                 <th>New Number</th>
                 <th>Reason</th>
                 <th>Status</th>
@@ -158,7 +158,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
           <table>
             <thead>
               <tr>
-                <th>Vendor</th>
+                <th>Business</th>
                 <th>Reference</th>
                 <th>Amount</th>
                 <th>Destination</th>
@@ -198,12 +198,12 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
       </section>
 
       <section className="card">
-        <div className="card-header"><span className="card-title">Recent Vendor Withdrawals</span></div>
+        <div className="card-header"><span className="card-title">Recent Business Withdrawals</span></div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Vendor</th>
+                <th>Business</th>
                 <th>Reference</th>
                 <th>Amount</th>
                 <th>Destination</th>
@@ -213,7 +213,7 @@ export default function PlatformWithdrawalsPanel({ initialData }: { initialData:
               </tr>
             </thead>
             <tbody>
-              {withdrawals.length === 0 && <Empty colSpan={7} text="No vendor withdrawals have been requested." />}
+              {withdrawals.length === 0 && <Empty colSpan={7} text="No business withdrawals have been requested." />}
               {withdrawals.slice(0, 80).map((withdrawal) => (
                 <tr key={withdrawal.id}>
                   <td>{withdrawal.tenant.name}</td>

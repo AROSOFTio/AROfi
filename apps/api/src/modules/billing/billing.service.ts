@@ -605,7 +605,7 @@ export class BillingService {
     const rows = grouped
       .map((row) => ({
         tenantId: row.tenantId,
-        tenantName: tenantById.get(row.tenantId)?.name ?? 'Unknown tenant',
+        tenantName: tenantById.get(row.tenantId)?.name ?? 'Unknown business',
         subscriptionPlan: tenantById.get(row.tenantId)?.tenantSettings?.subscriptionPlan ?? 'FREE',
         salesCount: row._count._all,
         grossSalesUgx: row._sum.grossAmountUgx ?? 0,
@@ -666,7 +666,7 @@ export class BillingService {
       contentType: 'text/csv',
       buffer: Buffer.from(
         this.toCsv(
-          ['date', 'tenant', 'type', 'channel', 'status', 'package', 'customerReference', 'grossUgx', 'feeUgx', 'netUgx', 'externalReference'],
+          ['date', 'business', 'type', 'channel', 'status', 'package', 'customerReference', 'grossUgx', 'feeUgx', 'netUgx', 'externalReference'],
           items.map((item) => [
             item.createdAt.toISOString(),
             item.tenant.name,
@@ -693,7 +693,7 @@ export class BillingService {
       contentType: 'text/csv',
       buffer: Buffer.from(
         this.toCsv(
-          ['date', 'tenant', 'type', 'channel', 'status', 'grossUgx', 'feeUgx', 'netUgx', 'paymentProvider', 'externalReference'],
+          ['date', 'business', 'type', 'channel', 'status', 'grossUgx', 'feeUgx', 'netUgx', 'paymentProvider', 'externalReference'],
           items.map((item) => [
             item.createdAt.toISOString(),
             item.tenant.name,

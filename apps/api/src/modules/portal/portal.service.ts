@@ -593,7 +593,7 @@ export class PortalService {
       ])
 
     if (!tenant) {
-      throw new NotFoundException('Portal tenant not found')
+      throw new NotFoundException('Portal business not found')
     }
 
     const activeSession = recentSessions.find((session) => session.status === SessionStatus.ACTIVE) ?? null

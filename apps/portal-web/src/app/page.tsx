@@ -17,14 +17,14 @@ export default function PortalPage() {
           Open your WiFi login page from the hotspot network.
         </h1>
         <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-          This public page does not show tenant packages. Customer packages load only from a tenant link,
-          QR code, or MikroTik captive portal such as <span className="font-semibold text-slate-900">tenantname.wifi/login</span>.
+          This public page does not show business packages. Customer packages load only from a business link,
+          QR code, or MikroTik captive portal such as <span className="font-semibold text-slate-900">yourbusiness.wifi/login</span>.
         </p>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-3">
           <InfoCard icon={<Wifi className="h-5 w-5" />} title="Customers" text="Connect to the WiFi network and open the login screen shown by the router." />
           <InfoCard icon={<Router className="h-5 w-5" />} title="Operators" text="Use your AROFi dashboard to manage routers, packages, vouchers, and payments." />
-          <InfoCard icon={<ShieldCheck className="h-5 w-5" />} title="Safe Routing" text="AROFi will not guess a tenant catalog on the public portal URL." />
+          <InfoCard icon={<ShieldCheck className="h-5 w-5" />} title="Safe Routing" text="AROFi will not guess a business catalog on the public portal URL." />
         </div>
 
         <div className="mt-8 flex flex-wrap gap-3">

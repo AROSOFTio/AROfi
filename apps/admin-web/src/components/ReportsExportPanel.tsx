@@ -27,7 +27,7 @@ const reportTypes: ReportDefinition[] = [
   {
     key: 'disbursements',
     label: 'Disbursements',
-    description: 'Agent and vendor payouts, including method, status, and destination.',
+    description: 'Agent and business payouts, including method, status, and destination.',
     statusOptions: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'],
     hasChannel: false,
   },

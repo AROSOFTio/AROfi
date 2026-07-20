@@ -1,7 +1,7 @@
 import { BillingOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { isPlatformAdmin } from '@/lib/workspace'
-import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { formatBusinessTerminology, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +25,7 @@ export default async function BillingPage() {
         {[
           { label: 'Wallet Float', value: formatCurrency(data?.summary.walletBalanceUgx ?? 0), color: 'green' },
           ...(showFees ? [{ label: 'Platform Fees', value: formatCurrency(data?.summary.platformFeesUgx ?? 0), color: 'amber' }] : []),
-          { label: 'Vendor Net', value: formatCurrency(data?.summary.vendorNetUgx ?? 0), color: 'blue' },
+          { label: 'Business Net', value: formatCurrency(data?.summary.vendorNetUgx ?? 0), color: 'blue' },
           { label: 'Posted Sales', value: formatCurrency(data?.summary.totalSalesUgx ?? 0), color: 'purple' },
         ].map((stat) => (
           <div key={stat.label} className={`stat-card ${stat.color}`}>
@@ -107,7 +107,7 @@ export default async function BillingPage() {
                     <span className={getStatusBadgeClass(entry.direction)}>{entry.direction.toLowerCase()}</span>
                   </td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(entry.amountUgx)}</td>
-                  <td>{entry.memo ?? entry.ledgerTransaction.description}</td>
+                  <td>{formatBusinessTerminology(entry.memo ?? entry.ledgerTransaction.description)}</td>
                   <td style={{ fontSize: 12 }}>{formatDate(entry.createdAt)}</td>
                 </tr>
               ))}

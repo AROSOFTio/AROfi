@@ -237,7 +237,7 @@ export default function CommissionRatesPage() {
               {(data?.tenants ?? []).length === 0 && (
                 <tr>
                   <td colSpan={6}>
-                    <div className="empty-state" style={{ padding: 24 }}><p>No vendors onboarded yet.</p></div>
+                    <div className="empty-state" style={{ padding: 24 }}><p>No businesses onboarded yet.</p></div>
                   </td>
                 </tr>
               )}

@@ -159,7 +159,7 @@ export class MailService {
       <p style="font-size:20px; font-weight:700; margin:20px 0;">${amount}</p>
       <p style="color:#64748b; font-size:13px;">Reference: ${this.escapeHtml(input.reference)}</p>
       ${input.reason ? `<p style="color:#b91c1c; font-size:13px;">Reason: ${this.escapeHtml(input.reason)}</p>` : ''}
-      <p style="margin-top:24px;">— ${this.escapeHtml(input.tenantName)} wallet</p>
+      <p style="margin-top:24px;">— ${this.escapeHtml(input.tenantName)} business wallet</p>
     `
     const text = `${lead}\n\nAmount: ${amount}\nReference: ${input.reference}${input.reason ? `\nReason: ${input.reason}` : ''}`
 

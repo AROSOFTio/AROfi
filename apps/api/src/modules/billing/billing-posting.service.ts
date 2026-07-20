@@ -74,7 +74,7 @@ export class BillingPostingService {
               accountCode: LEDGER_ACCOUNTS.tenantWallet,
               direction: LedgerDirection.DEBIT,
               amountUgx: breakdown.feeAmountUgx,
-              memo: 'Platform fee debited from vendor wallet',
+              memo: 'Platform fee debited from business wallet',
             },
             {
               tenantId: input.tenantId,
@@ -106,7 +106,7 @@ export class BillingPostingService {
               accountCode: LEDGER_ACCOUNTS.tenantWallet,
               direction: LedgerDirection.CREDIT,
               amountUgx: breakdown.netAmountUgx,
-              memo: 'Vendor net proceeds',
+              memo: 'Business net proceeds',
             },
           ],
     }

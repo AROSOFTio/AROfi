@@ -1,9 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // TypeScript errors are caught in CI; skip slow type-check during Docker build.
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   reactStrictMode: true,
   compress: true,
   // Force a single build worker. Next's default (cpu-count - 1) spawns

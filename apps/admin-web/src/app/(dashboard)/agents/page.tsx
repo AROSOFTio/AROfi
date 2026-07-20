@@ -173,7 +173,7 @@ export default async function AgentsPage() {
               {recentDisbursements.map((disbursement) => (
                 <tr key={disbursement.id}>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{disbursement.reference}</td>
-                  <td>{disbursement.agent?.name ?? 'Vendor wallet'}</td>
+                  <td>{disbursement.agent?.name ?? 'Business wallet'}</td>
                   <td>{disbursement.settlement?.reference ?? 'Ad hoc'}</td>
                   <td>{formatTransactionType(disbursement.method)}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(disbursement.amountUgx)}</td>

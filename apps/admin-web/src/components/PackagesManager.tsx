@@ -139,7 +139,7 @@ export default function PackagesManager() {
     setSuccess(null)
 
     if (!formState.tenantId) {
-      const failure = 'Select a tenant before creating a package'
+      const failure = 'Select a business before creating a package'
       setError(failure)
       setFormError(failure)
       return
@@ -215,7 +215,7 @@ export default function PackagesManager() {
             <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 16 }}>
               <div className="form-group">
-                <label className="form-label">Tenant</label>
+                <label className="form-label">Business</label>
                 <select
                   className="form-input"
                   value={formState.tenantId}
@@ -223,7 +223,7 @@ export default function PackagesManager() {
                   required
                   disabled={Boolean(editingId)}
                 >
-                  <option value="">Select tenant</option>
+                  <option value="">Select business</option>
                   {tenants.map((tenant) => (
                     <option key={tenant.id} value={tenant.id}>
                       {tenant.name}

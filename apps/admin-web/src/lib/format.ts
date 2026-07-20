@@ -116,11 +116,19 @@ export function getStatusBadgeClass(status: string) {
 }
 
 export function formatTransactionType(type: string) {
-  return type
+  return formatBusinessTerminology(type)
     .toLowerCase()
     .split('_')
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(' ')
+}
+
+export function formatBusinessTerminology(value: string) {
+  return value
+    .replace(/tenants/gi, 'businesses')
+    .replace(/tenant/gi, 'business')
+    .replace(/vendors/gi, 'businesses')
+    .replace(/vendor/gi, 'business')
 }
 
 // Role names are stored/looked-up in the database as-is (e.g. "VendorAdmin")

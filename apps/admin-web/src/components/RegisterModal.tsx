@@ -99,7 +99,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
   const portalHint = useMemo(() => {
     const value = formState.desiredDomain.trim()
     if (!value) return 'Generated automatically'
-    return value.includes('.') ? value : `${value}.tenant.arofi`
+    return value.includes('.') ? value : `${value}.wifi.arofi`
   }, [formState.desiredDomain])
 
   useEffect(() => {

@@ -91,7 +91,7 @@ export class UsersService {
     }
 
     if (!actor.permissions.includes(PERMISSIONS.all) && role.permissions.includes(PERMISSIONS.all)) {
-      throw new ForbiddenException('Tenant users cannot create platform administrator accounts')
+      throw new ForbiddenException('Business users cannot create platform administrator accounts')
     }
 
     const existingUser = await this.prisma.user.findUnique({

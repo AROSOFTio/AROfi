@@ -305,7 +305,7 @@ export class VouchersService {
     }
 
     if (pkg && pkg.tenantId !== dto.tenantId) {
-      throw new BadRequestException('Package does not belong to the tenant')
+      throw new BadRequestException('Package does not belong to the business')
     }
 
     if (dto.isDefault) {
@@ -368,7 +368,7 @@ export class VouchersService {
     if (dto.packageId) {
       const pkg = await this.prisma.package.findUnique({ where: { id: dto.packageId } })
       if (!pkg || pkg.tenantId !== existing.tenantId) {
-        throw new BadRequestException('Package does not belong to the template tenant')
+        throw new BadRequestException('Package does not belong to the template business')
       }
     }
 
@@ -438,7 +438,7 @@ export class VouchersService {
     ])
 
     if (template && template.tenantId !== dto.tenantId) {
-      throw new BadRequestException('Voucher template does not belong to the tenant')
+      throw new BadRequestException('Voucher template does not belong to the business')
     }
 
     if (!pkg || pkg.tenantId !== dto.tenantId) {
@@ -574,7 +574,7 @@ export class VouchersService {
         channel: BillingChannel.VOUCHER,
         type: BillingTransactionType.VOUCHER_SALE,
         grossAmountUgx: voucher.faceValueUgx,
-        description: 'Voucher sale posted to tenant wallet',
+        description: 'Voucher sale posted to business wallet',
         customerReference: dto.customerReference,
         externalReference: dto.externalReference,
         metadata: {

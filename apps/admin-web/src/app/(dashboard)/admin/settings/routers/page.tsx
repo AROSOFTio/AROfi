@@ -154,7 +154,7 @@ export default function SettingsRoutersPage() {
 
   const groupsForTenant = useMemo(() => {
     if (!overview || !routerForm.tenantId) return []
-    return overview.groups.filter((g) => g.tenantId === routerForm.tenantId)
+    return overview.groups.filter((g) => g.tenant.id === routerForm.tenantId)
   }, [overview, routerForm.tenantId])
 
   const hotspotsForTenant = useMemo(() => {
@@ -212,7 +212,7 @@ export default function SettingsRoutersPage() {
   const handleReboot = async (router: any) => {
     setActiveMenuId(null)
     try {
-      await clientPostApi(`/routers/${router.id}/health-check`)
+      await clientPostApi(`/routers/${router.id}/health-check`, {})
     } catch { /* ignore */ }
   }
 
@@ -220,7 +220,7 @@ export default function SettingsRoutersPage() {
   const handleTestConnection = async (routerId: string) => {
     try {
       setActiveMenuId(null)
-      await clientPostApi(`/routers/${routerId}/health-check`)
+      await clientPostApi(`/routers/${routerId}/health-check`, {})
       await loadData()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Test connection failed')
@@ -408,7 +408,7 @@ export default function SettingsRoutersPage() {
                     <tr key={router.id} style={{ borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                       <td style={{ padding: '16px 20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ p: 8, background: 'var(--bg-muted)', borderRadius: 8 }}>
+                          <div style={{ padding: 8, background: 'var(--bg-muted)', borderRadius: 8 }}>
                             <Radio size={16} className="text-primary" />
                           </div>
                           <div>

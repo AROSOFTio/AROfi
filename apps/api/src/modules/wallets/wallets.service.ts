@@ -459,8 +459,8 @@ export class WalletsService {
       throw new BadRequestException('Set your disbursement secret key before requesting withdrawal')
     }
 
-    if (!tenantSettings.kycCompleted) throw new BadRequestException('Complete vendor verification before withdrawing')
-    if (!tenantSettings.accountActive) throw new BadRequestException('Vendor account is not active for withdrawals')
+    if (!tenantSettings.kycCompleted) throw new BadRequestException('Complete business verification before withdrawing')
+    if (!tenantSettings.accountActive) throw new BadRequestException('Business account is not active for withdrawals')
     if (tenantSettings.fraudHold) throw new BadRequestException('Withdrawals are temporarily blocked while the account is under review')
     if (pendingNumberChange) throw new BadRequestException('A payout number change is pending. Withdrawals remain blocked until the request is approved or cancelled.')
     if (profile.withdrawalLockedUntil && profile.withdrawalLockedUntil > new Date()) {
@@ -604,7 +604,7 @@ export class WalletsService {
           reference: `LEDGER-${reference}`,
           type: LedgerTransactionType.DISBURSEMENT,
           channel: BillingChannel.DISBURSEMENT,
-          description: 'Vendor wallet withdrawal reserved',
+          description: 'Business wallet withdrawal reserved',
           grossAmountUgx: totalDebitUgx,
           feeAmountUgx: fee.feeAmountUgx,
           netAmountUgx: -totalDebitUgx,
@@ -627,7 +627,7 @@ export class WalletsService {
                 accountCode: 'tenant_wallet',
                 direction: LedgerDirection.DEBIT,
                 amountUgx: totalDebitUgx,
-                memo: 'Vendor wallet withdrawal reserve',
+                memo: 'Business wallet withdrawal reserve',
               },
               {
                 tenantId,
@@ -643,7 +643,7 @@ export class WalletsService {
                       accountCode: 'platform_revenue',
                       direction: LedgerDirection.CREDIT,
                       amountUgx: fee.feeAmountUgx,
-                      memo: 'Vendor withdrawal charge',
+                      memo: 'Business withdrawal charge',
                     },
                   ]
                 : []),
@@ -694,8 +694,8 @@ export class WalletsService {
           amountUgx: dto.amountUgx,
           destinationReference: payoutNumber.normalizedPhone,
           notes: reviewReason
-            ? `Vendor wallet withdrawal reserved. Review required: ${reviewReason}.`
-            : 'Vendor wallet withdrawal reserved. Provider payout is being sent instantly.',
+            ? `Business wallet withdrawal reserved. Review required: ${reviewReason}.`
+            : 'Business wallet withdrawal reserved. Provider payout is being sent instantly.',
           metadata: this.toJsonValue({
             payoutNumberId: payoutNumber.id,
             requestedByUserId: userId,
@@ -751,7 +751,7 @@ export class WalletsService {
         currency: reserved.currency,
         phoneNumber: payoutNumber.normalizedPhone,
         externalReference: reference,
-        narrative: 'AROfi vendor wallet withdrawal',
+        narrative: 'AROfi business wallet withdrawal',
         network: payoutNumber.network,
       })
     } catch (error) {
@@ -958,7 +958,7 @@ export class WalletsService {
     if (disbursement.status !== DisbursementStatus.FAILED) {
       throw new BadRequestException('Only failed withdrawals can be retried')
     }
-    throw new BadRequestException('Failed withdrawals release the reserved balance. Ask the vendor to submit a new withdrawal request.')
+    throw new BadRequestException('Failed withdrawals release the reserved balance. Ask the business owner to submit a new withdrawal request.')
   }
 
   async approvePayoutNumberChange(requestId: string, actorUserId: string, scopedTenantId?: string) {
@@ -1246,7 +1246,7 @@ export class WalletsService {
         currency: disbursement.wallet.currency,
         phoneNumber: disbursement.destinationReference,
         externalReference: disbursement.reference,
-        narrative: 'AROfi vendor wallet withdrawal',
+        narrative: 'AROfi business wallet withdrawal',
         network: disbursement.network,
       })
 
@@ -1496,7 +1496,7 @@ export class WalletsService {
           reference: `REVERSAL-${input.reference}`,
           type: LedgerTransactionType.DISBURSEMENT,
           channel: BillingChannel.DISBURSEMENT,
-          description: 'Vendor wallet withdrawal reserve released',
+          description: 'Business wallet withdrawal reserve released',
           grossAmountUgx: input.totalDebitUgx,
           feeAmountUgx: 0,
           netAmountUgx: input.totalDebitUgx,

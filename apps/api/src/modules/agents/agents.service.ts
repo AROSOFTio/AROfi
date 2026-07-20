@@ -690,12 +690,12 @@ export class AgentsService {
     })
 
     const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
-    const headers = ['date', 'tenant', 'agent', 'settlement', 'reference', 'method', 'status', 'amountUgx', 'destinationReference']
+    const headers = ['date', 'business', 'agent', 'settlement', 'reference', 'method', 'status', 'amountUgx', 'destinationReference']
     const rows = disbursements.map((disbursement) =>
       [
         (disbursement.completedAt ?? disbursement.createdAt).toISOString(),
         disbursement.tenant.name,
-        disbursement.agent?.name ?? 'Vendor wallet',
+        disbursement.agent?.name ?? 'Business wallet',
         disbursement.settlement?.reference ?? '',
         disbursement.reference,
         disbursement.method,

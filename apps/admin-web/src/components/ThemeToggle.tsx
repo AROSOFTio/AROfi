@@ -8,7 +8,7 @@ type Variant = 'icon' | 'segmented' | 'settings'
 const accentThemes: Array<{ key: AccentTheme; label: string; description: string; swatch: string }> = [
   { key: 'blue', label: 'Blue', description: 'AROFi blue for brand-led screens and primary actions.', swatch: '#2563eb' },
   { key: 'green', label: 'Green', description: 'aaPanel-style green throughout buttons, links, and selected states.', swatch: '#20a53a' },
-  { key: 'white', label: 'White', description: 'Neutral black and white controls with no blue or green accents.', swatch: '#3a424d' },
+  { key: 'white', label: 'Neutral', description: 'Black, slate, and grey controls with no blue or green accent.', swatch: '#3a424d' },
 ]
 
 export default function ThemeToggle({ variant = 'icon' }: { variant?: Variant }) {

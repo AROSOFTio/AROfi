@@ -17,7 +17,7 @@ const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
 const TITLE = 'AROFi – #1 WiFi Hotspot Billing & Mobile Money System in Uganda'
 const DESCRIPTION =
-  'AROFi is Uganda\'s best hotspot billing software. Manage MikroTik routers, sell WiFi packages, collect MTN MoMo & Airtel Money payments, issue vouchers, and track sessions — all from one multi-tenant cloud console. Self-onboarding. No IT needed.'
+  'AROFi is Uganda\'s best hotspot billing software. Manage MikroTik routers, sell WiFi packages, collect MTN MoMo & Airtel Money payments, issue vouchers, and track sessions — all from one multi-business cloud console. Self-onboarding. No IT needed.'
 
 const KEYWORDS = [
   // Core product
@@ -84,7 +84,7 @@ const KEYWORDS = [
   'cloud wifi billing Uganda',
   'online wifi billing system Uganda',
   // Multi-tenant & agent
-  'multi-tenant wifi billing',
+  'multi-business wifi billing',
   'wifi reseller system Uganda',
   'wifi agent management system',
   'ISP reseller billing Uganda',
@@ -263,7 +263,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       'MikroTik hotspot billing',
       'MTN MoMo payment integration',
       'Airtel Money payment integration',
-      'Multi-tenant SaaS',
+      'Multi-business SaaS',
       'WiFi voucher management',
       'RADIUS authentication',
       'Self-onboarding for WiFi operators',

@@ -181,7 +181,7 @@ const navItems: NavGroup[] = [
   {
     label: 'Businesses',
     icon: <Building2 size={17} />,
-    items: [{ href: '/tenants', label: 'Businesses', required: ['tenants.read'], platformOnly: true }]
+    items: [{ href: '/businesses', label: 'Businesses', required: ['tenants.read'], platformOnly: true }]
   },
   {
     label: 'Compliance Reviews',
@@ -211,7 +211,7 @@ const navItems: NavGroup[] = [
   {
     label: 'Sales by Business',
     icon: <BarChart3 size={17} />,
-    items: [{ href: '/sales-by-tenant', label: 'Sales by Business', required: ['billing.read'], platformOnly: true }]
+    items: [{ href: '/sales-by-business', label: 'Sales by Business', required: ['billing.read'], platformOnly: true }]
   },
   {
     label: 'Reports',

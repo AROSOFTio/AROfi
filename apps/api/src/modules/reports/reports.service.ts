@@ -201,7 +201,7 @@ export class ReportsService {
       columns.push(
         { header: 'Date', value: (r) => (r.completedAt ?? r.createdAt).toISOString() },
         { header: 'Reference', value: (r) => r.reference },
-        { header: 'Agent', value: (r) => (r.agent ? `${r.agent.name} (${r.agent.code})` : 'Vendor wallet') },
+        { header: 'Agent', value: (r) => (r.agent ? `${r.agent.name} (${r.agent.code})` : 'Business wallet') },
         { header: 'Method', value: (r) => r.method },
         { header: 'Status', value: (r) => r.status },
         { header: 'Amount UGX', value: (r) => r.amountUgx },

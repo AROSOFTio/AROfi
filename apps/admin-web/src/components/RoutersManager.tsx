@@ -223,7 +223,7 @@ export default function RoutersManager() {
     setError(null)
     setSuccess(null)
     setGroupFormError('')
-    setGroupProcessText('Creating router group for this tenant.')
+    setGroupProcessText('Creating router group for this business.')
     setSubmittingGroup(true)
 
     try {
@@ -234,7 +234,7 @@ export default function RoutersManager() {
         region: groupForm.region.trim() || undefined,
         description: groupForm.description.trim() || undefined,
       })
-      setGroupProcessText('Refreshing router groups and tenant launch checklist.')
+      setGroupProcessText('Refreshing router groups and business launch checklist.')
       setSuccess('Router group created successfully')
       setGroupForm((previous) => ({ ...initialGroupForm, tenantId: previous.tenantId }))
       await loadData()
@@ -500,7 +500,7 @@ export default function RoutersManager() {
         <div>
           <h1 className="page-title">Routers</h1>
           <p className="page-subtitle">
-            Register the first MikroTik, link it to a hotspot, and push RouterOS billing setup from the tenant workspace.
+            Register the first MikroTik, link it to a hotspot, and push RouterOS billing setup from the business workspace.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -566,7 +566,7 @@ export default function RoutersManager() {
       {activeRouterView === 'overview' && <div className="charts-grid">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Tenant Launch Sequence</span>
+            <span className="card-title">Business Launch Sequence</span>
           </div>
           <div style={{ padding: 20, display: 'grid', gap: 12 }}>
             {launchChecklist.map((step, index) => (
@@ -930,7 +930,7 @@ function RouterGroupCard({
       <div className="content" style={{ paddingTop: 16 }}>
         <form onSubmit={onSubmit}>
           <div className="form-grid" style={{ marginBottom: 12 }}>
-            {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
+            {showTenantSelector && <SelectField label="Business" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
             <InputField label="Group Name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Primary Site" required />
             <InputField label="Group Code" value={formState.code} onChange={(value) => setFormState((previous) => ({ ...previous, code: value.toUpperCase() }))} placeholder="PRIMARY" required />
             <InputField label="Region" value={formState.region} onChange={(value) => setFormState((previous) => ({ ...previous, region: value }))} placeholder="Kampala Central" />
@@ -982,7 +982,7 @@ function RouterCreateCard({
       <div className="content" style={{ paddingTop: 16 }}>
         <form onSubmit={onSubmit}>
           <div className="form-grid" style={{ marginBottom: 12 }}>
-            {showTenantSelector && <SelectField label="Tenant" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
+            {showTenantSelector && <SelectField label="Business" value={formState.tenantId} onChange={(value) => setFormState((previous) => ({ ...previous, tenantId: value, groupId: '', hotspotId: '' }))} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} required />}
             <InputField label="Router name" value={formState.name} onChange={(value) => setFormState((previous) => ({ ...previous, name: value }))} placeholder="Shop WiFi Router" required />
             <InputField label="Wi-Fi / site name (SSID)" value={formState.siteLabel} onChange={(value) => setFormState((previous) => ({ ...previous, siteLabel: value }))} placeholder="Mutungo Hill WiFi" />
             <SelectField label="Router group (optional)" value={formState.groupId} onChange={(value) => setFormState((previous) => ({ ...previous, groupId: value }))} options={[{ value: '', label: 'No group' }, ...groups.map((group) => ({ value: group.id, label: `${group.name} (${group.code})` }))]} />
@@ -1075,7 +1075,7 @@ function RouterInventoryTable({
         <div className="card-header"><span className="card-title">Router Inventory</span></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Router</th><th>Tenant</th><th>Hotspot</th><th>Endpoint</th><th>Status</th><th>Sessions</th><th>Last Seen</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Router</th><th>Business</th><th>Hotspot</th><th>Endpoint</th><th>Status</th><th>Sessions</th><th>Last Seen</th><th>Actions</th></tr></thead>
             <tbody>
               {loading && <tr><td colSpan={8}><div className="empty-state"><p>Loading routers...</p></div></td></tr>}
               {!loading && routers.length === 0 && <tr><td colSpan={8}><div className="empty-state"><p>No routers registered yet. Use the onboarding form above to connect the first MikroTik.</p></div></td></tr>}
@@ -1132,7 +1132,7 @@ function RouterInventoryTable({
         <div className="card-header"><span className="card-title">Recent Health Checks</span></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Router</th><th>Tenant</th><th>Status</th><th>Latency</th><th>Message</th><th>Checked</th></tr></thead>
+            <thead><tr><th>Router</th><th>Business</th><th>Status</th><th>Latency</th><th>Message</th><th>Checked</th></tr></thead>
             <tbody>
               {loading && <tr><td colSpan={6}><div className="empty-state"><p>Loading health checks...</p></div></td></tr>}
               {!loading && recentHealthChecks.length === 0 && <tr><td colSpan={6}><div className="empty-state"><p>No health checks yet. Run one after provisioning the first router.</p></div></td></tr>}

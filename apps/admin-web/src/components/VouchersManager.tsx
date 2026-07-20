@@ -122,7 +122,7 @@ const voucherCodeFormats = [
   {
     value: 'MIXED',
     label: 'Mixed numbers and text',
-    hint: 'Random uppercase letters and numbers, best for most vendors.',
+    hint: 'Random uppercase letters and numbers, best for most businesses.',
   },
   {
     value: 'NUMBERS',
@@ -258,14 +258,14 @@ export default function VouchersManager() {
     setSuccess(null)
 
     if (!templateForm.tenantId) {
-      const failure = 'Select a tenant before creating a voucher template'
+      const failure = 'Select a business before creating a voucher template'
       setError(failure)
       setTemplateFormError(failure)
       return
     }
 
     setSubmittingTemplate(true)
-    setTemplateProcessText('Creating voucher template for this tenant.')
+    setTemplateProcessText('Creating voucher template for this business.')
 
     try {
       await clientPostApi('/vouchers/templates', {
@@ -306,7 +306,7 @@ export default function VouchersManager() {
     setSuccess(null)
 
     if (!batchForm.tenantId || !batchForm.packageId) {
-      const failure = 'Select tenant and package before generating vouchers'
+      const failure = 'Select a business and package before generating vouchers'
       setError(failure)
       setBatchFormError(failure)
       return
@@ -427,7 +427,7 @@ export default function VouchersManager() {
             <form onSubmit={handleTemplateSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 12 }}>
               <div className="form-group">
-                <label className="form-label">Tenant</label>
+                <label className="form-label">Business</label>
                 <select
                   className="form-input"
                   value={templateForm.tenantId}
@@ -440,7 +440,7 @@ export default function VouchersManager() {
                   }
                   required
                 >
-                  <option value="">Select tenant</option>
+                  <option value="">Select business</option>
                   {tenants.map((tenant) => (
                     <option key={tenant.id} value={tenant.id}>
                       {tenant.name}
@@ -487,7 +487,7 @@ export default function VouchersManager() {
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <label style={{ fontSize: 13, color: 'var(--text-2)', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
                 <input type="checkbox" checked={templateForm.isDefault} onChange={(event) => setTemplateForm((previous) => ({ ...previous, isDefault: event.target.checked }))} />
-                Set as tenant default template
+                Set as business default template
               </label>
               <label style={{ fontSize: 13, color: 'var(--text-2)', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
                 <input type="checkbox" checked={templateForm.isActive} onChange={(event) => setTemplateForm((previous) => ({ ...previous, isActive: event.target.checked }))} />
@@ -514,7 +514,7 @@ export default function VouchersManager() {
             <form onSubmit={handleBatchSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 12 }}>
               <div className="form-group">
-                <label className="form-label">Tenant</label>
+                <label className="form-label">Business</label>
                 <select
                   className="form-input"
                   value={batchForm.tenantId}
@@ -528,7 +528,7 @@ export default function VouchersManager() {
                   }
                   required
                 >
-                  <option value="">Select tenant</option>
+                  <option value="">Select business</option>
                   {tenants.map((tenant) => (
                     <option key={tenant.id} value={tenant.id}>
                       {tenant.name}
@@ -630,7 +630,7 @@ export default function VouchersManager() {
             <thead>
               <tr>
                 <th>Batch</th>
-                <th>Tenant</th>
+                <th>Business</th>
                 <th>Package</th>
                 <th>Qty</th>
                 <th>Face Value</th>

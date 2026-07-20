@@ -53,7 +53,7 @@ export default function TenantsManager() {
       setSuccess(null)
       setData(await clientFetchApi<TenantOverviewResponse>('/tenants'))
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load tenants')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load businesses')
     } finally {
       setLoading(false)
     }
@@ -63,7 +63,7 @@ export default function TenantsManager() {
     event.preventDefault()
     setError(null)
     setFormError(null)
-    setProcessText('Creating tenant workspace and default wallet.')
+    setProcessText('Creating business workspace and default wallet.')
     setSubmitting(true)
 
     try {
@@ -76,12 +76,12 @@ export default function TenantsManager() {
         supportPhone: formState.supportPhone.trim() || undefined,
         supportEmail: formState.supportEmail.trim() || undefined,
       })
-      setProcessText('Refreshing tenant list.')
+      setProcessText('Refreshing business list.')
       setFormState(initialTenantForm)
       setIsCreateModalOpen(false)
       await loadData()
     } catch (requestError) {
-      const failure = requestError instanceof Error ? requestError.message : 'Unable to create tenant'
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to create business'
       setError(failure)
       setFormError(failure)
     } finally {
@@ -99,7 +99,7 @@ export default function TenantsManager() {
       setSuccess(successMessage)
       await loadData()
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to update vendor control')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update business controls')
     } finally {
       setBusyTenantId(null)
     }
@@ -111,12 +111,12 @@ export default function TenantsManager() {
     setError(null)
     try {
       await clientDeleteApi(`/tenants/${deleteTarget.id}`)
-      setSuccess(`Tenant "${deleteTarget.name}" and all associated data have been permanently deleted.`)
+      setSuccess(`Business "${deleteTarget.name}" and all associated data have been permanently deleted.`)
       setDeleteTarget(null)
       setDeleteConfirmName('')
       await loadData()
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to delete tenant')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete business')
     } finally {
       setIsDeleting(false)
     }
@@ -128,10 +128,10 @@ export default function TenantsManager() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Tenants</h1>
-          <p className="page-subtitle">Manage vendor businesses and their default operations wallet.</p>
+          <h1 className="page-title">Businesses</h1>
+          <p className="page-subtitle">Manage business workspaces and their default operations wallets.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setIsCreateModalOpen(true) }}>+ Add Tenant</button>
+        <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setIsCreateModalOpen(true) }}>+ Add Business</button>
       </div>
 
       {(success || error) && (
@@ -145,17 +145,17 @@ export default function TenantsManager() {
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
             <button type="button" className="modal-close" onClick={() => setIsCreateModalOpen(false)} disabled={submitting}>Close</button>
-            <div className="modal-kicker">Platform Tenant</div>
-            <h2 className="modal-title">Add Tenant</h2>
+            <div className="modal-kicker">Platform Business</div>
+            <h2 className="modal-title">Add Business</h2>
             <form onSubmit={handleSubmit}>
               <div className="stats-grid" style={{ marginBottom: 12 }}>
                 <div className="form-group">
-                  <label className="form-label">Tenant Name</label>
+                  <label className="form-label">Business Name</label>
                   <input className="form-input" value={formState.name} onChange={(event) => setFormState((previous) => ({ ...previous, name: event.target.value }))} placeholder="Kampala Downtown WiFi" required />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Domain (optional)</label>
-                  <input className="form-input" value={formState.domain} onChange={(event) => setFormState((previous) => ({ ...previous, domain: event.target.value }))} placeholder="tenant.example.com" />
+                  <input className="form-input" value={formState.domain} onChange={(event) => setFormState((previous) => ({ ...previous, domain: event.target.value }))} placeholder="business.example.com" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Logo URL (optional)</label>
@@ -168,11 +168,7 @@ export default function TenantsManager() {
                 <div className="form-group">
                   <label className="form-label">Portal Template</label>
                   <select className="form-input" value={formState.portalTemplate} onChange={(event) => setFormState((previous) => ({ ...previous, portalTemplate: event.target.value }))}>
-                    <option value="classic">Classic Card</option>
-                    <option value="fresh">Fresh Green</option>
-                    <option value="midnight">Midnight Premium</option>
-                    <option value="sunrise">Sunrise Promo</option>
-                    <option value="minimal">Minimal White</option>
+                    <option value="classic">Classic</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -181,12 +177,12 @@ export default function TenantsManager() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Support Email (optional)</label>
-                  <input className="form-input" value={formState.supportEmail} onChange={(event) => setFormState((previous) => ({ ...previous, supportEmail: event.target.value }))} placeholder="support@tenant.com" />
+                  <input className="form-input" value={formState.supportEmail} onChange={(event) => setFormState((previous) => ({ ...previous, supportEmail: event.target.value }))} placeholder="support@business.com" />
                 </div>
               </div>
-              <FormProcessStatus busy={submitting} error={formError} text={processText || 'Creating tenant. This modal closes after the tenant is saved.'} />
+              <FormProcessStatus busy={submitting} error={formError} text={processText || 'Creating business. This window closes after the business is saved.'} />
               <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Creating tenant...' : 'Create Tenant'}
+                {submitting ? 'Creating business...' : 'Create Business'}
               </button>
             </form>
           </div>
@@ -198,7 +194,7 @@ export default function TenantsManager() {
           <div className="modal-card" style={{ maxWidth: 480 }}>
             <button type="button" className="modal-close" onClick={() => { setDeleteTarget(null); setDeleteConfirmName('') }} disabled={isDeleting}>Close</button>
             <div className="modal-kicker" style={{ color: 'var(--danger-fg)' }}>Destructive Action</div>
-            <h2 className="modal-title">Delete Tenant</h2>
+            <h2 className="modal-title">Delete Business</h2>
             <p style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.6 }}>
               This will permanently delete <strong>{deleteTarget.name}</strong> and ALL associated data including
               hotspots, routers, vouchers, packages, payments, agents, wallets, and sessions.
@@ -225,7 +221,7 @@ export default function TenantsManager() {
                 disabled={deleteConfirmName !== deleteTarget.name || isDeleting}
                 onClick={() => void handleDeleteConfirm()}
               >
-                {isDeleting ? 'Deleting...' : 'Permanently Delete Tenant'}
+                {isDeleting ? 'Deleting...' : 'Permanently Delete Business'}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => { setDeleteTarget(null); setDeleteConfirmName('') }} disabled={isDeleting}>
                 Cancel
@@ -246,9 +242,9 @@ export default function TenantsManager() {
               key={tenant.id}
               tenant={tenant}
               busy={busyTenantId === tenant.id}
-              onActivate={() => updateTenantControl(tenant.id, { accountActive: true, fraudHold: false }, 'Vendor account activated.')}
-              onSuspend={() => updateTenantControl(tenant.id, { accountActive: false }, 'Vendor account suspended.')}
-              onFraudHold={() => updateTenantControl(tenant.id, { fraudHold: true }, 'Vendor placed on fraud hold.')}
+              onActivate={() => updateTenantControl(tenant.id, { accountActive: true, fraudHold: false }, 'Business account activated.')}
+              onSuspend={() => updateTenantControl(tenant.id, { accountActive: false }, 'Business account suspended.')}
+              onFraudHold={() => updateTenantControl(tenant.id, { fraudHold: true }, 'Business placed on fraud hold.')}
               onReleaseHold={() => updateTenantControl(tenant.id, { fraudHold: false }, 'Fraud hold released.')}
               onDelete={() => { setDeleteTarget(tenant); setDeleteConfirmName('') }}
             />

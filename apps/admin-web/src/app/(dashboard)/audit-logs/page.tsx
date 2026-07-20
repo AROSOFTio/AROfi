@@ -1,6 +1,6 @@
 import { AuditLogResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
-import { formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { formatBusinessTerminology, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,7 +74,7 @@ export default async function AuditLogsPage() {
                   </td>
                   <td>{formatTransactionType(log.action)}</td>
                   <td>
-                    <div>{log.entity}</div>
+                    <div>{formatBusinessTerminology(log.entity)}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                       {log.entityId ?? 'N/A'}
                     </div>
