@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle, Clock, Loader2, MessageCircle, Search, Send, Ticket } from 'lucide-react'
 import type { PortalContextResponse } from '../../lib/portal-types'
+import { PhoneNumberField } from '../../components/PhoneNumberField'
 
 type SupportTicket = {
   id: string
@@ -67,6 +68,7 @@ export default function SupportPage() {
   const [error, setError] = useState('')
   const [lookupRef, setLookupRef] = useState('')
   const [newTicketRef, setNewTicketRef] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
 
   useEffect(() => {
     void loadContext()
@@ -198,7 +200,14 @@ export default function SupportPage() {
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700">Phone Number <span className="font-normal text-slate-400">(optional)</span></label>
-              <input name="phoneNumber" type="tel" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500" placeholder="07XX XXX XXX" />
+              <div className="mt-1.5">
+                <PhoneNumberField
+                  name="phoneNumber"
+                  value={phoneNumber}
+                  onChange={setPhoneNumber}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-950 outline-none focus:border-emerald-500"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700">Category</label>

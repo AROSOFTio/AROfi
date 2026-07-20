@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AdminSessionResponse, SupportTicketResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -331,7 +332,7 @@ export default function SupportPage() {
                   {priorities.map((priority) => <option key={priority} value={priority}>{priority.toLowerCase()}</option>)}
                 </select>
               </Field>
-              <Field label="Phone number"><input name="phoneNumber" className="form-input" placeholder="+256..." /></Field>
+              <Field label="Phone number"><PhoneNumberField name="phoneNumber" /></Field>
               <Field label="Email"><input name="email" type="email" className="form-input" placeholder={session?.user.email ?? 'support contact email'} /></Field>
               <Field label="What happened?"><textarea name="body" className="form-input" rows={5} required maxLength={4000} /></Field>
               <FormProcessStatus busy={submittingAction === 'create'} error={submittingAction === 'create' ? formError : null} text={processText || 'Submitting ticket. The modal closes after the ticket is saved.'} />

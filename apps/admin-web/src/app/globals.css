@@ -5515,5 +5515,120 @@ html[data-theme][data-accent-theme] .chat-escalate-link {
 }
 html[data-theme=dark][data-accent-theme=white] .msg-bubble.visitor { color: #101828; }
 
+/* Phone fields use a real country selector and always keep the number input usable. */
+.phone-field {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.phone-country-select,
+.phone-national-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.phone-field-error {
+  grid-column: 1 / -1;
+  color: var(--danger-fg, #b42318);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* The setup wizard is a contained scroll surface at every viewport size. */
+.onboarding-modal-card,
+.onboarding-content,
+.onboarding-form-grid,
+.onboarding-choice-grid,
+.onboarding-speed-grid {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    align-items: stretch !important;
+    overflow-y: auto;
+  }
+
+  .modal-card {
+    min-height: 100dvh;
+    max-height: none !important;
+    border-radius: 0 !important;
+    padding: 18px 14px max(18px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .modal-card .stats-grid,
+  .onboarding-form-grid,
+  .onboarding-choice-grid,
+  .onboarding-speed-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .modal-card form > div:last-child,
+  .onboarding-actions {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .modal-card form > div:last-child .btn,
+  .onboarding-actions .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 46px;
+  }
+
+  .onboarding-modal-overlay {
+    height: 100dvh;
+    align-items: stretch !important;
+    overflow: hidden !important;
+  }
+
+  .onboarding-modal-card {
+    height: 100dvh;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  .onboarding-modal-header {
+    padding: max(14px, env(safe-area-inset-top)) 52px 14px 14px !important;
+  }
+
+  .onboarding-modal-close {
+    top: max(12px, env(safe-area-inset-top)) !important;
+    right: 12px !important;
+  }
+
+  .onboarding-progress > div {
+    padding: 9px 3px !important;
+  }
+
+  .onboarding-progress span {
+    font-size: 10px !important;
+  }
+
+  .onboarding-content {
+    padding: 16px 14px max(20px, env(safe-area-inset-bottom)) !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 430px) {
+  .phone-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .phone-country-select {
+    min-height: 44px;
+  }
+
+  .onboarding-modal-header h2 {
+    font-size: 18px !important;
+  }
+}
+
 
 

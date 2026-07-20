@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { BadgeCheck, Clock3, FileText, Info, ShieldCheck, Upload, XCircle } from 'lucide-react'
 import { clientFetchApi, clientPostApi, clientUploadApi } from '@/lib/client-api'
 import { formatDate } from '@/lib/format'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 type ComplianceProfile = {
   businessName: string
@@ -207,7 +208,7 @@ export default function ComplianceManager() {
           </label>
           <label className="form-group">
             <span className="form-label">Phone number</span>
-            <input name="phoneNumber" type="tel" className="form-input" required maxLength={30} defaultValue={profile?.phoneNumber ?? ''} disabled={saving || loading} />
+            <PhoneNumberField name="phoneNumber" defaultValue={profile?.phoneNumber ?? ''} required disabled={saving || loading} />
           </label>
           <label className="form-group">
             <span className="form-label">Email</span>
@@ -256,7 +257,7 @@ export default function ComplianceManager() {
           </label>
           <label className="form-group">
             <span className="form-label">Payout / withdrawal phone (optional)</span>
-            <input name="payoutPhoneNumber" type="tel" className="form-input" maxLength={30} defaultValue={profile?.payoutPhoneNumber ?? ''} disabled={saving || loading} />
+            <PhoneNumberField name="payoutPhoneNumber" defaultValue={profile?.payoutPhoneNumber ?? ''} disabled={saving || loading} ugandaOnly mobileOnly />
           </label>
           <label className="form-group form-span-2">
             <span className="form-label">Anything else we should know (optional)</span>

@@ -449,7 +449,7 @@ export default function OnboardingWizard({
         animation: 'fadeIn 0.2s ease-out'
       }} className="onboarding-modal-card">
         {/* Top Header */}
-        <div style={{
+        <div className="onboarding-modal-header" style={{
           background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, #0f172a 100%)',
           padding: 'clamp(14px, 3vw, 20px) clamp(16px, 5vw, 32px)',
           color: '#ffffff',
@@ -457,6 +457,7 @@ export default function OnboardingWizard({
           flexShrink: 0
         }}>
           <button
+            className="onboarding-modal-close"
             type="button"
             onClick={() => handleDismiss()}
             style={{
@@ -510,7 +511,7 @@ export default function OnboardingWizard({
         </div>
 
         {/* Steps Progress Bar */}
-        <div style={{
+        <div className="onboarding-progress" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           borderBottom: '1px solid var(--border)',
@@ -575,7 +576,7 @@ export default function OnboardingWizard({
         </div>
 
         {/* Content Box */}
-        <div style={{ padding: 'clamp(14px, 4vw, 22px) clamp(14px, 5vw, 32px)', overflowY: 'auto', flex: 1 }}>
+        <div className="onboarding-content" style={{ padding: 'clamp(14px, 4vw, 22px) clamp(14px, 5vw, 32px)', overflowY: 'auto', flex: 1 }}>
           {error && (
             <div style={{
               background: 'rgba(239, 68, 68, 0.05)',
@@ -622,7 +623,7 @@ export default function OnboardingWizard({
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+              <div className="onboarding-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontWeight: 600 }}>Router Custom Name</label>
                   <input
@@ -652,7 +653,7 @@ export default function OnboardingWizard({
 
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Hotspot Setup Mode</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div className="onboarding-choice-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <button
                     type="button"
                     style={{
@@ -701,7 +702,7 @@ export default function OnboardingWizard({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+              <div className="onboarding-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
                 <button
                   type="submit"
                   className="btn btn-primary"
@@ -852,7 +853,7 @@ export default function OnboardingWizard({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 14, flexWrap: 'wrap', gap: 10 }}>
+              <div className="onboarding-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 14, flexWrap: 'wrap', gap: 10 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trouble connecting? Paste the command exactly as shown.</span>
                 {canSkipConnect ? (
                   <button
@@ -882,7 +883,7 @@ export default function OnboardingWizard({
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+              <div className="onboarding-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontWeight: 600 }}>Package Name</label>
                   <input
@@ -924,7 +925,7 @@ export default function OnboardingWizard({
 
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Speed limits / Bandwidth Profile</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <div className="onboarding-speed-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {[
                     { value: 'FAST', label: 'Fast (2 Mbps)', desc: 'Standard browsing & social media.' },
                     { value: 'SUPER_FAST', label: 'Super Fast (5 Mbps)', desc: 'HD video stream & downloads.' },
@@ -952,7 +953,7 @@ export default function OnboardingWizard({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+              <div className="onboarding-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
                 <button
                   type="submit"
                   className="btn btn-primary"
@@ -975,7 +976,7 @@ export default function OnboardingWizard({
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="onboarding-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontWeight: 600 }}>Quantity to Generate</label>
                   <select
@@ -1017,7 +1018,7 @@ export default function OnboardingWizard({
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+              <div className="onboarding-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Vouchers will map to the package you created in Step 3.</span>
                 <button
                   type="submit"

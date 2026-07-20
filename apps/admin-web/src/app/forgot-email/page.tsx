@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 export default function ForgotEmailPage() {
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -67,14 +68,10 @@ export default function ForgotEmailPage() {
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label className="form-label">Registered Phone Number</label>
-              <input
-                className="form-input"
-                type="tel"
-                placeholder="0787726388"
+              <PhoneNumberField
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={setPhoneNumber}
                 required
-                autoComplete="tel"
                 autoFocus
               />
             </div>

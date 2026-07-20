@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
 import type { Request } from 'express'
-import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
+import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsPhoneNumber, IsString, Max, MaxLength, Min } from 'class-validator'
 import { Type } from 'class-transformer'
 import { AuthenticatedAdminUser, JwtAuthGuard, AccessScopeService } from '../auth/auth.module'
 import { ComplianceService } from './compliance.service'
@@ -13,7 +13,7 @@ class SubmitComplianceDto {
   @IsString() @IsNotEmpty() @MaxLength(120)
   ownerName: string
 
-  @IsString() @IsNotEmpty() @MaxLength(30)
+  @IsString() @IsNotEmpty() @IsPhoneNumber() @MaxLength(30)
   phoneNumber: string
 
   @IsEmail()
@@ -43,7 +43,7 @@ class SubmitComplianceDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1)
   expectedUsers?: number
 
-  @IsOptional() @IsString() @MaxLength(30)
+  @IsOptional() @IsString() @IsPhoneNumber() @MaxLength(30)
   payoutPhoneNumber?: string
 
   @IsOptional() @IsString() @MaxLength(2000)

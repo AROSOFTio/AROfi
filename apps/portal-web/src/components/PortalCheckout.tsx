@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, Copy, Loader2, LogIn, Share2, Ticket, Wifi } from 'lucide-react'
+import { PhoneNumberField } from './PhoneNumberField'
 import type {
   PortalContextResponse,
   PortalCustomerSession,
@@ -1371,22 +1372,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       {/* Network auto-detected by Yo! Uganda — selector hidden */}
                       <label className="block text-sm font-bold text-slate-700">
                         Mobile Money Number
-                        <div className="relative mt-2 flex items-center">
-                          <input
+                        <div className="mt-2">
+                          <PhoneNumberField
                             value={phoneNumber}
-                            onChange={(event) => {
-                              const val = event.target.value
+                            onChange={(val) => {
                               setPhoneNumber(val)
                               const detected = detectNetwork(val)
                               if (detected) setSelectedNetwork(detected)
                             }}
-                            placeholder="07XX XXX XXX"
-                            inputMode="tel"
                             autoFocus
-                            className={`w-full rounded-lg border bg-white pl-4 pr-24 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
+                            required
+                            ugandaOnly
+                            mobileOnly
+                            className={`w-full rounded-lg border bg-white px-3 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
                           />
                           {detectNetwork(phoneNumber) && (
-                            <div className="absolute right-2.5">
+                            <div className="mt-2 flex justify-end">
                               {detectNetwork(phoneNumber) === 'MTN' ? (
                                 <span className="rounded bg-[#ffcc00] px-2 py-1 text-[10px] font-black tracking-wide text-[#0b1f3a] shadow-sm">MTN MoMo</span>
                               ) : (
@@ -1447,12 +1448,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     Enter the phone number you paid with or redeemed your voucher on. We’ll reconnect you instantly.
                   </p>
                   <form onSubmit={handleLoginSubmit} className="mt-6 space-y-3">
-                    <input
+                    <PhoneNumberField
                       value={phoneNumber}
-                      onChange={(event) => setPhoneNumber(event.target.value)}
-                      placeholder="07XX XXX XXX"
-                      inputMode="tel"
+                      onChange={setPhoneNumber}
                       autoFocus
+                      required
                       className={`w-full rounded-2xl border bg-white px-4 py-3.5 text-lg text-slate-950 outline-none transition focus:ring-4 ${portalStyle.input}`}
                     />
                     <button type="submit" disabled={isLoginLoading} className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-base font-semibold transition disabled:bg-slate-300 disabled:text-slate-500 ${portalStyle.button}`}>
@@ -1509,7 +1509,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   </div>
                 ) : (
                   <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4">
-                    <input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="Phone number" className={`w-full rounded-2xl border bg-white px-4 py-3 text-slate-950 outline-none ${portalStyle.input}`} />
+                    <PhoneNumberField value={phoneNumber} onChange={setPhoneNumber} required className={`w-full rounded-2xl border bg-white px-4 py-3 text-slate-950 outline-none ${portalStyle.input}`} />
                     <button type="submit" disabled={isLoginLoading} className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold disabled:bg-slate-300 disabled:text-slate-500 ${portalStyle.button}`}>
                       {isLoginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
                       {isLoginLoading ? 'Signing in...' : 'Load session'}

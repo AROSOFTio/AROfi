@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator'
+import { IsNotEmpty, IsOptional, IsPhoneNumber, IsString, IsUUID, MaxLength } from 'class-validator'
 
 export class PortalRedeemVoucherDto {
   @IsString()
@@ -8,6 +8,7 @@ export class PortalRedeemVoucherDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   @MaxLength(32)
   phoneNumber?: string
 

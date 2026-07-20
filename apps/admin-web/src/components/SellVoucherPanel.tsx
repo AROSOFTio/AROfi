@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency } from '@/lib/format'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 type PackageOption = {
   id: string
@@ -154,12 +155,12 @@ export default function SellVoucherPanel() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Customer Phone Number</label>
-                    <input
-                      className="form-input"
+                    <PhoneNumberField
                       value={customerReference}
-                      onChange={(event) => setCustomerReference(event.target.value)}
-                      placeholder="0787726388"
+                      onChange={setCustomerReference}
                       required
+                      ugandaOnly
+                      mobileOnly
                     />
                   </div>
                 </div>

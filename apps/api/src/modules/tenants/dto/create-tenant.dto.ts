@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator'
+import { IsEmail, IsOptional, IsPhoneNumber, IsString, Matches, MaxLength, MinLength } from 'class-validator'
 
 export class CreateTenantDto {
   @IsString()
@@ -29,6 +29,7 @@ export class CreateTenantDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   @MaxLength(32)
   supportPhone?: string
 

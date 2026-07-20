@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator'
+import { IsOptional, IsPhoneNumber, IsString } from 'class-validator'
 
 export class UpdateRouterDto {
   @IsOptional()
@@ -27,5 +27,6 @@ export class UpdateRouterDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   managerPhone?: string
 }

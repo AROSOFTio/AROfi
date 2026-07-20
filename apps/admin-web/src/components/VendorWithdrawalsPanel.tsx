@@ -16,6 +16,7 @@ import FormProcessStatus from '@/components/FormProcessStatus'
 import { Modal } from '@/components/Modal'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 type PayoutNumber = {
   id: string
@@ -644,7 +645,7 @@ function SetupModal({
             </label>
             <label className="form-group">
               <span className="form-label">Phone number</span>
-              <input name="phoneNumber" required placeholder="0771234567" className="form-input" disabled={busy === 'number'} />
+              <PhoneNumberField name="phoneNumber" required disabled={busy === 'number'} ugandaOnly mobileOnly />
             </label>
             <label className="form-group">
               <span className="form-label">Label</span>
@@ -685,7 +686,7 @@ function SetupModal({
             </label>
             <label className="form-group form-span-2">
               <span className="form-label">New phone number</span>
-              <input name="phoneNumber" required placeholder="New phone number" className="form-input" disabled={busy === 'change'} />
+              <PhoneNumberField name="phoneNumber" required disabled={busy === 'change'} ugandaOnly mobileOnly />
             </label>
             <label className="form-group form-span-2">
               <span className="form-label">Reason</span>

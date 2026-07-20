@@ -1,5 +1,5 @@
 import { PaymentNetwork, PaymentProvider } from '@prisma/client'
-import { IsOptional, IsNumber, IsBoolean, IsString, IsArray, IsEnum } from 'class-validator'
+import { IsOptional, IsNumber, IsBoolean, IsString, IsArray, IsEnum, IsPhoneNumber } from 'class-validator'
 import { Type } from 'class-transformer'
 
 export class UpdatePlatformSettingsDto {
@@ -150,6 +150,7 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   supportPhone?: string
 
   @IsOptional()

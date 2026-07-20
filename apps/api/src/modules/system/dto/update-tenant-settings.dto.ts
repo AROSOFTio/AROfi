@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNumber, IsObject, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsInt, IsNumber, IsObject, IsOptional, IsPhoneNumber, IsString } from 'class-validator'
 
 export class UpdateTenantSettingsDto {
   @IsOptional()
@@ -15,6 +15,7 @@ export class UpdateTenantSettingsDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   supportPhone?: string
 
   @IsOptional()

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { TenantRegistrationResponse } from '@/lib/admin-types'
 import { getAppDashboardUrl } from '@/lib/admin-session'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
-import { COUNTRY_CODES, DEFAULT_COUNTRY, isPlausibleNationalNumber, toE164 } from '@/lib/country-codes'
+import { PhoneNumberField, validatePhoneNumber } from '@/components/PhoneNumberField'
 
 // Plan/payment picker is hidden from public signup for now — everyone lands
 // on the Free plan and goes straight to the dashboard. Flip this back on
@@ -77,7 +77,6 @@ type CheckoutStatus = {
 
 export function RegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [formState, setFormState] = useState(initialFormState)
-  const [phoneCountryIso2, setPhoneCountryIso2] = useState(DEFAULT_COUNTRY.iso2)
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -114,8 +113,13 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
     event.preventDefault()
     setError('')
 
-    if (step === 2 && !isPlausibleNationalNumber(formState.phoneNumber)) {
-      setError('Enter a valid phone number for the selected country.')
+    if (step === 2 && validatePhoneNumber(formState.phoneNumber)) {
+      setError(validatePhoneNumber(formState.phoneNumber))
+      return
+    }
+
+    if (step === 3 && formState.supportPhone && validatePhoneNumber(formState.supportPhone)) {
+      setError(validatePhoneNumber(formState.supportPhone))
       return
     }
 
@@ -128,9 +132,6 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       setError('Passwords do not match.')
       return
     }
-
-    const phoneCountry = COUNTRY_CODES.find((c) => c.iso2 === phoneCountryIso2) ?? DEFAULT_COUNTRY
-    const fullPhoneNumber = toE164(phoneCountry, formState.phoneNumber)
 
     setLoading(true)
 
@@ -145,7 +146,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
           firstName: formState.firstName.trim(),
           lastName: formState.lastName.trim(),
           email: formState.email.trim(),
-          phoneNumber: fullPhoneNumber,
+          phoneNumber: formState.phoneNumber,
           supportPhone: formState.supportPhone.trim() || undefined,
           supportEmail: formState.supportEmail.trim() || undefined,
           brandColor: formState.brandColor.trim() || undefined,
@@ -233,6 +234,11 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
 
   async function handlePayNow() {
     setCheckoutError('')
+    const phoneError = validatePhoneNumber(phoneNumber, true, true)
+    if (phoneError) {
+      setCheckoutError(phoneError)
+      return
+    }
     setCheckoutLoading(true)
     try {
       const statusResponse = await clientPostApi<CheckoutStatus>('/subscription/checkout', { phoneNumber })
@@ -333,12 +339,12 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
             )}
             <div className="form-group">
               <label className="form-label">Phone Number (MTN or Airtel)</label>
-              <input
-                className="form-input"
-                type="text"
+              <PhoneNumberField
                 value={phoneNumber}
-                onChange={(event) => setPhoneNumber(event.target.value)}
-                placeholder="07XXXXXXXX"
+                onChange={setPhoneNumber}
+                mobileOnly
+                ugandaOnly
+                required
                 disabled={checkoutLoading}
               />
             </div>
@@ -366,30 +372,12 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
                 <Field label="Login Email" type="email" value={formState.email} onChange={(value) => setFormState((previous) => ({ ...previous, email: value }))} required />
                 <div className="form-group">
                   <label className="form-label">Phone Number</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <select
-                      className="form-input"
-                      style={{ flex: '0 0 auto', width: 120 }}
-                      value={phoneCountryIso2}
-                      onChange={(event) => setPhoneCountryIso2(event.target.value)}
-                      aria-label="Country code"
-                    >
-                      {COUNTRY_CODES.map((country) => (
-                        <option key={country.iso2} value={country.iso2}>
-                          {country.iso2} +{country.dialCode}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="form-input"
-                      style={{ flex: 1 }}
-                      type="tel"
-                      value={formState.phoneNumber}
-                      onChange={(event) => setFormState((previous) => ({ ...previous, phoneNumber: event.target.value }))}
-                      placeholder="771234567"
-                      required
-                    />
-                  </div>
+                  <PhoneNumberField
+                    value={formState.phoneNumber}
+                    onChange={(value) => setFormState((previous) => ({ ...previous, phoneNumber: value }))}
+                    required
+                    autoFocus
+                  />
                 </div>
               </div>
             )}
@@ -397,7 +385,10 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
               <div className="stats-grid">
                 <Field label="Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} required />
                 <Field label="Confirm Password" type="password" value={formState.confirmPassword} onChange={(value) => setFormState((previous) => ({ ...previous, confirmPassword: value }))} required />
-                <Field label="Support Phone" value={formState.supportPhone} onChange={(value) => setFormState((previous) => ({ ...previous, supportPhone: value }))} />
+                <div className="form-group">
+                  <label className="form-label">Support Phone</label>
+                  <PhoneNumberField value={formState.supportPhone} onChange={(value) => setFormState((previous) => ({ ...previous, supportPhone: value }))} />
+                </div>
                 <Field label="Support Email" type="email" value={formState.supportEmail} onChange={(value) => setFormState((previous) => ({ ...previous, supportEmail: value }))} />
                 <Field label="Brand Color" value={formState.brandColor} onChange={(value) => setFormState((previous) => ({ ...previous, brandColor: value }))} placeholder="#475467" />
               </div>

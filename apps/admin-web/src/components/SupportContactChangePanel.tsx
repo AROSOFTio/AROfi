@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { clientPostApi } from '@/lib/client-api'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 // Support email/phone double as the business's verified identity details
 // captured during onboarding, so — like the sign-in email — a vendor can't
@@ -60,15 +61,11 @@ export default function SupportContactChangePanel({ currentEmail, currentPhone }
         </label>
         <label className="form-group">
           <span className="form-label">New {type === 'EMAIL' ? 'email' : 'phone number'}</span>
-          <input
-            className="form-input"
-            required
-            value={newValue}
-            onChange={(event) => setNewValue(event.target.value)}
-            disabled={busy}
-            type={type === 'EMAIL' ? 'email' : 'tel'}
-            placeholder={type === 'EMAIL' ? 'new@company.com' : '07XXXXXXXX'}
-          />
+          {type === 'EMAIL' ? (
+            <input className="form-input" required value={newValue} onChange={(event) => setNewValue(event.target.value)} disabled={busy} type="email" placeholder="new@company.com" />
+          ) : (
+            <PhoneNumberField value={newValue} onChange={setNewValue} required disabled={busy} />
+          )}
         </label>
         <label className="form-group form-span-2">
           <span className="form-label">Reason for the change</span>

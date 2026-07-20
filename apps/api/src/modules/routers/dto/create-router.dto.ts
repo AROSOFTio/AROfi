@@ -10,6 +10,7 @@ import {
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsPhoneNumber,
   IsString,
   IsUUID,
   Max,
@@ -88,6 +89,7 @@ export class CreateRouterDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   managerPhone?: string
 
   @IsOptional()

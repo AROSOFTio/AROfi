@@ -28,7 +28,7 @@ import * as bcrypt from 'bcrypt'
 import { createHash, randomBytes, randomInt } from 'crypto'
 import { AuthGuard } from '@nestjs/passport'
 import { ExtractJwt, Strategy } from 'passport-jwt'
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, Length, MinLength } from 'class-validator'
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsPhoneNumber, IsString, Length, MinLength } from 'class-validator'
 import { EmailChangeRequestStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { PrismaModule } from '../../prisma.module'
@@ -130,6 +130,7 @@ class ChangePasswordDto {
 class ForgotEmailDto {
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber()
   phoneNumber: string
 }
 

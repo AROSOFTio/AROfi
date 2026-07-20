@@ -8,6 +8,7 @@ import EmailChangeRequestCard from './EmailChangeRequestCard'
 import PasswordChangeCard from './PasswordChangeCard'
 import SupportContactChangePanel from './SupportContactChangePanel'
 import ThemeToggle from './ThemeToggle'
+import { PhoneNumberField, validatePhoneNumber } from './PhoneNumberField'
 
 type AdminUser = {
   permissions: string[]
@@ -243,6 +244,11 @@ export default function SettingsManager({
 
   async function handlePayNow() {
     setCheckoutError('')
+    const phoneError = validatePhoneNumber(planPhoneNumber, true, true)
+    if (phoneError) {
+      setCheckoutError(phoneError)
+      return
+    }
     setCheckoutLoading(true)
     try {
       const statusResponse = await clientPostApi<SubscriptionStatus>('/subscription/checkout', { phoneNumber: planPhoneNumber })
@@ -706,11 +712,12 @@ export default function SettingsManager({
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <label className="form-group" style={{ flex: 1, minWidth: 180 }}>
                     <span className="form-label">Mobile Money Number</span>
-                    <input
-                      className="form-input"
+                    <PhoneNumberField
                       value={planPhoneNumber}
-                      onChange={(event) => setPlanPhoneNumber(event.target.value)}
-                      placeholder="07XXXXXXXX"
+                      onChange={setPlanPhoneNumber}
+                      required
+                      ugandaOnly
+                      mobileOnly
                     />
                   </label>
                   <button type="button" className="btn btn-primary" disabled={checkoutLoading || !planPhoneNumber} onClick={handlePayNow}>
@@ -846,6 +853,14 @@ export default function SettingsManager({
 }
 
 function Input({ name, label, defaultValue }: { name: string; label: string; defaultValue: string | number }) {
+  if (name.toLowerCase().includes('phone')) {
+    return (
+      <label className="form-group">
+        <span className="form-label">{label}</span>
+        <PhoneNumberField name={name} defaultValue={String(defaultValue)} />
+      </label>
+    )
+  }
   return (
     <label className="form-group">
       <span className="form-label">{label}</span>

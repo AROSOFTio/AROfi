@@ -3,7 +3,7 @@ import {
   SupportTicketPriority,
   SupportTicketStatus,
 } from '@prisma/client'
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator'
+import { IsEmail, IsEnum, IsOptional, IsPhoneNumber, IsString, MaxLength } from 'class-validator'
 
 export class CreateSupportTicketDto {
   @IsOptional()
@@ -42,6 +42,7 @@ export class CreateSupportTicketDto {
 
   @IsOptional()
   @IsString()
+  @IsPhoneNumber()
   @MaxLength(32)
   phoneNumber?: string
 

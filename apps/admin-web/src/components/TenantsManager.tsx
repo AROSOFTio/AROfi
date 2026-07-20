@@ -5,6 +5,7 @@ import type { TenantOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 type TenantItem = TenantOverviewResponse['items'][number]
 
@@ -173,7 +174,7 @@ export default function TenantsManager() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Support Phone (optional)</label>
-                  <input className="form-input" value={formState.supportPhone} onChange={(event) => setFormState((previous) => ({ ...previous, supportPhone: event.target.value }))} placeholder="+256 700 000000" />
+                  <PhoneNumberField value={formState.supportPhone} onChange={(value) => setFormState((previous) => ({ ...previous, supportPhone: value }))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Support Email (optional)</label>

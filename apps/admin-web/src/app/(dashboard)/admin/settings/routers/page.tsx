@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { formatDate } from '@/lib/format'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 export default function SettingsRoutersPage() {
   const [loading, setLoading] = useState(true)
@@ -681,12 +682,9 @@ export default function SettingsRoutersPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Site Manager Phone</label>
-                  <input
-                    className="form-input"
-                    type="tel"
+                  <PhoneNumberField
                     value={routerForm.managerPhone}
-                    onChange={(e) => setRouterForm(prev => ({ ...prev, managerPhone: e.target.value }))}
-                    placeholder="e.g. 0787726388"
+                    onChange={(value) => setRouterForm(prev => ({ ...prev, managerPhone: value }))}
                   />
                 </div>
 

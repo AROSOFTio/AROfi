@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { clientPostApi } from '@/lib/client-api'
+import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 type AgentFormState = {
   code: string
@@ -76,7 +77,10 @@ export default function RegisterAgentPanel() {
               <div className="form-grid">
                 <Field label="Agent Code" value={form.code} onChange={(value) => setForm((previous) => ({ ...previous, code: value.toUpperCase() }))} placeholder="KLA-AGENT-01" required />
                 <Field label="Agent Name" value={form.name} onChange={(value) => setForm((previous) => ({ ...previous, name: value }))} placeholder="Kampala Kiosk Agent" required />
-                <Field label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((previous) => ({ ...previous, phoneNumber: value }))} placeholder="0787726388" required />
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <PhoneNumberField value={form.phoneNumber} onChange={(value) => setForm((previous) => ({ ...previous, phoneNumber: value }))} required ugandaOnly mobileOnly />
+                </div>
                 <Field label="Email" type="email" value={form.email} onChange={(value) => setForm((previous) => ({ ...previous, email: value }))} placeholder="agent@example.com" />
                 <div className="form-group">
                   <label className="form-label">Agent Type</label>
