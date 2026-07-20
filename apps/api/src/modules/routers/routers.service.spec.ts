@@ -112,6 +112,11 @@ describe('RoutersService', () => {
       router: {
         findUnique: jest.fn().mockResolvedValue(router),
         update: jest.fn().mockResolvedValue(router),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      hotspot: {
+        create: jest.fn().mockResolvedValue({ id: 'access-point-1' }),
+        delete: jest.fn().mockResolvedValue({}),
       },
       networkSession: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -360,6 +365,31 @@ describe('RoutersService', () => {
           data: expect.objectContaining({ source: 'router-heartbeat' }),
         }),
       )
+    })
+
+    it('automatically creates and links an access point on the first router heartbeat', async () => {
+      const router = buildCallbackRouter({
+        hotspotId: null,
+        identity: 'shop-gateway',
+        siteLabel: null,
+        radiusNasIpAddress: null,
+      })
+      const { service, prisma } = buildCallbackHarness(router)
+
+      await service.recordRouterHeartbeatByKey('registration-key', '102.209.111.77', '0')
+
+      expect(prisma.hotspot.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          name: 'shop-gateway Access Point',
+          nasIpAddress: '102.209.111.77',
+        }),
+        select: { id: true },
+      })
+      expect(prisma.router.updateMany).toHaveBeenCalledWith({
+        where: { id: 'router-1', hotspotId: null },
+        data: { hotspotId: 'access-point-1' },
+      })
     })
   })
 

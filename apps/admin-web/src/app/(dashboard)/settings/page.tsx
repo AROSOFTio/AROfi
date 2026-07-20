@@ -4,7 +4,7 @@ import type { AdminSessionResponse, KycDocumentItem } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { isVendorWorkspace } from '@/lib/workspace'
 
-export default async function SettingsPage({ searchParams }: { searchParams?: Promise<{ tenantId?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams?: Promise<{ tenantId?: string; tab?: string }> }) {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
   const isDevAdmin = Boolean(session?.user.permissions.includes('ALL'))
   const isVendor = isVendorWorkspace(session?.user)
@@ -16,7 +16,9 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
     isVendor || tenantQuery ? fetchApi(`/system/tenant-settings${tenantQuery}`) : Promise.resolve(null),
     fetchApi('/subscription/plans'),
     isVendor ? fetchApi('/subscription/status') : Promise.resolve(null),
-    fetchApi<KycDocumentItem[]>('/system/kyc/documents'),
+    resolvedSearchParams?.tab === 'Security'
+      ? fetchApi<KycDocumentItem[]>('/system/kyc/documents')
+      : Promise.resolve([]),
   ])
 
   return (
@@ -29,7 +31,9 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         initialSubscriptionPlans={subscriptionPlans as never}
         initialSubscriptionStatus={subscriptionStatus as never}
       />
-      <KycDocumentsPanel isSuperAdmin={isDevAdmin} initialDocuments={kycDocuments ?? []} />
+      {resolvedSearchParams?.tab === 'Security' && (
+        <KycDocumentsPanel isSuperAdmin={isDevAdmin} initialDocuments={kycDocuments ?? []} />
+      )}
     </>
   )
 }

@@ -53,15 +53,22 @@ export default function HotspotsManager() {
 
   const launchNotes = useMemo(
     () => [
-      'Create one hotspot site per physical access zone, branch, or captive portal identity.',
-      'Add the NAS IP once your MikroTik interface plan is final so accounting events map cleanly.',
-      'Link routers to the hotspot during MikroTik onboarding to make sessions and activations visible immediately.',
+      'A connected MikroTik is detected automatically and appears here as an access point.',
+      'Use Add External Access Point only for a separate access zone that is not represented by its own router.',
+      'AROFi links the NAS identity automatically so sessions and activations appear without manual setup.',
     ],
     [],
   )
 
   useEffect(() => {
     void loadData()
+    const refreshId = window.setInterval(() => {
+      void clientFetchApi<HotspotOverviewResponse>('/hotspots/overview')
+        .then(setOverview)
+        .catch(() => {})
+    }, 5000)
+
+    return () => window.clearInterval(refreshId)
   }, [])
 
   async function loadData() {
@@ -87,7 +94,7 @@ export default function HotspotsManager() {
             },
       )
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load hotspot data')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load access point data')
     } finally {
       setLoading(false)
     }
@@ -100,14 +107,14 @@ export default function HotspotsManager() {
     setSuccess(null)
 
     if (!formState.tenantId) {
-      const failure = 'Select a business before creating a hotspot site'
+      const failure = 'Select a business before adding an access point'
       setError(failure)
       setFormError(failure)
       return
     }
 
     setSubmitting(true)
-    setProcessText('Creating hotspot site and preparing NAS mapping.')
+    setProcessText('Adding the external access point and preparing its NAS mapping.')
 
     try {
       await clientPostApi('/hotspots', {
@@ -117,8 +124,8 @@ export default function HotspotsManager() {
         secret: formState.secret.trim() || undefined,
       })
 
-      setProcessText('Refreshing hotspot inventory.')
-      setSuccess('Hotspot site created successfully')
+      setProcessText('Refreshing access point inventory.')
+      setSuccess('Access point added successfully')
       setFormState((previous) => ({
         ...initialHotspotForm,
         tenantId: previous.tenantId,
@@ -126,7 +133,7 @@ export default function HotspotsManager() {
       await loadData()
       setCreateOpen(false)
     } catch (requestError) {
-      const failure = requestError instanceof Error ? requestError.message : 'Unable to create hotspot site'
+      const failure = requestError instanceof Error ? requestError.message : 'Unable to add access point'
       setError(failure)
       setFormError(failure)
     } finally {
@@ -139,9 +146,9 @@ export default function HotspotsManager() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Hotspots</h1>
+          <h1 className="page-title">Access Points</h1>
           <p className="page-subtitle">
-            Build captive portal sites, anchor NAS identities, and prepare business locations before router rollout.
+            Connected MikroTik access points are detected automatically. Add a separate external access point only when needed.
           </p>
         </div>
         {tenantWorkspace && (
@@ -150,7 +157,7 @@ export default function HotspotsManager() {
           </span>
         )}
         <button type="button" className="btn btn-primary" onClick={() => { setFormError(null); setProcessText(''); setCreateOpen(true) }}>
-          Create Hotspot
+          Add External Access Point
         </button>
       </div>
 
@@ -159,8 +166,8 @@ export default function HotspotsManager() {
           <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
             <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
-              <div className="modal-kicker">Hotspot site</div>
-              <h2 className="modal-title">Create Hotspot Site</h2>
+              <div className="modal-kicker">External access point</div>
+              <h2 className="modal-title">Add External Access Point</h2>
               <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
               <div className="stats-grid" style={{ marginBottom: 12 }}>
                 {showTenantSelector && (
@@ -187,7 +194,7 @@ export default function HotspotsManager() {
                   </div>
                 )}
                 <Field
-                  label="Hotspot Site Name"
+                  label="Access Point Name"
                   value={formState.name}
                   placeholder="Main Street Portal"
                   onChange={(value) =>
@@ -210,7 +217,7 @@ export default function HotspotsManager() {
                   }
                 />
                 <Field
-                  label="Hotspot Secret"
+                  label="RADIUS Secret"
                   value={formState.secret}
                   placeholder="Auto-generated when left blank"
                   onChange={(value) =>
@@ -223,7 +230,7 @@ export default function HotspotsManager() {
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Creating hotspot...' : 'Create Hotspot'}
+                  {submitting ? 'Adding access point...' : 'Add Access Point'}
                 </button>
                 <button
                   type="button"
@@ -239,7 +246,7 @@ export default function HotspotsManager() {
                 </button>
               </div>
               <div style={{ marginTop: 12 }}>
-                <FormProcessStatus busy={submitting} error={formError} success={success} text={processText || 'Creating hotspot. The inventory refreshes after AROFi saves it.'} />
+                <FormProcessStatus busy={submitting} error={formError} success={success} text={processText || 'Adding the access point. The inventory refreshes after AROFi saves it.'} />
               </div>
               {error && !formError && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
               </form>
@@ -263,7 +270,7 @@ export default function HotspotsManager() {
                   padding: 14,
                   borderRadius: 12,
                   border: '1px solid var(--border)',
-                  background: 'rgba(15, 23, 42, 0.18)',
+                  background: 'var(--bg-hover)',
                 }}
               >
                 <span className="badge badge-info" style={{ minWidth: 28, justifyContent: 'center' }}>
@@ -278,7 +285,7 @@ export default function HotspotsManager() {
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
-          { label: 'Hotspot Sites', value: `${summary.totalHotspots}`, color: 'blue' },
+          { label: 'Access Points', value: `${summary.totalHotspots}`, color: 'blue' },
           { label: 'NAS Configured', value: `${summary.configuredNas}`, color: 'green' },
           { label: 'Linked Routers', value: `${summary.linkedRouters}`, color: 'amber' },
           { label: 'Live Sessions', value: `${summary.activeSessions}`, color: 'purple' },
@@ -294,7 +301,7 @@ export default function HotspotsManager() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Hotspot Inventory</span>
+          <span className="card-title">Access Point Inventory</span>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {loading ? 'Loading...' : `${items.length} site${items.length === 1 ? '' : 's'}`}
           </span>
@@ -303,7 +310,7 @@ export default function HotspotsManager() {
           <table>
             <thead>
               <tr>
-                <th>Hotspot</th>
+                <th>Access Point</th>
                 <th>Business</th>
                 <th>NAS & Secret</th>
                 <th>Routers</th>
@@ -318,7 +325,7 @@ export default function HotspotsManager() {
                 <tr>
                   <td colSpan={8}>
                     <div className="empty-state">
-                      <p>Loading hotspot inventory...</p>
+                      <p>Loading access points...</p>
                     </div>
                   </td>
                 </tr>
@@ -327,7 +334,7 @@ export default function HotspotsManager() {
                 <tr>
                   <td colSpan={8}>
                     <div className="empty-state">
-                      <p>No hotspot sites configured yet. Create the first site before linking your MikroTik router.</p>
+                      <p>No access points detected yet. Connect and provision a MikroTik router, or add an external access point.</p>
                     </div>
                   </td>
                 </tr>

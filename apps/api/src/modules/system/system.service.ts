@@ -191,10 +191,17 @@ export class SystemService {
   }
 
   async getTenantSettings(tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      include: { tenantSettings: true, payoutNumbers: true, payoutProfile: true },
-    })
+    const [tenant, platformSettings] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        include: { tenantSettings: true, payoutNumbers: true, payoutProfile: true },
+      }),
+      this.prisma.platformSetting.upsert({
+        where: { id: PLATFORM_SETTINGS_ID },
+        update: {},
+        create: { id: PLATFORM_SETTINGS_ID },
+      }),
+    ])
 
     if (!tenant) {
       throw new NotFoundException('Business not found')
@@ -205,6 +212,22 @@ export class SystemService {
       (await this.prisma.tenantSetting.create({
         data: { tenantId },
       }))
+    const effectiveTier = resolveEffectiveSubscriptionTier(
+      settings.subscriptionPlan,
+      settings.subscriptionPlanExpiresAt,
+    )
+    const defaultMobileMoneyFeeBps =
+      effectiveTier === SubscriptionPlanTier.ENTERPRISE
+        ? platformSettings.enterpriseMobileMoneyFeeBps
+        : effectiveTier === SubscriptionPlanTier.PRO
+          ? platformSettings.proMobileMoneyFeeBps
+          : platformSettings.mobileMoneyFeeBps
+    const defaultVoucherFeeBps =
+      effectiveTier === SubscriptionPlanTier.ENTERPRISE
+        ? platformSettings.enterpriseVoucherFeeBps
+        : effectiveTier === SubscriptionPlanTier.PRO
+          ? platformSettings.proVoucherFeeBps
+          : platformSettings.voucherFeeBps
 
     return {
       tenant: {
@@ -223,6 +246,16 @@ export class SystemService {
         tenantVoucherFeePercent: this.bpsToPercent(settings.tenantVoucherFeeBps),
         withdrawalSecretConfigured: Boolean(tenant.payoutProfile),
         payoutNumbers: tenant.payoutNumbers,
+      },
+      payment: {
+        acceptedNetworks: platformSettings.allowedPaymentNetworks,
+        collectionMode: 'AUTOMATIC',
+        effectiveMobileMoneyFeePercent: this.bpsToPercent(
+          settings.tenantMobileMoneyFeeBps ?? defaultMobileMoneyFeeBps,
+        ),
+        effectiveVoucherFeePercent: this.bpsToPercent(
+          settings.tenantVoucherFeeBps ?? defaultVoucherFeeBps,
+        ),
       },
     }
   }

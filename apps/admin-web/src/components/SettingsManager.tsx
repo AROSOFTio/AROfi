@@ -82,6 +82,12 @@ type TenantSettings = {
     fraudHold?: boolean
     termsAcceptedAt?: string | null
   }
+  payment?: {
+    acceptedNetworks: string[]
+    collectionMode: 'AUTOMATIC'
+    effectiveMobileMoneyFeePercent: number
+    effectiveVoucherFeePercent: number
+  }
 }
 
 type SubscriptionPlanCatalogItem = {
@@ -258,8 +264,16 @@ export default function SettingsManager({
     }
   }
 
-  const effectiveMobileFee = tenant?.settings.tenantMobileMoneyFeePercent ?? platform?.mobileMoneyFeePercent ?? 7
-  const effectiveVoucherFee = tenant?.settings.tenantVoucherFeePercent ?? platform?.voucherFeePercent ?? 2
+  const effectiveMobileFee =
+    tenant?.payment?.effectiveMobileMoneyFeePercent ??
+    tenant?.settings.tenantMobileMoneyFeePercent ??
+    platform?.mobileMoneyFeePercent ??
+    7
+  const effectiveVoucherFee =
+    tenant?.payment?.effectiveVoucherFeePercent ??
+    tenant?.settings.tenantVoucherFeePercent ??
+    platform?.voucherFeePercent ??
+    2
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab')
@@ -548,7 +562,30 @@ export default function SettingsManager({
           </form>
         )}
 
-        {tenantForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && activeTab !== 'Password' && (
+        {tenantForm && activeTab === 'Payment & Fees' && !isDevAdmin && (
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">Customer Payment Setup</span>
+              <span className="badge badge-success">Connected</span>
+            </div>
+            <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: '0 0 18px' }}>
+              AROFi collects customer payments automatically and activates internet access after confirmation.
+              Payment provider routes are securely managed by AROFi, so there is nothing to configure here.
+            </p>
+            <div className="form-grid">
+              <ReadOnly label="MTN Mobile Money" value={tenant.payment?.acceptedNetworks.includes('MTN') ? 'Enabled' : 'Unavailable'} />
+              <ReadOnly label="Airtel Money" value={tenant.payment?.acceptedNetworks.includes('AIRTEL') ? 'Enabled' : 'Unavailable'} />
+              <ReadOnly label="Mobile Money Service Fee" value={String(effectiveMobileFee) + '% per successful payment'} />
+              <ReadOnly label="Voucher Service Fee" value={String(effectiveVoucherFee) + '% per redeemed voucher'} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
+              <Link href="/transactions" className="btn btn-primary">View Transactions</Link>
+              <Link href="/settings?tab=Subscription%20Plan" className="btn btn-ghost">View Plan Details</Link>
+            </div>
+          </div>
+        )}
+
+        {tenantForm && activeTab !== 'Subscription Plan' && activeTab !== 'Appearance' && activeTab !== 'Password' && (activeTab !== 'Payment & Fees' || isDevAdmin) && (
           <form className="card" onSubmit={saveTenant}>
             <div className="card-header">
               <span className="card-title">Business Settings</span>

@@ -236,6 +236,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         tenantId: true,
+        hotspotId: true,
+        name: true,
+        identity: true,
+        siteLabel: true,
         status: true,
         onboardingStatus: true,
         radiusNasIpAddress: true,
@@ -272,6 +276,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           : {}),
       },
     })
+
+    if (router.hotspotId === null) {
+      await this.ensureAccessPointForRouter(router, normalizedSourceIp)
+    }
 
     if (reportedActiveUsers === 0) {
       const staleSessions = await this.prisma.networkSession.findMany({
@@ -960,6 +968,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           warning: warnings.length ? warnings.join(' ') : undefined,
         }
       })
+
+      if (router.hotspotId === null) {
+        await this.ensureAccessPointForRouter(router, normalizedSourceIp)
+      }
 
       this.reloadFreeradiusNasClients()
 
@@ -1858,6 +1870,55 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     return Math.floor(parsed)
+  }
+
+  private async ensureAccessPointForRouter(
+    router: {
+      id: string
+      tenantId: string
+      hotspotId?: string | null
+      name: string
+      identity?: string | null
+      siteLabel?: string | null
+      radiusNasIpAddress?: string | null
+    },
+    reportedNasIp?: string,
+  ) {
+    if (router.hotspotId) {
+      return
+    }
+
+    const baseName = router.siteLabel?.trim() || router.identity?.trim() || router.name.trim()
+    const accessPointName = /access point|hotspot/i.test(baseName)
+      ? baseName
+      : `${baseName} Access Point`
+
+    try {
+      const accessPoint = await this.prisma.hotspot.create({
+        data: {
+          tenantId: router.tenantId,
+          name: accessPointName,
+          nasIpAddress: reportedNasIp?.trim() || router.radiusNasIpAddress || null,
+          secret: randomBytes(12).toString('hex'),
+        },
+        select: { id: true },
+      })
+      const linked = await this.prisma.router.updateMany({
+        where: { id: router.id, hotspotId: null },
+        data: { hotspotId: accessPoint.id },
+      })
+
+      if (linked.count === 0) {
+        await this.prisma.hotspot.delete({ where: { id: accessPoint.id } })
+        return
+      }
+
+      this.logger.log(`Automatically detected access point for router ${router.id}`)
+    } catch (error) {
+      this.logger.warn(
+        `Could not create the automatic access point for router ${router.id}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }
 
   private generateSharedSecret() {
