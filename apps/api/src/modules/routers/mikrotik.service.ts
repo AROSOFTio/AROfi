@@ -141,7 +141,7 @@ export class MikrotikService {
         ':put "ERROR: AROFi server unreachable after 3 attempts."; ' +
         ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) AND HTTPS (port 443). 3) System clock correct (check /system clock). 4) Re-paste when WAN is stable." ' +
       '} else={ ' +
-        ':if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" } ' +
+        ':if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ :delay 1s; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" } ' +
       '}'
     )
   }
