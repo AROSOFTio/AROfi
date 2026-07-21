@@ -305,8 +305,8 @@ export class MikrotikService {
       // 30 days), while still bounded (not an unbounded/infinite value that
       // could behave unpredictably), so idle time is never the reason a
       // customer gets disconnected.
-      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes cookie-timeout=1d keepalive-timeout=30d`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes cookie-timeout=1d keepalive-timeout=30d }`,
+      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
       `# Remove HotSpot bypass bindings so every device must authenticate through AROFi`,
       `:do { /ip hotspot ip-binding remove [find type=bypassed] } on-error={}`,
       // dns-name on the profile only controls which name the HotSpot itself answers
