@@ -10,7 +10,6 @@ const PRIVATE: string[] = [
   '/api/',
   '/login',
   '/register',
-  '/setup',
   '/forgot-password',
   '/forgot-email',
   '/reset-password',
