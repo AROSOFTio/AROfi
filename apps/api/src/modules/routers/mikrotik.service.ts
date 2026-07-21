@@ -290,7 +290,7 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=cookie,http-pap split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
       // keepalive-timeout=2m (MikroTik's own default) force-disconnected
       // customers for mere inactivity: phones/laptops stop answering the
       // HotSpot's ARP-based keepalive probe within 1-2 minutes of the screen
@@ -305,8 +305,8 @@ export class MikrotikService {
       // 30 days), while still bounded (not an unbounded/infinite value that
       // could behave unpredictably), so idle time is never the reason a
       // customer gets disconnected.
-      `/ip hotspot user profile set [find default=yes] shared-users=1 keepalive-timeout=30d`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 keepalive-timeout=30d }`,
+      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes cookie-timeout=1d keepalive-timeout=30d`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes cookie-timeout=1d keepalive-timeout=30d }`,
       `# Remove HotSpot bypass bindings so every device must authenticate through AROFi`,
       `:do { /ip hotspot ip-binding remove [find type=bypassed] } on-error={}`,
       // dns-name on the profile only controls which name the HotSpot itself answers
