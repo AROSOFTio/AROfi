@@ -1033,22 +1033,10 @@ export class MikrotikService {
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Connected</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#eff6ff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center}
-    .spinner{width:30px;height:30px;border:3px solid #bfdbfe;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;margin-bottom:14px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    p{color:#475569;font-size:14px}
-    a{color:#2563EB;font-weight:700}
-  </style>
 </head>
 <body>
-  <div class="spinner"></div>
-  <p>You're connected. Redirecting&hellip;</p>
   <script>
-    // Single automatic redirect; no manual fallback link.
+    // Silent one-shot redirect; captive browsers close when connectivity is detected.
     window.location.replace("$(link-orig-esc)");
   </script>
 </body>
