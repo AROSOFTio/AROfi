@@ -1551,7 +1551,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
-    const label = this.buildTenantWifiLabel(tenant?.domain || tenant?.name || 'arofi')
+    // The tenant Wi-Fi hostname is a local captive-portal name, never the
+    // platform's public domain or a stored marketing/domain label.
+    const rawName = (tenant?.name || 'arofi')
+      .replace(/^arofi(?:\s+wifi)?(?:\s+tenant)?[\s:_-]*/i, '')
+      .trim()
+    const label = this.buildTenantWifiLabel(rawName || 'arofi')
     return `${label}.wifi`
   }
 
