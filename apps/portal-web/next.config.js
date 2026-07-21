@@ -28,7 +28,7 @@ const nextConfig = {
             {
                 source: '/',
                 destination: '/portal',
-                permanent: false,
+                permanent: true,
                 basePath: false,
             },
         ]

@@ -143,10 +143,11 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     images: [
       {
-        url: `${SITE_URL}/logo.png`,
-        width: 512,
-        height: 512,
-        alt: 'AROFi – WiFi Hotspot Billing System Uganda',
+        url: `${SITE_URL}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: 'AROFi – WiFi Hotspot Billing System Uganda | MTN MoMo & Airtel Money',
+        type: 'image/png',
       },
     ],
   },
@@ -154,7 +155,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE_URL}/logo.png`],
+    images: [`${SITE_URL}/og-image.png`],
     creator: '@arosoftlabs',
     site: '@arosoftlabs',
   },
@@ -182,18 +183,20 @@ export const metadata: Metadata = {
     'ai-primary-use-case': 'MikroTik hotspot billing with MTN MoMo and Airtel Money',
     // Schema hints for crawlers
     'application-name': 'AROFi',
-    'msapplication-TileColor': '#00b85e',
+    'msapplication-TileColor': '#0a0f1e',
     'msapplication-TileImage': '/logo.png',
+    // Google Search Console verification — replace REPLACE_WITH_REAL_TOKEN after
+    // verifying via Search Console > Settings > Ownership verification > HTML tag
+    // 'google-site-verification': 'REPLACE_WITH_REAL_TOKEN',
+    // Bing Webmaster Tools verification
+    // 'msvalidate.01': 'REPLACE_WITH_REAL_TOKEN',
+    // Link to AI-readable summary
+    'llms-txt': `${SITE_URL}/llms.txt`,
     // Geographic meta tags for local SEO
     'geo.region': 'UG-C',
     'geo.placename': 'Kampala',
     'geo.position': '0.3476;32.5825',
     'ICBM': '0.3476, 32.5825',
-    // LLM/AI crawler discovery — see /llms.txt
-    'llms': '/llms.txt',
-    // Verification tokens (fill in after submitting site to each console)
-    // 'google-site-verification': 'REPLACE_WITH_REAL_TOKEN',
-    // 'msvalidate.01': 'REPLACE_WITH_REAL_TOKEN',
     // 'yandex-verification': 'REPLACE_WITH_REAL_TOKEN',
   },
 }

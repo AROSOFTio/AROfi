@@ -3,148 +3,195 @@ import type { MetadataRoute } from 'next'
 const SITE_URL = 'https://arofi.net'
 
 /**
- * robots.ts — AROFi crawling rules
- *
- * Key decisions:
- * - /portal is disallowed here; the portal Next.js app (apps/portal-web)
- *   owns its own robots and canonical, and we don't want Google to index
- *   the portal redirect/login page alongside the marketing site.
- * - All dashboard/operational paths are private and must not be indexed.
- * - Googlebot and GPTBot get explicit allow/disallow rules for clarity.
- * - Bingbot and other bots get a crawl-delay to reduce server load.
+ * Private dashboard routes — must NEVER be indexed by any crawler.
+ * Update this list whenever new protected routes are added.
  */
-export default function robots(): MetadataRoute.Robots {
-  // Paths that should NEVER be indexed (app routes, not content routes)
-  const privateDisallow = [
-    '/portal',
-    '/portal/',
-    '/dashboard',
-    '/dashboard/',
-    '/admin',
-    '/api/',
-    '/login',
-    '/register',
-    '/setup',
-    '/forgot-email',
-    '/forgot-password',
-    '/reset-password',
-    '/packages',
-    '/vouchers',
-    '/sales',
-    '/transactions',
-    '/earnings',
-    '/float',
-    '/disbursements',
-    '/users',
-    '/agents',
-    '/settings',
-    '/support',
-    '/tenants',
-    '/businesses',
-    '/feedback',
-    '/sales-by-tenant',
-    '/sales-by-business',
-    '/feature-limits',
-    '/audit-logs',
-    '/sessions',
-    '/hotspots',
-    '/payments',
-    '/reports',
-    '/router',
-    '/payment-return',
-  ]
+const PRIVATE: string[] = [
+  '/api/',
+  '/login',
+  '/register',
+  '/setup',
+  '/forgot-password',
+  '/forgot-email',
+  '/reset-password',
+  // Operator dashboard routes
+  '/dashboard',
+  '/admin',
+  '/packages',
+  '/vouchers',
+  '/sales',
+  '/sales-by-tenant',
+  '/sales-by-business',
+  '/transactions',
+  '/earnings',
+  '/float',
+  '/disbursements',
+  '/users',
+  '/agents',
+  '/settings',
+  '/support',
+  '/tenants',
+  '/businesses',
+  '/customers',
+  '/billing',
+  '/routers',
+  '/hotspots',
+  '/sessions',
+  '/payments',
+  '/reports',
+  '/router',
+  '/audit-logs',
+  '/feature-limits',
+  '/feedback',
+  '/compliance',
+  '/settlements',
+  // Portal (captive portal web-app — has its own robots)
+  '/portal',
+  '/payment-return',
+]
 
+/**
+ * Public pages that every crawler should be able to reach.
+ */
+const PUBLIC: string[] = [
+  '/',
+  '/blog',
+  '/blog/',
+  '/docs',
+  '/docs/',
+  '/privacy',
+  '/terms',
+  '/sitemap.xml',
+  '/llms.txt',
+]
+
+export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      // --- Googlebot: full access to public content, images enabled ---
+      // ── Googlebot ────────────────────────────────────────────────
       {
         userAgent: 'Googlebot',
-        allow: [
-          '/',
-          '/blog',
-          '/blog/',
-          '/docs',
-          '/docs/',
-          '/privacy',
-          '/terms',
-          '/sitemap.xml',
-          '/*.png',
-          '/*.jpg',
-          '/*.webp',
-          '/*.svg',
-          '/_next/static/',
-        ],
-        disallow: privateDisallow,
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
-      // --- Googlebot-Image: allow all public images ---
+      // ── Googlebot-Image: index all public images ──────────────────
       {
         userAgent: 'Googlebot-Image',
-        allow: ['/*.png', '/*.jpg', '/*.jpeg', '/*.webp', '/*.svg', '/*.gif', '/api/blog/images/'],
-        disallow: [],
+        allow: ['/', '/*.png', '/*.jpg', '/*.jpeg', '/*.webp', '/*.svg'],
+        disallow: PRIVATE,
       },
-      // --- Bingbot: same as Googlebot with crawl-delay ---
+      // ── Google AI training crawler ────────────────────────────────
+      {
+        userAgent: 'Google-Extended',
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      // ── Bingbot ───────────────────────────────────────────────────
       {
         userAgent: 'Bingbot',
-        allow: ['/', '/blog', '/docs', '/privacy', '/terms'],
-        disallow: privateDisallow,
+        allow: PUBLIC,
+        disallow: PRIVATE,
         crawlDelay: 2,
       },
-      // --- AI / LLM crawlers: allow content pages ---
+      // ── AI / LLM Crawlers ─────────────────────────────────────────
       {
         userAgent: 'GPTBot',
-        allow: ['/', '/blog', '/docs', '/privacy', '/terms'],
-        disallow: [...privateDisallow, '/api/'],
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
       {
         userAgent: 'ChatGPT-User',
-        allow: ['/', '/blog', '/docs'],
-        disallow: privateDisallow,
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'OAI-SearchBot',
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
       {
         userAgent: 'ClaudeBot',
-        allow: ['/', '/blog', '/docs', '/privacy', '/terms'],
-        disallow: [...privateDisallow, '/api/'],
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
       {
-        userAgent: 'PerplexityBot',
-        allow: ['/', '/blog', '/docs', '/privacy', '/terms'],
-        disallow: privateDisallow,
-      },
-      {
-        userAgent: 'YouBot',
-        allow: ['/', '/blog', '/docs'],
-        disallow: privateDisallow,
+        userAgent: 'Claude-Web',
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
       {
         userAgent: 'anthropic-ai',
-        allow: ['/', '/blog', '/docs'],
-        disallow: [...privateDisallow, '/api/'],
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
       {
-        userAgent: 'Google-Extended',
-        allow: ['/', '/blog', '/docs', '/privacy', '/terms'],
-        disallow: [...privateDisallow, '/api/'],
+        userAgent: 'PerplexityBot',
+        allow: PUBLIC,
+        disallow: PRIVATE,
       },
       {
-        userAgent: 'FacebookExternalHit',
-        allow: ['/', '/logo.png'],
-        disallow: privateDisallow,
+        userAgent: 'YouBot',
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'meta-externalagent',
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'Applebot',
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'Applebot-Extended',
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      // ── Social preview bots ───────────────────────────────────────
+      {
+        userAgent: 'facebookexternalhit',
+        allow: ['/', '/logo.png', '/og-image.png'],
+        disallow: PRIVATE,
       },
       {
         userAgent: 'Twitterbot',
-        allow: ['/', '/logo.png'],
-        disallow: privateDisallow,
+        allow: ['/', '/logo.png', '/og-image.png'],
+        disallow: PRIVATE,
       },
-      // --- Unwanted scrapers and bad bots: block everything ---
+      {
+        userAgent: 'LinkedInBot',
+        allow: ['/', '/logo.png', '/og-image.png'],
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'WhatsApp',
+        allow: ['/', '/logo.png', '/og-image.png'],
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'Slackbot',
+        allow: ['/', '/logo.png', '/og-image.png'],
+        disallow: PRIVATE,
+      },
+      {
+        userAgent: 'DuckDuckBot',
+        allow: PUBLIC,
+        disallow: PRIVATE,
+      },
+      // ── Known scrapers / SEO tool bots — block entirely ───────────
       { userAgent: 'AhrefsBot', disallow: ['/'] },
       { userAgent: 'SemrushBot', disallow: ['/'] },
       { userAgent: 'DotBot', disallow: ['/'] },
       { userAgent: 'MJ12bot', disallow: ['/'] },
-      // --- Default: all other bots get public content ---
+      { userAgent: 'BLEXBot', disallow: ['/'] },
+      { userAgent: 'DataForSeoBot', disallow: ['/'] },
+      // ── Catch-all ─────────────────────────────────────────────────
       {
         userAgent: '*',
-        allow: ['/', '/blog', '/docs', '/privacy', '/terms'],
-        disallow: privateDisallow,
+        allow: PUBLIC,
+        disallow: PRIVATE,
         crawlDelay: 5,
       },
     ],

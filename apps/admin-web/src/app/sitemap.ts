@@ -4,64 +4,65 @@ import { docs } from './docs/[slug]/page'
 
 const SITE_URL = 'https://arofi.net'
 
-// Last time the static pages were meaningfully updated.
-// Update this date whenever you make content changes to the homepage, privacy, or terms pages.
-const STATIC_UPDATED = new Date('2026-07-21').toISOString()
+// Static public pages — update `lastmod` when page content changes significantly
+const staticPages: MetadataRoute.Sitemap = [
+  {
+    url: SITE_URL,
+    changeFrequency: 'weekly',
+    priority: 1.0,
+    lastModified: new Date('2026-07-21'),
+  },
+  {
+    url: `${SITE_URL}/blog`,
+    changeFrequency: 'daily',
+    priority: 0.9,
+    lastModified: new Date(),
+  },
+  {
+    url: `${SITE_URL}/docs`,
+    changeFrequency: 'weekly',
+    priority: 0.8,
+    lastModified: new Date('2026-07-01'),
+  },
+  {
+    url: `${SITE_URL}/privacy`,
+    changeFrequency: 'yearly',
+    priority: 0.4,
+    lastModified: new Date('2026-01-01'),
+  },
+  {
+    url: `${SITE_URL}/terms`,
+    changeFrequency: 'yearly',
+    priority: 0.4,
+    lastModified: new Date('2026-01-01'),
+  },
+]
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date()
+  // Docs pages — generated from the static docs config
+  const docEntries: MetadataRoute.Sitemap = Object.keys(docs).map((slug) => ({
+    url: `${SITE_URL}/docs/${slug}`,
+    changeFrequency: 'monthly' as const,
+    priority: 0.6,
+    lastModified: new Date('2026-07-01'),
+  }))
 
-  const staticEntries: MetadataRoute.Sitemap = [
-    {
-      url: SITE_URL,
-      lastModified: STATIC_UPDATED,
-      changeFrequency: 'weekly',
-      priority: 1,
-    },
-    {
-      url: `${SITE_URL}/blog`,
-      lastModified: now.toISOString(),
-      changeFrequency: 'daily',
-      priority: 0.9,
-    },
-    {
-      url: `${SITE_URL}/docs`,
-      lastModified: STATIC_UPDATED,
-      changeFrequency: 'weekly',
-      priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/privacy`,
-      lastModified: STATIC_UPDATED,
-      changeFrequency: 'yearly',
-      priority: 0.3,
-    },
-    {
-      url: `${SITE_URL}/terms`,
-      lastModified: STATIC_UPDATED,
-      changeFrequency: 'yearly',
-      priority: 0.3,
-    },
-    ...Object.keys(docs).map((slug) => ({
-      url: `${SITE_URL}/docs/${slug}`,
-      lastModified: STATIC_UPDATED,
-      changeFrequency: 'monthly' as const,
-      priority: 0.6,
-    })),
-  ]
-
+  // Blog posts — fetched from the API (gracefully handles failure)
   let postEntries: MetadataRoute.Sitemap = []
   try {
-    const posts = await fetchPublicApi<Array<{ slug: string; updatedAt: string }>>('/blog/slugs', 300)
+    const posts = await fetchPublicApi<Array<{ slug: string; updatedAt: string }>>(
+      '/blog/slugs',
+      300,
+    )
     postEntries = (posts ?? []).map((post) => ({
       url: `${SITE_URL}/${post.slug}`,
       lastModified: new Date(post.updatedAt),
       changeFrequency: 'monthly' as const,
-      priority: 0.8,
+      priority: 0.75,
     }))
   } catch {
-    // Non-fatal: sitemap is still valid without blog posts
+    // API unavailable during build — skip dynamic posts, static pages still included
   }
 
-  return [...staticEntries, ...postEntries]
+  return [...staticPages, ...docEntries, ...postEntries]
 }
