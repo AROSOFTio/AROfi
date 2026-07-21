@@ -735,9 +735,7 @@ export class MikrotikService {
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/>
         </svg>
       </div>
-      <img id="tlogo" class="tlogo" src="https://arofi.net/logo.png" alt="AROFi" onerror="this.style.display='none'">
       <h1 id="tname" class="title">AROFi Hotspot</h1>
-      <div id="idline" class="idline"></div>
     </div>
 
     <div id="loading" class="spin-wrap"><div class="spinner"></div><p>Loading packages...</p></div>
@@ -802,7 +800,6 @@ export class MikrotikService {
   </div>
 
   <div class="tech">
-    <span id="tip">IP: </span> | <span id="tmac">MAC: </span><br><br>
     Powered By <a href="https://arofi.net" target="_blank" rel="noreferrer" style="color:#2563EB;font-weight:600;text-decoration:none">AROFi</a><br>
     Terms and Conditions Apply
   </div>
@@ -843,13 +840,6 @@ export class MikrotikService {
         setTimeout(login, 200);
       }
 
-      if(ip)document.getElementById('tip').textContent='IP: '+ip;
-      if(mac)document.getElementById('tmac').textContent='MAC: '+mac.toUpperCase();
-      var idl='';
-      if(ip)idl='IP: '+ip;
-      if(ip&&mac)idl+='  |  ';
-      if(mac)idl+='MAC: '+mac.toUpperCase();
-      if(idl)document.getElementById('idline').textContent=idl;
       load();
     };
 
@@ -898,7 +888,6 @@ export class MikrotikService {
         document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';
         // Prefer the operator's own logo; the default AROFi logo is already in
         // the src attribute (with onerror hide) so there's always a logo.
-        if(d.tenant&&d.tenant.logoUrl){document.getElementById('tlogo').src=d.tenant.logoUrl;}
         // Support footer + inline WhatsApp button — mirrors arofi.net/portal.
         // Uses the operator's support number, or the AROFi platform number.
         var supPhone=(d.tenant&&(d.tenant.supportPhone||d.tenant.platformSupportPhone))||'';
