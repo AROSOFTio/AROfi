@@ -152,6 +152,7 @@ describe('MikrotikService', () => {
     expect(html).toContain('var dst=CONNECTED')
     expect(html).toContain('encodeURIComponent(CONNECTED)')
     expect(html).not.toContain('CONNECTED="https://wifi.example.com/portal?connected=1"')
+    expect(html).not.toContain('window.location.href=lo+\'?username=')
     expect(html).not.toContain('neverssl.com')
     expect(html).not.toContain('http://google.com')
     expect(html).toContain('id="multiSection"')

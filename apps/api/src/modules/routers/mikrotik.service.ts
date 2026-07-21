@@ -819,21 +819,11 @@ export class MikrotikService {
       var search=window.location.search;
       var v='';
       
-      // Auto-redirect for mikrotik username/password
-      if(search&&search.indexOf('username=')!==-1&&search.indexOf('password=')!==-1){
-        var parts=search.split('&');
-        var u='',p='',dst='';
-        for(var i=0;i<parts.length;i++){
-          var kv=parts[i].split('=');
-          if(kv[0]==='username'||kv[0]==='?username') u=kv[1];
-          if(kv[0]==='password') p=kv[1];
-          if(kv[0]==='dst') dst=kv[1];
-        }
-        if(u&&p){
-          window.location.href=lo+'?username='+u+'&password='+p+'&dst='+(dst||encodeURIComponent(CONNECTED));
-          return;
-        }
-      }
+      // Do not auto-submit MikroTik credentials into the hotspot login page here.
+      // That path bypasses the AROFi payment/voucher portal and makes the user
+      // appear connected without ever seeing the payment flow. We only use the
+      // captive portal page for package selection, voucher redemption, and
+      // payment initiation.
       
       // Auto-login for voucher. The code can arrive two ways:
       //   1. Directly:  /login?voucher=HT2KUQ

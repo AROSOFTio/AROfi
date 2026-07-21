@@ -214,6 +214,25 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
     )
   })
 
+  it('maps router-identified accounting rows to the router when no credential exists', async () => {
+    const { service, prisma, realtimeEvents } = buildHarness({
+      credential: null,
+      existingSession: null,
+    })
+
+    await service.processAcctRow(buildAcctRow({ username: 'router-1' }) as never)
+
+    expect(prisma.router.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'router-1' }),
+      }),
+    )
+    expect(realtimeEvents.publish).toHaveBeenCalledWith(
+      'session.started',
+      expect.objectContaining({ routerId: 'router-1' }),
+    )
+  })
+
   it('turns a radpostauth accept into a radius.auth event and fresh auth signal', async () => {
     const { service, prisma, realtimeEvents } = buildHarness()
 
