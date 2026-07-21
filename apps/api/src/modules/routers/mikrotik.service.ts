@@ -1058,10 +1058,8 @@ export class MikrotikService {
 <body>
   <div class="spinner"></div>
   <p>You're connected. Redirecting&hellip;</p>
-  <p style="margin-top:10px"><a href="$(link-orig-esc)">Click here if nothing happens</a></p>
   <script>
-    // Use one redirect mechanism only; meta-refresh + JS caused captive
-    // browsers to navigate twice and repeatedly show this page.
+    // Single automatic redirect; no manual fallback link.
     window.location.replace("$(link-orig-esc)");
   </script>
 </body>
