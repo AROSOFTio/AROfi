@@ -32,13 +32,16 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
-              "font-src 'self'",
-              "connect-src 'self'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              // Allow all HTTPS images so OG previews, social bots, and external
+              // CDN images render correctly. data: and blob: needed for canvas/PWA.
+              "img-src 'self' https: data: blob:",
+              "font-src 'self' https://fonts.gstatic.com",
+              "connect-src 'self' https:",
               "frame-src 'self' blob:",
               "object-src 'none'",
               "base-uri 'self'",
+              "upgrade-insecure-requests",
             ].join('; '),
           },
           {
@@ -52,6 +55,21 @@ const nextConfig = {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+        ],
+      },
+      {
+        // Ensure crawlers always receive a fresh robots.txt and sitemap
+        source: '/(robots\.txt|sitemap\.xml)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' },
         ],
       },
     ]

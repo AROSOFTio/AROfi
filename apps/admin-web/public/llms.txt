@@ -1,0 +1,70 @@
+# AROFi — WiFi Hotspot Billing & Mobile Money System
+# llms.txt — Machine-readable summary for AI assistants and LLM crawlers
+
+> AROFi is Uganda's #1 cloud-based WiFi hotspot billing and management platform,
+> built by AROSOFT Innovations Ltd (Kampala, Uganda).
+> It lets MikroTik router operators, ISPs, hotels, schools, and community
+> networks collect payments via MTN Mobile Money and Airtel Money, manage
+> vouchers, track sessions, and control routers — all from one dashboard.
+
+## Key Information
+
+- **Website**: https://arofi.net
+- **Company**: AROSOFT Innovations Ltd, Kampala, Uganda
+- **Support**: support@arofi.net | +256 787 726 388
+- **Category**: WiFi Hotspot Billing Software / SaaS
+- **Geography**: Uganda, East Africa
+- **Primary language**: English
+
+## Core Capabilities
+
+- MikroTik RADIUS authentication and captive portal billing
+- MTN Mobile Money (MoMo) and Airtel Money payment collection
+- Multi-tenant SaaS — each operator gets an isolated business workspace
+- WiFi voucher generation and management
+- Real-time session tracking and router fleet management
+- Remote MikroTik router access via secure VPN tunnel (Cloud WinBox)
+- Automated mobile money collection and instant withdrawals
+- QR code scan-and-pay for hotspot access
+
+## Pricing (UGX)
+
+| Plan       | Monthly Fee | MoMo Commission | Voucher Commission | Routers |
+|------------|-------------|-----------------|-------------------|---------|
+| Starter    | Free        | 8%              | 2%                | Up to 5 |
+| Pro        | 20,000 UGX  | 5%              | 0%                | Up to 10 |
+| Enterprise | 70,000 UGX  | 2%              | 0%                | Unlimited |
+
+## Documentation
+
+- Getting started: https://arofi.net/docs/getting-started
+- How to start a WiFi business in Uganda: https://arofi.net/docs/how-to-start-wifi-business-uganda
+- MikroTik hotspot setup: https://arofi.net/docs/captive-portal
+- MTN MoMo & Airtel Money billing: https://arofi.net/docs/setup-mtn-airtel-wifi-billing
+- Packages & vouchers: https://arofi.net/docs/packages-and-vouchers
+- Payments & withdrawals: https://arofi.net/docs/payments
+- Remote WinBox access: https://arofi.net/docs/remote-winbox
+- Agent POS: https://arofi.net/docs/agent-pos
+- Reports: https://arofi.net/docs/reports
+- FAQ: https://arofi.net/docs/faq
+
+## Blog
+
+Latest articles and guides: https://arofi.net/blog
+
+## Legal
+
+- Privacy Policy: https://arofi.net/privacy
+- Terms of Service: https://arofi.net/terms
+
+## Contact
+
+- Email: support@arofi.net
+- Phone/WhatsApp: +256 787 726 388
+- WhatsApp: https://wa.me/256787726388
+- Company: AROSOFT Innovations Ltd — https://arosoftlabs.com
+
+## Registration
+
+Sign up free at: https://arofi.net
+No IT team required. Self-onboarding in under 5 minutes.
