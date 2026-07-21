@@ -33,7 +33,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              "img-src 'self' data: blob: https://arofi.net",
               "font-src 'self'",
               "connect-src 'self'",
               "frame-src 'self' blob:",

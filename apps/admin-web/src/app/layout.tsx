@@ -182,11 +182,19 @@ export const metadata: Metadata = {
     'ai-primary-use-case': 'MikroTik hotspot billing with MTN MoMo and Airtel Money',
     // Schema hints for crawlers
     'application-name': 'AROFi',
-    'msapplication-TileColor': '#ffffff',
+    'msapplication-TileColor': '#00b85e',
     'msapplication-TileImage': '/logo.png',
-    // Verification placeholders (replace with real tokens after submitting to Search Console)
+    // Geographic meta tags for local SEO
+    'geo.region': 'UG-C',
+    'geo.placename': 'Kampala',
+    'geo.position': '0.3476;32.5825',
+    'ICBM': '0.3476, 32.5825',
+    // LLM/AI crawler discovery — see /llms.txt
+    'llms': '/llms.txt',
+    // Verification tokens (fill in after submitting site to each console)
     // 'google-site-verification': 'REPLACE_WITH_REAL_TOKEN',
     // 'msvalidate.01': 'REPLACE_WITH_REAL_TOKEN',
+    // 'yandex-verification': 'REPLACE_WITH_REAL_TOKEN',
   },
 }
 
@@ -291,6 +299,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href="/logo.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
+        {/* AI/LLM crawler discovery */}
+        <link rel="llms" href="/llms.txt" type="text/plain" />
         {/* Resource hints */}
         <link rel="dns-prefetch" href="//fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -298,6 +308,54 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        {/* LocalBusiness schema for Uganda local SEO */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'LocalBusiness',
+              '@id': `${SITE_URL}/#local-business`,
+              name: 'AROSOFT Innovations Ltd',
+              alternateName: 'AROFi',
+              description: 'Uganda\'s leading WiFi hotspot billing platform with MTN MoMo and Airtel Money integration for MikroTik operators.',
+              url: SITE_URL,
+              logo: {
+                '@type': 'ImageObject',
+                url: `${SITE_URL}/logo.png`,
+                width: 512,
+                height: 512,
+              },
+              image: `${SITE_URL}/logo.png`,
+              telephone: '+256787726388',
+              email: 'support@arofi.net',
+              address: {
+                '@type': 'PostalAddress',
+                streetAddress: 'Kampala',
+                addressLocality: 'Kampala',
+                addressRegion: 'Central Region',
+                addressCountry: 'UG',
+              },
+              geo: {
+                '@type': 'GeoCoordinates',
+                latitude: 0.3476,
+                longitude: 32.5825,
+              },
+              areaServed: [
+                { '@type': 'Country', name: 'Uganda' },
+                { '@type': 'AdministrativeArea', name: 'East Africa' },
+              ],
+              openingHoursSpecification: {
+                '@type': 'OpeningHoursSpecification',
+                dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                opens: '00:00',
+                closes: '23:59',
+              },
+              priceRange: 'Free – UGX 70,000/month',
+              sameAs: ['https://arosoftlabs.com'],
+            }),
+          }}
         />
         {/* Page-specific FAQPage/Product schema (must mirror visible content) lives on the homepage itself — see apps/admin-web/src/app/page.tsx */}
       </head>
