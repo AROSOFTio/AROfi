@@ -1044,7 +1044,6 @@ export class MikrotikService {
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0;url=$(link-orig-esc)">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Connected</title>
   <style>
@@ -1061,6 +1060,8 @@ export class MikrotikService {
   <p>You're connected. Redirecting&hellip;</p>
   <p style="margin-top:10px"><a href="$(link-orig-esc)">Click here if nothing happens</a></p>
   <script>
+    // Use one redirect mechanism only; meta-refresh + JS caused captive
+    // browsers to navigate twice and repeatedly show this page.
     window.location.replace("$(link-orig-esc)");
   </script>
 </body>
