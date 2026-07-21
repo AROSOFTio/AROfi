@@ -1036,8 +1036,9 @@ export class MikrotikService {
 </head>
 <body>
   <script>
-    // Silent one-shot redirect; captive browsers close when connectivity is detected.
-    window.location.replace("$(link-orig-esc)");
+    // Silent one-shot redirect. A connectivity probe makes Android/iOS captive
+    // browsers close instead of leaving the router's /status page visible.
+    window.location.replace("http://connectivitycheck.gstatic.com/generate_204");
   </script>
 </body>
 </html>
