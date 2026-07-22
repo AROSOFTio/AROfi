@@ -1207,21 +1207,11 @@ export class VouchersService {
     let x = pageMargin
     let y = pageMargin
 
-    // Printed voucher QRs must always open a universally reachable page.
-    // Pointing them at a hotspot-local IP/hostname only works on one specific
-    // captive network and fails everywhere else with "page could not be
-    // reached". The public portal URL is the reliable target:
-    //   - Off-network scans open the portal directly and still prefill the code.
-    //   - On-network scans are intercepted by MikroTik; login.html recovers the
-    //     nested voucher code from dst/link-orig and auto-redeems it there.
-    const portalHost = this.getVoucherPortalHost()
-    const tenantSlug = batch.tenant.name
-      .replace(/^arofi(?:\s+wifi)?[\s:_-]*/i, '')
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '')
-    const tenantHotspotDomain = tenantSlug ? `${tenantSlug}.wifi` : portalHost
+    // Voucher QR codes are consumed on the customer's captive network. They
+    // must point at that tenant's local hotspot hostname so RouterOS can serve
+    // login.html and auto-submit the voucher in one scan. Public portal URLs
+    // cannot authenticate a device on the LAN and leave the user stranded.
+    const tenantHotspotDomain = this.buildTenantHotspotDomain(batch.tenant.name)
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
@@ -1578,6 +1568,17 @@ export class VouchersService {
       : this.getVoucherQrBaseUrl()
     const separator = baseUrl.includes('?') ? '&' : '?'
     return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
+  }
+
+  private buildTenantHotspotDomain(tenantName?: string | null) {
+    const slug = (tenantName ?? '')
+      .replace(/^arofi(?:\s+wifi)?(?:\s+tenant)?[\s:_-]*/i, '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+
+    return `${slug || 'arofi'}.wifi`
   }
 
   private getVoucherPortalBaseUrl() {
