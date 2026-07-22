@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
     npm run build --workspace=arofi-admin
 
 # Build API last
-RUN export NODE_OPTIONS='--max-old-space-size=1024' && \
+RUN export NODE_OPTIONS='--max-old-space-size=2048' && \
     npm run build --workspace=arofi-api
 
 # Prune development dependencies to make production node_modules as small as
