@@ -1207,11 +1207,11 @@ export class VouchersService {
     let x = pageMargin
     let y = pageMargin
 
-    // Voucher QR codes are consumed on the customer's captive network. They
-    // must point at that tenant's local hotspot hostname so RouterOS can serve
-    // login.html and auto-submit the voucher in one scan. Public portal URLs
-    // cannot authenticate a device on the LAN and leave the user stranded.
-    const tenantHotspotDomain = this.buildTenantHotspotDomain(batch.tenant.name)
+    // A phone scanning a voucher is not connected to Wi-Fi yet, so a private
+    // *.wifi hostname cannot resolve and produces "site can't be reached".
+    // Use the public portal as the reachable bootstrap URL; RouterOS intercepts
+    // it on the captive network and login.html auto-submits the voucher.
+    const portalHost = this.getVoucherPortalHost()
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
@@ -1219,7 +1219,7 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-      const qrPng = await this.generateVoucherQrPng(voucher.code, tenantHotspotDomain)
+      const qrPng = await this.generateVoucherQrPng(voucher.code, portalHost)
 
       this.drawVoucherCard(doc, {
         x,
@@ -1233,7 +1233,7 @@ export class VouchersService {
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
         support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
-        portalHost: tenantHotspotDomain,
+        portalHost,
         qrPng,
       })
 
