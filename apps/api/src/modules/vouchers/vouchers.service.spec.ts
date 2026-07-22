@@ -45,4 +45,13 @@ describe('VouchersService voucher QR URLs', () => {
     expect((service as any).buildVoucherPortalUrl('ZX-90')).toBe('https://wifi.example.com/portal?voucher=ZX-90')
     expect((service as any).getVoucherPortalHost()).toBe('wifi.example.com')
   })
+
+  it('builds a tenant-only local hotspot URL for QR vouchers', () => {
+    const service = buildService()
+
+    expect((service as any).buildTenantHotspotDomain('AROFI WIFI Opio')).toBe('opio.wifi')
+    expect((service as any).buildVoucherPortalUrl('747774', 'opio.wifi')).toBe(
+      'http://opio.wifi/login?voucher=747774',
+    )
+  })
 })
