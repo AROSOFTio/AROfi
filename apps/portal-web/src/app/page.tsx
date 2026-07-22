@@ -14,17 +14,16 @@ export default function PortalPage() {
           AROFi WiFi Billing
         </p>
         <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-5xl">
-          Open your WiFi login page from the hotspot network.
+          Run a faster, smarter WiFi business.
         </h1>
         <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-          This public page does not show business packages. Customer packages load only from a business link,
-          QR code, or MikroTik captive portal such as <span className="font-semibold text-slate-900">yourbusiness.wifi/login</span>.
+          AROFi handles hotspot access, vouchers, mobile-money payments, live sessions, and automatic expiry—so you can focus on your customers.
         </p>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-3">
-          <InfoCard icon={<Wifi className="h-5 w-5" />} title="Customers" text="Connect to the WiFi network and open the login screen shown by the router." />
-          <InfoCard icon={<Router className="h-5 w-5" />} title="Operators" text="Use your AROFi dashboard to manage routers, packages, vouchers, and payments." />
-          <InfoCard icon={<ShieldCheck className="h-5 w-5" />} title="Safe Routing" text="AROFi will not guess a business catalog on the public portal URL." />
+          <InfoCard icon={<Wifi className="h-5 w-5" />} title="Sell access" text="Turn any supported hotspot into a simple, branded customer login." />
+          <InfoCard icon={<Router className="h-5 w-5" />} title="Manage remotely" text="Provision routers, monitor sessions, and see live health from one dashboard." />
+          <InfoCard icon={<ShieldCheck className="h-5 w-5" />} title="Get paid" text="Collect with MTN MoMo, Airtel Money, or printed vouchers with automatic expiry." />
         </div>
 
         <div className="mt-8 flex flex-wrap gap-3">
