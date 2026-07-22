@@ -1233,7 +1233,7 @@ export class VouchersService {
         amountUgx: batch.faceValueUgx,
         voucherCode: voucher.code,
         support: this.formatVoucherSupport(batch.tenant.supportPhone, batch.tenant.supportEmail),
-        portalHost,
+        portalHost: tenantHotspotDomain,
         qrPng,
       })
 
