@@ -1207,11 +1207,8 @@ export class VouchersService {
     let x = pageMargin
     let y = pageMargin
 
-    // A phone scanning a voucher is not connected to Wi-Fi yet, so a private
-    // *.wifi hostname cannot resolve and produces "site can't be reached".
-    // Use the public portal as the reachable bootstrap URL; RouterOS intercepts
-    // it on the captive network and login.html auto-submits the voucher.
     const portalHost = this.getVoucherPortalHost()
+    const tenantHotspotDomain = this.buildTenantHotspotDomain(batch.tenant.name)
 
     for (const voucher of batch.vouchers) {
       if (y + cardHeight > doc.page.height - pageMargin) {
@@ -1219,7 +1216,7 @@ export class VouchersService {
         x = pageMargin
         y = pageMargin
       }
-      const qrPng = await this.generateVoucherQrPng(voucher.code, portalHost)
+      const qrPng = await this.generateVoucherQrPng(voucher.code, tenantHotspotDomain)
 
       this.drawVoucherCard(doc, {
         x,
