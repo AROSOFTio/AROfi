@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
 
 # Build admin-web second (largest app — own dedicated step for memory isolation)
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=1024' && \
+    export NODE_OPTIONS='--max-old-space-size=2048' && \
     export NEXT_CPU_LIMIT=1 && \
     npm run build --workspace=arofi-admin
 
