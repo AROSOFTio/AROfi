@@ -134,6 +134,8 @@ const demoFeed = [
   { who: 'Router online', plan: 'RB951Ui', amount: 'healthy' },
 ]
 
+type PublicStats = { salesTodayUgx: number; activeSessions: number; liveRouters: number; routers: number }
+
 function useCountUp(target: number, durationMs = 1400) {
   const [value, setValue] = useState(0)
   const raf = useRef<number | undefined>(undefined)
@@ -155,10 +157,18 @@ export default function RootPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [feedIndex, setFeedIndex] = useState(0)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [stats, setStats] = useState<PublicStats | null>(null)
 
-  const revenue = useCountUp(284500)
-  const sessions = useCountUp(126)
-  const routers = useCountUp(18)
+  const revenue = useCountUp(stats?.salesTodayUgx ?? 0)
+  const sessions = useCountUp(stats?.activeSessions ?? 0)
+  const routers = useCountUp(stats?.liveRouters ?? 0)
+
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/public/stats`, { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((value) => value && setStats(value))
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -281,7 +291,7 @@ export default function RootPage() {
               </div>
               <div className="home-metric">
                 <span>Routers online</span>
-                <strong>{routers}/20</strong>
+                <strong>{routers}/{stats?.routers ?? '—'}</strong>
               </div>
             </div>
 
