@@ -111,6 +111,14 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
     }
   }, [])
 
+  useEffect(() => {
+    const referralCode = new URLSearchParams(window.location.search).get('ref')?.trim()
+    if (!referralCode) return
+    setFormState((previous) => previous.referralCode
+      ? previous
+      : { ...previous, referralCode: referralCode.toUpperCase() })
+  }, [])
+
   if (!open) return null
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

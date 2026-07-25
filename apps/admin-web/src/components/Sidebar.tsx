@@ -26,6 +26,7 @@ import {
   RadioTower,
   Router,
   Settings,
+  Share2,
   ShieldCheck,
   ShoppingCart,
   Store,
@@ -205,6 +206,11 @@ const navItems: NavGroup[] = [
     items: [{ href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true }]
   },
   {
+    label: 'Referral Management',
+    icon: <Share2 size={17} />,
+    items: [{ href: '/admin/referrals', label: 'Referral Management', required: ['ALL'], platformOnly: true }]
+  },
+  {
     label: 'Transactions',
     icon: <CreditCard size={17} />,
     items: [{ href: '/transactions', label: 'Transactions', required: ['billing.read'], platformOnly: true }]
@@ -315,6 +321,7 @@ const tenantNavItems: NavGroup[] = [
       { href: '/sales', label: 'Sales', required: ['billing.read'], tenantOnly: true },
       { href: '/transactions', label: 'Transactions', required: ['billing.read'], tenantOnly: true },
       { href: '/earnings', label: 'Wallet', required: ['billing.read'], tenantOnly: true },
+      { href: '/referrals', label: 'Referral Programme', required: ['referrals.read'], tenantOnly: true },
       { href: '/disbursements', label: 'Withdraw Money', required: ['disbursements.read'], tenantOnly: true },
     ],
   },

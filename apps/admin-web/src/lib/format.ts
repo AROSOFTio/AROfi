@@ -137,6 +137,7 @@ export function formatBusinessTerminology(value: string) {
 const ROLE_DISPLAY: Record<string, { label: string; description: string }> = {
   SuperAdmin: { label: 'Dev Admin', description: 'Full platform control across every business.' },
   VendorAdmin: { label: 'Business Admin', description: "Full control of this business's workspace — routers, sales, staff, and settings." },
+  ResellerPartner: { label: 'Referral Partner', description: 'Shares AroFi with WiFi vendors and earns qualified referral commission.' },
   WifiAdmin: { label: 'WiFi Administrator', description: 'Manages routers, hotspots, and packages day to day.' },
   VoucherAgent: { label: 'Voucher Agent', description: 'Sells and manages vouchers only.' },
   FinanceManager: { label: 'Finance Manager', description: 'Views sales, manages payouts, float, and withdrawals.' },
