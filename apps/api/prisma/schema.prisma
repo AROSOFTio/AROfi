@@ -374,6 +374,7 @@ model Tenant {
   disbursements       Disbursement[]
   voucherRedemptions  VoucherRedemption[]
   payments            Payment[]
+  subscriptionPayments SubscriptionPayment[]
   paymentWebhooks     PaymentWebhook[]
   paymentProviderConfigs PaymentProviderConfig[]
   packageActivations  PackageActivation[]
@@ -1200,6 +1201,32 @@ model PaymentWebhook {
   @@index([paymentId, createdAt])
   @@index([externalReference, createdAt])
   @@index([provider, providerReference, createdAt])
+}
+
+model SubscriptionPayment {
+  id                String               @id @default(uuid())
+  tenantId          String
+  tenant            Tenant               @relation(fields: [tenantId], references: [id])
+  plan              SubscriptionPlanTier
+  status            PaymentStatus        @default(INITIATED)
+  amountUgx         Int
+  durationDays      Int
+  currency          String               @default("UGX")
+  network           PaymentNetwork
+  phoneNumber       String
+  externalReference String               @unique
+  providerReference String?              @unique
+  statusMessage     String?
+  requestPayload    Json?
+  responsePayload   Json?
+  initiatedAt       DateTime             @default(now())
+  completedAt       DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, status, createdAt])
 }
 
 model PaymentProviderConfig {

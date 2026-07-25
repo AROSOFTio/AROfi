@@ -45,6 +45,16 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const PENDING_SUBSCRIPTION_PAYMENT_STATUSES = new Set<PaymentStatus>([
+  PaymentStatus.INITIATED,
+  PaymentStatus.PENDING,
+  PaymentStatus.INDETERMINATE,
+])
+const FAILED_SUBSCRIPTION_PAYMENT_STATUSES = new Set<PaymentStatus>([
+  PaymentStatus.FAILED,
+  PaymentStatus.CANCELLED,
+  PaymentStatus.EXPIRED,
+])
 
 type SubscriptionPaymentState = {
   id: string
@@ -411,6 +421,14 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Select a Pro or Enterprise plan before checking out')
     }
 
+    if (
+      prefs.subscriptionPayment &&
+      PENDING_SUBSCRIPTION_PAYMENT_STATUSES.has(prefs.subscriptionPayment.status) &&
+      Date.now() - new Date(prefs.subscriptionPayment.initiatedAt).getTime() < 2 * 60 * 1000
+    ) {
+      return this.presentStatus(prefs)
+    }
+
     const planDefinition = await this.resolvePlanDefinition(plan)
     const network = this.phoneNumberService.resolveNetwork(phoneNumber)
     const normalizedPhone = this.phoneNumberService.normalizeForNetwork(phoneNumber, network)
@@ -427,10 +445,35 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     })
 
     const status = mapRawStatusToPaymentStatus(gatewayResponse.transactionStatus)
+    const subscriptionPayment = await this.prisma.subscriptionPayment.create({
+      data: {
+        tenantId,
+        plan: plan as SubscriptionPlanTier,
+        status,
+        amountUgx: planDefinition.amountUgx,
+        durationDays: planDefinition.durationDays,
+        currency: 'UGX',
+        network,
+        phoneNumber: normalizedPhone,
+        externalReference,
+        providerReference: gatewayResponse.transactionReference,
+        statusMessage: gatewayResponse.statusMessage,
+        requestPayload: {
+          amountUgx: planDefinition.amountUgx,
+          currency: 'UGX',
+          phoneNumber: normalizedPhone,
+          externalReference,
+          network,
+        } as Prisma.InputJsonValue,
+        responsePayload: gatewayResponse as Prisma.InputJsonValue,
+        completedAt: status === PaymentStatus.COMPLETED ? new Date() : null,
+        failedAt: FAILED_SUBSCRIPTION_PAYMENT_STATUSES.has(status) ? new Date() : null,
+      },
+    })
 
     prefs.subscriptionStatus = 'PENDING_PAYMENT'
     prefs.subscriptionPayment = {
-      id: randomUUID(),
+      id: subscriptionPayment.id,
       plan,
       amountUgx: planDefinition.amountUgx,
       network,
@@ -481,12 +524,68 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       prefs.subscriptionPendingPlan = undefined
       prefs.subscriptionPaidUntil = paidUntil.toISOString()
       prefs.subscriptionPayment = undefined
-      await this.persistActivePlan(tenantId, payment.plan, paidUntil)
+      await this.prisma.$transaction(async (tx) => {
+        await tx.subscriptionPayment.updateMany({
+          where: { OR: [{ id: payment.id }, { externalReference: payment.externalReference }] },
+          data: {
+            status,
+            providerReference: payment.providerReference,
+            statusMessage: payment.statusMessage,
+            responsePayload: gatewayResponse as Prisma.InputJsonValue,
+            completedAt: new Date(),
+            failedAt: null,
+          },
+        })
+        await this.persistActivePlan(tenantId, payment.plan, paidUntil, tx)
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            action: 'subscription.payment_verified',
+            entity: 'SubscriptionPayment',
+            entityId: payment.id,
+            severity: AuditSeverity.INFO,
+            details: {
+              plan: payment.plan,
+              amountUgx: payment.amountUgx,
+              externalReference: payment.externalReference,
+              providerReference: payment.providerReference,
+              paidUntil: paidUntil.toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+        })
+        await tx.notification.create({
+          data: {
+            title: `${payment.plan} plan activated`,
+            body: `Payment confirmed. Your ${payment.plan} plan is active until ${paidUntil.toLocaleDateString('en-UG')}.`,
+            audience: NotificationAudience.SINGLE_BUSINESS,
+            tenantId,
+          },
+        })
+      })
     } else if (status === PaymentStatus.FAILED || status === PaymentStatus.CANCELLED || status === PaymentStatus.EXPIRED) {
       prefs.subscriptionStatus = 'PENDING_PAYMENT'
       prefs.subscriptionPayment = undefined
+      await this.prisma.subscriptionPayment.updateMany({
+        where: { OR: [{ id: payment.id }, { externalReference: payment.externalReference }] },
+        data: {
+          status,
+          providerReference: payment.providerReference,
+          statusMessage: payment.statusMessage,
+          responsePayload: gatewayResponse as Prisma.InputJsonValue,
+          failedAt: new Date(),
+        },
+      })
     } else {
       prefs.subscriptionPayment = payment
+      await this.prisma.subscriptionPayment.updateMany({
+        where: { OR: [{ id: payment.id }, { externalReference: payment.externalReference }] },
+        data: {
+          status,
+          providerReference: payment.providerReference,
+          statusMessage: payment.statusMessage,
+          responsePayload: gatewayResponse as Prisma.InputJsonValue,
+        },
+      })
     }
 
     await this.savePreferences(tenantId, prefs)
@@ -562,13 +661,14 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
   // Writes the authoritative plan columns the fee engine and reporting read
   // directly (TenantSetting.subscriptionPlan/subscriptionPlanExpiresAt),
   // separate from the JSON checkout-flow bookkeeping in routerOnboardingPreferences.
-  private async persistActivePlan(tenantId: string, plan: SubscriptionPlanKey, expiresAt: Date | null) {
+  private async persistActivePlan(tenantId: string, plan: SubscriptionPlanKey, expiresAt: Date | null, tx?: Prisma.TransactionClient) {
+    const client = tx ?? this.prisma
     const data = {
       subscriptionPlan: plan as SubscriptionPlanTier,
       subscriptionPlanExpiresAt: expiresAt,
     }
 
-    await this.prisma.tenantSetting.upsert({
+    await client.tenantSetting.upsert({
       where: { tenantId },
       update: data,
       create: { tenantId, ...data },
