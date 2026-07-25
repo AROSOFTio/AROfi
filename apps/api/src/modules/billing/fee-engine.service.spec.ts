@@ -12,9 +12,9 @@ describe('FeeEngineService', () => {
     prisma = {
       platformSetting: {
         upsert: jest.fn().mockResolvedValue({
-          mobileMoneyFeeBps: 700,
+          mobileMoneyFeeBps: 800,
           voucherFeeBps: 200,
-          proMobileMoneyFeeBps: 400,
+          proMobileMoneyFeeBps: 300,
           proVoucherFeeBps: 0,
           enterpriseMobileMoneyFeeBps: 160,
           enterpriseVoucherFeeBps: 0,
@@ -27,14 +27,14 @@ describe('FeeEngineService', () => {
     service = new FeeEngineService(prisma as never)
   })
 
-  it('calculates 7 percent fee for mobile money collections by default', async () => {
+  it('calculates 8 percent fee for Free mobile money collections by default', async () => {
     await expect(service.calculateBreakdown(BillingChannel.MOBILE_MONEY, 10000, 'tenant-1')).resolves.toEqual({
       grossAmountUgx: 10000,
-      feeAmountUgx: 700,
-      netAmountUgx: 9300,
-      feeBasisPoints: 700,
+      feeAmountUgx: 800,
+      netAmountUgx: 9200,
+      feeBasisPoints: 800,
       feeSource: 'GLOBAL_DEFAULT',
-      basisPoints: 700,
+      basisPoints: 800,
     })
   })
 
@@ -75,11 +75,11 @@ describe('FeeEngineService', () => {
 
     await expect(service.calculateBreakdown(BillingChannel.MOBILE_MONEY, 10000, 'tenant-1')).resolves.toEqual({
       grossAmountUgx: 10000,
-      feeAmountUgx: 400,
-      netAmountUgx: 9600,
-      feeBasisPoints: 400,
+      feeAmountUgx: 300,
+      netAmountUgx: 9700,
+      feeBasisPoints: 300,
       feeSource: 'PLAN_TIER',
-      basisPoints: 400,
+      basisPoints: 300,
     })
   })
 
@@ -111,11 +111,11 @@ describe('FeeEngineService', () => {
 
     await expect(service.calculateBreakdown(BillingChannel.MOBILE_MONEY, 10000, 'tenant-1')).resolves.toEqual({
       grossAmountUgx: 10000,
-      feeAmountUgx: 700,
-      netAmountUgx: 9300,
-      feeBasisPoints: 700,
+      feeAmountUgx: 800,
+      netAmountUgx: 9200,
+      feeBasisPoints: 800,
       feeSource: 'GLOBAL_DEFAULT',
-      basisPoints: 700,
+      basisPoints: 800,
     })
   })
 

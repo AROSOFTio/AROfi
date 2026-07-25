@@ -20,6 +20,8 @@ type PlatformSettings = {
   voucherFeePercent: number
   proMobileMoneyFeePercent: number
   proVoucherFeePercent: number
+  proSubscriptionPriceUgx: number
+  proSubscriptionDurationDays: number
   enterpriseMobileMoneyFeePercent: number
   enterpriseVoucherFeePercent: number
   freeRouterLimit: number
@@ -95,6 +97,7 @@ type SubscriptionPlanCatalogItem = {
   key: 'FREE' | 'PRO' | 'ENTERPRISE'
   name: string
   amountUgx: number
+  durationDays?: number
   routerLimit: string
   features: string[]
   commissionSummary: string
@@ -308,6 +311,8 @@ export default function SettingsManager({
           voucherFeePercent: numberValue(form, 'voucherFeePercent'),
           proMobileMoneyFeePercent: numberValue(form, 'proMobileMoneyFeePercent'),
           proVoucherFeePercent: numberValue(form, 'proVoucherFeePercent'),
+          proSubscriptionPriceUgx: numberValue(form, 'proSubscriptionPriceUgx'),
+          proSubscriptionDurationDays: numberValue(form, 'proSubscriptionDurationDays'),
           enterpriseMobileMoneyFeePercent: numberValue(form, 'enterpriseMobileMoneyFeePercent'),
           enterpriseVoucherFeePercent: numberValue(form, 'enterpriseVoucherFeePercent'),
           mtnCollectionProvider: stringValue(form, 'mtnCollectionProvider'),
@@ -505,6 +510,8 @@ export default function SettingsManager({
                   <FormSubheading text="Pro Plan Commission" />
                   <Input name="proMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.proMobileMoneyFeePercent} />
                   <Input name="proVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.proVoucherFeePercent} />
+                  <Input name="proSubscriptionPriceUgx" label="Subscription Price UGX" defaultValue={platformForm.proSubscriptionPriceUgx} />
+                  <Input name="proSubscriptionDurationDays" label="Subscription Duration Days" defaultValue={platformForm.proSubscriptionDurationDays} />
                   <FormSubheading text="Enterprise Plan Commission" />
                   <Input name="enterpriseMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.enterpriseMobileMoneyFeePercent} />
                   <Input name="enterpriseVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.enterpriseVoucherFeePercent} />

@@ -476,10 +476,12 @@ model KycDocument {
 
 model PlatformSetting {
   id                         String   @id @default("global")
-  mobileMoneyFeeBps          Int      @default(700)
+  mobileMoneyFeeBps          Int      @default(800)
   voucherFeeBps              Int      @default(200)
-  proMobileMoneyFeeBps       Int      @default(400)
+  proMobileMoneyFeeBps       Int      @default(300)
   proVoucherFeeBps           Int      @default(0)
+  proSubscriptionPriceUgx    Int      @default(20000)
+  proSubscriptionDurationDays Int     @default(30)
   enterpriseMobileMoneyFeeBps Int     @default(160)
   enterpriseVoucherFeeBps    Int      @default(0)
   freeRouterLimit            Int      @default(5)

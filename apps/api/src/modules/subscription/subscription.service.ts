@@ -19,6 +19,7 @@ const EXPIRY_REMINDER_WINDOW_DAYS = 3
 export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
   name: string
   amountUgx: number
+  durationDays?: number
   routerLimit: string
   features: string[]
 }> = {
@@ -31,6 +32,7 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
   PRO: {
     name: 'Pro Plan',
     amountUgx: 20000,
+    durationDays: 30,
     routerLimit: 'Up to 10 Routers',
     features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
   },
@@ -42,7 +44,7 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
   },
 }
 
-const SUBSCRIPTION_PLAN_DURATION_MS = 30 * 24 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 type SubscriptionPaymentState = {
   id: string
@@ -186,6 +188,8 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     return Object.entries(SUBSCRIPTION_PLAN_CATALOG).map(([key, value]) => ({
       key,
       ...value,
+      amountUgx: key === 'PRO' ? platformSettings.proSubscriptionPriceUgx : value.amountUgx,
+      durationDays: key === 'PRO' ? platformSettings.proSubscriptionDurationDays : value.durationDays,
       commissionSummary: commissionSummaryByPlan[key as SubscriptionPlanKey],
     }))
   }
@@ -243,7 +247,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Select a Pro or Enterprise plan before checking out')
     }
 
-    const planDefinition = SUBSCRIPTION_PLAN_CATALOG[plan]
+    const planDefinition = await this.resolvePlanDefinition(plan)
     const network = this.phoneNumberService.resolveNetwork(phoneNumber)
     const normalizedPhone = this.phoneNumberService.normalizeForNetwork(phoneNumber, network)
     const externalReference = `SUB-${tenantId.slice(0, 8)}-${Date.now()}`
@@ -303,7 +307,11 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (status === PaymentStatus.COMPLETED) {
-      const paidUntil = new Date(Date.now() + SUBSCRIPTION_PLAN_DURATION_MS)
+      const planDefinition = await this.resolvePlanDefinition(payment.plan)
+      if (payment.amountUgx !== planDefinition.amountUgx) {
+        throw new BadRequestException('Subscription payment amount no longer matches the active plan price')
+      }
+      const paidUntil = new Date(Date.now() + planDefinition.durationDays * DAY_MS)
       prefs.selectedPlan = payment.plan
       prefs.subscriptionStatus = 'ACTIVE'
       prefs.subscriptionPendingPlan = undefined
@@ -335,6 +343,32 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
             plan: prefs.subscriptionPayment.plan,
           }
         : null,
+    }
+  }
+
+  private async resolvePlanDefinition(plan: SubscriptionPlanKey) {
+    const base = SUBSCRIPTION_PLAN_CATALOG[plan]
+    if (plan !== 'PRO') {
+      return {
+        ...base,
+        durationDays: base.durationDays ?? 30,
+      }
+    }
+
+    const platformSettings = await this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+      select: {
+        proSubscriptionPriceUgx: true,
+        proSubscriptionDurationDays: true,
+      },
+    })
+
+    return {
+      ...base,
+      amountUgx: platformSettings.proSubscriptionPriceUgx,
+      durationDays: platformSettings.proSubscriptionDurationDays,
     }
   }
 

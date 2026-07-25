@@ -56,6 +56,8 @@ export class SystemService {
     if (dto.voucherFeePercent !== undefined) data.voucherFeeBps = this.percentToBps(dto.voucherFeePercent, 'voucherFeePercent')
     if (dto.proMobileMoneyFeePercent !== undefined) data.proMobileMoneyFeeBps = this.percentToBps(dto.proMobileMoneyFeePercent, 'proMobileMoneyFeePercent')
     if (dto.proVoucherFeePercent !== undefined) data.proVoucherFeeBps = this.percentToBps(dto.proVoucherFeePercent, 'proVoucherFeePercent')
+    if (dto.proSubscriptionPriceUgx !== undefined) data.proSubscriptionPriceUgx = this.nonNegativeInt(dto.proSubscriptionPriceUgx, 'proSubscriptionPriceUgx')
+    if (dto.proSubscriptionDurationDays !== undefined) data.proSubscriptionDurationDays = this.positiveInt(dto.proSubscriptionDurationDays, 'proSubscriptionDurationDays')
     if (dto.enterpriseMobileMoneyFeePercent !== undefined) {
       data.enterpriseMobileMoneyFeeBps = this.percentToBps(dto.enterpriseMobileMoneyFeePercent, 'enterpriseMobileMoneyFeePercent')
     }
@@ -867,6 +869,8 @@ export class SystemService {
     voucherFeeBps: number
     proMobileMoneyFeeBps: number
     proVoucherFeeBps: number
+    proSubscriptionPriceUgx: number
+    proSubscriptionDurationDays: number
     enterpriseMobileMoneyFeeBps: number
     enterpriseVoucherFeeBps: number
     minimumWithdrawalUgx: number

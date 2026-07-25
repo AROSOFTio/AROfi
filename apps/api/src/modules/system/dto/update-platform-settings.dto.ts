@@ -26,6 +26,16 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  proSubscriptionPriceUgx?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  proSubscriptionDurationDays?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   enterpriseMobileMoneyFeePercent?: number
 
   @IsOptional()
