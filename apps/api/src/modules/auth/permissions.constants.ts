@@ -28,6 +28,9 @@ export const PERMISSIONS = {
   auditRead: 'audit.read',
   featureLimitsRead: 'feature_limits.read',
   featureLimitsManage: 'feature_limits.manage',
+  referralsRead: 'referrals.read',
+  referralsManage: 'referrals.manage',
+  referralWithdrawalsManage: 'referral_withdrawals.manage',
 } as const
 
 export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
@@ -59,6 +62,15 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.supportWrite,
     PERMISSIONS.auditRead,
     PERMISSIONS.featureLimitsRead,
+    PERMISSIONS.referralsRead,
+  ],
+  ResellerPartner: [
+    PERMISSIONS.tenantsRead,
+    PERMISSIONS.referralsRead,
+    PERMISSIONS.referralWithdrawalsManage,
+    PERMISSIONS.settingsManage,
+    PERMISSIONS.supportRead,
+    PERMISSIONS.supportWrite,
   ],
   Support: [
     PERMISSIONS.supportRead,

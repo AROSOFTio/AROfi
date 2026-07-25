@@ -1,6 +1,15 @@
-import { IsEmail, IsOptional, IsPhoneNumber, IsString, Matches, MaxLength, MinLength } from 'class-validator'
+import { IsEmail, IsIn, IsOptional, IsPhoneNumber, IsString, Matches, MaxLength, MinLength } from 'class-validator'
 
 export class RegisterTenantDto {
+  @IsOptional()
+  @IsIn(['WIFI_VENDOR', 'RESELLER'])
+  accountType?: 'WIFI_VENDOR' | 'RESELLER'
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  referralCode?: string
+
   @IsString()
   @MinLength(2)
   @MaxLength(120)

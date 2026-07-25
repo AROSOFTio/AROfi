@@ -12,6 +12,8 @@ import { PhoneNumberField, validatePhoneNumber } from '@/components/PhoneNumberF
 const SHOW_PRICING = false
 
 type RegisterFormState = {
+  accountType: 'WIFI_VENDOR' | 'RESELLER'
+  referralCode: string
   tenantName: string
   desiredDomain: string
   firstName: string
@@ -26,6 +28,8 @@ type RegisterFormState = {
 }
 
 const initialFormState: RegisterFormState = {
+  accountType: 'WIFI_VENDOR',
+  referralCode: '',
   tenantName: '',
   desiredDomain: '',
   firstName: '',
@@ -142,6 +146,8 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantName: formState.tenantName.trim(),
+          accountType: formState.accountType,
+          referralCode: formState.referralCode.trim() || undefined,
           desiredDomain: formState.desiredDomain.trim() || undefined,
           firstName: formState.firstName.trim(),
           lastName: formState.lastName.trim(),
@@ -361,8 +367,20 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
           <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
             {step === 1 && (
               <div className="stats-grid">
+                <div className="form-group">
+                  <label className="form-label">Account Type</label>
+                  <select
+                    className="form-input"
+                    value={formState.accountType}
+                    onChange={(event) => setFormState((previous) => ({ ...previous, accountType: event.target.value as RegisterFormState['accountType'] }))}
+                  >
+                    <option value="WIFI_VENDOR">WiFi Vendor</option>
+                    <option value="RESELLER">Reseller / Referral Partner</option>
+                  </select>
+                </div>
                 <Field label="Business Name" value={formState.tenantName} onChange={(value) => setFormState((previous) => ({ ...previous, tenantName: value }))} required />
                 <Field label="Portal Slug" value={formState.desiredDomain} onChange={(value) => setFormState((previous) => ({ ...previous, desiredDomain: value }))} placeholder={portalHint} />
+                <Field label="Referral Code" value={formState.referralCode} onChange={(value) => setFormState((previous) => ({ ...previous, referralCode: value.toUpperCase() }))} placeholder="Optional" />
               </div>
             )}
             {step === 2 && (

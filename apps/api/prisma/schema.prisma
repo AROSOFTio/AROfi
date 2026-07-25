@@ -188,6 +188,56 @@ enum CommissionStatus {
   REVERSED
 }
 
+enum AccountType {
+  WIFI_VENDOR
+  RESELLER
+}
+
+enum ReferralProfileStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum ReferralRelationshipStatus {
+  PENDING
+  QUALIFIED
+  REJECTED
+  SUSPICIOUS
+}
+
+enum ReferralCommissionStatus {
+  PENDING
+  APPROVED
+  AVAILABLE
+  REVERSED
+}
+
+enum ReferralWalletTransactionType {
+  PENDING_COMMISSION
+  APPROVED_COMMISSION
+  AVAILABLE_COMMISSION
+  WITHDRAWAL_REQUEST
+  WITHDRAWAL_PROCESSING
+  PAID_WITHDRAWAL
+  FAILED_WITHDRAWAL
+  REJECTED_WITHDRAWAL
+  REVERSED_COMMISSION
+  ADMIN_ADJUSTMENT
+}
+
+enum ReferralWalletTransactionStatus {
+  PENDING
+  APPROVED
+  AVAILABLE
+  PROCESSING
+  PAID
+  FAILED
+  REJECTED
+  REVERSED
+  CANCELLED
+}
+
 enum SettlementStatus {
   DRAFT
   READY
@@ -401,6 +451,7 @@ model Tenant {
   kycDocuments        KycDocument[]
   complianceProfile   ComplianceProfile?
   notifications       Notification[]
+  referredRelationships ReferralRelationship[] @relation("ReferredTenant")
 }
 
 enum KycDocumentType {
@@ -515,6 +566,16 @@ model PlatformSetting {
   voucherTemplateDefaultStyle String  @default("signal")
   auditLoggingEnabled        Boolean  @default(true)
   platformWalletBalanceUgx   Int      @default(0)
+  referralProgramEnabled     Boolean  @default(true)
+  resellerRegistrationEnabled Boolean @default(true)
+  referralCommissionBps      Int      @default(3000)
+  referralCommissionBasis    String   @default("PRO_SUBSCRIPTION_PAYMENT")
+  referralQualifyingEvent    String   @default("PRO_SUBSCRIPTION_PAYMENT_CONFIRMED")
+  referralHoldingPeriodDays  Int      @default(0)
+  referralMinimumWithdrawalUgx Int    @default(0)
+  referralMaximumWithdrawalUgx Int?
+  referralWithdrawalFeeBps   Int      @default(0)
+  referralWithdrawalFlatFeeUgx Int    @default(0)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
@@ -536,6 +597,7 @@ model User {
   role                   Role              @relation(fields: [roleId], references: [id])
   tenantId               String?
   tenant                 Tenant?           @relation(fields: [tenantId], references: [id])
+  accountType            AccountType       @default(WIFI_VENDOR)
   isActive               Boolean           @default(true)
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
@@ -549,6 +611,8 @@ model User {
   emailChangeRequests    EmailChangeRequest[]
   sentNotifications      Notification[]      @relation("NotificationSender")
   notificationReads      NotificationRead[]
+  referralProfile        ReferralProfile?
+  referredRelationships  ReferralRelationship[] @relation("ReferredUser")
 }
 
 model PasswordResetToken {
@@ -1227,6 +1291,101 @@ model SubscriptionPayment {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, status, createdAt])
+}
+
+model ReferralProfile {
+  id                 String                @id @default(uuid())
+  userId             String                @unique
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId           String?
+  code               String                @unique
+  status             ReferralProfileStatus @default(ACTIVE)
+  referralPrivilegesSuspendedAt DateTime?
+  suspensionReason   String?
+  availableBalanceUgx Int                  @default(0)
+  pendingBalanceUgx  Int                   @default(0)
+  withdrawnAmountUgx Int                   @default(0)
+  registeredPayoutPhone String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  referrals          ReferralRelationship[]
+  commissions        ReferralCommission[]
+  walletTransactions ReferralWalletTransaction[]
+
+  @@index([tenantId])
+  @@index([status, createdAt])
+}
+
+model ReferralRelationship {
+  id                 String                     @id @default(uuid())
+  referrerProfileId  String
+  referrerProfile    ReferralProfile            @relation(fields: [referrerProfileId], references: [id])
+  referredTenantId   String?                    @unique
+  referredTenant     Tenant?                    @relation("ReferredTenant", fields: [referredTenantId], references: [id])
+  referredUserId     String?                    @unique
+  referredUser       User?                      @relation("ReferredUser", fields: [referredUserId], references: [id])
+  referralCode       String
+  status             ReferralRelationshipStatus @default(PENDING)
+  source             String?
+  ipAddress          String?
+  userAgent          String?
+  suspiciousReason   String?
+  qualifiedAt        DateTime?
+  rejectedAt         DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  commissions        ReferralCommission[]
+  walletTransactions ReferralWalletTransaction[]
+
+  @@index([referrerProfileId, status])
+  @@index([referralCode, createdAt])
+}
+
+model ReferralCommission {
+  id                    String                   @id @default(uuid())
+  referrerProfileId     String
+  referrerProfile       ReferralProfile          @relation(fields: [referrerProfileId], references: [id])
+  relationshipId        String
+  relationship          ReferralRelationship     @relation(fields: [relationshipId], references: [id])
+  subscriptionPaymentId String?                  @unique
+  status                ReferralCommissionStatus @default(PENDING)
+  basisType             String
+  basisAmountUgx        Int
+  rateBps               Int
+  amountUgx             Int
+  holdUntil             DateTime?
+  approvedAt            DateTime?
+  availableAt           DateTime?
+  reversedAt            DateTime?
+  reversalReason        String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  walletTransactions    ReferralWalletTransaction[]
+
+  @@index([referrerProfileId, status])
+  @@index([relationshipId, status])
+}
+
+model ReferralWalletTransaction {
+  id                String                          @id @default(uuid())
+  referrerProfileId String
+  referrerProfile   ReferralProfile                 @relation(fields: [referrerProfileId], references: [id])
+  relationshipId    String?
+  relationship      ReferralRelationship?           @relation(fields: [relationshipId], references: [id])
+  commissionId      String?
+  commission        ReferralCommission?             @relation(fields: [commissionId], references: [id])
+  type              ReferralWalletTransactionType
+  status            ReferralWalletTransactionStatus
+  amountUgx         Int
+  previousBalanceUgx Int
+  newBalanceUgx     Int
+  description       String
+  adminUserId       String?
+  metadata          Json?
+  createdAt         DateTime                        @default(now())
+
+  @@index([referrerProfileId, createdAt])
+  @@index([type, status, createdAt])
 }
 
 model PaymentProviderConfig {

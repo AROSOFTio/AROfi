@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common'
-import { FeatureLimitCategory, WalletOwnerType } from '@prisma/client'
+import { AccountType, FeatureLimitCategory, ReferralRelationshipStatus, WalletOwnerType } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
@@ -159,16 +159,30 @@ export class OnboardingService {
     const supportEmail = dto.supportEmail?.trim().toLowerCase() ?? email
     const brandColor = this.resolveBrandColor(dto.brandColor, tenantName)
     const domain = await this.resolveTenantDomain(dto.desiredDomain, tenantName)
+    const accountType = dto.accountType ?? 'WIFI_VENDOR'
+    const referralCode = dto.referralCode?.trim().toUpperCase() || null
 
-    const [existingUser, role] = await Promise.all([
+    const [existingUser, role, platformSettings, referrerProfile] = await Promise.all([
       this.prisma.user.findUnique({
         where: { email },
         select: { id: true },
       }),
       this.prisma.role.findUnique({
-        where: { name: 'VendorAdmin' },
+        where: { name: accountType === 'RESELLER' ? 'ResellerPartner' : 'VendorAdmin' },
         select: { id: true, name: true },
       }),
+      this.prisma.platformSetting.upsert({
+        where: { id: 'global' },
+        update: {},
+        create: { id: 'global' },
+        select: { referralProgramEnabled: true, resellerRegistrationEnabled: true },
+      }),
+      referralCode
+        ? this.prisma.referralProfile.findUnique({
+            where: { code: referralCode },
+            include: { user: { select: { email: true, tenantId: true } } },
+          })
+        : null,
     ])
 
     if (existingUser) {
@@ -178,9 +192,16 @@ export class OnboardingService {
     if (!role) {
       throw new BadRequestException('Business admin role is not configured yet')
     }
+    if (accountType === 'RESELLER' && !platformSettings.resellerRegistrationEnabled) {
+      throw new BadRequestException('Reseller registration is currently disabled')
+    }
+    if (referralCode && (!platformSettings.referralProgramEnabled || !referrerProfile)) {
+      throw new BadRequestException('Referral code is invalid or inactive')
+    }
 
     const passwordHash = await bcrypt.hash(dto.password, 10)
     const primaryHotspotSecret = `HS-${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`
+    const ownReferralCode = await this.generateReferralCode(tenantName)
 
     const workspace = await this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
@@ -194,31 +215,37 @@ export class OnboardingService {
         },
       })
 
-      const wallet = await tx.wallet.create({
-        data: {
-          tenantId: tenant.id,
-          ownerType: WalletOwnerType.TENANT,
-          ownerReference: tenant.id,
-        },
-      })
+      const wallet = accountType === 'WIFI_VENDOR'
+        ? await tx.wallet.create({
+            data: {
+              tenantId: tenant.id,
+              ownerType: WalletOwnerType.TENANT,
+              ownerReference: tenant.id,
+            },
+          })
+        : null
 
-      const routerGroup = await tx.routerGroup.create({
-        data: {
-          tenantId: tenant.id,
-          name: 'Primary Site',
-          code: 'PRIMARY',
-          description: 'Automatically provisioned during business onboarding.',
-          region: 'Main location',
-        },
-      })
+      const routerGroup = accountType === 'WIFI_VENDOR'
+        ? await tx.routerGroup.create({
+            data: {
+              tenantId: tenant.id,
+              name: 'Primary Site',
+              code: 'PRIMARY',
+              description: 'Automatically provisioned during business onboarding.',
+              region: 'Main location',
+            },
+          })
+        : null
 
-      const hotspot = await tx.hotspot.create({
-        data: {
-          tenantId: tenant.id,
-          name: `${tenantName} Main Hotspot`,
-          secret: primaryHotspotSecret,
-        },
-      })
+      const hotspot = accountType === 'WIFI_VENDOR'
+        ? await tx.hotspot.create({
+            data: {
+              tenantId: tenant.id,
+              name: `${tenantName} Main Hotspot`,
+              secret: primaryHotspotSecret,
+            },
+          })
+        : null
 
       await tx.tenantSetting.create({
         data: {
@@ -233,12 +260,14 @@ export class OnboardingService {
         },
       })
 
-      await tx.featureLimit.createMany({
-        data: DEFAULT_FEATURE_LIMITS.map((limit) => ({
-          tenantId: tenant.id,
-          ...limit,
-        })),
-      })
+      if (accountType === 'WIFI_VENDOR') {
+        await tx.featureLimit.createMany({
+          data: DEFAULT_FEATURE_LIMITS.map((limit) => ({
+            tenantId: tenant.id,
+            ...limit,
+          })),
+        })
+      }
 
       const user = await tx.user.create({
         data: {
@@ -248,8 +277,34 @@ export class OnboardingService {
           lastName,
           roleId: role.id,
           tenantId: tenant.id,
+          accountType: accountType as AccountType,
         },
       })
+
+      const referralProfile = await tx.referralProfile.create({
+        data: {
+          userId: user.id,
+          tenantId: tenant.id,
+          code: ownReferralCode,
+        },
+      })
+
+      if (referrerProfile) {
+        const isSelfReferralSignal =
+          referrerProfile.user.email.toLowerCase() === email ||
+          Boolean(referrerProfile.user.tenantId && referrerProfile.user.tenantId === tenant.id)
+        await tx.referralRelationship.create({
+          data: {
+            referrerProfileId: referrerProfile.id,
+            referredTenantId: tenant.id,
+            referredUserId: user.id,
+            referralCode,
+            status: isSelfReferralSignal ? ReferralRelationshipStatus.SUSPICIOUS : ReferralRelationshipStatus.PENDING,
+            suspiciousReason: isSelfReferralSignal ? 'Self-referral signal matched at registration' : null,
+            source: 'self-service-registration',
+          },
+        })
+      }
 
       await tx.auditLog.createMany({
         data: [
@@ -279,6 +334,21 @@ export class OnboardingService {
               role: role.name,
               supportPhone,
               supportEmail,
+              accountType,
+            },
+          },
+          {
+            tenantId: tenant.id,
+            userId: user.id,
+            actorName: `${firstName} ${lastName}`,
+            actorEmail: email,
+            action: 'referral.profile_created',
+            entity: 'ReferralProfile',
+            entityId: referralProfile.id,
+            details: {
+              code: ownReferralCode,
+              accountType,
+              referredBy: referralCode,
             },
           },
         ],
@@ -330,24 +400,36 @@ export class OnboardingService {
         supportEmail: workspace.tenant.supportEmail,
       },
       starterWorkspace: {
-        wallet: {
+        wallet: workspace.wallet ? {
           id: workspace.wallet.id,
           balanceUgx: workspace.wallet.balanceUgx,
           currency: workspace.wallet.currency,
-        },
-        primaryRouterGroup: {
+        } : null,
+        primaryRouterGroup: workspace.routerGroup ? {
           id: workspace.routerGroup.id,
           name: workspace.routerGroup.name,
           code: workspace.routerGroup.code,
-        },
-        primaryHotspot: {
+        } : null,
+        primaryHotspot: workspace.hotspot ? {
           id: workspace.hotspot.id,
           name: workspace.hotspot.name,
           secret: workspace.hotspot.secret,
-        },
+        } : null,
+        referralCode: ownReferralCode,
       },
       onboarding: {
-        checklist: [
+        checklist: accountType === 'RESELLER' ? [
+          {
+            title: 'Open your reseller dashboard',
+            description: 'Your referral partner workspace is ready.',
+            path: '/dashboard',
+          },
+          {
+            title: 'Share your referral link',
+            description: 'Invite WiFi businesses and track qualified referrals.',
+            path: '/referrals',
+          },
+        ] : [
           {
             title: 'Open the business console',
             description: 'Your workspace is ready immediately with your business admin account.',
@@ -430,5 +512,22 @@ export class OnboardingService {
       .reduce((total, character) => total + character.charCodeAt(0), 0)
 
     return palette[seed % palette.length]
+  }
+
+  private async generateReferralCode(seed: string) {
+    const prefix = this.slugify(seed).replace(/-/g, '').slice(0, 6).toUpperCase() || 'AROFI'
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const code = `${prefix}${randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`
+      const existing = await this.prisma.referralProfile.findUnique({
+        where: { code },
+        select: { id: true },
+      })
+      if (!existing) {
+        return code
+      }
+    }
+
+    return `AROFI${Date.now().toString(36).toUpperCase()}`
   }
 }
