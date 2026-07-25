@@ -247,6 +247,26 @@ export class MailService {
     return this.sendMail({ to: input.to, subject, html: this.renderLayout(body), text })
   }
 
+  async sendSubscriptionDowngradeEmail(input: {
+    to: string
+    tenantName: string
+    recipientName: string
+    previousPlan: 'PRO' | 'ENTERPRISE'
+    expiredAt: Date
+  }): Promise<boolean> {
+    const subject = `Your AROFi ${input.previousPlan} plan moved to Starter`
+    const body = `
+      <h2 style="color:#2563EB; margin-top:0;">Hi ${this.escapeHtml(input.recipientName)},</h2>
+      <p>Your <strong>${this.escapeHtml(input.tenantName)}</strong> ${input.previousPlan} subscription expired on <strong>${input.expiredAt.toLocaleDateString('en-UG')}</strong>.</p>
+      <p>Your account has automatically moved to the <strong>Starter (Free)</strong> plan. Your dashboard, router, customer bundles, Mobile Money collection, vouchers, RADIUS services, and internet provisioning remain active.</p>
+      <p>Starter fees now apply to new sales: <strong>8% on Mobile Money</strong> and <strong>2% on vouchers</strong>.</p>
+      <p>You can renew Pro any time from Settings &rarr; Subscription Plan.</p>
+    `
+    const text = `Your ${input.tenantName} ${input.previousPlan} subscription expired on ${input.expiredAt.toLocaleDateString('en-UG')}. Your account moved to Starter (Free); services remain active. Starter fees now apply: 8% Mobile Money and 2% vouchers. Renew from Settings > Subscription Plan.`
+
+    return this.sendMail({ to: input.to, subject, html: this.renderLayout(body), text })
+  }
+
   private renderLayout(bodyHtml: string) {
     return `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #0f172a;">

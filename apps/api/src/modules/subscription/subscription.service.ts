@@ -1,16 +1,16 @@
 import { Injectable, BadRequestException, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
-import { PaymentNetwork, PaymentStatus, Prisma, SubscriptionPlanTier } from '@prisma/client'
+import { AuditSeverity, NotificationAudience, PaymentNetwork, PaymentStatus, Prisma, SubscriptionPlanTier } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { MailService } from '../mail/mail.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 import { PaymentRouterService } from '../payments/payment-router.service'
 import { PhoneNumberService } from '../payments/phone-number.service'
 import { mapRawStatusToPaymentStatus } from '../payments/payment-provider.interface'
 import { SubscriptionPlanKey } from './dto/select-plan.dto'
 
-// How far ahead of expiry to start emailing a renewal reminder.
-const EXPIRY_REMINDER_WINDOW_DAYS = 3
+const EXPIRY_NOTIFICATION_DAYS = [7, 3, 1, 0] as const
 
 // Commission rates are intentionally NOT listed here: they are DevAdmin-configured
 // (PlatformSetting.{mobileMoneyFeeBps,voucherFeeBps,proMobileMoneyFeeBps,...}) and
@@ -67,6 +67,8 @@ type SubscriptionPreferences = {
   subscriptionPaidUntil?: string
   subscriptionPayment?: SubscriptionPaymentState
   subscriptionExpiryReminderSentForExpiresAt?: string
+  subscriptionExpiryNotifications?: Record<string, string>
+  subscriptionAutoDowngradedAt?: string
   [key: string]: unknown
 }
 
@@ -80,6 +82,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     private readonly paymentRouterService: PaymentRouterService,
     private readonly phoneNumberService: PhoneNumberService,
     private readonly mailService: MailService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   onModuleInit() {
@@ -88,9 +91,9 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     }
     const intervalMs = Number.parseInt(process.env.SUBSCRIPTION_EXPIRY_REMINDER_INTERVAL_MS ?? '21600000', 10) // 6h default
     this.reminderTimer = setInterval(() => {
-      void this.sendExpiryReminders().catch((error) => this.logger.error(error))
+      void this.processSubscriptionLifecycle().catch((error) => this.logger.error(error))
     }, intervalMs)
-    void this.sendExpiryReminders().catch((error) => this.logger.error(error))
+    void this.processSubscriptionLifecycle().catch((error) => this.logger.error(error))
   }
 
   onModuleDestroy() {
@@ -99,13 +102,17 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // Reminds tenants on a paid plan whose subscription renews within the next
-  // few days, so a lapsed payment doesn't silently drop them back to Free.
-  // Dedupes per renewal cycle by remembering which expiresAt it last
-  // reminded for, in the same JSON prefs blob the checkout flow already uses.
-  private async sendExpiryReminders() {
+  private async processSubscriptionLifecycle() {
+    await this.sendExpiryNotifications()
+    await this.downgradeExpiredSubscriptions()
+  }
+
+  // Reminds paid-plan tenants at the configured 7/3/1/0 day windows. Dedupes
+  // by (tenant, expiry timestamp, interval) in the same preferences JSON blob
+  // used by the checkout flow.
+  private async sendExpiryNotifications() {
     const now = new Date()
-    const windowEnd = new Date(now.getTime() + EXPIRY_REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    const windowEnd = new Date(now.getTime() + Math.max(...EXPIRY_NOTIFICATION_DAYS) * DAY_MS)
 
     const expiringTenants = await this.prisma.tenantSetting.findMany({
       where: {
@@ -131,40 +138,194 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       if (!row.subscriptionPlanExpiresAt) continue
 
       const prefs = (row.routerOnboardingPreferences as SubscriptionPreferences | null) ?? {}
-      const alreadyRemindedForThisCycle = prefs.subscriptionExpiryReminderSentForExpiresAt === row.subscriptionPlanExpiresAt.toISOString()
-      if (alreadyRemindedForThisCycle) continue
+      const daysRemaining = Math.max(0, Math.ceil((row.subscriptionPlanExpiresAt.getTime() - now.getTime()) / DAY_MS))
+      if (!EXPIRY_NOTIFICATION_DAYS.includes(daysRemaining as (typeof EXPIRY_NOTIFICATION_DAYS)[number])) continue
+
+      const expiryKey = row.subscriptionPlanExpiresAt.toISOString()
+      const notificationKey = `${expiryKey}:${daysRemaining}`
+      const sentMap = prefs.subscriptionExpiryNotifications ?? {}
+      if (sentMap[notificationKey]) continue
 
       const recipientEmail = row.tenant.supportEmail ?? row.tenant.users[0]?.email
-      if (!recipientEmail) continue
 
       const recipientName = row.tenant.users[0]
         ? `${row.tenant.users[0].firstName ?? ''} ${row.tenant.users[0].lastName ?? ''}`.trim() || row.tenant.name
         : row.tenant.name
 
-      const daysRemaining = Math.max(0, Math.ceil((row.subscriptionPlanExpiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+      const title = daysRemaining === 0
+        ? `${row.subscriptionPlan} subscription expires today`
+        : `${row.subscriptionPlan} subscription expires in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`
+      const body = [
+        `Your ${row.subscriptionPlan} subscription for ${row.tenant.name} expires on ${row.subscriptionPlanExpiresAt.toLocaleDateString('en-UG')}.`,
+        daysRemaining === 0 ? 'Renew today to keep your current plan fees.' : `You have ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining to renew from Settings > Subscription Plan.`,
+        'If you do not renew, your account will automatically move to the Starter (Free) plan. Your account, router, customer bundles, Mobile Money collection, vouchers, and internet services will remain active.',
+        'After downgrade, Starter fees apply: 8% on Mobile Money sales and 2% on voucher sales.',
+      ].join('\n\n')
 
       try {
-        await this.mailService.sendSubscriptionExpiryReminderEmail({
-          to: recipientEmail,
-          tenantName: row.tenant.name,
-          recipientName,
-          plan: row.subscriptionPlan as 'PRO' | 'ENTERPRISE',
-          expiresAt: row.subscriptionPlanExpiresAt,
-          daysRemaining,
+        await this.prisma.notification.create({
+          data: {
+            title,
+            body,
+            audience: NotificationAudience.SINGLE_BUSINESS,
+            tenantId: row.tenantId,
+          },
         })
+
+        if (recipientEmail) {
+          await this.mailService.sendSubscriptionExpiryReminderEmail({
+            to: recipientEmail,
+            tenantName: row.tenant.name,
+            recipientName,
+            plan: row.subscriptionPlan as 'PRO' | 'ENTERPRISE',
+            expiresAt: row.subscriptionPlanExpiresAt,
+            daysRemaining,
+          })
+        }
 
         await this.prisma.tenantSetting.update({
           where: { tenantId: row.tenantId },
           data: {
             routerOnboardingPreferences: {
               ...prefs,
+              subscriptionExpiryNotifications: {
+                ...sentMap,
+                [notificationKey]: new Date().toISOString(),
+              },
               subscriptionExpiryReminderSentForExpiresAt: row.subscriptionPlanExpiresAt.toISOString(),
             } as Prisma.InputJsonValue,
           },
         })
       } catch (error) {
         this.logger.warn(
-          `Failed to send subscription expiry reminder for tenant ${row.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to send subscription expiry notification for tenant ${row.tenantId}: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
+  }
+
+  private async downgradeExpiredSubscriptions() {
+    const now = new Date()
+    const expiredTenants = await this.prisma.tenantSetting.findMany({
+      where: {
+        subscriptionPlan: { in: [SubscriptionPlanTier.PRO, SubscriptionPlanTier.ENTERPRISE] },
+        subscriptionPlanExpiresAt: { lte: now },
+      },
+      select: {
+        tenantId: true,
+        subscriptionPlan: true,
+        subscriptionPlanExpiresAt: true,
+        routerOnboardingPreferences: true,
+        tenant: {
+          select: {
+            name: true,
+            supportEmail: true,
+            users: { select: { email: true, firstName: true, lastName: true }, take: 1 },
+          },
+        },
+      },
+    })
+
+    for (const row of expiredTenants) {
+      if (!row.subscriptionPlanExpiresAt) continue
+      const downgradedAt = new Date()
+      const previousPlan = row.subscriptionPlan
+      const expiryIso = row.subscriptionPlanExpiresAt.toISOString()
+      const prefs = (row.routerOnboardingPreferences as SubscriptionPreferences | null) ?? {}
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const current = await tx.tenantSetting.findUnique({
+            where: { tenantId: row.tenantId },
+            select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true, routerOnboardingPreferences: true },
+          })
+          if (
+            !current?.subscriptionPlanExpiresAt ||
+            current.subscriptionPlan === SubscriptionPlanTier.FREE ||
+            current.subscriptionPlanExpiresAt.getTime() > now.getTime()
+          ) {
+            return
+          }
+
+          const currentPrefs = (current.routerOnboardingPreferences as SubscriptionPreferences | null) ?? prefs
+          await tx.tenantSetting.update({
+            where: { tenantId: row.tenantId },
+            data: {
+              subscriptionPlan: SubscriptionPlanTier.FREE,
+              subscriptionPlanExpiresAt: null,
+              routerOnboardingPreferences: {
+                ...currentPrefs,
+                selectedPlan: 'FREE',
+                subscriptionStatus: 'ACTIVE',
+                subscriptionPendingPlan: undefined,
+                subscriptionPayment: undefined,
+                subscriptionPaidUntil: undefined,
+                subscriptionAutoDowngradedAt: downgradedAt.toISOString(),
+              } as Prisma.InputJsonValue,
+            },
+          })
+
+          await tx.auditLog.create({
+            data: {
+              tenantId: row.tenantId,
+              action: 'subscription.auto_downgraded',
+              entity: 'TenantSetting',
+              entityId: row.tenantId,
+              severity: AuditSeverity.INFO,
+              details: {
+                previousPlan,
+                newPlan: SubscriptionPlanTier.FREE,
+                expiredAt: expiryIso,
+                downgradedAt: downgradedAt.toISOString(),
+                reason: 'Paid subscription expired without renewal',
+                servicesRemainActive: true,
+              } as Prisma.InputJsonValue,
+            },
+          })
+
+          await tx.notification.create({
+            data: {
+              title: 'Subscription moved to Starter',
+              body: [
+                `Your ${previousPlan} subscription for ${row.tenant.name} expired on ${row.subscriptionPlanExpiresAt!.toLocaleDateString('en-UG')}.`,
+                'Your account has automatically moved to the Starter (Free) plan.',
+                'Your account, router, customer bundles, Mobile Money collection, vouchers, and internet services remain active.',
+                'Starter fees now apply: 8% on Mobile Money sales and 2% on voucher sales.',
+              ].join('\n\n'),
+              audience: NotificationAudience.SINGLE_BUSINESS,
+              tenantId: row.tenantId,
+            },
+          })
+        })
+
+        const recipientEmail = row.tenant.supportEmail ?? row.tenant.users[0]?.email
+        if (recipientEmail) {
+          const recipientName = row.tenant.users[0]
+            ? `${row.tenant.users[0].firstName ?? ''} ${row.tenant.users[0].lastName ?? ''}`.trim() || row.tenant.name
+            : row.tenant.name
+          await this.mailService.sendSubscriptionDowngradeEmail({
+            to: recipientEmail,
+            tenantName: row.tenant.name,
+            recipientName,
+            previousPlan: previousPlan as 'PRO' | 'ENTERPRISE',
+            expiredAt: row.subscriptionPlanExpiresAt,
+          })
+        }
+
+        this.realtimeEvents.publish('alert', {
+          tenantId: row.tenantId,
+          data: {
+            category: 'subscription',
+            action: 'auto_downgraded',
+            previousPlan,
+            newPlan: SubscriptionPlanTier.FREE,
+            expiredAt: expiryIso,
+          },
+        })
+      } catch (error) {
+        this.logger.error(
+          `Failed to auto-downgrade expired subscription for tenant ${row.tenantId}`,
+          error instanceof Error ? error.stack : String(error),
         )
       }
     }

@@ -4,6 +4,7 @@ describe('SubscriptionService plan selection', () => {
   const paymentRouterService = {} as never
   const phoneNumberService = {} as never
   const mailService = {} as never
+  const realtimeEvents = {} as never
 
   function createService(initialPreferences: Record<string, unknown> = {}) {
     const prisma = {
@@ -22,7 +23,7 @@ describe('SubscriptionService plan selection', () => {
 
     return {
       prisma,
-      service: new SubscriptionService(prisma as never, paymentRouterService, phoneNumberService, mailService),
+      service: new SubscriptionService(prisma as never, paymentRouterService, phoneNumberService, mailService, realtimeEvents),
     }
   }
 
