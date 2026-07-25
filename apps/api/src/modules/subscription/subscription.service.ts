@@ -8,6 +8,7 @@ import { RealtimeEventsService } from '../events/realtime-events.service'
 import { PaymentRouterService } from '../payments/payment-router.service'
 import { PhoneNumberService } from '../payments/phone-number.service'
 import { mapRawStatusToPaymentStatus } from '../payments/payment-provider.interface'
+import { ReferralsService } from '../referrals/referrals.service'
 import { SubscriptionPlanKey } from './dto/select-plan.dto'
 
 const EXPIRY_NOTIFICATION_DAYS = [7, 3, 1, 0] as const
@@ -93,6 +94,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     private readonly phoneNumberService: PhoneNumberService,
     private readonly mailService: MailService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   onModuleInit() {
@@ -560,6 +562,13 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
             audience: NotificationAudience.SINGLE_BUSINESS,
             tenantId,
           },
+        })
+        await this.referralsService.recordQualifiedSubscriptionPayment({
+          tenantId,
+          subscriptionPaymentId: payment.id,
+          amountUgx: payment.amountUgx,
+          paidAt: new Date(),
+          tx,
         })
       })
     } else if (status === PaymentStatus.FAILED || status === PaymentStatus.CANCELLED || status === PaymentStatus.EXPIRED) {

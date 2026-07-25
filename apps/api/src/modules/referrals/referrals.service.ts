@@ -1,10 +1,146 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { ReferralCommissionStatus, ReferralRelationshipStatus, ReferralProfileStatus } from '@prisma/client'
+import {
+  NotificationAudience,
+  Prisma,
+  ReferralCommissionStatus,
+  ReferralRelationshipStatus,
+  ReferralProfileStatus,
+  ReferralWalletTransactionStatus,
+  ReferralWalletTransactionType,
+} from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
 @Injectable()
 export class ReferralsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async recordQualifiedSubscriptionPayment(input: {
+    tenantId: string
+    subscriptionPaymentId: string
+    amountUgx: number
+    paidAt: Date
+    tx?: Prisma.TransactionClient
+  }) {
+    const client = input.tx ?? this.prisma
+    const settings = await client.platformSetting.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global' },
+      select: {
+        referralProgramEnabled: true,
+        referralCommissionBps: true,
+        referralCommissionBasis: true,
+        referralHoldingPeriodDays: true,
+      },
+    })
+    if (!settings.referralProgramEnabled || settings.referralCommissionBps <= 0) {
+      return null
+    }
+
+    const relationship = await client.referralRelationship.findUnique({
+      where: { referredTenantId: input.tenantId },
+      include: { referrerProfile: { include: { user: { select: { id: true } } } } },
+    })
+    if (!relationship || relationship.status === ReferralRelationshipStatus.REJECTED || relationship.status === ReferralRelationshipStatus.SUSPICIOUS) {
+      return null
+    }
+
+    const existing = await client.referralCommission.findUnique({
+      where: { subscriptionPaymentId: input.subscriptionPaymentId },
+      select: { id: true },
+    })
+    if (existing) {
+      return existing
+    }
+
+    const amountUgx = Math.round((input.amountUgx * settings.referralCommissionBps) / 10000)
+    if (amountUgx <= 0) {
+      return null
+    }
+
+    const holdUntil = settings.referralHoldingPeriodDays > 0
+      ? new Date(input.paidAt.getTime() + settings.referralHoldingPeriodDays * 24 * 60 * 60 * 1000)
+      : null
+    const immediatelyAvailable = !holdUntil || holdUntil <= input.paidAt
+    const status = immediatelyAvailable ? ReferralCommissionStatus.AVAILABLE : ReferralCommissionStatus.APPROVED
+    const profileBefore = await client.referralProfile.findUniqueOrThrow({
+      where: { id: relationship.referrerProfileId },
+      select: { pendingBalanceUgx: true, availableBalanceUgx: true },
+    })
+
+    const commission = await client.referralCommission.create({
+      data: {
+        referrerProfileId: relationship.referrerProfileId,
+        relationshipId: relationship.id,
+        subscriptionPaymentId: input.subscriptionPaymentId,
+        status,
+        basisType: settings.referralCommissionBasis,
+        basisAmountUgx: input.amountUgx,
+        rateBps: settings.referralCommissionBps,
+        amountUgx,
+        holdUntil,
+        approvedAt: input.paidAt,
+        availableAt: immediatelyAvailable ? input.paidAt : null,
+      },
+    })
+
+    await client.referralRelationship.update({
+      where: { id: relationship.id },
+      data: {
+        status: ReferralRelationshipStatus.QUALIFIED,
+        qualifiedAt: input.paidAt,
+      },
+    })
+
+    if (immediatelyAvailable) {
+      await client.referralProfile.update({
+        where: { id: relationship.referrerProfileId },
+        data: { availableBalanceUgx: { increment: amountUgx } },
+      })
+      await client.referralWalletTransaction.create({
+        data: {
+          referrerProfileId: relationship.referrerProfileId,
+          relationshipId: relationship.id,
+          commissionId: commission.id,
+          type: ReferralWalletTransactionType.AVAILABLE_COMMISSION,
+          status: ReferralWalletTransactionStatus.AVAILABLE,
+          amountUgx,
+          previousBalanceUgx: profileBefore.availableBalanceUgx,
+          newBalanceUgx: profileBefore.availableBalanceUgx + amountUgx,
+          description: 'Referral commission credited after confirmed Pro subscription payment',
+        },
+      })
+    } else {
+      await client.referralProfile.update({
+        where: { id: relationship.referrerProfileId },
+        data: { pendingBalanceUgx: { increment: amountUgx } },
+      })
+      await client.referralWalletTransaction.create({
+        data: {
+          referrerProfileId: relationship.referrerProfileId,
+          relationshipId: relationship.id,
+          commissionId: commission.id,
+          type: ReferralWalletTransactionType.APPROVED_COMMISSION,
+          status: ReferralWalletTransactionStatus.APPROVED,
+          amountUgx,
+          previousBalanceUgx: profileBefore.pendingBalanceUgx,
+          newBalanceUgx: profileBefore.pendingBalanceUgx + amountUgx,
+          description: 'Referral commission approved and waiting for holding period',
+        },
+      })
+    }
+
+    await client.notification.create({
+      data: {
+        title: immediatelyAvailable ? 'Referral commission credited' : 'Referral commission approved',
+        body: `A referred business completed a qualifying Pro subscription payment. Referral commission: UGX ${amountUgx.toLocaleString('en-UG')}.`,
+        audience: NotificationAudience.SINGLE_BUSINESS,
+        tenantId: relationship.referrerProfile.tenantId,
+      },
+    })
+
+    return commission
+  }
 
   async getMyDashboard(userId: string, origin = 'https://arofi.net') {
     const profile = await this.ensureProfile(userId)

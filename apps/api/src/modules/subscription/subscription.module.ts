@@ -3,11 +3,12 @@ import { AuthModule } from '../auth/auth.module'
 import { MailModule } from '../mail/mail.module'
 import { EventsModule } from '../events/events.module'
 import { PaymentsModule } from '../payments/payments.module'
+import { ReferralsModule } from '../referrals/referrals.module'
 import { SubscriptionController } from './subscription.controller'
 import { SubscriptionService } from './subscription.service'
 
 @Module({
-  imports: [AuthModule, MailModule, PaymentsModule, EventsModule],
+  imports: [AuthModule, MailModule, PaymentsModule, EventsModule, ReferralsModule],
   controllers: [SubscriptionController],
   providers: [SubscriptionService],
   exports: [SubscriptionService],
