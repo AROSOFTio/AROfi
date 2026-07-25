@@ -58,6 +58,10 @@ export class SystemService {
     if (dto.proVoucherFeePercent !== undefined) data.proVoucherFeeBps = this.percentToBps(dto.proVoucherFeePercent, 'proVoucherFeePercent')
     if (dto.proSubscriptionPriceUgx !== undefined) data.proSubscriptionPriceUgx = this.nonNegativeInt(dto.proSubscriptionPriceUgx, 'proSubscriptionPriceUgx')
     if (dto.proSubscriptionDurationDays !== undefined) data.proSubscriptionDurationDays = this.positiveInt(dto.proSubscriptionDurationDays, 'proSubscriptionDurationDays')
+    if (dto.referralProgramEnabled !== undefined) data.referralProgramEnabled = dto.referralProgramEnabled
+    if (dto.resellerRegistrationEnabled !== undefined) data.resellerRegistrationEnabled = dto.resellerRegistrationEnabled
+    if (dto.referralCommissionPercent !== undefined) data.referralCommissionBps = this.percentToBps(dto.referralCommissionPercent, 'referralCommissionPercent')
+    if (dto.referralHoldingPeriodDays !== undefined) data.referralHoldingPeriodDays = this.nonNegativeInt(dto.referralHoldingPeriodDays, 'referralHoldingPeriodDays')
     if (dto.enterpriseMobileMoneyFeePercent !== undefined) {
       data.enterpriseMobileMoneyFeeBps = this.percentToBps(dto.enterpriseMobileMoneyFeePercent, 'enterpriseMobileMoneyFeePercent')
     }
@@ -871,6 +875,10 @@ export class SystemService {
     proVoucherFeeBps: number
     proSubscriptionPriceUgx: number
     proSubscriptionDurationDays: number
+    referralProgramEnabled: boolean
+    resellerRegistrationEnabled: boolean
+    referralCommissionBps: number
+    referralHoldingPeriodDays: number
     enterpriseMobileMoneyFeeBps: number
     enterpriseVoucherFeeBps: number
     minimumWithdrawalUgx: number
@@ -904,6 +912,7 @@ export class SystemService {
       voucherFeePercent: this.bpsToPercent(settings.voucherFeeBps),
       proMobileMoneyFeePercent: this.bpsToPercent(settings.proMobileMoneyFeeBps),
       proVoucherFeePercent: this.bpsToPercent(settings.proVoucherFeeBps),
+      referralCommissionPercent: this.bpsToPercent(settings.referralCommissionBps),
       enterpriseMobileMoneyFeePercent: this.bpsToPercent(settings.enterpriseMobileMoneyFeeBps),
       enterpriseVoucherFeePercent: this.bpsToPercent(settings.enterpriseVoucherFeeBps),
       withdrawalFeePercent: this.bpsToPercent(settings.withdrawalFeeBps),

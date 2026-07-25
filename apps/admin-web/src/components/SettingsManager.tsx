@@ -22,6 +22,10 @@ type PlatformSettings = {
   proVoucherFeePercent: number
   proSubscriptionPriceUgx: number
   proSubscriptionDurationDays: number
+  referralProgramEnabled: boolean
+  resellerRegistrationEnabled: boolean
+  referralCommissionPercent: number
+  referralHoldingPeriodDays: number
   enterpriseMobileMoneyFeePercent: number
   enterpriseVoucherFeePercent: number
   freeRouterLimit: number
@@ -314,6 +318,10 @@ export default function SettingsManager({
           proVoucherFeePercent: numberValue(form, 'proVoucherFeePercent'),
           proSubscriptionPriceUgx: numberValue(form, 'proSubscriptionPriceUgx'),
           proSubscriptionDurationDays: numberValue(form, 'proSubscriptionDurationDays'),
+          referralProgramEnabled: form.get('referralProgramEnabled') === 'on',
+          resellerRegistrationEnabled: form.get('resellerRegistrationEnabled') === 'on',
+          referralCommissionPercent: numberValue(form, 'referralCommissionPercent'),
+          referralHoldingPeriodDays: numberValue(form, 'referralHoldingPeriodDays'),
           enterpriseMobileMoneyFeePercent: numberValue(form, 'enterpriseMobileMoneyFeePercent'),
           enterpriseVoucherFeePercent: numberValue(form, 'enterpriseVoucherFeePercent'),
           mtnCollectionProvider: stringValue(form, 'mtnCollectionProvider'),
@@ -513,6 +521,11 @@ export default function SettingsManager({
                   <Input name="proVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.proVoucherFeePercent} />
                   <Input name="proSubscriptionPriceUgx" label="Subscription Price UGX" defaultValue={platformForm.proSubscriptionPriceUgx} />
                   <Input name="proSubscriptionDurationDays" label="Subscription Duration Days" defaultValue={platformForm.proSubscriptionDurationDays} />
+                  <FormSubheading text="Referral Programme" />
+                  <Check name="referralProgramEnabled" label="Enable referral programme" defaultChecked={platformForm.referralProgramEnabled} />
+                  <Check name="resellerRegistrationEnabled" label="Allow reseller account registration" defaultChecked={platformForm.resellerRegistrationEnabled} />
+                  <Input name="referralCommissionPercent" label="Referral Commission %" defaultValue={platformForm.referralCommissionPercent} />
+                  <Input name="referralHoldingPeriodDays" label="Referral Holding Period Days" defaultValue={platformForm.referralHoldingPeriodDays} />
                   <FormSubheading text="Enterprise Plan Commission" />
                   <Input name="enterpriseMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.enterpriseMobileMoneyFeePercent} />
                   <Input name="enterpriseVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.enterpriseVoucherFeePercent} />

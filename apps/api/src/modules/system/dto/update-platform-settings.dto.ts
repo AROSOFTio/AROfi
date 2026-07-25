@@ -34,6 +34,26 @@ export class UpdatePlatformSettingsDto {
   proSubscriptionDurationDays?: number
 
   @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  referralProgramEnabled?: boolean
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  resellerRegistrationEnabled?: boolean
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  referralCommissionPercent?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  referralHoldingPeriodDays?: number
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   enterpriseMobileMoneyFeePercent?: number
