@@ -2,16 +2,8 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
-import { Inter } from 'next/font/google'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt'
 import ChatWidget from '@/components/ChatWidget'
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-  preload: false,
-})
 
 const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
@@ -297,16 +289,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} ${inter.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href="/logo.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
         {/* AI/LLM crawler discovery */}
         <link rel="llms" href="/llms.txt" type="text/plain" />
-        {/* Resource hints */}
-        <link rel="dns-prefetch" href="//fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Structured Data / JSON-LD for Google, Bing & AI crawlers */}
         <script
           type="application/ld+json"
