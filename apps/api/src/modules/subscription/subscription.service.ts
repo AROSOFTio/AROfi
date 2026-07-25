@@ -61,6 +61,7 @@ type SubscriptionPaymentState = {
 
 type SubscriptionPreferences = {
   selectedPlan?: SubscriptionPlanKey
+  planSelectionConfirmed?: boolean
   subscriptionStatus?: 'ACTIVE' | 'PENDING_PAYMENT' | 'SKIPPED'
   subscriptionPendingPlan?: SubscriptionPlanKey
   subscriptionPaidUntil?: string
@@ -208,6 +209,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
 
     if (plan === 'FREE') {
       prefs.selectedPlan = 'FREE'
+      prefs.planSelectionConfirmed = true
       prefs.subscriptionStatus = 'ACTIVE'
       prefs.subscriptionPendingPlan = undefined
       prefs.subscriptionPaidUntil = undefined
@@ -215,6 +217,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       await this.persistActivePlan(tenantId, 'FREE', null)
     } else {
       prefs.subscriptionPendingPlan = plan
+      prefs.planSelectionConfirmed = true
       prefs.subscriptionStatus = 'PENDING_PAYMENT'
       prefs.subscriptionPayment = undefined
       if (!prefs.selectedPlan) {
@@ -332,6 +335,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
   private presentStatus(prefs: SubscriptionPreferences) {
     return {
       selectedPlan: prefs.selectedPlan ?? 'FREE',
+      planSelectionConfirmed: Boolean(prefs.planSelectionConfirmed),
       subscriptionStatus: prefs.subscriptionStatus ?? 'ACTIVE',
       pendingPlan: prefs.subscriptionPendingPlan ?? null,
       paidUntil: prefs.subscriptionPaidUntil ?? null,

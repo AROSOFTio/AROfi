@@ -112,6 +112,7 @@ type SubscriptionCheckoutState = {
 
 type SubscriptionStatus = {
   selectedPlan: string
+  planSelectionConfirmed: boolean
   subscriptionStatus: 'ACTIVE' | 'PENDING_PAYMENT' | 'SKIPPED'
   pendingPlan: string | null
   paidUntil: string | null
