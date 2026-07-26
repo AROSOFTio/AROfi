@@ -163,11 +163,11 @@ export default function RouterObservabilityPage() {
           </div>
         </div>
 
-        <div className="stat-card purple">
+        <div className={`stat-card ${isLive ? 'green' : selectedRouter?.liveState === 'OFFLINE' ? 'danger' : 'amber'}`}>
           <div className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {isLive ? <Wifi size={16} /> : <WifiOff size={16} />} Live State
           </div>
-          <div className="stat-value purple" style={{ fontSize: 16 }}>
+          <div className={`stat-value ${isLive ? 'green' : selectedRouter?.liveState === 'OFFLINE' ? 'danger' : 'amber'}`} style={{ fontSize: 16 }}>
             {selectedRouter?.liveState ?? selectedRouter?.status?.replace(/_/g, ' ') ?? '—'}
           </div>
         </div>

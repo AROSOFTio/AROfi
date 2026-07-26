@@ -19,7 +19,6 @@ import {
   LifeBuoy,
   Lock,
   Mail,
-  MessageSquarePlus,
   PenLine,
   Percent,
   PiggyBank,
@@ -261,19 +260,17 @@ const navItems: NavGroup[] = [
     items: [{ href: '/admin/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true }]
   },
   {
-    label: 'Feedback',
-    icon: <MessageSquarePlus size={17} />,
-    items: [{ href: '/support?view=feedback', label: 'Feedback', required: ['support.read'], platformOnly: true }]
-  },
-  {
     label: 'Agents',
     icon: <Store size={17} />,
     items: [{ href: '/agents', label: 'Agents', required: ['agents.read'], platformOnly: true }]
   },
   {
-    label: 'Support Tickets',
+    label: 'Support',
     icon: <LifeBuoy size={17} />,
-    items: [{ href: '/support', label: 'Support Tickets', required: ['support.read'], platformOnly: true }]
+    items: [
+      { href: '/support', label: 'Tickets', required: ['support.read'], platformOnly: true },
+      { href: '/support?view=feedback', label: 'Feedback', required: ['support.read'], platformOnly: true },
+    ]
   },
   {
     label: 'Platform Staff',
@@ -355,21 +352,15 @@ const tenantNavItems: NavGroup[] = [
       { href: '/settings?tab=Password', label: 'Password', tenantOnly: true },
       { href: '/settings?tab=Security', label: 'Security', tenantOnly: true },
       { href: '/settings?tab=Subscription%20Plan', label: 'Plan', tenantOnly: true },
-      { href: '/support', label: 'Support', required: ['support.read'], tenantOnly: true },
     ],
   },
   {
-    label: 'Feedback',
-    icon: <MessageSquarePlus size={17} />,
-    items: [
-      { href: '/feedback', label: 'Feedback', tenantOnly: true },
-    ],
-  },
-  {
-    label: 'Help',
+    label: 'Support',
     icon: <LifeBuoy size={17} />,
     items: [
-      { href: '/docs/getting-started', label: 'Setup Guide', tenantOnly: true },
+      { href: '/support', label: 'Tickets', required: ['support.read'], tenantOnly: true },
+      { href: '/feedback', label: 'Feedback', tenantOnly: true },
+      { href: '/docs/getting-started', label: 'Guide', tenantOnly: true },
     ],
   },
 ]

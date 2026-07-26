@@ -773,7 +773,7 @@ function SystemInsights({
       <div className="system-insights-head">
         <span className="system-insights-title">System Insights</span>
         <span className={`live-pill ${live ? 'is-live' : 'is-offline'}`}>
-          <span className="live-dot" style={{ background: live ? 'var(--arofi-theme-accent)' : statusColor }} />
+          <span className="live-dot" style={{ background: live ? 'var(--success-fg)' : statusColor }} />
           {live ? 'Live' : 'Offline'}
         </span>
       </div>
@@ -807,7 +807,7 @@ function SystemInsightsCompact({
       <div className="system-insights-card-head">
         <span className="system-insights-card-title">System Insights</span>
         <span className={`live-pill-mini ${live ? 'is-live' : 'is-offline'}`}>
-          <span className="live-dot-mini" style={{ background: live ? 'var(--arofi-theme-accent)' : statusColor }} />
+          <span className="live-dot-mini" style={{ background: live ? 'var(--success-fg)' : statusColor }} />
           {live ? 'Live' : 'Offline'}
         </span>
       </div>

@@ -3501,9 +3501,14 @@ html[data-theme="dark"][data-accent-theme] {
   background: linear-gradient(180deg, var(--bg-card), color-mix(in srgb, var(--success-bg) 44%, var(--bg-card)));
 }
 .stat-card.amber,
-.stat-card.warning {
+.stat-card.warning,
+.stat-card.orange {
   border-left: 3px solid var(--warn-fg);
   background: linear-gradient(180deg, var(--bg-card), color-mix(in srgb, var(--warn-bg) 44%, var(--bg-card)));
+}
+.stat-card.danger {
+  border-left: 3px solid var(--danger-fg);
+  background: linear-gradient(180deg, var(--bg-card), color-mix(in srgb, var(--danger-bg) 44%, var(--bg-card)));
 }
 .stat-card.blue,
 .stat-card.info {
@@ -3522,8 +3527,12 @@ html[data-theme="dark"][data-accent-theme] {
 .stat-value.amber,
 .stat-card.amber .stat-value,
 .stat-value.warning,
+.stat-value.orange,
+.stat-card.orange .stat-value,
 .amount-fee,
 .wallet-fee { color: var(--warn-fg) !important; }
+.stat-value.danger,
+.stat-card.danger .stat-value { color: var(--danger-fg) !important; }
 .stat-value.blue,
 .stat-card.blue .stat-value,
 .stat-value.info,
@@ -5020,10 +5029,10 @@ body {
 }
 
 .sidebar-group-items .nav-item {
-  min-height: var(--aa-submenu-row-height);
+  min-height: var(--aa-navigation-row-height);
   padding-left: 52px;
-  font-size: var(--aa-submenu-font-size);
-  line-height: var(--aa-submenu-row-height);
+  font-size: var(--aa-sidebar-font-size);
+  line-height: var(--aa-navigation-row-height);
 }
 
 .sidebar-group-items::before,
@@ -5557,9 +5566,7 @@ html[data-theme][data-accent-theme] .link-button {
   color: var(--arofi-theme-accent-text);
 }
 
-html[data-theme][data-accent-theme] .pulse-dot,
-html[data-theme][data-accent-theme] .live-dot,
-html[data-theme][data-accent-theme] .live-dot-mini {
+html[data-theme][data-accent-theme] .pulse-dot {
   background: var(--arofi-theme-accent);
   box-shadow: 0 0 0 0 var(--arofi-theme-accent-border);
   animation: themeAccentPulse 1.6s infinite;
@@ -5571,8 +5578,6 @@ html[data-theme][data-accent-theme] .live-dot-mini {
 }
 
 html[data-theme][data-accent-theme] .home-live,
-html[data-theme][data-accent-theme] .live-pill.is-live,
-html[data-theme][data-accent-theme] .live-pill-mini.is-live,
 html[data-theme][data-accent-theme] .sale-redeemed {
   background: var(--arofi-theme-accent-soft);
   color: var(--arofi-theme-accent-text);
