@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Param, Post, Res, UseGuards } from '@nestjs/common'
+import type { Response } from 'express'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
@@ -27,6 +28,24 @@ export class ReferralsController {
   @Get('admin')
   getAdminOverview() {
     return this.referralsService.listForAdmin()
+  }
+
+  @RequirePermissions(PERMISSIONS.all)
+  @Get('admin/export/referrals.csv')
+  async exportReferrals(@Res() response: Response) {
+    const file = await this.referralsService.exportReferralsCsv()
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
+  }
+
+  @RequirePermissions(PERMISSIONS.all)
+  @Get('admin/export/withdrawals.csv')
+  async exportWithdrawals(@Res() response: Response) {
+    const file = await this.referralsService.exportWithdrawalsCsv()
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
   }
 
   @RequirePermissions(PERMISSIONS.all)

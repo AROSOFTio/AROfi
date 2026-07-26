@@ -287,6 +287,56 @@ export class ReferralsService {
     }
   }
 
+  async exportReferralsCsv() {
+    const rows = await this.prisma.referralRelationship.findMany({
+      include: {
+        referrerProfile: { select: { code: true, user: { select: { email: true, firstName: true, lastName: true, accountType: true } } } },
+        referredTenant: { select: { name: true, domain: true } },
+        referredUser: { select: { email: true, firstName: true, lastName: true, accountType: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    const csv = this.toCsv([
+      ['Referral Code', 'Referrer Email', 'Referrer Name', 'Referred Business', 'Referred Email', 'Status', 'Suspicious Reason', 'Registered At', 'Qualified At'],
+      ...rows.map((row) => [
+        row.referralCode,
+        row.referrerProfile.user.email,
+        [row.referrerProfile.user.firstName, row.referrerProfile.user.lastName].filter(Boolean).join(' '),
+        row.referredTenant?.name ?? '',
+        row.referredUser?.email ?? '',
+        row.status,
+        row.suspiciousReason ?? '',
+        row.createdAt.toISOString(),
+        row.qualifiedAt?.toISOString() ?? '',
+      ]),
+    ])
+    return { filename: `referral-report-${new Date().toISOString().slice(0, 10)}.csv`, contentType: 'text/csv; charset=utf-8', buffer: Buffer.from(csv) }
+  }
+
+  async exportWithdrawalsCsv() {
+    const rows = await this.prisma.referralWalletTransaction.findMany({
+      where: { type: { in: [ReferralWalletTransactionType.WITHDRAWAL_REQUEST, ReferralWalletTransactionType.WITHDRAWAL_PROCESSING, ReferralWalletTransactionType.PAID_WITHDRAWAL, ReferralWalletTransactionType.FAILED_WITHDRAWAL, ReferralWalletTransactionType.REJECTED_WITHDRAWAL] } },
+      include: { referrerProfile: { select: { code: true, user: { select: { email: true, firstName: true, lastName: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    const csv = this.toCsv([
+      ['Referral Code', 'Partner Email', 'Partner Name', 'Type', 'Status', 'Amount UGX', 'Previous Balance UGX', 'New Balance UGX', 'Description', 'Created At'],
+      ...rows.map((row) => [
+        row.referrerProfile.code,
+        row.referrerProfile.user.email,
+        [row.referrerProfile.user.firstName, row.referrerProfile.user.lastName].filter(Boolean).join(' '),
+        row.type,
+        row.status,
+        row.amountUgx,
+        row.previousBalanceUgx,
+        row.newBalanceUgx,
+        row.description,
+        row.createdAt.toISOString(),
+      ]),
+    ])
+    return { filename: `referral-withdrawals-${new Date().toISOString().slice(0, 10)}.csv`, contentType: 'text/csv; charset=utf-8', buffer: Buffer.from(csv) }
+  }
+
   async requestWithdrawal(userId: string, dto: { amountUgx?: number; payoutNumberId?: string; secretKey?: string }) {
     const amountUgx = this.positiveInt(dto.amountUgx, 'amountUgx')
     const secretKey = dto.secretKey?.trim()
@@ -627,6 +677,15 @@ export class ReferralsService {
       throw new BadRequestException(`${field} must be greater than zero`)
     }
     return Math.round(parsed)
+  }
+
+  private toCsv(rows: unknown[][]) {
+    return rows
+      .map((row) => row.map((value) => {
+        const text = value === null || value === undefined ? '' : String(value)
+        return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+      }).join(','))
+      .join('\n')
   }
 
   private async generateCode(seed: string) {

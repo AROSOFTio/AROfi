@@ -76,6 +76,10 @@ export default async function AdminReferralManagementPage() {
           <h1 className="page-title">Referral Management</h1>
           <p className="page-subtitle">Review referral partners, referred businesses, commission exposure, and suspicious referral signals.</p>
         </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <a className="btn btn-ghost" href="/api/referrals/admin/export/referrals.csv">Export Referrals</a>
+          <a className="btn btn-ghost" href="/api/referrals/admin/export/withdrawals.csv">Export Withdrawals</a>
+        </div>
       </div>
 
       {!data && (
