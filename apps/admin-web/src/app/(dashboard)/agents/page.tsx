@@ -1,4 +1,5 @@
 import RegisterAgentPanel from '@/components/RegisterAgentPanel'
+import GenerateAgentVouchersPanel from '@/components/GenerateAgentVouchersPanel'
 import { AdminSessionResponse, AgentsOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
@@ -64,6 +65,7 @@ export default async function AgentsPage() {
                 <th>Voucher Sales</th>
                 <th>Cash to Collect</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -89,6 +91,9 @@ export default async function AgentsPage() {
                   <td>{formatCurrency(agent.cashToCollectUgx ?? Math.max(agent.lifetimeSalesUgx - agent.accruedCommissionUgx, 0))}</td>
                   <td>
                     <span className={getStatusBadgeClass(agent.status)}>{agent.status.toLowerCase()}</span>
+                  </td>
+                  <td>
+                    {canManageBusinessAgents && <GenerateAgentVouchersPanel agent={agent} />}
                   </td>
                 </tr>
               ))}
