@@ -542,6 +542,9 @@ export type AgentItem = {
   accruedCommissionUgx: number
   settledCommissionUgx: number
   lifetimeSalesUgx: number
+  voucherSalesUgx?: number
+  voucherAgentPayUgx?: number
+  cashToCollectUgx?: number
   lifetimeCommissionUgx: number
   totalDisbursedUgx: number
 }
@@ -554,6 +557,9 @@ export type AgentsOverviewResponse = {
     totalFloatUgx: number
     accruedCommissionUgx: number
     totalDisbursedUgx: number
+    voucherSalesUgx?: number
+    voucherAgentPayUgx?: number
+    cashToCollectUgx?: number
   }
   agents: AgentItem[]
   recentCommissions: Array<{

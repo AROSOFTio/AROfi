@@ -36,12 +36,13 @@ export class AgentsService {
         include: {
           tenant: { select: { id: true, name: true } },
           wallet: { select: { id: true, balanceUgx: true, currency: true } },
-          commissions: { select: { id: true, status: true, amountUgx: true, createdAt: true } },
+          commissions: {
+            where: { sourceTransaction: { type: BillingTransactionType.VOUCHER_SALE } },
+            select: { id: true, status: true, amountUgx: true, createdAt: true },
+          },
           transactions: {
             where: {
-              type: {
-                in: [BillingTransactionType.MOBILE_MONEY_SALE, BillingTransactionType.VOUCHER_SALE],
-              },
+              type: BillingTransactionType.VOUCHER_SALE,
               status: BillingTransactionStatus.COMPLETED,
             },
             select: { id: true, grossAmountUgx: true },
@@ -54,7 +55,10 @@ export class AgentsService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.agentCommission.findMany({
-        where: tenantId ? { tenantId } : undefined,
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          sourceTransaction: { type: BillingTransactionType.VOUCHER_SALE },
+        },
         include: {
           tenant: { select: { id: true, name: true } },
           agent: { select: { id: true, code: true, name: true } },
@@ -85,6 +89,8 @@ export class AgentsService {
         .filter((commission) => commission.status === CommissionStatus.SETTLED)
         .reduce((total, commission) => total + commission.amountUgx, 0)
       const walletBalanceUgx = agent.wallet?.balanceUgx ?? 0
+      const voucherSalesUgx = agent.transactions.reduce((total, transaction) => total + transaction.grossAmountUgx, 0)
+      const voucherAgentPayUgx = agent.commissions.reduce((total, commission) => total + commission.amountUgx, 0)
 
       return {
         id: agent.id,
@@ -105,7 +111,10 @@ export class AgentsService {
         availableFloatUgx: Math.max(walletBalanceUgx - accruedCommissionUgx, 0),
         accruedCommissionUgx,
         settledCommissionUgx,
-        lifetimeSalesUgx: agent.transactions.reduce((total, transaction) => total + transaction.grossAmountUgx, 0),
+        lifetimeSalesUgx: voucherSalesUgx,
+        voucherSalesUgx,
+        voucherAgentPayUgx,
+        cashToCollectUgx: Math.max(voucherSalesUgx - voucherAgentPayUgx, 0),
         lifetimeCommissionUgx: agent.commissions.reduce((total, commission) => total + commission.amountUgx, 0),
         totalDisbursedUgx: agent.disbursements.reduce((total, disbursement) => total + disbursement.amountUgx, 0),
       }
@@ -116,9 +125,12 @@ export class AgentsService {
         totalAgents: items.length,
         activeAgents: items.filter((agent) => agent.status === AgentStatus.ACTIVE).length,
         resellers: items.filter((agent) => agent.type === AgentType.RESELLER).length,
-        totalFloatUgx: items.reduce((total, agent) => total + agent.walletBalanceUgx, 0),
-        accruedCommissionUgx: items.reduce((total, agent) => total + agent.accruedCommissionUgx, 0),
+        totalFloatUgx: 0,
+        accruedCommissionUgx: items.reduce((total, agent) => total + agent.voucherAgentPayUgx, 0),
         totalDisbursedUgx: items.reduce((total, agent) => total + agent.totalDisbursedUgx, 0),
+        voucherSalesUgx: items.reduce((total, agent) => total + agent.voucherSalesUgx, 0),
+        voucherAgentPayUgx: items.reduce((total, agent) => total + agent.voucherAgentPayUgx, 0),
+        cashToCollectUgx: items.reduce((total, agent) => total + agent.cashToCollectUgx, 0),
       },
       agents: items,
       recentCommissions,
@@ -165,9 +177,9 @@ export class AgentsService {
     return {
       summary: {
         tenantWalletBalanceUgx: tenantWallets.reduce((total, wallet) => total + wallet.balanceUgx, 0),
-        totalAgentWalletBalanceUgx: agentsOverview.agents.reduce((total, agent) => total + agent.walletBalanceUgx, 0),
-        reservedCommissionUgx: agentsOverview.summary.accruedCommissionUgx,
-        workingFloatUgx: agentsOverview.agents.reduce((total, agent) => total + agent.availableFloatUgx, 0),
+        totalAgentWalletBalanceUgx: 0,
+        reservedCommissionUgx: 0,
+        workingFloatUgx: 0,
         activeAgents: agentsOverview.summary.activeAgents,
       },
       tenantWallets,
@@ -253,18 +265,9 @@ export class AgentsService {
         },
       })
 
-      const wallet = await tx.wallet.create({
-        data: {
-          tenantId: dto.tenantId,
-          ownerType: WalletOwnerType.AGENT,
-          ownerReference: agent.id,
-          agentId: agent.id,
-        },
-      })
-
       return {
         ...agent,
-        wallet,
+        wallet: null,
         tenant: {
           id: tenant.id,
           name: tenant.name,
@@ -274,6 +277,11 @@ export class AgentsService {
   }
 
   async loadFloat(agentId: string, dto: AgentFloatAdjustmentDto, tenantId?: string) {
+    void agentId
+    void dto
+    void tenantId
+    throw new BadRequestException('Agents are voucher sellers only; agent wallets and float top-ups are disabled')
+
     return this.prisma.$transaction(async (tx) => {
       const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const tenantWallet = await this.findOrCreateTenantWallet(tx, agent.tenantId)
@@ -377,6 +385,11 @@ export class AgentsService {
   }
 
   async returnFloat(agentId: string, dto: AgentFloatAdjustmentDto, tenantId?: string) {
+    void agentId
+    void dto
+    void tenantId
+    throw new BadRequestException('Agents are voucher sellers only; agent wallets and float returns are disabled')
+
     return this.prisma.$transaction(async (tx) => {
       const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const tenantWallet = await this.findOrCreateTenantWallet(tx, agent.tenantId)
@@ -481,6 +494,11 @@ export class AgentsService {
   }
 
   async createSettlement(agentId: string, dto: CreateSettlementDto, tenantId?: string) {
+    void agentId
+    void dto
+    void tenantId
+    throw new BadRequestException('Agents are voucher sellers only; settle voucher cash outside the wallet system')
+
     return this.prisma.$transaction(async (tx) => {
       const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const wallet = await this.findOrCreateAgentWallet(tx, agent)
@@ -715,6 +733,11 @@ export class AgentsService {
   }
 
   async createDisbursement(agentId: string, dto: CreateDisbursementDto, tenantId?: string) {
+    void agentId
+    void dto
+    void tenantId
+    throw new BadRequestException('Agents are voucher sellers only; agent wallet disbursements are disabled')
+
     return this.prisma.$transaction(async (tx) => {
       const agent = await this.getAgentForUpdate(tx, agentId, tenantId)
       const wallet = await this.findOrCreateAgentWallet(tx, agent)

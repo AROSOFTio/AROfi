@@ -909,10 +909,7 @@ export class BillingService {
       return
     }
 
-    if (
-      billingTransaction.type !== BillingTransactionType.MOBILE_MONEY_SALE &&
-      billingTransaction.type !== BillingTransactionType.VOUCHER_SALE
-    ) {
+    if (billingTransaction.type !== BillingTransactionType.VOUCHER_SALE) {
       return
     }
 
@@ -947,76 +944,11 @@ export class BillingService {
       return
     }
 
-    const agentWallet = await this.findOrCreateAgentWallet(tx, billingTransaction.tenantId, agent.id)
-    const posting = this.billingPostingService.buildCommissionPosting({
-      tenantId: billingTransaction.tenantId,
-      walletId: agentWallet.id,
-      amountUgx: commissionAmountUgx,
-      description: `Agent commission for ${billingTransaction.type.toLowerCase()}`,
-    })
-
-    const ledgerTransaction = await tx.ledgerTransaction.create({
-      data: {
-        tenantId: billingTransaction.tenantId,
-        walletId: agentWallet.id,
-        reference: `LEDGER-AGENT-COMMISSION-${randomUUID()}`,
-        type: LedgerTransactionType.COMMISSION,
-        channel: posting.channel,
-        description: posting.description,
-        grossAmountUgx: posting.grossAmountUgx,
-        feeAmountUgx: posting.feeAmountUgx,
-        netAmountUgx: posting.netAmountUgx,
-        sourceType: 'AgentCommission',
-        sourceId: billingTransaction.id,
-        metadata: {
-          agentId: agent.id,
-          sourceTransactionId: billingTransaction.id,
-        } as Prisma.InputJsonValue,
-        entries: {
-          create: posting.entries,
-        },
-      },
-    })
-
-    await tx.wallet.update({
-      where: { id: agentWallet.id },
-      data: {
-        balanceUgx: {
-          increment: posting.walletDeltaUgx,
-        },
-      },
-    })
-
-    const payoutTransaction = await tx.billingTransaction.create({
-      data: {
-        tenantId: billingTransaction.tenantId,
-        walletId: agentWallet.id,
-        agentId: agent.id,
-        ledgerTransactionId: ledgerTransaction.id,
-        channel: BillingChannel.COMMISSION,
-        type: BillingTransactionType.AGENT_COMMISSION,
-        status: BillingTransactionStatus.COMPLETED,
-        grossAmountUgx: posting.grossAmountUgx,
-        feeAmountUgx: posting.feeAmountUgx,
-        netAmountUgx: posting.netAmountUgx,
-        customerReference: agent.phoneNumber,
-        externalReference: `AGENT-COMMISSION-${randomUUID()}`,
-        paymentProvider: 'Internal',
-        metadata: {
-          agentId: agent.id,
-          sourceTransactionId: billingTransaction.id,
-          commissionRateBps: agent.commissionRateBps,
-        } as Prisma.InputJsonValue,
-      },
-    })
-
     await tx.agentCommission.create({
       data: {
         tenantId: billingTransaction.tenantId,
         agentId: agent.id,
-        walletId: agentWallet.id,
         sourceTransactionId: billingTransaction.id,
-        payoutTransactionId: payoutTransaction.id,
         status: CommissionStatus.ACCRUED,
         basisAmountUgx: billingTransaction.grossAmountUgx,
         rateBps: agent.commissionRateBps,

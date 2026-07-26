@@ -296,13 +296,6 @@ const navItems: NavGroup[] = [
 
 const tenantNavItems: NavGroup[] = [
   {
-    label: 'Agents',
-    icon: <Store size={17} />,
-    items: [
-      { href: '/agents', label: 'Agents', required: ['agents.read'], tenantOnly: true },
-    ],
-  },
-  {
     label: 'Sell Internet',
     icon: <ShoppingCart size={17} />,
     items: [
@@ -337,6 +330,8 @@ const tenantNavItems: NavGroup[] = [
     icon: <Users size={17} />,
     items: [
       { href: '/users?tab=staff', label: 'Staff', required: ['users.read'], tenantOnly: true },
+      { href: '/agents', label: 'Agents', required: ['agents.read'], tenantOnly: true },
+      { href: '/users?tab=customers', label: 'Customers', required: ['users.read'], tenantOnly: true },
     ],
   },
   {

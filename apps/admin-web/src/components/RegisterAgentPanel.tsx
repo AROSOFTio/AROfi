@@ -12,7 +12,6 @@ type AgentFormState = {
   type: string
   territory: string
   commissionPercent: string
-  floatLimitUgx: string
   notes: string
 }
 
@@ -24,7 +23,6 @@ const initialForm: AgentFormState = {
   type: 'RESELLER',
   territory: '',
   commissionPercent: '5',
-  floatLimitUgx: '0',
   notes: '',
 }
 
@@ -48,7 +46,7 @@ export default function RegisterAgentPanel() {
         type: form.type,
         territory: form.territory.trim() || undefined,
         commissionRateBps: Math.round(Number(form.commissionPercent || 0) * 100),
-        floatLimitUgx: Number(form.floatLimitUgx || 0),
+        floatLimitUgx: 0,
         notes: form.notes.trim() || undefined,
       })
       setIsOpen(false)
@@ -72,7 +70,7 @@ export default function RegisterAgentPanel() {
           <div className="modal-card">
             <button className="modal-close" type="button" onClick={() => setIsOpen(false)}>Close</button>
             <div className="modal-kicker">Voucher Sales Team</div>
-            <h2 className="modal-title">Register Agent</h2>
+            <h2 className="modal-title">Register Voucher Agent</h2>
             <form onSubmit={submit}>
               <div className="form-grid">
                 <Field label="Agent Code" value={form.code} onChange={(value) => setForm((previous) => ({ ...previous, code: value.toUpperCase() }))} placeholder="KLA-AGENT-01" required />
@@ -90,15 +88,14 @@ export default function RegisterAgentPanel() {
                   </select>
                 </div>
                 <Field label="Territory" value={form.territory} onChange={(value) => setForm((previous) => ({ ...previous, territory: value }))} placeholder="Kampala Central" />
-                <Field label="Commission %" type="number" value={form.commissionPercent} onChange={(value) => setForm((previous) => ({ ...previous, commissionPercent: value }))} placeholder="5" required />
-                <Field label="Float Limit UGX" type="number" value={form.floatLimitUgx} onChange={(value) => setForm((previous) => ({ ...previous, floatLimitUgx: value }))} placeholder="100000" />
+                <Field label="Voucher Pay %" type="number" value={form.commissionPercent} onChange={(value) => setForm((previous) => ({ ...previous, commissionPercent: value }))} placeholder="5" required />
               </div>
               <div className="form-group" style={{ marginTop: 12 }}>
                 <label className="form-label">Notes</label>
                 <input className="form-input" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder="Can generate and sell printed vouchers." />
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 12 }}>
-                Sign-in needs a separate staff user (Users &amp; Roles → VoucherAgent).
+                Agents do not need dashboard login or wallets. Use this profile to track printed vouchers, sales, and cash to collect.
               </p>
               {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>

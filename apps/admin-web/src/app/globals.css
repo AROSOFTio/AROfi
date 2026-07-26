@@ -1547,6 +1547,7 @@ a.home-contact-item:hover { border-color: var(--green); transform: translateY(-2
   padding: 7px 10px;
   margin: 1px 0;
   font-size: 13.5px;
+  line-height: 1.2;
   font-weight: 600;
   letter-spacing: 0;
   cursor: pointer;
@@ -1569,6 +1570,7 @@ a.home-contact-item:hover { border-color: var(--green); transform: translateY(-2
   align-items: center;
   gap: 10px;
   min-width: 0;
+  line-height: 1.2;
 }
 
 .sidebar-group-label svg {
@@ -1598,16 +1600,18 @@ a.home-contact-item:hover { border-color: var(--green); transform: translateY(-2
 .sidebar-group-items {
   display: grid;
   gap: 0;
-  padding: 1px 0 4px 30px;
+  padding: 0 0 3px 30px;
 }
 
 .nav-item {
-  gap: 0;
-  padding: 5px 8px;
+  min-height: 28px;
+  gap: 8px;
+  padding: 4px 8px;
   margin-bottom: 0;
   border-radius: 6px;
   color: var(--text-2);
   font-size: 13px;
+  line-height: 1.2;
   font-weight: 500;
 }
 

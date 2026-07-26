@@ -121,7 +121,7 @@ export default function SellVoucherPanel() {
                   <div style={{ fontSize: 14, color: 'var(--text-2)' }}>{formatCurrency(result.voucher.faceValueUgx)}</div>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 14 }}>
-                  Sale recorded successfully{agentId ? ' and attributed to the selected agent for commission.' : '.'} Give this code to the customer to redeem on the hotspot portal.
+                  Sale recorded successfully{agentId ? ' and attributed to the selected agent for voucher accountability.' : '.'} Give this code to the customer to redeem on the hotspot portal.
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
                   <button className="secondary-button" type="button" onClick={sellAnother}>Sell Another</button>
@@ -165,7 +165,7 @@ export default function SellVoucherPanel() {
                   </div>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 12 }}>
-                  Picks the next available unused voucher for this package and marks it sold. Attributing an agent accrues their commission automatically.
+                  Picks the next available unused voucher for this package and marks it sold. Attributing an agent keeps their voucher sales and cash-to-collect report up to date.
                 </p>
                 {error && <p style={{ color: 'var(--danger-fg)', marginTop: 10, fontSize: 13 }}>{error}</p>}
                 {!loadingOptions && packages.length === 0 && (

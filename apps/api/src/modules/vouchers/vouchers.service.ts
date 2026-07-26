@@ -603,8 +603,8 @@ export class VouchersService {
 
   // Point-of-sale: staff/agents pick a package, not a specific voucher code —
   // this assigns the oldest unexpired GENERATED voucher for that package and
-  // records the sale against it (optionally attributed to an agent so
-  // commission accrues automatically).
+  // records the sale against it (optionally attributed to an agent for
+  // voucher accountability and cash collection reporting).
   async sellNextAvailable(dto: SellVoucherDto, tenantId?: string) {
     const voucher = await this.prisma.voucher.findFirst({
       where: {

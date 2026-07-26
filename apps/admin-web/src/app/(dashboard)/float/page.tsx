@@ -1,13 +1,12 @@
 import { FloatOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
-import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
 export default async function FloatPage() {
   const data = await fetchApi<FloatOverviewResponse>('/agents/float/overview')
   const tenantWallets = data?.tenantWallets ?? []
-  const agents = data?.agents ?? []
   const movements = data?.movements ?? []
 
   return (
@@ -15,16 +14,16 @@ export default async function FloatPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Earnings</h1>
-          <p className="page-subtitle">Business settlement balance, agent wallet balances, reserved commissions, and recent wallet movements.</p>
+          <p className="page-subtitle">Business settlement balance and recent wallet movements.</p>
         </div>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
           { label: 'Settlement Balance', value: formatCurrency(data?.summary.tenantWalletBalanceUgx ?? 0), color: 'blue' },
-          { label: 'Agent Wallets', value: formatCurrency(data?.summary.totalAgentWalletBalanceUgx ?? 0), color: 'green' },
-          { label: 'Reserved Commission', value: formatCurrency(data?.summary.reservedCommissionUgx ?? 0), color: 'amber' },
-          { label: 'Working Balance', value: formatCurrency(data?.summary.workingFloatUgx ?? 0), color: 'purple' },
+          { label: 'Business Wallets', value: `${tenantWallets.length}`, color: 'green' },
+          { label: 'Pending Movements', value: `${movements.filter((movement) => movement.status === 'PENDING' || movement.status === 'PROCESSING').length}`, color: 'amber' },
+          { label: 'Recent Movements', value: `${movements.length}`, color: 'purple' },
         ].map((stat) => (
           <div key={stat.label} className={`stat-card ${stat.color}`}>
             <div className="stat-label">{stat.label}</div>
@@ -61,50 +60,6 @@ export default async function FloatPage() {
                   <td>{wallet.tenant.name}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(wallet.balanceUgx)}</td>
                   <td>{wallet.currency}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Agent Wallets</span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Type</th>
-                <th>Rate</th>
-                <th>Wallet Balance</th>
-                <th>Available Balance</th>
-                <th>Reserved Commission</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.length === 0 && (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="empty-state">
-                      <p>No agent wallets have been provisioned yet.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {agents.map((agent) => (
-                <tr key={agent.id}>
-                  <td>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{agent.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{agent.code}</div>
-                  </td>
-                  <td>{formatTransactionType(agent.type)}</td>
-                  <td>{formatBasisPoints(agent.commissionRateBps)}</td>
-                  <td>{formatCurrency(agent.walletBalanceUgx)}</td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(agent.availableFloatUgx)}</td>
-                  <td>{formatCurrency(agent.accruedCommissionUgx)}</td>
                 </tr>
               ))}
             </tbody>

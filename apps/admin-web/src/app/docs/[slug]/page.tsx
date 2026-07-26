@@ -401,14 +401,14 @@ export const docs: Record<string, DocPage> = {
     ],
   },
   'agent-pos': {
-    title: 'Agent PoS & Resellers',
-    intro: 'Register field agents or resellers, then use the Sell Voucher point-of-sale flow to sell a voucher to a walk-in customer with commission tracked automatically.',
+    title: 'Voucher Agents',
+    intro: 'Register physical voucher sellers, attribute voucher sales to them, and track the cash each agent should return.',
     sections: [
       {
         heading: 'Registering an agent',
         body: [
-          'From the Agent PoS page, click Register Agent. Set an agent code (e.g. KLA-AGENT-01), name, phone number, agent type (Reseller or Field Agent), optional territory, a commission percentage (5% by default), and an optional float limit.',
-          'Registering an agent here only creates the agent record — it does not create a login. If the agent needs to sign in themselves, create a separate staff user under Users &amp; Roles with the VoucherAgent role.',
+          'From the Agents page, click Register Agent. Set an agent code (e.g. KLA-AGENT-01), name, phone number, agent type, territory, and voucher pay percentage.',
+          'Registering an agent only creates a tracking record. Agents do not need dashboard login or wallets.',
         ],
       },
       {
@@ -416,14 +416,14 @@ export const docs: Record<string, DocPage> = {
         body: [
           'Click Sell Voucher on the Agent PoS page. Choose a package, optionally attribute the sale to a registered agent, and enter the customer\'s phone number.',
           'AROFi automatically assigns the oldest unused voucher in stock for that package — you don\'t pick a specific code, and if none are left it tells you to generate a new batch first (see Packages and vouchers).',
-          'The sale is recorded immediately: the voucher is marked sold, a billing transaction is posted, and — if you picked an agent — their commission accrues automatically as part of the same transaction. Nothing further to do manually.',
+          'The sale is recorded immediately: the voucher is marked sold, a billing transaction is posted, and, if you picked an agent, the sale appears in that agent\'s voucher accountability report.',
         ],
       },
       {
-        heading: 'Agent float and settlement',
+        heading: 'Cash collection',
         body: [
-          'Agents can be loaded with float from the business wallet and can return unused float, both as controlled, ledgered transfers.',
-          'Accrued commission is settled and paid out through the same disbursement flow used for business withdrawals, not paid ad hoc — see Commissions and Disbursements &amp; Withdrawals.',
+          'Agents sell physical vouchers outside the wallet system. AROFi tracks voucher sales, agent pay, and cash to collect so the business owner knows what each agent sold.',
+          'Mobile Money sales are business sales, not agent wallet activity.',
         ],
       },
     ],
