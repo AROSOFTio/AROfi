@@ -400,12 +400,18 @@ export class MikrotikService {
       `# Every fallback below also excludes our own remote-access tunnel (${this.escape(remoteClientName)})`,
       `# so customer traffic never gets masqueraded into AROFi's management VPN.`,
       ...this.buildWanDetectionScript('wanIface', remoteClientName),
-      `:if ($wanIface = "") do={`,
-      `  :foreach ppp in=[/interface find type=pppoe] do={ :local pppName [/interface get $ppp name]; :if ($pppName != "${this.escape(remoteClientName)}") do={ :set wanIface $pppName } }`,
-      `}`,
-      `:if ($wanIface = "") do={`,
-      `  :foreach lte in=[/interface lte find] do={ :set wanIface [/interface lte get $lte name] }`,
-      `}`,
+      `:global arofiWanIface`,
+      `:set arofiWanIface $wanIface`,
+      ...this.parseGuard(
+        `:global arofiWanIface; :if ($arofiWanIface = "") do={ :foreach ppp in=[/interface find type=pppoe] do={ :local pppName [/interface get $ppp name]; :if ($pppName != "${this.escape(remoteClientName)}") do={ :set arofiWanIface $pppName } } }`,
+        'AROFi: PPPoE WAN scan skipped.',
+      ),
+      `:set wanIface $arofiWanIface`,
+      ...this.parseGuard(
+        `:global arofiWanIface; :if ($arofiWanIface = "") do={ :foreach lte in=[/interface lte find] do={ :set arofiWanIface [/interface lte get $lte name] } }`,
+        'AROFi: LTE WAN scan skipped.',
+      ),
+      `:set wanIface $arofiWanIface`,
       `:if ($wanIface = "") do={`,
       `  :foreach addr in=[/ip address find] do={`,
       `    :local addrIf [/ip address get $addr interface]`,
@@ -1062,10 +1068,13 @@ export class MikrotikService {
       `:if ([:len [/interface bridge port find interface="${iface}"]]=0) do={/interface bridge port add bridge=arofi-hotspot interface=${iface}} else={/interface bridge port set [find interface="${iface}"] bridge=arofi-hotspot}`
 
     const v6Inner = (iface: string) =>
-      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge band=2ghz-b/g/n ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
+      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
 
-    const v7Inner = (iface: string) =>
-      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}" security.authentication-types=""; ${bridgePort(iface)}}`
+    const v7Base = (iface: string) =>
+      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [find name="${iface}"] disabled=no configuration.mode=ap configuration.ssid="${escapedSsid}"; ${bridgePort(iface)}}`
+
+    const v7OpenSecurity = (iface: string) =>
+      `:if ([:len [/interface wifi find name="${iface}"]]>0) do={/interface wifi set [find name="${iface}"] security.authentication-types=""}`
 
     const securityProfile =
       `:if ([:len [/interface wireless security-profiles find name="arofi-open"]]>0) do={/interface wireless security-profiles set [find name="arofi-open"] mode=none authentication-types=""} else={/interface wireless security-profiles add name="arofi-open" mode=none authentication-types=""}`
@@ -1075,8 +1084,10 @@ export class MikrotikService {
       ...this.parseGuard(securityProfile, 'AROFi: wireless security-profiles not available - skipped.'),
       ...this.parseGuard(v6Inner('wlan1'), 'AROFi: wlan1 (RouterOS 6 wireless) not available - skipped.'),
       ...this.parseGuard(v6Inner('wlan2'), 'AROFi: wlan2 not available - skipped.'),
-      ...this.parseGuard(v7Inner('wifi1'), 'AROFi: wifi1 (RouterOS 7 wifi) not available - skipped.'),
-      ...this.parseGuard(v7Inner('wifi2'), 'AROFi: wifi2 not available - skipped.'),
+      ...this.parseGuard(v7Base('wifi1'), 'AROFi: wifi1 (RouterOS 7 wifi) not available - skipped.'),
+      ...this.parseGuard(v7OpenSecurity('wifi1'), 'AROFi: wifi1 open-security setting skipped.'),
+      ...this.parseGuard(v7Base('wifi2'), 'AROFi: wifi2 not available - skipped.'),
+      ...this.parseGuard(v7OpenSecurity('wifi2'), 'AROFi: wifi2 open-security setting skipped.'),
     ]
   }
 
@@ -1084,7 +1095,7 @@ export class MikrotikService {
   // and any failure (e.g. a menu that does not exist on this RouterOS version)
   // is caught instead of aborting the import.
   private parseGuard(inner: string, putOnError: string) {
-    const escaped = inner.replace(/"/g, '\\"')
+    const escaped = inner.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$')
     return [`:do { :local arofiApply [:parse "${escaped}"]; $arofiApply } on-error={ :put "${putOnError}" }`]
   }
 
