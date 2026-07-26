@@ -80,6 +80,12 @@ export function getStatusBadgeClass(status: string) {
     case 'COMPLETED':
     case 'CREDIT':
     case 'GENERATED':
+    case 'APPROVED':
+    case 'AVAILABLE':
+    case 'PAID':
+    case 'QUALIFIED':
+    case 'LIVE':
+    case 'ONLINE':
     case 'accepted':
     case 'success':
       return 'badge badge-success'
@@ -93,9 +99,12 @@ export function getStatusBadgeClass(status: string) {
     case 'DEBIT':
     case 'SOLD':
     case 'SUSPENDED':
+    case 'FLAGGED_FOR_REVIEW':
+    case 'UNDER_REVIEW':
     case 'pending':
       return 'badge badge-warning'
     case 'REDEEMED':
+    case 'READY_FOR_REVIEW':
       return 'badge badge-info'
     case 'ARCHIVED':
     case 'DISABLED':
@@ -107,6 +116,9 @@ export function getStatusBadgeClass(status: string) {
     case 'CANCELLED':
     case 'EXPIRED':
     case 'VOID':
+    case 'REJECTED':
+    case 'SUSPICIOUS':
+    case 'OFFLINE':
     case 'rejected':
     case 'failed':
       return 'badge badge-danger'
