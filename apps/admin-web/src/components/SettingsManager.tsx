@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
+import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import EmailChangeRequestCard from './EmailChangeRequestCard'
 import PasswordChangeCard from './PasswordChangeCard'
 import SupportContactChangePanel from './SupportContactChangePanel'
@@ -22,6 +23,14 @@ type PlatformSettings = {
   proVoucherFeePercent: number
   proSubscriptionPriceUgx: number
   proSubscriptionDurationDays: number
+  proPlanEnabled: boolean
+  proRenewalRule: string
+  proGracePeriodDays: number
+  subscriptionExpiryNotificationDays: string
+  freePlanDescription: string
+  proPlanDescription: string
+  freePlanBenefits: string
+  proPlanBenefits: string
   referralProgramEnabled: boolean
   resellerRegistrationEnabled: boolean
   referralCommissionPercent: number
@@ -102,6 +111,11 @@ type SubscriptionPlanCatalogItem = {
   name: string
   amountUgx: number
   durationDays?: number
+  enabled?: boolean
+  description?: string
+  renewalRule?: string
+  gracePeriodDays?: number
+  expiryNotificationDays?: string
   routerLimit: string
   features: string[]
   commissionSummary: string
@@ -116,11 +130,32 @@ type SubscriptionCheckoutState = {
 
 type SubscriptionStatus = {
   selectedPlan: string
+  currentPlan?: string
   planSelectionConfirmed: boolean
   subscriptionStatus: 'ACTIVE' | 'PENDING_PAYMENT' | 'SKIPPED'
   pendingPlan: string | null
   paidUntil: string | null
+  remainingDays?: number | null
+  downgradeScheduledAt?: string | null
+  downgradeEffectiveAt?: string | null
+  lastPaymentPhoneNumber?: string | null
   checkout: SubscriptionCheckoutState
+  payments?: Array<{
+    id: string
+    plan: string
+    status: string
+    amountUgx: number
+    durationDays: number
+    network: string
+    phoneNumber: string
+    externalReference: string
+    providerReference?: string | null
+    statusMessage?: string | null
+    initiatedAt: string
+    completedAt?: string | null
+    failedAt?: string | null
+    createdAt: string
+  }>
 }
 
 const PLAN_CARD_META: Record<string, { price: string; desc: string; color: string; badge?: string }> = {
@@ -136,6 +171,11 @@ const PLAN_CARD_META: Record<string, { price: string; desc: string; color: strin
     desc: 'For professional, large-scale networks and operators.',
     color: '#8b5cf6',
   },
+}
+
+function planPriceLabel(plan: SubscriptionPlanCatalogItem) {
+  if (plan.amountUgx <= 0) return 'No subscription payment'
+  return `${formatCurrency(plan.amountUgx)} / ${plan.durationDays ?? 30} days`
 }
 
 const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Password', 'Security', 'Subscription Plan'] as const
@@ -162,6 +202,7 @@ const tabDescriptions: Record<(typeof tabs)[number], string> = {
   'Subscription Plan': 'View or change the plan for this business.',
 }
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
+const renewalRuleOptions = ['MANUAL_RENEWAL', 'AUTO_RENEWAL_WHEN_AVAILABLE', 'DISABLED']
 const portalTemplates = ['classic']
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
 
@@ -221,6 +262,10 @@ export default function SettingsManager({
           stopPolling()
           setCheckoutLoading(false)
           setMessage(`Payment confirmed! You're now on the ${statusResponse.selectedPlan} plan.`)
+        } else if (statusResponse.subscriptionStatus === 'PENDING_PAYMENT' && !statusResponse.checkout) {
+          stopPolling()
+          setCheckoutLoading(false)
+          setCheckoutError('Payment was not completed. Retry with the same number or enter a different Mobile Money number.')
         } else if (checkoutPaymentStatus === 'FAILED' || checkoutPaymentStatus === 'CANCELLED' || checkoutPaymentStatus === 'EXPIRED') {
           stopPolling()
           setCheckoutLoading(false)
@@ -231,6 +276,15 @@ export default function SettingsManager({
       }
     }, 4000)
   }
+
+  useEffect(() => {
+    const status = subStatus?.checkout?.status
+    if (!isVendor || !status) return
+    if (status === 'PENDING' || status === 'INITIATED' || status === 'INDETERMINATE') {
+      setCheckoutLoading(true)
+      startPolling()
+    }
+  }, [isVendor, subStatus?.checkout?.status])
 
   async function handleSelectPlan(planKey: string) {
     setPlanSaving(true)
@@ -265,6 +319,26 @@ export default function SettingsManager({
     } catch (caught) {
       setCheckoutLoading(false)
       setCheckoutError(caught instanceof Error ? caught.message : 'Unable to start payment.')
+    }
+  }
+
+  async function handleRefreshCheckoutStatus() {
+    setCheckoutError('')
+    setCheckoutLoading(true)
+    try {
+      const statusResponse = await clientFetchApi<SubscriptionStatus>('/subscription/checkout/status')
+      setSubStatus(statusResponse)
+      if (statusResponse.subscriptionStatus === 'ACTIVE' && !statusResponse.checkout) {
+        setMessage(`Payment confirmed! You're now on the ${statusResponse.selectedPlan} plan.`)
+        stopPolling()
+      } else if (statusResponse.subscriptionStatus === 'PENDING_PAYMENT' && !statusResponse.checkout) {
+        setCheckoutError('Payment was not completed. Retry with the same number or enter a different Mobile Money number.')
+        stopPolling()
+      }
+    } catch (caught) {
+      setCheckoutError(caught instanceof Error ? caught.message : 'Unable to check payment status.')
+    } finally {
+      setCheckoutLoading(false)
     }
   }
 
@@ -318,6 +392,14 @@ export default function SettingsManager({
           proVoucherFeePercent: numberValue(form, 'proVoucherFeePercent'),
           proSubscriptionPriceUgx: numberValue(form, 'proSubscriptionPriceUgx'),
           proSubscriptionDurationDays: numberValue(form, 'proSubscriptionDurationDays'),
+          proPlanEnabled: form.get('proPlanEnabled') === 'on',
+          proRenewalRule: stringValue(form, 'proRenewalRule'),
+          proGracePeriodDays: numberValue(form, 'proGracePeriodDays'),
+          subscriptionExpiryNotificationDays: stringValue(form, 'subscriptionExpiryNotificationDays'),
+          freePlanDescription: stringValue(form, 'freePlanDescription'),
+          proPlanDescription: stringValue(form, 'proPlanDescription'),
+          freePlanBenefits: stringValue(form, 'freePlanBenefits'),
+          proPlanBenefits: stringValue(form, 'proPlanBenefits'),
           referralProgramEnabled: form.get('referralProgramEnabled') === 'on',
           resellerRegistrationEnabled: form.get('resellerRegistrationEnabled') === 'on',
           referralCommissionPercent: numberValue(form, 'referralCommissionPercent'),
@@ -517,10 +599,18 @@ export default function SettingsManager({
                   <Input name="mobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.mobileMoneyFeePercent} />
                   <Input name="voucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.voucherFeePercent} />
                   <FormSubheading text="Pro Plan Commission" />
+                  <Check name="proPlanEnabled" label="Pro plan enabled" defaultChecked={platformForm.proPlanEnabled} />
                   <Input name="proMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.proMobileMoneyFeePercent} />
                   <Input name="proVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.proVoucherFeePercent} />
                   <Input name="proSubscriptionPriceUgx" label="Subscription Price UGX" defaultValue={platformForm.proSubscriptionPriceUgx} />
                   <Input name="proSubscriptionDurationDays" label="Subscription Duration Days" defaultValue={platformForm.proSubscriptionDurationDays} />
+                  <Select name="proRenewalRule" label="Renewal Rule" defaultValue={platformForm.proRenewalRule} options={renewalRuleOptions} />
+                  <Input name="proGracePeriodDays" label="Grace Period Days" defaultValue={platformForm.proGracePeriodDays} />
+                  <Input name="subscriptionExpiryNotificationDays" label="Expiry Notice Days" defaultValue={platformForm.subscriptionExpiryNotificationDays} />
+                  <TextArea name="freePlanDescription" label="Starter Description" defaultValue={platformForm.freePlanDescription} />
+                  <TextArea name="proPlanDescription" label="Pro Description" defaultValue={platformForm.proPlanDescription} />
+                  <TextArea name="freePlanBenefits" label="Starter Benefits (use | between benefits)" defaultValue={platformForm.freePlanBenefits} />
+                  <TextArea name="proPlanBenefits" label="Pro Benefits (use | between benefits)" defaultValue={platformForm.proPlanBenefits} />
                   <FormSubheading text="Referral Programme" />
                   <Check name="referralProgramEnabled" label="Enable referral programme" defaultChecked={platformForm.referralProgramEnabled} />
                   <Check name="resellerRegistrationEnabled" label="Allow reseller account registration" defaultChecked={platformForm.resellerRegistrationEnabled} />
@@ -728,11 +818,21 @@ export default function SettingsManager({
                 <div className="badge badge-danger" style={{ marginBottom: 10 }}>{checkoutError}</div>
               )}
               {subStatus.checkout ? (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {checkoutLoading || subStatus.checkout.status === 'PENDING' || subStatus.checkout.status === 'INITIATED'
-                    ? 'Waiting for mobile money confirmation on your phone...'
-                    : subStatus.checkout.statusMessage || subStatus.checkout.status}
-                </p>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                    {checkoutLoading || subStatus.checkout.status === 'PENDING' || subStatus.checkout.status === 'INITIATED'
+                      ? 'Waiting for mobile money confirmation on your phone...'
+                      : subStatus.checkout.statusMessage || subStatus.checkout.status}
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-primary" disabled={checkoutLoading} onClick={handleRefreshCheckoutStatus}>
+                      {checkoutLoading ? 'Checking...' : 'Check Status'}
+                    </button>
+                    <button type="button" className="btn btn-ghost" disabled={checkoutLoading} onClick={() => setSubStatus({ ...subStatus, checkout: null })}>
+                      Change Number
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <label className="form-group" style={{ flex: 1, minWidth: 180 }}>
@@ -756,6 +856,17 @@ export default function SettingsManager({
             </div>
           )}
 
+          {subStatus && (
+            <div className="form-grid" style={{ marginBottom: 24 }}>
+              <ReadOnly label="Current Plan" value={subStatus.currentPlan ?? subStatus.selectedPlan ?? 'FREE'} />
+              <ReadOnly label="Status" value={subStatus.subscriptionStatus.replace(/_/g, ' ')} />
+              <ReadOnly label="Expiry Date" value={subStatus.paidUntil ? formatDate(subStatus.paidUntil) : 'No paid expiry'} />
+              <ReadOnly label="Days Remaining" value={subStatus.remainingDays === null || subStatus.remainingDays === undefined ? 'Not applicable' : String(subStatus.remainingDays)} />
+              <ReadOnly label="Payment Number" value={subStatus.lastPaymentPhoneNumber ?? 'Not saved yet'} />
+              <ReadOnly label="Downgrade Date" value={subStatus.downgradeEffectiveAt ? formatDate(subStatus.downgradeEffectiveAt) : 'Not scheduled'} />
+            </div>
+          )}
+
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -764,7 +875,7 @@ export default function SettingsManager({
           }}>
             {subscriptionPlans.map((plan) => {
               const meta = PLAN_CARD_META[plan.key] ?? PLAN_CARD_META.FREE
-              const isActivePlan = subStatus?.selectedPlan === plan.key
+              const isActivePlan = (subStatus?.currentPlan ?? subStatus?.selectedPlan) === plan.key
               const isPendingThisPlan = subStatus?.pendingPlan === plan.key
               return (
                 <div
@@ -804,10 +915,10 @@ export default function SettingsManager({
                   <div>
                     <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-1)' }}>{plan.name}</h3>
                     <div style={{ margin: '12px 0' }}>
-                      <span style={{ fontSize: 20, fontWeight: 900, color: meta.color }}>{meta.price}</span>
+                      <span style={{ fontSize: 20, fontWeight: 900, color: meta.color }}>{planPriceLabel(plan)}</span>
                     </div>
                     <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 14 }}>
-                      {meta.desc}
+                      {plan.description || meta.desc}
                     </p>
 
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 14 }}>
@@ -839,7 +950,7 @@ export default function SettingsManager({
                   {isVendor && (
                     <button
                       type="button"
-                      disabled={planSaving || isActivePlan || isPendingThisPlan}
+                      disabled={planSaving || isPendingThisPlan || plan.enabled === false}
                       onClick={() => handleSelectPlan(plan.key)}
                       className="btn"
                       style={{
@@ -851,7 +962,7 @@ export default function SettingsManager({
                         backgroundColor: isActivePlan ? meta.color : 'transparent',
                         color: isActivePlan ? '#fff' : 'var(--text-1)',
                         border: isActivePlan ? 'none' : '1px solid var(--border)',
-                        cursor: isActivePlan ? 'default' : 'pointer',
+                        cursor: plan.enabled === false ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -859,9 +970,11 @@ export default function SettingsManager({
                       }}
                     >
                       {isActivePlan
-                        ? 'Active Plan ✓'
+                        ? plan.key === 'PRO' && subStatus?.downgradeEffectiveAt ? 'Keep Pro' : plan.key === 'PRO' ? 'Renew Pro' : 'Active Plan'
                         : isPendingThisPlan
                           ? 'Awaiting payment...'
+                          : plan.enabled === false
+                            ? 'Unavailable'
                           : planSaving
                             ? 'Updating...'
                             : `Select ${plan.name}`}
@@ -870,6 +983,52 @@ export default function SettingsManager({
                 </div>
               )
             })}
+          </div>
+
+          {subStatus?.downgradeEffectiveAt && (
+            <div className="badge badge-warning" style={{ marginBottom: 18 }}>
+              Downgrade to Starter is scheduled for {formatDate(subStatus.downgradeEffectiveAt)}. Paid Pro days remain active until then.
+            </div>
+          )}
+
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="card-header" style={{ padding: '16px 18px' }}>
+              <span className="card-title">Payment History</span>
+              <span className="badge badge-info">{subStatus?.payments?.length ?? 0} records</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Phone</th>
+                    <th>Reference</th>
+                    <th>Started</th>
+                    <th>Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(subStatus?.payments ?? []).map((payment) => (
+                    <tr key={payment.id}>
+                      <td>{payment.plan}</td>
+                      <td><span className={getStatusBadgeClass(payment.status)}>{payment.status.replace(/_/g, ' ')}</span></td>
+                      <td>{formatCurrency(payment.amountUgx)}</td>
+                      <td>{payment.phoneNumber}</td>
+                      <td>{payment.providerReference ?? payment.externalReference}</td>
+                      <td>{formatDate(payment.initiatedAt)}</td>
+                      <td>{payment.completedAt ? formatDate(payment.completedAt) : payment.failedAt ? formatDate(payment.failedAt) : '-'}</td>
+                    </tr>
+                  ))}
+                  {(!subStatus?.payments || subStatus.payments.length === 0) && (
+                    <tr>
+                      <td colSpan={7} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 18 }}>No subscription payments yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

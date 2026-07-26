@@ -77,6 +77,9 @@ type SubscriptionPreferences = {
   subscriptionPendingPlan?: SubscriptionPlanKey
   subscriptionPaidUntil?: string
   subscriptionPayment?: SubscriptionPaymentState
+  subscriptionDowngradeScheduledAt?: string
+  subscriptionDowngradeEffectiveAt?: string
+  subscriptionLastPaymentPhoneNumber?: string
   subscriptionExpiryReminderSentForExpiresAt?: string
   subscriptionExpiryNotifications?: Record<string, string>
   subscriptionAutoDowngradedAt?: string
@@ -124,7 +127,8 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
   // used by the checkout flow.
   private async sendExpiryNotifications() {
     const now = new Date()
-    const windowEnd = new Date(now.getTime() + Math.max(...EXPIRY_NOTIFICATION_DAYS) * DAY_MS)
+    const expiryNotificationDays = await this.getExpiryNotificationDays()
+    const windowEnd = new Date(now.getTime() + Math.max(...expiryNotificationDays) * DAY_MS)
 
     const expiringTenants = await this.prisma.tenantSetting.findMany({
       where: {
@@ -151,7 +155,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
 
       const prefs = (row.routerOnboardingPreferences as SubscriptionPreferences | null) ?? {}
       const daysRemaining = Math.max(0, Math.ceil((row.subscriptionPlanExpiresAt.getTime() - now.getTime()) / DAY_MS))
-      if (!EXPIRY_NOTIFICATION_DAYS.includes(daysRemaining as (typeof EXPIRY_NOTIFICATION_DAYS)[number])) continue
+      if (!expiryNotificationDays.includes(daysRemaining)) continue
 
       const expiryKey = row.subscriptionPlanExpiresAt.toISOString()
       const notificationKey = `${expiryKey}:${daysRemaining}`
@@ -362,8 +366,22 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     return Object.entries(SUBSCRIPTION_PLAN_CATALOG).map(([key, value]) => ({
       key,
       ...value,
+      enabled: key === 'PRO' ? platformSettings.proPlanEnabled : true,
       amountUgx: key === 'PRO' ? platformSettings.proSubscriptionPriceUgx : value.amountUgx,
       durationDays: key === 'PRO' ? platformSettings.proSubscriptionDurationDays : value.durationDays,
+      description: key === 'FREE'
+        ? platformSettings.freePlanDescription
+        : key === 'PRO'
+          ? platformSettings.proPlanDescription
+          : value.features.join('. '),
+      renewalRule: key === 'PRO' ? platformSettings.proRenewalRule : 'NO_SUBSCRIPTION_PAYMENT',
+      gracePeriodDays: key === 'PRO' ? platformSettings.proGracePeriodDays : 0,
+      expiryNotificationDays: platformSettings.subscriptionExpiryNotificationDays,
+      features: key === 'FREE'
+        ? this.splitPipeList(platformSettings.freePlanBenefits)
+        : key === 'PRO'
+          ? this.splitPipeList(platformSettings.proPlanBenefits)
+          : value.features,
       commissionSummary: commissionSummaryByPlan[key as SubscriptionPlanKey],
     }))
   }
@@ -373,33 +391,90 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getStatus(tenantId: string) {
-    const prefs = await this.getPreferences(tenantId)
-    return this.presentStatus(prefs)
+    const { prefs, tenantSettings } = await this.getPreferenceState(tenantId)
+    const payments = await this.prisma.subscriptionPayment.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        plan: true,
+        status: true,
+        amountUgx: true,
+        durationDays: true,
+        network: true,
+        phoneNumber: true,
+        externalReference: true,
+        providerReference: true,
+        statusMessage: true,
+        initiatedAt: true,
+        completedAt: true,
+        failedAt: true,
+        createdAt: true,
+      },
+    })
+    return { ...this.presentStatus(prefs, tenantSettings), payments }
   }
 
   async selectPlan(tenantId: string, plan: SubscriptionPlanKey) {
     const prefs = await this.getPreferences(tenantId)
+    const tenantSettings = await this.getTenantPlanState(tenantId)
 
     if (plan === 'FREE') {
+      const activePaidPlan =
+        tenantSettings?.subscriptionPlan &&
+        tenantSettings.subscriptionPlan !== SubscriptionPlanTier.FREE &&
+        tenantSettings.subscriptionPlanExpiresAt &&
+        tenantSettings.subscriptionPlanExpiresAt.getTime() > Date.now()
+
       prefs.selectedPlan = 'FREE'
       prefs.planSelectionConfirmed = true
       prefs.subscriptionStatus = 'ACTIVE'
       prefs.subscriptionPendingPlan = undefined
       prefs.subscriptionPaidUntil = undefined
       prefs.subscriptionPayment = undefined
+      if (activePaidPlan) {
+        prefs.subscriptionDowngradeScheduledAt = new Date().toISOString()
+        prefs.subscriptionDowngradeEffectiveAt = tenantSettings.subscriptionPlanExpiresAt!.toISOString()
+        await this.savePreferences(tenantId, prefs)
+        return this.presentStatus(prefs, tenantSettings)
+      }
+      prefs.subscriptionDowngradeScheduledAt = undefined
+      prefs.subscriptionDowngradeEffectiveAt = undefined
       await this.persistActivePlan(tenantId, 'FREE', null)
     } else {
+      if (
+        tenantSettings?.subscriptionPlan === plan &&
+        tenantSettings.subscriptionPlanExpiresAt &&
+        tenantSettings.subscriptionPlanExpiresAt.getTime() > Date.now() &&
+        prefs.subscriptionDowngradeEffectiveAt
+      ) {
+        prefs.selectedPlan = plan
+        prefs.subscriptionStatus = 'ACTIVE'
+        prefs.subscriptionPendingPlan = undefined
+        prefs.subscriptionPayment = undefined
+        prefs.subscriptionDowngradeScheduledAt = undefined
+        prefs.subscriptionDowngradeEffectiveAt = undefined
+        await this.savePreferences(tenantId, prefs)
+        return this.presentStatus(prefs, tenantSettings)
+      }
+      const planDefinition = await this.resolvePlanDefinition(plan)
+      if (plan === 'PRO' && !planDefinition.enabled) {
+        throw new BadRequestException('The Pro plan is currently disabled by Main Admin')
+      }
       prefs.subscriptionPendingPlan = plan
       prefs.planSelectionConfirmed = true
       prefs.subscriptionStatus = 'PENDING_PAYMENT'
       prefs.subscriptionPayment = undefined
+      prefs.subscriptionDowngradeScheduledAt = undefined
+      prefs.subscriptionDowngradeEffectiveAt = undefined
       if (!prefs.selectedPlan) {
         prefs.selectedPlan = 'FREE'
       }
     }
 
     await this.savePreferences(tenantId, prefs)
-    return this.presentStatus(prefs)
+    return this.presentStatus(prefs, tenantSettings)
   }
 
   async skipPayment(tenantId: string) {
@@ -412,7 +487,8 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     prefs.subscriptionStatus = 'SKIPPED'
     prefs.subscriptionPayment = undefined
     await this.savePreferences(tenantId, prefs)
-    return this.presentStatus(prefs)
+    const tenantSettings = await this.getTenantPlanState(tenantId)
+    return this.presentStatus(prefs, tenantSettings)
   }
 
   async startCheckout(tenantId: string, phoneNumber: string) {
@@ -432,6 +508,9 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     }
 
     const planDefinition = await this.resolvePlanDefinition(plan)
+    if (plan === 'PRO' && !planDefinition.enabled) {
+      throw new BadRequestException('The Pro plan is currently disabled by Main Admin')
+    }
     const network = this.phoneNumberService.resolveNetwork(phoneNumber)
     const normalizedPhone = this.phoneNumberService.normalizeForNetwork(phoneNumber, network)
     const externalReference = `SUB-${tenantId.slice(0, 8)}-${Date.now()}`
@@ -486,9 +565,11 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       statusMessage: gatewayResponse.statusMessage,
       initiatedAt: new Date().toISOString(),
     }
+    prefs.subscriptionLastPaymentPhoneNumber = normalizedPhone
 
     await this.savePreferences(tenantId, prefs)
-    return this.presentStatus(prefs)
+    const tenantSettings = await this.getTenantPlanState(tenantId)
+    return this.presentStatus(prefs, tenantSettings)
   }
 
   async refreshCheckoutStatus(tenantId: string) {
@@ -520,12 +601,18 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       if (payment.amountUgx !== planDefinition.amountUgx) {
         throw new BadRequestException('Subscription payment amount no longer matches the active plan price')
       }
-      const paidUntil = new Date(Date.now() + planDefinition.durationDays * DAY_MS)
+      const tenantSettings = await this.getTenantPlanState(tenantId)
+      const activeExpiry = tenantSettings?.subscriptionPlan === payment.plan && tenantSettings.subscriptionPlanExpiresAt && tenantSettings.subscriptionPlanExpiresAt.getTime() > Date.now()
+        ? tenantSettings.subscriptionPlanExpiresAt.getTime()
+        : Date.now()
+      const paidUntil = new Date(activeExpiry + planDefinition.durationDays * DAY_MS)
       prefs.selectedPlan = payment.plan
       prefs.subscriptionStatus = 'ACTIVE'
       prefs.subscriptionPendingPlan = undefined
       prefs.subscriptionPaidUntil = paidUntil.toISOString()
       prefs.subscriptionPayment = undefined
+      prefs.subscriptionDowngradeScheduledAt = undefined
+      prefs.subscriptionDowngradeEffectiveAt = undefined
       await this.prisma.$transaction(async (tx) => {
         await tx.subscriptionPayment.updateMany({
           where: { OR: [{ id: payment.id }, { externalReference: payment.externalReference }] },
@@ -598,16 +685,26 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.savePreferences(tenantId, prefs)
-    return this.presentStatus(prefs)
+    const tenantSettings = await this.getTenantPlanState(tenantId)
+    return this.presentStatus(prefs, tenantSettings)
   }
 
-  private presentStatus(prefs: SubscriptionPreferences) {
+  private presentStatus(prefs: SubscriptionPreferences, tenantSettings?: { subscriptionPlan: SubscriptionPlanTier; subscriptionPlanExpiresAt: Date | null } | null) {
+    const expiresAt = tenantSettings?.subscriptionPlanExpiresAt?.toISOString() ?? prefs.subscriptionPaidUntil ?? null
+    const remainingDays = expiresAt
+      ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / DAY_MS))
+      : null
     return {
       selectedPlan: prefs.selectedPlan ?? 'FREE',
+      currentPlan: tenantSettings?.subscriptionPlan ?? prefs.selectedPlan ?? 'FREE',
       planSelectionConfirmed: Boolean(prefs.planSelectionConfirmed),
       subscriptionStatus: prefs.subscriptionStatus ?? 'ACTIVE',
       pendingPlan: prefs.subscriptionPendingPlan ?? null,
-      paidUntil: prefs.subscriptionPaidUntil ?? null,
+      paidUntil: expiresAt,
+      remainingDays,
+      downgradeScheduledAt: prefs.subscriptionDowngradeScheduledAt ?? null,
+      downgradeEffectiveAt: prefs.subscriptionDowngradeEffectiveAt ?? null,
+      lastPaymentPhoneNumber: prefs.subscriptionLastPaymentPhoneNumber ?? null,
       checkout: prefs.subscriptionPayment
         ? {
             status: prefs.subscriptionPayment.status,
@@ -624,6 +721,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     if (plan !== 'PRO') {
       return {
         ...base,
+        enabled: true,
         durationDays: base.durationDays ?? 30,
       }
     }
@@ -635,20 +733,59 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
       select: {
         proSubscriptionPriceUgx: true,
         proSubscriptionDurationDays: true,
+        proPlanEnabled: true,
       },
     })
 
     return {
       ...base,
+      enabled: platformSettings.proPlanEnabled,
       amountUgx: platformSettings.proSubscriptionPriceUgx,
       durationDays: platformSettings.proSubscriptionDurationDays,
     }
   }
 
-  private async getPreferences(tenantId: string): Promise<SubscriptionPreferences> {
+  private async getExpiryNotificationDays() {
+    const settings = await this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+      select: { subscriptionExpiryNotificationDays: true },
+    })
+    const configured = settings.subscriptionExpiryNotificationDays
+      .split(',')
+      .map((part) => Number.parseInt(part.trim(), 10))
+      .filter((day) => Number.isInteger(day) && day >= 0)
+    return configured.length > 0 ? Array.from(new Set(configured)) : [...EXPIRY_NOTIFICATION_DAYS]
+  }
+
+  private splitPipeList(value: string) {
+    return value.split('|').map((item) => item.trim()).filter(Boolean)
+  }
+
+  private async getTenantPlanState(tenantId: string) {
+    return this.prisma.tenantSetting.findUnique({
+      where: { tenantId },
+      select: { subscriptionPlan: true, subscriptionPlanExpiresAt: true },
+    })
+  }
+
+  private async getPreferenceState(tenantId: string): Promise<{
+    prefs: SubscriptionPreferences
+    tenantSettings: { subscriptionPlan: SubscriptionPlanTier; subscriptionPlanExpiresAt: Date | null } | null
+  }> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { id: true, tenantSettings: { select: { routerOnboardingPreferences: true } } },
+      select: {
+        id: true,
+        tenantSettings: {
+          select: {
+            routerOnboardingPreferences: true,
+            subscriptionPlan: true,
+            subscriptionPlanExpiresAt: true,
+          },
+        },
+      },
     })
 
     if (!tenant) {
@@ -656,7 +793,19 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     }
 
     const raw = (tenant.tenantSettings?.routerOnboardingPreferences as SubscriptionPreferences | null) ?? {}
-    return { ...raw }
+    return {
+      prefs: { ...raw },
+      tenantSettings: tenant.tenantSettings
+        ? {
+            subscriptionPlan: tenant.tenantSettings.subscriptionPlan,
+            subscriptionPlanExpiresAt: tenant.tenantSettings.subscriptionPlanExpiresAt,
+          }
+        : null,
+    }
+  }
+
+  private async getPreferences(tenantId: string): Promise<SubscriptionPreferences> {
+    return (await this.getPreferenceState(tenantId)).prefs
   }
 
   private async savePreferences(tenantId: string, prefs: SubscriptionPreferences) {

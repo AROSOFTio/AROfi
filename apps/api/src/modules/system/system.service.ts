@@ -58,6 +58,16 @@ export class SystemService {
     if (dto.proVoucherFeePercent !== undefined) data.proVoucherFeeBps = this.percentToBps(dto.proVoucherFeePercent, 'proVoucherFeePercent')
     if (dto.proSubscriptionPriceUgx !== undefined) data.proSubscriptionPriceUgx = this.nonNegativeInt(dto.proSubscriptionPriceUgx, 'proSubscriptionPriceUgx')
     if (dto.proSubscriptionDurationDays !== undefined) data.proSubscriptionDurationDays = this.positiveInt(dto.proSubscriptionDurationDays, 'proSubscriptionDurationDays')
+    if (dto.proPlanEnabled !== undefined) data.proPlanEnabled = dto.proPlanEnabled
+    if (dto.proRenewalRule !== undefined) data.proRenewalRule = this.nonEmptyTrim(dto.proRenewalRule, 'proRenewalRule')
+    if (dto.proGracePeriodDays !== undefined) data.proGracePeriodDays = this.nonNegativeInt(dto.proGracePeriodDays, 'proGracePeriodDays')
+    if (dto.subscriptionExpiryNotificationDays !== undefined) {
+      data.subscriptionExpiryNotificationDays = this.sanitizeExpiryDays(dto.subscriptionExpiryNotificationDays)
+    }
+    if (dto.freePlanDescription !== undefined) data.freePlanDescription = this.nonEmptyTrim(dto.freePlanDescription, 'freePlanDescription')
+    if (dto.proPlanDescription !== undefined) data.proPlanDescription = this.nonEmptyTrim(dto.proPlanDescription, 'proPlanDescription')
+    if (dto.freePlanBenefits !== undefined) data.freePlanBenefits = this.nonEmptyTrim(dto.freePlanBenefits, 'freePlanBenefits')
+    if (dto.proPlanBenefits !== undefined) data.proPlanBenefits = this.nonEmptyTrim(dto.proPlanBenefits, 'proPlanBenefits')
     if (dto.referralProgramEnabled !== undefined) data.referralProgramEnabled = dto.referralProgramEnabled
     if (dto.resellerRegistrationEnabled !== undefined) data.resellerRegistrationEnabled = dto.resellerRegistrationEnabled
     if (dto.referralCommissionPercent !== undefined) data.referralCommissionBps = this.percentToBps(dto.referralCommissionPercent, 'referralCommissionPercent')
@@ -875,6 +885,14 @@ export class SystemService {
     proVoucherFeeBps: number
     proSubscriptionPriceUgx: number
     proSubscriptionDurationDays: number
+    proPlanEnabled: boolean
+    proRenewalRule: string
+    proGracePeriodDays: number
+    subscriptionExpiryNotificationDays: string
+    freePlanDescription: string
+    proPlanDescription: string
+    freePlanBenefits: string
+    proPlanBenefits: string
     referralProgramEnabled: boolean
     resellerRegistrationEnabled: boolean
     referralCommissionBps: number
@@ -937,6 +955,26 @@ export class SystemService {
       throw new BadRequestException(`${field} must be zero or greater`)
     }
     return Math.round(numeric)
+  }
+
+  private nonEmptyTrim(value: string, field: string) {
+    const trimmed = String(value ?? '').trim()
+    if (!trimmed) {
+      throw new BadRequestException(`${field} is required`)
+    }
+    return trimmed
+  }
+
+  private sanitizeExpiryDays(value: string) {
+    const days = String(value)
+      .split(',')
+      .map((part) => Number.parseInt(part.trim(), 10))
+      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 60)
+    const unique = Array.from(new Set(days)).sort((a, b) => b - a)
+    if (unique.length === 0) {
+      throw new BadRequestException('subscriptionExpiryNotificationDays must include at least one day between 0 and 60')
+    }
+    return unique.join(',')
   }
 
   private positiveInt(value: number, field: string) {

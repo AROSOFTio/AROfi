@@ -14,11 +14,20 @@ describe('SubscriptionService plan selection', () => {
           id: 'tenant-1',
           tenantSettings: {
             routerOnboardingPreferences: initialPreferences,
+            subscriptionPlan: 'FREE',
+            subscriptionPlanExpiresAt: null,
           },
         }),
       },
       tenantSetting: {
+        findUnique: jest.fn().mockResolvedValue({
+          subscriptionPlan: 'FREE',
+          subscriptionPlanExpiresAt: null,
+        }),
         upsert: jest.fn().mockResolvedValue({}),
+      },
+      subscriptionPayment: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
     }
 

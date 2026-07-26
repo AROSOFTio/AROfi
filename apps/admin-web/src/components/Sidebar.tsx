@@ -261,9 +261,9 @@ const navItems: NavGroup[] = [
     items: [{ href: '/admin/blog', label: 'Blog', required: ['settings.manage'], platformOnly: true }]
   },
   {
-    label: 'Feedback & Reviews',
+    label: 'Feedback',
     icon: <MessageSquarePlus size={17} />,
-    items: [{ href: '/support?view=feedback', label: 'Feedback & Reviews', required: ['support.read'], platformOnly: true }]
+    items: [{ href: '/support?view=feedback', label: 'Feedback', required: ['support.read'], platformOnly: true }]
   },
   {
     label: 'Agents',
@@ -359,10 +359,10 @@ const tenantNavItems: NavGroup[] = [
     ],
   },
   {
-    label: 'Feedback & Reviews',
+    label: 'Feedback',
     icon: <MessageSquarePlus size={17} />,
     items: [
-      { href: '/feedback', label: 'Feedback & Reviews', tenantOnly: true },
+      { href: '/feedback', label: 'Feedback', tenantOnly: true },
     ],
   },
   {

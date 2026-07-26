@@ -36,6 +36,40 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
+  proPlanEnabled?: boolean
+
+  @IsOptional()
+  @IsString()
+  proRenewalRule?: string
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  proGracePeriodDays?: number
+
+  @IsOptional()
+  @IsString()
+  subscriptionExpiryNotificationDays?: string
+
+  @IsOptional()
+  @IsString()
+  freePlanDescription?: string
+
+  @IsOptional()
+  @IsString()
+  proPlanDescription?: string
+
+  @IsOptional()
+  @IsString()
+  freePlanBenefits?: string
+
+  @IsOptional()
+  @IsString()
+  proPlanBenefits?: string
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
   referralProgramEnabled?: boolean
 
   @IsOptional()

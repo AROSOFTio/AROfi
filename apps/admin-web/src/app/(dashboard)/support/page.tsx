@@ -178,7 +178,7 @@ export default function SupportPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isVendor ? 'Support Tickets' : feedbackOnly ? 'Feedback & Reviews' : 'Developer Support Queue'}</h1>
+          <h1 className="page-title">{isVendor ? 'Support Tickets' : feedbackOnly ? 'Feedback' : 'Developer Support Queue'}</h1>
           <p className="page-subtitle">
             {isVendor
               ? 'Submit router, payment, wallet, voucher, and customer connection issues for developer admin support.'
