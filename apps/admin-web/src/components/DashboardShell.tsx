@@ -93,27 +93,8 @@ export default function DashboardShell({ children, initials, session, workspaceT
             <div style={{ position: 'relative' }}>
             <button
               type="button"
+              className="topbar-profile-trigger"
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px 8px',
-                borderRadius: 8,
-                transition: 'background 0.2s',
-                outline: 'none',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--bg-hover)'
-              }}
-              onMouseLeave={(e) => {
-                if (!profileDropdownOpen) {
-                  e.currentTarget.style.background = 'transparent'
-                }
-              }}
             >
               <div className="avatar" style={{ margin: 0 }}>{initials}</div>
               <svg
@@ -147,33 +128,17 @@ export default function DashboardShell({ children, initials, session, workspaceT
                   }}
                   onClick={() => setProfileDropdownOpen(false)}
                 />
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: 0,
-                    width: 240,
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    boxShadow: 'var(--shadow-md)',
-                    padding: 16,
-                    zIndex: 1000,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12,
-                  }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
+                <div className="topbar-profile-menu">
+                  <div className="topbar-profile-menu-head">
+                    <span className="topbar-profile-name">
                       {session.user.displayName}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                    <span className="topbar-profile-email">
                       {session.user.email}
                     </span>
                   </div>
-                  <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div className="topbar-profile-divider" />
+                  <div className="topbar-profile-actions">
                     <AdminSessionControl />
                   </div>
                 </div>
