@@ -5852,15 +5852,40 @@ html[data-theme][data-accent-theme] .sale-redeemed {
 }
 
 .settings-card-body {
-  padding: 20px 22px 24px;
+  padding: 14px 16px 16px;
 }
 
 .settings-card-body .appearance-settings {
-  gap: 22px;
+  gap: 12px;
 }
 
 .settings-card-body .appearance-accent-card {
-  padding: 14px;
+  padding: 12px;
+}
+
+.settings-grid {
+  gap: 12px;
+}
+
+.settings-grid > .card,
+.settings-grid > form.card {
+  margin-bottom: 0;
+}
+
+.settings-grid > form.card > .form-grid,
+.settings-grid > .card > .form-grid {
+  padding: 4px 14px 0;
+}
+
+.settings-grid > .card > p {
+  padding: 0 14px;
+}
+
+.settings-grid > .card > .form-grid + div,
+.settings-grid > form.card > button.btn {
+  margin-left: 14px;
+  margin-right: 14px;
+  margin-bottom: 14px;
 }
 
 /* The AI launcher is the AROFi mark itself, without a colored plate or badge. */
@@ -5884,11 +5909,27 @@ html[data-theme][data-accent-theme] .chat-bubble:hover {
 
 @media (max-width: 640px) {
   .settings-card-body {
-    padding: 18px 16px 22px;
+    padding: 12px 12px 14px;
   }
 
   .settings-card-body .appearance-accent-card {
-    padding: 13px;
+    padding: 10px;
+  }
+
+  .settings-grid > form.card > .form-grid,
+  .settings-grid > .card > .form-grid {
+    padding: 2px 12px 0;
+  }
+
+  .settings-grid > .card > p {
+    padding: 0 12px;
+  }
+
+  .settings-grid > .card > .form-grid + div,
+  .settings-grid > form.card > button.btn {
+    margin-left: 12px;
+    margin-right: 12px;
+    margin-bottom: 12px;
   }
 }
 

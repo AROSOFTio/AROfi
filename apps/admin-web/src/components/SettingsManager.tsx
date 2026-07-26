@@ -198,7 +198,12 @@ const tabDescriptions: Record<(typeof tabs)[number], string> = {
 }
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const renewalRuleOptions = ['MANUAL_RENEWAL', 'AUTO_RENEWAL_WHEN_AVAILABLE', 'DISABLED']
-const portalTemplates = ['classic']
+const portalTemplates = ['classic', 'fresh', 'sunrise']
+const optionLabels: Record<string, string> = {
+  classic: 'Blue',
+  fresh: 'Green',
+  sunrise: 'Gold',
+}
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
 
 export default function SettingsManager({
@@ -1057,7 +1062,7 @@ function Select({ name, label, defaultValue, options }: { name: string; label: s
     <label className="form-group">
       <span className="form-label">{label}</span>
       <select className="form-input" name={name} defaultValue={defaultValue}>
-        {options.map((option) => <option key={option} value={option}>{option.replace(/_/g, ' ')}</option>)}
+        {options.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option.replace(/_/g, ' ')}</option>)}
       </select>
     </label>
   )

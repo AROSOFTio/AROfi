@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Check, Loader2, AlertCircle } from 'lucide-react'
 import { clientFetchApi, clientPatchApi } from '@/lib/client-api'
 
-type PortalTemplateId = 'classic'
+type PortalTemplateId = 'classic' | 'fresh' | 'sunrise'
 
 type TemplateDefinition = {
   id: PortalTemplateId
@@ -29,20 +29,56 @@ type TemplateDefinition = {
 const TEMPLATES: TemplateDefinition[] = [
   {
     id: 'classic',
-    name: 'Business Theme',
-    description: 'A clean portal using the saved business accent. Loads quickly on any device.',
+    name: 'Blue',
+    description: 'The current clean blue customer portal theme.',
     isPro: false,
-    pageBg: 'var(--arofi-theme-accent-soft)',
+    pageBg: '#eff6ff',
     cardBg: '#ffffff',
-    cardBorder: 'var(--arofi-theme-accent-border)',
-    cardShadow: '0 8px 32px var(--arofi-theme-accent-soft)',
+    cardBorder: '#bfdbfe',
+    cardShadow: '0 8px 32px rgba(37,99,235,0.10)',
     tabsBg: '#f1f5f9',
-    accentColor: 'var(--arofi-theme-accent)',
-    titleColor: 'var(--arofi-theme-accent-text)',
+    accentColor: '#2563eb',
+    titleColor: '#1d4ed8',
     subtitleColor: '#64748b',
     inputBg: '#f8fafc',
     inputBorder: '#e2e8f0',
-    buttonBg: 'var(--arofi-theme-accent)',
+    buttonBg: '#2563eb',
+    buttonText: '#ffffff',
+  },
+  {
+    id: 'fresh',
+    name: 'Green',
+    description: 'Fresh green portal theme for clean hotspot branding.',
+    isPro: false,
+    pageBg: '#ecfdf5',
+    cardBg: '#ffffff',
+    cardBorder: '#a7f3d0',
+    cardShadow: '0 8px 32px rgba(5,150,105,0.10)',
+    tabsBg: '#f0fdf4',
+    accentColor: '#059669',
+    titleColor: '#047857',
+    subtitleColor: '#64748b',
+    inputBg: '#f8fafc',
+    inputBorder: '#d1fae5',
+    buttonBg: '#059669',
+    buttonText: '#ffffff',
+  },
+  {
+    id: 'sunrise',
+    name: 'Gold',
+    description: 'Warm gold portal theme for premium voucher and package sales.',
+    isPro: false,
+    pageBg: '#fffbeb',
+    cardBg: '#ffffff',
+    cardBorder: '#fde68a',
+    cardShadow: '0 8px 32px rgba(217,119,6,0.12)',
+    tabsBg: '#fef3c7',
+    accentColor: '#d97706',
+    titleColor: '#92400e',
+    subtitleColor: '#78716c',
+    inputBg: '#fffdf5',
+    inputBorder: '#fde68a',
+    buttonBg: '#d97706',
     buttonText: '#ffffff',
   },
 ]
