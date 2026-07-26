@@ -6105,5 +6105,104 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   }
 }
 
+/* Final form/referral spacing authority. Keeps dropdowns tight and prevents
+   long referral copy or links from overlapping adjacent boxes. */
+.form-group {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.form-grid {
+  gap: 12px;
+}
+
+.form-label {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.form-input,
+select.form-input,
+textarea.form-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+select.form-input {
+  height: 32px;
+}
+
+textarea.form-input {
+  min-height: 76px;
+}
+
+.settings-grid .form-grid,
+.settings-card-body .form-grid {
+  row-gap: 10px;
+  column-gap: 12px;
+}
+
+.referral-hero,
+.referral-card,
+.referral-card *,
+.home-contact-card,
+.home-contact-card *,
+.home-feature,
+.home-feature *,
+.home-panel-grid,
+.home-panel-grid * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.referral-hero {
+  align-items: start;
+}
+
+.referral-card .home-panel-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.referral-card .home-panel-row strong {
+  display: block;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.referral-card .home-panel-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.referral-list {
+  gap: 8px;
+}
+
+.referral-list li {
+  align-items: flex-start;
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .referral-card .home-panel-grid,
+  .home-contact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .referral-hero .home-hero-copy h1 {
+    font-size: clamp(30px, 9vw, 42px) !important;
+  }
+}
+
 
 
