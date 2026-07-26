@@ -34,7 +34,7 @@ type OnboardingWizardProps = {
 }
 
 type SubscriptionPlan = {
-  key: 'FREE' | 'PRO' | 'ENTERPRISE'
+  key: 'FREE' | 'PRO'
   name: string
   amountUgx: number
   durationDays?: number

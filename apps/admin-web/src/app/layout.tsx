@@ -344,7 +344,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 opens: '00:00',
                 closes: '23:59',
               },
-              priceRange: 'Free – UGX 70,000/month',
+              priceRange: 'Free - UGX 20,000/month',
               sameAs: ['https://arosoftlabs.com'],
             }),
           }}

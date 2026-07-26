@@ -83,7 +83,7 @@ const faqs = [
   },
   {
     q: 'How many routers or hotspot sites can I run?',
-    a: 'Starter supports up to 5 routers, Pro up to 10, and Enterprise is unlimited. You can upgrade anytime as you grow.',
+    a: 'Starter supports up to 5 routers and Pro supports up to 10. If you need more capacity, contact support and we will help you plan the cleanest setup.',
   },
   {
     q: 'Do you support vouchers as well as mobile money?',
@@ -243,6 +243,7 @@ export default function RootPage() {
         <div className="home-nav-links">
           <a href="#features">Features</a>
           {SHOW_PRICING && <a href="#pricing">Pricing</a>}
+          <Link href="/referral-program">Referral</Link>
           <a href="#faq">FAQ</a>
           <a href="#contact">Contact</a>
           <Link href="/blog">Blog</Link>

@@ -7,8 +7,6 @@ type GlobalRates = {
   freeVoucherFeePercent: number | null
   proMobileMoneyFeePercent: number | null
   proVoucherFeePercent: number | null
-  enterpriseMobileMoneyFeePercent: number | null
-  enterpriseVoucherFeePercent: number | null
 }
 
 type TenantRate = {
@@ -31,8 +29,6 @@ const RATE_FIELDS: Array<{ key: keyof GlobalRates; label: string }> = [
   { key: 'freeVoucherFeePercent', label: 'Free — Voucher Fee' },
   { key: 'proMobileMoneyFeePercent', label: 'Pro — Mobile Money Fee' },
   { key: 'proVoucherFeePercent', label: 'Pro — Voucher Fee' },
-  { key: 'enterpriseMobileMoneyFeePercent', label: 'Enterprise — Mobile Money Fee' },
-  { key: 'enterpriseVoucherFeePercent', label: 'Enterprise — Voucher Fee' },
 ]
 
 export default function CommissionRatesPage() {
@@ -141,8 +137,8 @@ export default function CommissionRatesPage() {
   }
 
   const tierPill = (plan: string) => {
-    const color = plan === 'ENTERPRISE' ? '#7c3aed' : plan === 'PRO' ? 'var(--arofi-theme-accent)' : '#6b7280'
-    const bg = plan === 'ENTERPRISE' ? 'rgba(124,58,237,0.1)' : plan === 'PRO' ? 'var(--arofi-theme-accent-soft)' : 'rgba(107,114,128,0.1)'
+    const color = plan === 'PRO' ? 'var(--arofi-theme-accent)' : '#6b7280'
+    const bg = plan === 'PRO' ? 'var(--arofi-theme-accent-soft)' : 'rgba(107,114,128,0.1)'
     return (
       <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: bg, color, textTransform: 'uppercase' }}>
         {plan}

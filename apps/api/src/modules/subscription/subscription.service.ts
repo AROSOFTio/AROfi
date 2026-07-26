@@ -37,15 +37,10 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
     routerLimit: 'Up to 10 Routers',
     features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
   },
-  ENTERPRISE: {
-    name: 'Enterprise Plan',
-    amountUgx: 70000,
-    routerLimit: 'Unlimited Routers',
-    features: ['Cloud WinBox Tunnels', 'Priority Support', 'Custom Domains & SMS Gateway (coming soon)'],
-  },
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const STALE_SUBSCRIPTION_CHECKOUT_MS = 15 * 60 * 1000
 const PENDING_SUBSCRIPTION_PAYMENT_STATUSES = new Set<PaymentStatus>([
   PaymentStatus.INITIATED,
   PaymentStatus.PENDING,
@@ -357,10 +352,6 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     const commissionSummaryByPlan: Record<SubscriptionPlanKey, string> = {
       FREE: this.formatCommissionSummary(platformSettings.mobileMoneyFeeBps, platformSettings.voucherFeeBps),
       PRO: this.formatCommissionSummary(platformSettings.proMobileMoneyFeeBps, platformSettings.proVoucherFeeBps),
-      ENTERPRISE: this.formatCommissionSummary(
-        platformSettings.enterpriseMobileMoneyFeeBps,
-        platformSettings.enterpriseVoucherFeeBps,
-      ),
     }
 
     return Object.entries(SUBSCRIPTION_PLAN_CATALOG).map(([key, value]) => ({
@@ -392,6 +383,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
 
   async getStatus(tenantId: string) {
     const { prefs, tenantSettings } = await this.getPreferenceState(tenantId)
+    const normalizedPrefs = await this.clearStaleCheckout(tenantId, prefs)
     const payments = await this.prisma.subscriptionPayment.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
@@ -413,7 +405,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
         createdAt: true,
       },
     })
-    return { ...this.presentStatus(prefs, tenantSettings), payments }
+    return { ...this.presentStatus(normalizedPrefs, tenantSettings), payments }
   }
 
   async selectPlan(tenantId: string, plan: SubscriptionPlanKey) {
@@ -496,7 +488,7 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
     const plan = prefs.subscriptionPendingPlan
 
     if (!plan) {
-      throw new BadRequestException('Select a Pro or Enterprise plan before checking out')
+      throw new BadRequestException('Select Pro before checking out')
     }
 
     if (
@@ -806,6 +798,19 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
 
   private async getPreferences(tenantId: string): Promise<SubscriptionPreferences> {
     return (await this.getPreferenceState(tenantId)).prefs
+  }
+
+  private async clearStaleCheckout(tenantId: string, prefs: SubscriptionPreferences) {
+    if (
+      prefs.subscriptionStatus === 'PENDING_PAYMENT' &&
+      prefs.subscriptionPayment &&
+      PENDING_SUBSCRIPTION_PAYMENT_STATUSES.has(prefs.subscriptionPayment.status) &&
+      Date.now() - new Date(prefs.subscriptionPayment.initiatedAt).getTime() > STALE_SUBSCRIPTION_CHECKOUT_MS
+    ) {
+      prefs.subscriptionPayment = undefined
+      await this.savePreferences(tenantId, prefs)
+    }
+    return prefs
   }
 
   private async savePreferences(tenantId: string, prefs: SubscriptionPreferences) {

@@ -60,14 +60,6 @@ const PLAN_CARDS = [
     color: 'var(--arofi-theme-accent)',
     badge: 'Recommended',
   },
-  {
-    key: 'ENTERPRISE',
-    name: 'Enterprise Plan',
-    price: 'UGX 70,000 / Month',
-    desc: 'For professional, large-scale networks and operators.',
-    color: '#8b5cf6',
-    badge: undefined as string | undefined,
-  },
 ] as const
 
 type PlanKey = (typeof PLAN_CARDS)[number]['key']
@@ -343,7 +335,7 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
         ) : step === 5 && success ? (
           <div style={{ marginTop: 18 }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 18 }}>
-              Mobile money number for your {planChoice === 'ENTERPRISE' ? 'Enterprise' : 'Pro'} subscription, or skip and pay later.
+              Mobile money number for your Pro subscription, or skip and pay later.
             </p>
             {checkoutError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{checkoutError}</p>}
             {checkoutState?.checkout?.status === 'PENDING' && (

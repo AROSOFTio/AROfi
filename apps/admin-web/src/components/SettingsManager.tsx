@@ -107,7 +107,7 @@ type TenantSettings = {
 }
 
 type SubscriptionPlanCatalogItem = {
-  key: 'FREE' | 'PRO' | 'ENTERPRISE'
+  key: 'FREE' | 'PRO'
   name: string
   amountUgx: number
   durationDays?: number
@@ -165,11 +165,6 @@ const PLAN_CARD_META: Record<string, { price: string; desc: string; color: strin
     desc: 'For growing ISPs wanting lower fees and branding control.',
     color: 'var(--green)',
     badge: 'Recommended',
-  },
-  ENTERPRISE: {
-    price: 'UGX 70,000 / Month',
-    desc: 'For professional, large-scale networks and operators.',
-    color: '#8b5cf6',
   },
 }
 
@@ -616,9 +611,6 @@ export default function SettingsManager({
                   <Check name="resellerRegistrationEnabled" label="Allow reseller account registration" defaultChecked={platformForm.resellerRegistrationEnabled} />
                   <Input name="referralCommissionPercent" label="Referral Commission %" defaultValue={platformForm.referralCommissionPercent} />
                   <Input name="referralHoldingPeriodDays" label="Referral Holding Period Days" defaultValue={platformForm.referralHoldingPeriodDays} />
-                  <FormSubheading text="Enterprise Plan Commission" />
-                  <Input name="enterpriseMobileMoneyFeePercent" label="Mobile Money Fee %" defaultValue={platformForm.enterpriseMobileMoneyFeePercent} />
-                  <Input name="enterpriseVoucherFeePercent" label="Voucher Fee %" defaultValue={platformForm.enterpriseVoucherFeePercent} />
                   <FormSubheading text="Collection Routes" />
                   <Select name="mtnCollectionProvider" label="MTN Collection Route" defaultValue={platformForm.mtnCollectionProvider} options={providerOptions} />
                   <Select name="airtelCollectionProvider" label="Airtel Collection Route" defaultValue={platformForm.airtelCollectionProvider} options={providerOptions} />
@@ -655,11 +647,9 @@ export default function SettingsManager({
                   <FormSubheading text="Router Limits by Plan" />
                   <Input name="freeRouterLimit" label="Starter Router Limit" defaultValue={platformForm.freeRouterLimit} />
                   <Input name="proRouterLimit" label="Pro Router Limit" defaultValue={platformForm.proRouterLimit} />
-                  <Input name="enterpriseRouterLimit" label="Enterprise Router Limit (blank = unlimited)" defaultValue={platformForm.enterpriseRouterLimit ?? ''} />
                   <FormSubheading text="Analytics History Window by Plan (days)" />
                   <Input name="freeAnalyticsHistoryDays" label="Starter History (days)" defaultValue={platformForm.freeAnalyticsHistoryDays} />
                   <Input name="proAnalyticsHistoryDays" label="Pro History (days)" defaultValue={platformForm.proAnalyticsHistoryDays} />
-                  <Input name="enterpriseAnalyticsHistoryDays" label="Enterprise History (days, blank = unlimited)" defaultValue={platformForm.enterpriseAnalyticsHistoryDays ?? ''} />
                 </>
               )}
               {activeTab === 'Voucher Printing' && (
@@ -950,7 +940,7 @@ export default function SettingsManager({
                   {isVendor && (
                     <button
                       type="button"
-                      disabled={planSaving || isPendingThisPlan || plan.enabled === false}
+                      disabled={planSaving || plan.enabled === false}
                       onClick={() => handleSelectPlan(plan.key)}
                       className="btn"
                       style={{
@@ -972,7 +962,7 @@ export default function SettingsManager({
                       {isActivePlan
                         ? plan.key === 'PRO' && subStatus?.downgradeEffectiveAt ? 'Keep Pro' : plan.key === 'PRO' ? 'Renew Pro' : 'Active Plan'
                         : isPendingThisPlan
-                          ? 'Awaiting payment...'
+                          ? 'Pay Pro'
                           : plan.enabled === false
                             ? 'Unavailable'
                           : planSaving

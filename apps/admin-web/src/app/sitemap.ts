@@ -25,6 +25,12 @@ const staticPages: MetadataRoute.Sitemap = [
     lastModified: new Date('2026-07-01'),
   },
   {
+    url: `${SITE_URL}/referral-program`,
+    changeFrequency: 'weekly',
+    priority: 0.85,
+    lastModified: new Date('2026-07-26'),
+  },
+  {
     url: `${SITE_URL}/privacy`,
     changeFrequency: 'yearly',
     priority: 0.4,
