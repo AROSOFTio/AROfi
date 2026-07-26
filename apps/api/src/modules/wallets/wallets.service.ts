@@ -480,21 +480,25 @@ export class WalletsService {
       })
     }
 
-    const payoutNumber = await this.prisma.tenantPayoutNumber.findFirst({
+    const verifiedPayoutNumbers = await this.prisma.tenantPayoutNumber.findMany({
       where: {
         tenantId,
-        isPrimary: true,
         status: PayoutNumberStatus.VERIFIED,
         verifiedAt: { not: null },
       },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
     })
 
-    if (!payoutNumber) {
-      throw new NotFoundException('Primary verified payout number not found')
+    if (verifiedPayoutNumbers.length === 0) {
+      throw new NotFoundException('Registered verified payout number not found')
     }
 
-    if (dto.payoutNumberId && dto.payoutNumberId !== payoutNumber.id) {
-      throw new BadRequestException('Withdrawals can only go to the primary verified payout number')
+    const payoutNumber = dto.payoutNumberId
+      ? verifiedPayoutNumbers.find((number) => number.id === dto.payoutNumberId)
+      : verifiedPayoutNumbers[0]
+
+    if (!payoutNumber) {
+      throw new BadRequestException('Withdrawals can only go to one of your registered verified payout numbers')
     }
 
     const provider = this.paymentRouterService.resolveDisbursement(payoutNumber.network)
@@ -507,8 +511,8 @@ export class WalletsService {
       throw new BadRequestException(`Minimum withdrawal is UGX ${minimumPayoutUgx.toLocaleString('en-US')}`)
     }
 
-    const reviewReason = await this.resolveWithdrawalReviewReason(tenantId, dto.amountUgx, platformSettings)
-    const initialStatus = reviewReason ? DisbursementStatus.FLAGGED_FOR_REVIEW : DisbursementStatus.PROCESSING
+    const reviewReason = null
+    const initialStatus = DisbursementStatus.PROCESSING
 
     const reserved = await this.prisma.$transaction(async (tx) => {
       const wallet = await tx.wallet.findFirst({
@@ -720,29 +724,6 @@ export class WalletsService {
 
       return { walletId: wallet.id, currency: wallet.currency, billingTransactionId: billingTransaction.id, disbursementId: disbursement.id }
     })
-
-    if (reviewReason) {
-      const [disbursement, billingTransaction, wallet] = await Promise.all([
-        this.prisma.disbursement.findUniqueOrThrow({ where: { id: reserved.disbursementId } }),
-        this.prisma.billingTransaction.findUniqueOrThrow({ where: { id: reserved.billingTransactionId } }),
-        this.prisma.wallet.findUniqueOrThrow({ where: { id: reserved.walletId } }),
-      ])
-
-      void this.notifyWithdrawalEmail({
-        tenantId,
-        status: 'REQUESTED',
-        amountUgx: dto.amountUgx,
-        reference: disbursement.reference,
-        reason: reviewReason,
-      })
-
-      return {
-        disbursement,
-        billingTransaction,
-        wallet,
-        providerStatus: 'FLAGGED_FOR_REVIEW',
-      }
-    }
 
     let providerResponse
     try {

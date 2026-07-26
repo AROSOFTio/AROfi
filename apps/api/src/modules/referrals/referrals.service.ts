@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import {
+  AuditSeverity,
   NotificationAudience,
+  PayoutNumberStatus,
   Prisma,
   ReferralCommissionStatus,
   ReferralRelationshipStatus,
@@ -8,6 +10,7 @@ import {
   ReferralWalletTransactionStatus,
   ReferralWalletTransactionType,
 } from '@prisma/client'
+import * as bcrypt from 'bcrypt'
 import { PrismaService } from '../../prisma.service'
 
 @Injectable()
@@ -139,12 +142,33 @@ export class ReferralsService {
       },
     })
 
+    await client.auditLog.create({
+      data: {
+        tenantId: relationship.referrerProfile.tenantId,
+        userId: relationship.referrerProfile.user.id,
+        action: immediatelyAvailable ? 'referral.commission_credited' : 'referral.commission_approved',
+        entity: 'ReferralCommission',
+        entityId: commission.id,
+        severity: AuditSeverity.INFO,
+        details: {
+          relationshipId: relationship.id,
+          subscriptionPaymentId: input.subscriptionPaymentId,
+          basisType: settings.referralCommissionBasis,
+          basisAmountUgx: input.amountUgx,
+          rateBps: settings.referralCommissionBps,
+          amountUgx,
+          holdUntil,
+          availableImmediately: immediatelyAvailable,
+        },
+      },
+    })
+
     return commission
   }
 
   async getMyDashboard(userId: string, origin = 'https://arofi.net') {
     const profile = await this.ensureProfile(userId)
-    const [relationships, commissions, transactions] = await Promise.all([
+    const [relationships, commissions, transactions, payoutNumbers] = await Promise.all([
       this.prisma.referralRelationship.findMany({
         where: { referrerProfileId: profile.id },
         include: {
@@ -164,6 +188,14 @@ export class ReferralsService {
         orderBy: { createdAt: 'desc' },
         take: 50,
       }),
+      profile.tenantId
+        ? this.prisma.tenantPayoutNumber.findMany({
+            where: { tenantId: profile.tenantId, status: PayoutNumberStatus.VERIFIED, verifiedAt: { not: null } },
+            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+            take: 2,
+            select: { id: true, network: true, normalizedPhone: true, label: true, isPrimary: true },
+          })
+        : [],
     ])
 
     const referralLink = `${origin.replace(/\/$/, '')}/register?ref=${encodeURIComponent(profile.code)}`
@@ -207,6 +239,7 @@ export class ReferralsService {
       })),
       commissions,
       walletTransactions: transactions,
+      payoutNumbers,
     }
   }
 
@@ -254,11 +287,11 @@ export class ReferralsService {
     }
   }
 
-  async requestWithdrawal(userId: string, dto: { amountUgx?: number; payoutPhone?: string }) {
+  async requestWithdrawal(userId: string, dto: { amountUgx?: number; payoutNumberId?: string; secretKey?: string }) {
     const amountUgx = this.positiveInt(dto.amountUgx, 'amountUgx')
-    const payoutPhone = dto.payoutPhone?.trim()
-    if (!payoutPhone) {
-      throw new BadRequestException('Enter the Mobile Money number for this referral withdrawal')
+    const secretKey = dto.secretKey?.trim()
+    if (!secretKey) {
+      throw new BadRequestException('Enter your withdrawal secret PIN')
     }
 
     const settings = await this.prisma.platformSetting.upsert({
@@ -287,6 +320,23 @@ export class ReferralsService {
         include: { user: { select: { tenantId: true } } },
       })
       if (!profile) throw new NotFoundException('Referral profile not found')
+      const tenantId = profile.tenantId ?? profile.user.tenantId
+      if (!tenantId) throw new BadRequestException('Referral withdrawals require a registered workspace')
+      const payoutProfile = await tx.tenantPayoutProfile.findUnique({ where: { tenantId } })
+      if (!payoutProfile) throw new BadRequestException('Set your withdrawal secret PIN before requesting referral withdrawals')
+      const secretOk = await bcrypt.compare(secretKey, payoutProfile.secretHash)
+      if (!secretOk) throw new BadRequestException('Invalid withdrawal secret PIN')
+      const verifiedPayoutNumbers = await tx.tenantPayoutNumber.findMany({
+        where: { tenantId, status: PayoutNumberStatus.VERIFIED, verifiedAt: { not: null } },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      })
+      if (verifiedPayoutNumbers.length === 0) throw new NotFoundException('Registered verified payout number not found')
+      const payoutNumber = dto.payoutNumberId
+        ? verifiedPayoutNumbers.find((number) => number.id === dto.payoutNumberId)
+        : verifiedPayoutNumbers[0]
+      if (!payoutNumber) {
+        throw new BadRequestException('Referral withdrawals can only go to one of your registered verified payout numbers')
+      }
       if (profile.status !== ReferralProfileStatus.ACTIVE) {
         throw new BadRequestException('Referral withdrawals are not available while this profile is under review')
       }
@@ -298,27 +348,47 @@ export class ReferralsService {
         where: { id: profile.id },
         data: {
           availableBalanceUgx: { decrement: totalDebitUgx },
-          registeredPayoutPhone: payoutPhone,
+          withdrawnAmountUgx: { increment: amountUgx },
+          registeredPayoutPhone: payoutNumber.normalizedPhone,
         },
       })
       const withdrawal = await tx.referralWalletTransaction.create({
         data: {
           referrerProfileId: profile.id,
-          type: ReferralWalletTransactionType.WITHDRAWAL_REQUEST,
-          status: ReferralWalletTransactionStatus.PENDING,
+          type: ReferralWalletTransactionType.PAID_WITHDRAWAL,
+          status: ReferralWalletTransactionStatus.PAID,
           amountUgx,
           previousBalanceUgx: profile.availableBalanceUgx,
           newBalanceUgx: updated.availableBalanceUgx,
-          description: 'Referral wallet withdrawal requested',
-          metadata: { payoutPhone, feeUgx, totalDebitUgx },
+          description: 'Referral wallet withdrawal auto-approved to registered payout number',
+          metadata: { payoutNumberId: payoutNumber.id, payoutPhone: payoutNumber.normalizedPhone, network: payoutNumber.network, feeUgx, totalDebitUgx },
         },
       })
       await tx.notification.create({
         data: {
-          title: 'Referral withdrawal requested',
-          body: `Referral withdrawal request received for UGX ${amountUgx.toLocaleString('en-UG')}.`,
+          title: 'Referral withdrawal approved',
+          body: `Referral withdrawal of UGX ${amountUgx.toLocaleString('en-UG')} was auto-approved to your registered payout number.`,
           audience: NotificationAudience.SINGLE_BUSINESS,
-          tenantId: profile.tenantId ?? profile.user.tenantId,
+          tenantId,
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'referral.withdrawal_auto_approved',
+          entity: 'ReferralWalletTransaction',
+          entityId: withdrawal.id,
+          severity: AuditSeverity.INFO,
+          details: {
+            amountUgx,
+            feeUgx,
+            totalDebitUgx,
+            previousBalanceUgx: profile.availableBalanceUgx,
+            newBalanceUgx: updated.availableBalanceUgx,
+            payoutNumberId: payoutNumber.id,
+            payoutPhone: payoutNumber.normalizedPhone,
+          },
         },
       })
       return withdrawal
@@ -356,6 +426,22 @@ export class ReferralsService {
           tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
         },
       })
+      await tx.auditLog.create({
+        data: {
+          tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
+          userId: adminUserId,
+          action: 'referral.withdrawal_paid',
+          entity: 'ReferralWalletTransaction',
+          entityId: withdrawal.id,
+          severity: AuditSeverity.INFO,
+          details: {
+            referrerProfileId: withdrawal.referrerProfileId,
+            amountUgx: withdrawal.amountUgx,
+            previousStatus: withdrawal.status,
+            newStatus: ReferralWalletTransactionStatus.PAID,
+          },
+        },
+      })
       return paid
     })
   }
@@ -391,6 +477,24 @@ export class ReferralsService {
           body: `Referral withdrawal of UGX ${withdrawal.amountUgx.toLocaleString('en-UG')} was rejected. ${reason}`,
           audience: NotificationAudience.SINGLE_BUSINESS,
           tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
+          userId: adminUserId,
+          action: 'referral.withdrawal_rejected',
+          entity: 'ReferralWalletTransaction',
+          entityId: withdrawal.id,
+          severity: AuditSeverity.WARNING,
+          details: {
+            referrerProfileId: withdrawal.referrerProfileId,
+            amountUgx: withdrawal.amountUgx,
+            releasedAmountUgx: releaseAmount,
+            previousStatus: withdrawal.status,
+            newStatus: ReferralWalletTransactionStatus.REJECTED,
+            reason,
+          },
         },
       })
       return rejected

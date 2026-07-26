@@ -38,6 +38,9 @@ describe('ReferralsService commission qualification', () => {
       notification: {
         create: jest.fn().mockResolvedValue({}),
       },
+      auditLog: {
+        create: jest.fn().mockResolvedValue({}),
+      },
     }
 
     const service = new ReferralsService(prisma as never)

@@ -25,6 +25,7 @@ describe('WalletsService withdrawals', () => {
       create: jest.fn(),
       update: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
     auditLog: { create: jest.fn() },
   }
@@ -38,7 +39,7 @@ describe('WalletsService withdrawals', () => {
     tenantSetting: { upsert: jest.fn() },
     platformSetting: { upsert: jest.fn() },
     tenantPayoutNumberChangeRequest: { findFirst: jest.fn() },
-    tenantPayoutNumber: { findFirst: jest.fn() },
+    tenantPayoutNumber: { findMany: jest.fn() },
     disbursement: { count: jest.fn(), findUniqueOrThrow: jest.fn() },
     billingTransaction: { findUniqueOrThrow: jest.fn() },
     wallet: { findUniqueOrThrow: jest.fn() },
@@ -91,15 +92,17 @@ describe('WalletsService withdrawals', () => {
     prisma.tenantSetting.upsert.mockResolvedValue({ kycCompleted: true, accountActive: true, fraudHold: false })
     prisma.platformSetting.upsert.mockResolvedValue(settings)
     prisma.tenantPayoutNumberChangeRequest.findFirst.mockResolvedValue(null)
-    prisma.tenantPayoutNumber.findFirst.mockResolvedValue({
-      id: 'payout-1',
-      tenantId: 'tenant-1',
-      network: PaymentNetwork.MTN,
-      normalizedPhone: '+256771234567',
-      status: PayoutNumberStatus.VERIFIED,
-      isPrimary: true,
-      verifiedAt: new Date(),
-    })
+    prisma.tenantPayoutNumber.findMany.mockResolvedValue([
+      {
+        id: 'payout-1',
+        tenantId: 'tenant-1',
+        network: PaymentNetwork.MTN,
+        normalizedPhone: '+256771234567',
+        status: PayoutNumberStatus.VERIFIED,
+        isPrimary: true,
+        verifiedAt: new Date(),
+      },
+    ])
     prisma.disbursement.count.mockResolvedValue(1)
     prisma.disbursement.findUniqueOrThrow.mockResolvedValue({ id: 'disb-1', status: DisbursementStatus.FLAGGED_FOR_REVIEW })
     prisma.billingTransaction.findUniqueOrThrow.mockResolvedValue({ id: 'billing-1', status: BillingTransactionStatus.PENDING })
@@ -109,6 +112,7 @@ describe('WalletsService withdrawals', () => {
     tx.ledgerTransaction.create.mockResolvedValue({ id: 'ledger-1' })
     tx.billingTransaction.create.mockResolvedValue({ id: 'billing-1' })
     tx.disbursement.create.mockResolvedValue({ id: 'disb-1' })
+    tx.disbursement.findMany.mockResolvedValue([])
     tx.billingTransaction.update.mockResolvedValue({ id: 'billing-1', status: BillingTransactionStatus.COMPLETED })
     tx.disbursement.update.mockResolvedValue({ id: 'disb-1', tenantId: 'tenant-1', status: DisbursementStatus.PROCESSING })
     tx.wallet.findUniqueOrThrow.mockResolvedValue({ id: 'wallet-1', balanceUgx: 40_000 })
@@ -123,7 +127,7 @@ describe('WalletsService withdrawals', () => {
     })
   })
 
-  it('sends an instant withdrawal to the primary verified payout number', async () => {
+  it('sends an instant withdrawal to a registered verified payout number', async () => {
     const result = await service.requestWithdrawal('tenant-1', dto, 'user-1')
 
     expect(provider.sendMoney).toHaveBeenCalledWith(expect.objectContaining({
@@ -134,8 +138,8 @@ describe('WalletsService withdrawals', () => {
     expect(result.disbursement.status).toBe(DisbursementStatus.PROCESSING)
   })
 
-  it('blocks withdrawal when no verified primary payout number exists', async () => {
-    prisma.tenantPayoutNumber.findFirst.mockResolvedValue(null)
+  it('blocks withdrawal when no registered verified payout number exists', async () => {
+    prisma.tenantPayoutNumber.findMany.mockResolvedValue([])
 
     await expect(service.requestWithdrawal('tenant-1', dto, 'user-1')).rejects.toBeInstanceOf(NotFoundException)
     expect(provider.sendMoney).not.toHaveBeenCalled()
@@ -186,12 +190,12 @@ describe('WalletsService withdrawals', () => {
     }))
   })
 
-  it('flags high-risk withdrawal for review instead of calling provider', async () => {
+  it('auto-sends high-risk withdrawals after the secret PIN passes', async () => {
     prisma.platformSetting.upsert.mockResolvedValue({ ...settings, requireApprovalAboveAmountUgx: 5_000 })
 
     const result = await service.requestWithdrawal('tenant-1', dto, 'user-1')
 
-    expect(provider.sendMoney).not.toHaveBeenCalled()
-    expect(result.providerStatus).toBe('FLAGGED_FOR_REVIEW')
+    expect(provider.sendMoney).toHaveBeenCalled()
+    expect(result.disbursement.status).toBe(DisbursementStatus.PROCESSING)
   })
 })

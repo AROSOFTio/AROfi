@@ -51,6 +51,13 @@ type ReferralDashboard = {
     description: string
     createdAt: string
   }>
+  payoutNumbers: Array<{
+    id: string
+    network: string
+    normalizedPhone: string
+    label?: string | null
+    isPrimary: boolean
+  }>
 }
 
 export default async function ReferralProgrammePage() {
@@ -108,7 +115,7 @@ export default async function ReferralProgrammePage() {
             </div>
           </div>
 
-          <ReferralWithdrawalPanel availableBalanceUgx={data.summary.availableWalletBalanceUgx} />
+          <ReferralWithdrawalPanel availableBalanceUgx={data.summary.availableWalletBalanceUgx} payoutNumbers={data.payoutNumbers ?? []} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-header">
