@@ -14,8 +14,11 @@ const features = [
 
 export default function RegisterPage() {
   const [registerOpen, setRegisterOpen] = useState(true)
+  const [signupPlan, setSignupPlan] = useState<'FREE' | 'PRO' | null>(null)
 
   useEffect(() => {
+    const plan = new URLSearchParams(window.location.search).get('plan')?.toUpperCase()
+    setSignupPlan(plan === 'PRO' ? 'PRO' : plan === 'FREE' ? 'FREE' : null)
     setRegisterOpen(true)
   }, [])
 
@@ -28,7 +31,7 @@ export default function RegisterPage() {
         </div>
         <div className="home-actions">
           <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
-          <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Get Started</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setSignupPlan('FREE'); setRegisterOpen(true) }}>Get Started</button>
         </div>
       </nav>
 
@@ -41,7 +44,7 @@ export default function RegisterPage() {
             packages, vouchers, and payment settings from the console.
           </p>
           <div className="home-cta">
-            <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Workspace</button>
+            <button type="button" className="btn btn-primary" onClick={() => { setSignupPlan('FREE'); setRegisterOpen(true) }}>Create Workspace</button>
             <a href={getAppLoginUrl()} className="btn btn-ghost">Open Console</a>
           </div>
         </div>
@@ -67,7 +70,7 @@ export default function RegisterPage() {
         ))}
       </section>
 
-      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
+      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={signupPlan} />
     </main>
   )
 }

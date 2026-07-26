@@ -135,6 +135,7 @@ const demoFeed = [
 ]
 
 type PublicStats = { salesTodayUgx: number; activeSessions: number; liveRouters: number; routers: number }
+type SignupPlan = 'FREE' | 'PRO'
 
 function useCountUp(target: number, durationMs = 1400) {
   const [value, setValue] = useState(0)
@@ -155,6 +156,7 @@ function useCountUp(target: number, durationMs = 1400) {
 
 export default function RootPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [signupPlan, setSignupPlan] = useState<SignupPlan | null>(null)
   const [feedIndex, setFeedIndex] = useState(0)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [stats, setStats] = useState<PublicStats | null>(null)
@@ -173,6 +175,8 @@ export default function RootPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('register') === '1') {
+      const plan = params.get('plan')?.toUpperCase()
+      setSignupPlan(plan === 'PRO' ? 'PRO' : plan === 'FREE' ? 'FREE' : null)
       setRegisterOpen(true)
       window.history.replaceState(null, '', '/')
     }
@@ -180,6 +184,11 @@ export default function RootPage() {
       window.location.href = getAppLoginUrl()
     }
   }, [])
+
+  function openRegister(plan: SignupPlan = 'FREE') {
+    setSignupPlan(plan)
+    setRegisterOpen(true)
+  }
 
   useEffect(() => {
     const id = setInterval(() => setFeedIndex((i) => (i + 1) % demoFeed.length), 2200)
@@ -251,7 +260,7 @@ export default function RootPage() {
         <div className="home-actions">
           <Link href="/docs" className="btn btn-ghost">Docs</Link>
           <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
-          <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Register Free</button>
+          <button type="button" className="btn btn-primary" onClick={() => openRegister('FREE')}>Register Free</button>
         </div>
       </nav>
 
@@ -261,7 +270,7 @@ export default function RootPage() {
           <h1>Run your WiFi<br />like a business.</h1>
           <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, simple setup, free to start.</p>
           <div className="home-cta">
-            <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Your WiFi Business</button>
+            <button type="button" className="btn btn-primary" onClick={() => openRegister('FREE')}>Create Your WiFi Business</button>
             <Link href="/docs" className="btn btn-ghost">Documentation</Link>
             <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
           </div>
@@ -434,7 +443,7 @@ export default function RootPage() {
                 <button
                   type="button"
                   className={`btn ${tier.featured ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => setRegisterOpen(true)}
+                  onClick={() => openRegister(tier.key as SignupPlan)}
                 >
                   {tier.priceUgx === 0 ? 'Register Free' : 'Get Started'}
                 </button>
@@ -524,7 +533,7 @@ export default function RootPage() {
         <p>Run a WiFi reseller business across Kampala and Uganda. Each business gets its own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
       </div>
 
-      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
+      <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={signupPlan} />
     </main>
   )
 }

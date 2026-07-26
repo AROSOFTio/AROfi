@@ -6,10 +6,9 @@ import { getAppDashboardUrl } from '@/lib/admin-session'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { PhoneNumberField, validatePhoneNumber } from '@/components/PhoneNumberField'
 
-// Plan/payment picker is hidden from public signup for now — everyone lands
-// on the Free plan and goes straight to the dashboard. Flip this back on
-// when pricing is ready to go public; the step 4/5 UI below is untouched.
-const SHOW_PRICING = false
+// Public signup follows the selected homepage plan: Starter continues free,
+// while Pro moves the new business into subscription payment.
+const SHOW_PRICING = true
 
 type RegisterFormState = {
   accountType: 'WIFI_VENDOR' | 'RESELLER'
@@ -71,7 +70,15 @@ type CheckoutStatus = {
   checkout: { status: string; statusMessage?: string; amountUgx: number; plan: string } | null
 }
 
-export function RegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function RegisterModal({
+  open,
+  onClose,
+  initialPlan = null,
+}: {
+  open: boolean
+  onClose: () => void
+  initialPlan?: PlanKey | null
+}) {
   const [formState, setFormState] = useState(initialFormState)
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -110,6 +117,12 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       ? previous
       : { ...previous, referralCode: referralCode.toUpperCase() })
   }, [])
+
+  useEffect(() => {
+    if (open && initialPlan) {
+      setPlanChoice(initialPlan)
+    }
+  }, [initialPlan, open])
 
   if (!open) return null
 
@@ -178,6 +191,21 @@ export function RegisterModal({ open, onClose }: { open: boolean; onClose: () =>
       if (!SHOW_PRICING) {
         window.location.href = getAppDashboardUrl()
         return
+      }
+
+      if (initialPlan) {
+        try {
+          await clientPostApi('/subscription/select', { plan: initialPlan })
+          setPlanChoice(initialPlan)
+          if (initialPlan === 'FREE') {
+            window.location.href = getAppDashboardUrl()
+            return
+          }
+          setStep(5)
+          return
+        } catch (planRequestError) {
+          setPlanError(planRequestError instanceof Error ? planRequestError.message : 'Unable to save plan selection.')
+        }
       }
 
       setStep(4)
