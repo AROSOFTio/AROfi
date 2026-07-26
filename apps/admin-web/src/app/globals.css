@@ -5888,5 +5888,222 @@ html[data-theme][data-accent-theme] .chat-bubble:hover {
   }
 }
 
+/* Final dashboard density authority.
+   The dashboard should read like an operations console: compact, scannable,
+   and no heavier than the sidebar navigation. */
+.content {
+  padding: 12px 14px;
+}
+
+.page-header {
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.page-title {
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.page-subtitle,
+.dashboard-panel-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.stats-grid,
+.tenant-stats,
+.tenant-stats-compact,
+.dashboard-insights-row,
+.charts-grid {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.card,
+.dashboard-panel,
+.tenant-stat,
+.tenant-stat-compact,
+.stat-card,
+.ui-card,
+.action-center-item {
+  border-radius: var(--aa-radius-lg);
+}
+
+.card,
+.dashboard-panel {
+  margin-bottom: 12px;
+}
+
+.card-header,
+.dashboard-panel-header {
+  min-height: 40px;
+  padding: 0 12px;
+  margin-bottom: 10px;
+}
+
+.card-title,
+.dashboard-panel-title,
+.section-title {
+  font-size: 13px !important;
+  line-height: 1.2;
+}
+
+.card-body,
+.referral-link-card {
+  padding: 12px;
+}
+
+.dashboard-panel {
+  min-height: 0;
+  padding: 12px;
+}
+
+.stat-card,
+.tenant-stat,
+.tenant-stat-compact,
+.metric-card {
+  min-height: 0;
+  padding: 10px 12px !important;
+}
+
+.stat-label,
+.tenant-stat-title,
+.tenant-stat-compact-title,
+.label-text {
+  margin-bottom: 4px;
+  font-size: 11px !important;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.stat-value,
+.tenant-stat-value,
+.tenant-stat-compact-value,
+.card-value {
+  font-size: 17px !important;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.stat-change,
+.tenant-stat-note,
+.field-hint {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.btn,
+.btn-block,
+button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobile-nav-close) {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.btn-sm {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.badge {
+  min-height: 20px;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.empty-state {
+  padding: 18px 12px;
+}
+
+.empty-state svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 8px;
+}
+
+.action-center-grid {
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.action-center-item {
+  gap: 9px;
+  padding: 9px 10px;
+}
+
+.action-center-item svg {
+  width: 16px;
+  height: 16px;
+}
+
+.action-center-item strong {
+  font-size: 14px;
+}
+
+.recent-sales-list {
+  gap: 10px;
+  max-height: 318px;
+}
+
+.recent-sale {
+  grid-template-columns: 34px 1fr auto;
+  gap: 9px;
+}
+
+.sale-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+
+.sale-title,
+.sale-meta,
+.sale-amount,
+.sale-fee,
+.recent-sales-footer {
+  font-size: 12px;
+}
+
+.recent-sales-footer {
+  margin-top: 12px;
+  padding-top: 8px;
+}
+
+.chart-shell {
+  height: 290px;
+}
+
+.chart-axis,
+.chart-legend {
+  font-size: 11px;
+}
+
+.referral-code {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@media (max-width: 768px) {
+  .content {
+    padding: 10px;
+  }
+
+  .page-title {
+    font-size: 17px;
+  }
+
+  .card-body,
+  .referral-link-card,
+  .dashboard-panel {
+    padding: 10px;
+  }
+}
+
 
 

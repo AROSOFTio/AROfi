@@ -21,7 +21,7 @@ export default function MetricCard({
   children,
 }: MetricCardProps) {
   return (
-    <div className="ui-card" style={{ padding: '18px 20px' }}>
+    <div className="ui-card metric-card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span className="label-text">{label}</span>
         {icon && <div style={{ color: 'var(--brand)', opacity: 0.85 }}>{icon}</div>}

@@ -86,7 +86,7 @@ export default async function ReferralProgrammePage() {
 
       {data && (
         <>
-          <div className="stats-grid" style={{ marginBottom: 20 }}>
+          <div className="stats-grid">
             {[
               { label: 'Referred Businesses', value: `${data.summary.totalReferredAccounts}`, color: 'blue' },
               { label: 'Successful Referrals', value: `${data.summary.successfulReferrals}`, color: 'green' },
@@ -100,15 +100,15 @@ export default async function ReferralProgrammePage() {
             ))}
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card">
             <div className="card-header">
               <span className="card-title">Your Referral Link</span>
               {profile && <span className={getStatusBadgeClass(profile.status)}>{profile.status.toLowerCase()}</span>}
             </div>
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div className="card-body referral-link-card">
               <div>
                 <div className="stat-label">Referral Code</div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 24, fontWeight: 800 }}>{profile?.code}</div>
+                <div className="referral-code">{profile?.code}</div>
               </div>
               <input className="input" readOnly value={profile?.referralLink ?? ''} aria-label="Referral link" />
               <p className="field-hint">Share this link with WiFi vendors. Commission is credited after a referred business completes a qualifying Pro subscription payment.</p>
@@ -117,7 +117,7 @@ export default async function ReferralProgrammePage() {
 
           <ReferralWithdrawalPanel availableBalanceUgx={data.summary.availableWalletBalanceUgx} payoutNumbers={data.payoutNumbers ?? []} />
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card">
             <div className="card-header">
               <span className="card-title">Referred Businesses</span>
             </div>
@@ -150,7 +150,7 @@ export default async function ReferralProgrammePage() {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card">
             <div className="card-header">
               <span className="card-title">Commissions</span>
               <span className="badge badge-info">Pending {formatCurrency(data.summary.pendingCommissionUgx)}</span>

@@ -45,7 +45,7 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
   }
 
   return (
-    <form className="card" onSubmit={submit} style={{ marginBottom: 20 }}>
+    <form className="card" onSubmit={submit}>
       <div className="card-header">
         <span className="card-title">Withdraw Referral Earnings</span>
         <span className="badge badge-info">Available {formatCurrency(availableBalanceUgx)}</span>
