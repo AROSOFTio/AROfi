@@ -15,8 +15,8 @@ export default function SiteFooter() {
             <span>AROFi</span>
           </div>
           <p>
-            WiFi hotspot billing for authorised operators, licensed ISPs and compliant hotspot
-            businesses across Uganda and East Africa. Built by AROSOFT Innovations Ltd, Kampala.
+            WiFi hotspot billing with Mobile Money, vouchers and live router tools.
+            Built by AROSOFT Innovations Ltd, Kampala.
           </p>
         </div>
         <div className="site-footer-col">
@@ -42,8 +42,8 @@ export default function SiteFooter() {
         </div>
       </div>
       <div className="site-footer-bottom">
-        <span>© {new Date().getFullYear()} AROSOFT Innovations Ltd. All rights reserved.</span>
-        <span>AROFi — WiFi billing for authorised and compliant operators.</span>
+        <span>(c) {new Date().getFullYear()} AROSOFT Innovations Ltd. All rights reserved.</span>
+        <span>AROFi - WiFi billing made simple.</span>
       </div>
     </footer>
   )

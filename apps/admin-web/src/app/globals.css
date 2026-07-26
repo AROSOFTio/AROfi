@@ -6089,6 +6089,73 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   line-height: 1.2;
 }
 
+.referral-share-card .referral-link-card,
+.referral-withdraw-card {
+  display: grid;
+  gap: 10px;
+}
+
+.referral-share-top,
+.referral-link-row,
+.referral-share-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.referral-share-top {
+  justify-content: space-between;
+}
+
+.referral-link-row {
+  align-items: stretch;
+}
+
+.referral-link-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+}
+
+.referral-share-actions {
+  flex-wrap: wrap;
+}
+
+.referral-share-actions .btn,
+.referral-link-row .btn,
+.referral-share-top .btn {
+  flex: 0 0 auto;
+}
+
+.referral-copy-status,
+.referral-withdraw-message {
+  justify-self: start;
+}
+
+.referral-withdraw-card {
+  padding-bottom: 12px;
+}
+
+.referral-withdraw-card > .form-grid,
+.referral-withdraw-card > .field-hint,
+.referral-withdraw-card > .referral-withdraw-message,
+.referral-withdraw-card > .referral-withdraw-submit {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.referral-withdraw-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.referral-withdraw-submit {
+  justify-self: start;
+  margin-top: 0;
+}
+
 @media (max-width: 768px) {
   .content {
     padding: 10px;
@@ -6102,6 +6169,23 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   .referral-link-card,
   .dashboard-panel {
     padding: 10px;
+  }
+
+  .referral-link-row,
+  .referral-share-top {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .referral-share-top .btn,
+  .referral-link-row .btn,
+  .referral-withdraw-submit {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .referral-withdraw-grid {
+    grid-template-columns: 1fr;
   }
 }
 

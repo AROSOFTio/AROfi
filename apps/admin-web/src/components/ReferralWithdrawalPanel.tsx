@@ -45,19 +45,19 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
   }
 
   return (
-    <form className="card" onSubmit={submit}>
+    <form className="card referral-withdraw-card" onSubmit={submit}>
       <div className="card-header">
         <span className="card-title">Withdraw Referral Earnings</span>
         <span className="badge badge-info">Available {formatCurrency(availableBalanceUgx)}</span>
       </div>
-      <div className="form-grid">
-        <label className="field">
-          <span>Amount UGX</span>
-          <input className="input" value={amountUgx} onChange={(event) => setAmountUgx(event.target.value)} inputMode="numeric" required />
+      <div className="form-grid referral-withdraw-grid">
+        <label className="form-group">
+          <span className="form-label">Amount UGX</span>
+          <input className="form-input" value={amountUgx} onChange={(event) => setAmountUgx(event.target.value)} inputMode="numeric" required />
         </label>
-        <label className="field">
-          <span>Registered Payout Number</span>
-          <select className="input" value={payoutNumberId} onChange={(event) => setPayoutNumberId(event.target.value)} required>
+        <label className="form-group">
+          <span className="form-label">Payout Number</span>
+          <select className="form-input" value={payoutNumberId} onChange={(event) => setPayoutNumberId(event.target.value)} required>
             {payoutNumbers.map((number) => (
               <option key={number.id} value={number.id}>
                 {number.label ? `${number.label} - ` : ''}{number.network} {number.normalizedPhone}{number.isPrimary ? ' - Primary' : ''}
@@ -65,14 +65,14 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Withdrawal Secret PIN</span>
-          <input className="input" value={secretKey} onChange={(event) => setSecretKey(event.target.value)} type="password" required />
+        <label className="form-group">
+          <span className="form-label">Secret PIN</span>
+          <input className="form-input" value={secretKey} onChange={(event) => setSecretKey(event.target.value)} type="password" required />
         </label>
       </div>
-      {message && <div className="badge badge-success" style={{ marginTop: 12 }}>{message}</div>}
-      {error && <div className="badge badge-danger" style={{ marginTop: 12 }}>{error}</div>}
-      <button className="btn btn-primary" type="submit" disabled={saving || availableBalanceUgx <= 0 || payoutNumbers.length === 0} style={{ marginTop: 14 }}>
+      {message && <div className="badge badge-success referral-withdraw-message">{message}</div>}
+      {error && <div className="badge badge-danger referral-withdraw-message">{error}</div>}
+      <button className="btn btn-primary referral-withdraw-submit" type="submit" disabled={saving || availableBalanceUgx <= 0 || payoutNumbers.length === 0}>
         {saving ? 'Submitting...' : 'Request Withdrawal'}
       </button>
       {payoutNumbers.length === 0 && <p className="field-hint">Register and verify up to two payout numbers before withdrawing referral earnings.</p>}

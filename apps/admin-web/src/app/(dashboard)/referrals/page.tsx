@@ -1,6 +1,7 @@
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import { ReferralWithdrawalPanel } from '@/components/ReferralWithdrawalPanel'
+import { ReferralShareCard } from '@/components/ReferralShareCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +73,7 @@ export default async function ReferralProgrammePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Referral Programme</h1>
-          <p className="page-subtitle">Invite WiFi vendors, track qualified Pro subscriptions, and monitor your referral wallet.</p>
+          <p className="page-subtitle">Share AROFi, track signups, and withdraw earned commissions.</p>
         </div>
       </div>
 
@@ -100,20 +101,12 @@ export default async function ReferralProgrammePage() {
             ))}
           </div>
 
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">Your Referral Link</span>
-              {profile && <span className={getStatusBadgeClass(profile.status)}>{profile.status.toLowerCase()}</span>}
-            </div>
-            <div className="card-body referral-link-card">
-              <div>
-                <div className="stat-label">Referral Code</div>
-                <div className="referral-code">{profile?.code}</div>
-              </div>
-              <input className="input" readOnly value={profile?.referralLink ?? ''} aria-label="Referral link" />
-              <p className="field-hint">Share this link with WiFi vendors. Commission is credited after a referred business completes a qualifying Pro subscription payment.</p>
-            </div>
-          </div>
+          <ReferralShareCard
+            code={profile?.code}
+            referralLink={profile?.referralLink}
+            status={profile?.status}
+            statusClassName={profile ? getStatusBadgeClass(profile.status) : undefined}
+          />
 
           <ReferralWithdrawalPanel availableBalanceUgx={data.summary.availableWalletBalanceUgx} payoutNumbers={data.payoutNumbers ?? []} />
 

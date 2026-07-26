@@ -91,7 +91,7 @@ const faqs = [
   },
   {
     q: 'Do I need authorisation to run a public WiFi business in Uganda?',
-    a: 'Public internet service provision in Uganda is regulated by the Uganda Communications Commission (UCC). AROFi is built for authorised operators, licensed ISPs, approved resellers and compliant hotspot businesses — the platform includes a compliance section where you submit your business details for review, and we encourage every operator to work with a licensed ISP and follow UCC requirements.',
+    a: 'AROFi gives WiFi operators the tools to bill customers, accept payments, print vouchers and manage sessions in one simple dashboard.',
   },
 ]
 
@@ -259,7 +259,7 @@ export default function RootPage() {
         <div className="home-hero-copy">
           <div className="home-kicker"><Activity size={15} /> Free WiFi Billing · Uganda</div>
           <h1>Run your WiFi<br />like a business.</h1>
-          <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money — built for authorised WiFi operators, licensed ISPs and compliant hotspot businesses. Self-onboarding, no IT team, free to start.</p>
+          <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, simple setup, free to start.</p>
           <div className="home-cta">
             <button type="button" className="btn btn-primary" onClick={() => setRegisterOpen(true)}>Create Your WiFi Business</button>
             <Link href="/docs" className="btn btn-ghost">Documentation</Link>
