@@ -65,10 +65,8 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.referralsRead,
   ],
   ResellerPartner: [
-    PERMISSIONS.tenantsRead,
     PERMISSIONS.referralsRead,
     PERMISSIONS.referralWithdrawalsManage,
-    PERMISSIONS.settingsManage,
     PERMISSIONS.supportRead,
     PERMISSIONS.supportWrite,
   ],

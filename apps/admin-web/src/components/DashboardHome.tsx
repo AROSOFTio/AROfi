@@ -12,7 +12,8 @@ import OnboardingWizard from '@/components/OnboardingWizard'
 import ComplianceBanner from '@/components/ComplianceBanner'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
-import { isVendorWorkspace } from '@/lib/workspace'
+import { isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
+import ReferralProgrammePage from '@/app/(dashboard)/referrals/page'
 import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
@@ -25,6 +26,11 @@ type DashboardSearchParams = { range?: string; from?: string; to?: string }
 export default async function DashboardHome({ searchParams }: { searchParams?: DashboardSearchParams }) {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
   const isVendor = isVendorWorkspace(session?.user)
+  const isReseller = isResellerWorkspace(session?.user)
+
+  if (isReseller) {
+    return <ReferralProgrammePage />
+  }
 
   if (isVendor) {
     return <VendorDashboard session={session} searchParams={searchParams} />

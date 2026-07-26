@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
-import { isVendorWorkspace } from '@/lib/workspace'
+import { isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
 
 const tenantOnlyPaths = new Set([
   '/billing',
@@ -27,6 +27,12 @@ const platformOnlyPaths = new Set([
   '/businesses',
 ])
 
+const resellerAllowedPaths = new Set([
+  '/dashboard',
+  '/referrals',
+  '/support',
+])
+
 export default function WorkspaceRouteGuard({
   user,
   children,
@@ -37,8 +43,12 @@ export default function WorkspaceRouteGuard({
   const pathname = usePathname()
   const router = useRouter()
   const isVendor = isVendorWorkspace(user)
+  const isReseller = isResellerWorkspace(user)
   const basePath = `/${pathname.split('/').filter(Boolean)[0] ?? 'dashboard'}`
-  const wrongWorkspace = (!isVendor && tenantOnlyPaths.has(basePath)) || (isVendor && platformOnlyPaths.has(basePath))
+  const wrongWorkspace =
+    (isReseller && !resellerAllowedPaths.has(basePath)) ||
+    (!isVendor && !isReseller && tenantOnlyPaths.has(basePath)) ||
+    (isVendor && platformOnlyPaths.has(basePath))
 
   useEffect(() => {
     if (wrongWorkspace) {

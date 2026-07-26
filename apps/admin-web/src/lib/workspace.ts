@@ -7,5 +7,9 @@ export function isPlatformAdmin(user?: AdminUser | null) {
 }
 
 export function isVendorWorkspace(user?: AdminUser | null) {
-  return Boolean(user?.tenantId) && !isPlatformAdmin(user)
+  return Boolean(user?.tenantId) && !isPlatformAdmin(user) && !isResellerWorkspace(user)
+}
+
+export function isResellerWorkspace(user?: AdminUser | null) {
+  return user?.role === 'ResellerPartner'
 }

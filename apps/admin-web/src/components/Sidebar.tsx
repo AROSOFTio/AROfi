@@ -38,7 +38,7 @@ import {
   Zap,
 } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
-import { isPlatformAdmin, isVendorWorkspace } from '@/lib/workspace'
+import { isPlatformAdmin, isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
 import { formatRoleName } from '@/lib/format'
 
 type NavItem = {
@@ -321,7 +321,7 @@ const tenantNavItems: NavGroup[] = [
       { href: '/sales', label: 'Sales', required: ['billing.read'], tenantOnly: true },
       { href: '/transactions', label: 'Transactions', required: ['billing.read'], tenantOnly: true },
       { href: '/earnings', label: 'Wallet', required: ['billing.read'], tenantOnly: true },
-      { href: '/referrals', label: 'Referral Programme', required: ['referrals.read'], tenantOnly: true },
+      { href: '/referrals', label: 'Referral Programme', required: ['referrals.read'] },
       { href: '/disbursements', label: 'Withdraw Money', required: ['disbursements.read'], tenantOnly: true },
     ],
   },
@@ -374,6 +374,23 @@ const tenantNavItems: NavGroup[] = [
   },
 ]
 
+const resellerNavItems: NavGroup[] = [
+  {
+    label: 'Referral Programme',
+    icon: <Share2 size={17} />,
+    items: [
+      { href: '/referrals', label: 'Referral Programme', required: ['referrals.read'], tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Support',
+    icon: <LifeBuoy size={17} />,
+    items: [
+      { href: '/support', label: 'Support', required: ['support.read'] },
+    ],
+  },
+]
+
 type SidebarUser = AdminSessionResponse['user']
 
 function canAccess(user: SidebarUser, required: string[] = [], platformOnly?: boolean, tenantOnly?: boolean) {
@@ -399,9 +416,10 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const isVendor = isVendorWorkspace(user)
+  const isReseller = isResellerWorkspace(user)
   const currentQuery = searchParams.toString()
   const currentHref = currentQuery ? `${pathname}?${currentQuery}` : pathname
-  const navigationGroups = isVendor ? tenantNavItems : navItems
+  const navigationGroups = isReseller ? resellerNavItems : isVendor ? tenantNavItems : navItems
   const visibleGroups = useMemo(() => navigationGroups
     .map((group) => ({
       ...group,
@@ -415,7 +433,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
     if (activeGroup) setOpenGroup(activeGroup.label)
   }, [currentHref, visibleGroups])
 
-  const workspaceLabel = isVendor ? 'Business Dashboard' : 'Platform Admin'
+  const workspaceLabel = isReseller ? 'Referral Partner Dashboard' : isVendor ? 'Business Dashboard' : 'Platform Admin'
 
   return (
     <aside className="sidebar">
@@ -425,7 +443,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>
           <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isVendor ? 'Business' : 'Platform'} - {formatRoleName(user.role)}</span>
+            <span className="badge badge-info" style={{ padding: '6px 10px' }}>{isReseller ? 'Referral Partner' : isVendor ? 'Business' : 'Platform'} - {formatRoleName(user.role)}</span>
             {isVendor && user.tenantName && (
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{user.tenantName}</span>
             )}
