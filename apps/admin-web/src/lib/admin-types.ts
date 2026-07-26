@@ -272,6 +272,12 @@ export type VouchersOverviewResponse = {
       code: string
       durationMinutes: number
     }
+    agent?: {
+      id: string
+      code: string
+      name: string
+      phoneNumber: string
+    } | null
     generatedCount: number
     soldCount: number
     redeemedCount: number

@@ -724,6 +724,7 @@ model Agent {
   commissions       AgentCommission[]
   settlements       Settlement[]
   disbursements     Disbursement[]
+  voucherBatches    VoucherBatch[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, phoneNumber])
@@ -1006,6 +1007,8 @@ model VoucherBatch {
   package           Package           @relation(fields: [packageId], references: [id])
   templateId        String?
   template          VoucherTemplate?  @relation(fields: [templateId], references: [id])
+  agentId           String?
+  agent             Agent?            @relation(fields: [agentId], references: [id])
   generatedByUserId String?
   generatedByUser   User?             @relation("VoucherBatchGenerator", fields: [generatedByUserId], references: [id])
   batchNumber       String            @unique
@@ -1024,6 +1027,7 @@ model VoucherBatch {
   printLogs         VoucherPrintLog[]
 
   @@index([tenantId, createdAt])
+  @@index([agentId, createdAt])
 }
 
 model Voucher {

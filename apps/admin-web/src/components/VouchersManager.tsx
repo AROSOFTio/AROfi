@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import {
+  AgentsOverviewResponse,
   PackageCatalogResponse,
   TenantOverviewResponse,
   VoucherTemplatesResponse,
@@ -28,6 +29,7 @@ type TemplateFormState = {
 
 type BatchFormState = {
   tenantId: string
+  agentId: string
   packageId: string
   templateId: string
   codeFormat: 'NUMBERS' | 'MIXED' | 'UPPERCASE_TEXT' | 'LOWERCASE_TEXT'
@@ -53,6 +55,7 @@ const initialTemplateForm: TemplateFormState = {
 
 const initialBatchForm: BatchFormState = {
   tenantId: '',
+  agentId: '',
   packageId: '',
   templateId: '',
   codeFormat: 'MIXED',
@@ -187,6 +190,7 @@ export default function VouchersManager() {
   const [templates, setTemplates] = useState<VoucherTemplatesResponse | null>(null)
   const [packages, setPackages] = useState<PackageCatalogResponse['items']>([])
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
+  const [agents, setAgents] = useState<AgentsOverviewResponse['agents']>([])
   const [templateForm, setTemplateForm] = useState<TemplateFormState>(initialTemplateForm)
   const [batchForm, setBatchForm] = useState<BatchFormState>(initialBatchForm)
   const [loading, setLoading] = useState(true)
@@ -222,20 +226,27 @@ export default function VouchersManager() {
     [templates, batchForm.tenantId],
   )
 
+  const tenantAgents = useMemo(
+    () => agents.filter((agent) => agent.tenant.id === batchForm.tenantId && agent.status === 'ACTIVE'),
+    [agents, batchForm.tenantId],
+  )
+
   async function loadData() {
     try {
       setLoading(true)
-      const [overviewData, templateData, packageData, tenantData] = await Promise.all([
+      const [overviewData, templateData, packageData, tenantData, agentData] = await Promise.all([
         clientFetchApi<VouchersOverviewResponse>('/vouchers/overview'),
         clientFetchApi<VoucherTemplatesResponse>('/vouchers/templates'),
         clientFetchApi<PackageCatalogResponse>('/packages'),
         clientFetchApi<TenantOverviewResponse>('/tenants'),
+        clientFetchApi<AgentsOverviewResponse>('/agents/overview'),
       ])
 
       setOverview(overviewData)
       setTemplates(templateData)
       setPackages(packageData.items)
       setTenants(tenantData.items)
+      setAgents(agentData.agents ?? [])
 
       const defaultTenantId = tenantData.items[0]?.id ?? ''
       if (!templateForm.tenantId && defaultTenantId) {
@@ -305,19 +316,20 @@ export default function VouchersManager() {
     setBatchFormError(null)
     setSuccess(null)
 
-    if (!batchForm.tenantId || !batchForm.packageId) {
-      const failure = 'Select a business and package before generating vouchers'
+    if (!batchForm.tenantId || !batchForm.agentId || !batchForm.packageId) {
+      const failure = 'Select a business, agent, and package before generating vouchers'
       setError(failure)
       setBatchFormError(failure)
       return
     }
 
     setSubmittingBatch(true)
-    setBatchProcessText('Generating voucher codes and reserving the batch.')
+    setBatchProcessText('Generating voucher codes for this agent.')
 
     try {
-      await clientPostApi('/vouchers/batches', {
+      const createdBatch = await clientPostApi<VouchersOverviewResponse['batches'][number]>('/vouchers/batches', {
         tenantId: batchForm.tenantId,
+        agentId: batchForm.agentId,
         packageId: batchForm.packageId,
         templateId: batchForm.templateId || undefined,
         codeFormat: batchForm.codeFormat,
@@ -328,14 +340,16 @@ export default function VouchersManager() {
         notes: batchForm.notes.trim() || undefined,
       })
 
-      setBatchProcessText('Refreshing voucher batch list.')
-      setSuccess('Voucher batch generated successfully')
+      setBatchProcessText('Opening voucher print sheet.')
+      setSuccess('Agent vouchers generated successfully')
       setBatchForm((previous) => ({
         ...initialBatchForm,
         tenantId: previous.tenantId,
       }))
       await loadData()
       setBatchModalOpen(false)
+      setSelectedPrintTemplateId('agent')
+      setPrintBatch(createdBatch)
     } catch (requestError) {
       const failure = requestError instanceof Error ? requestError.message : 'Unable to generate voucher batch'
       setError(failure)
@@ -509,8 +523,8 @@ export default function VouchersManager() {
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingBatch && setBatchModalOpen(false)}>
           <div className="modal-card wide" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setBatchModalOpen(false)} disabled={submittingBatch}>Close</button>
-            <div className="modal-kicker">Voucher batch</div>
-            <h2 className="modal-title">Generate Voucher Batch</h2>
+            <div className="modal-kicker">Agent voucher stock</div>
+            <h2 className="modal-title">Generate Vouchers for Agent</h2>
             <form onSubmit={handleBatchSubmit} style={{ marginTop: 18 }}>
             <div className="stats-grid" style={{ marginBottom: 12 }}>
               <div className="form-group">
@@ -522,6 +536,7 @@ export default function VouchersManager() {
                     setBatchForm((previous) => ({
                       ...previous,
                       tenantId: event.target.value,
+                      agentId: '',
                       packageId: '',
                       templateId: '',
                     }))
@@ -532,6 +547,17 @@ export default function VouchersManager() {
                   {tenants.map((tenant) => (
                     <option key={tenant.id} value={tenant.id}>
                       {tenant.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Agent</label>
+                <select className="form-input" value={batchForm.agentId} onChange={(event) => setBatchForm((previous) => ({ ...previous, agentId: event.target.value }))} required>
+                  <option value="">Select agent</option>
+                  {tenantAgents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name} ({agent.code})
                     </option>
                   ))}
                 </select>
@@ -578,7 +604,7 @@ export default function VouchersManager() {
                 <input className="form-input" type="number" min={6} max={24} value={batchForm.codeLength} onChange={(event) => setBatchForm((previous) => ({ ...previous, codeLength: event.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Quantity</label>
+                <label className="form-label">Number of Copies</label>
                 <input className="form-input" type="number" min={1} value={batchForm.quantity} onChange={(event) => setBatchForm((previous) => ({ ...previous, quantity: event.target.value }))} />
               </div>
               <div className="form-group">
@@ -591,13 +617,13 @@ export default function VouchersManager() {
               </div>
               <div className="form-group">
                 <label className="form-label">Notes</label>
-                <input className="form-input" value={batchForm.notes} onChange={(event) => setBatchForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder="Batch for city center outlets" />
+                <input className="form-input" value={batchForm.notes} onChange={(event) => setBatchForm((previous) => ({ ...previous, notes: event.target.value }))} placeholder="Physical vouchers for this agent" />
               </div>
             </div>
             <div style={{ display: 'grid', gap: 12 }}>
-              <FormProcessStatus busy={submittingBatch} error={batchFormError} success={success?.includes('batch') ? success : null} text={batchProcessText || 'Generating vouchers. The batch list refreshes after AROFi saves it.'} />
+              <FormProcessStatus busy={submittingBatch} error={batchFormError} success={success?.includes('Agent vouchers') ? success : null} text={batchProcessText || 'Generate vouchers for the selected agent, then print the current voucher sheet.'} />
               <button type="submit" className="btn btn-primary" disabled={submittingBatch}>
-                {submittingBatch ? 'Generating vouchers...' : 'Generate Vouchers'}
+                {submittingBatch ? 'Generating vouchers...' : 'Generate and Print'}
               </button>
             </div>
             </form>
@@ -631,6 +657,7 @@ export default function VouchersManager() {
               <tr>
                 <th>Batch</th>
                 <th>Business</th>
+                <th>Agent</th>
                 <th>Package</th>
                 <th>Qty</th>
                 <th>Face Value</th>
@@ -644,7 +671,7 @@ export default function VouchersManager() {
             <tbody>
               {!loading && voucherBatches.length === 0 && (
                 <tr>
-                  <td colSpan={10}>
+                  <td colSpan={11}>
                     <div className="empty-state">
                       <p>No voucher batches generated yet.</p>
                     </div>
@@ -658,6 +685,7 @@ export default function VouchersManager() {
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Random {batch.prefix.toLowerCase()} codes</div>
                   </td>
                   <td>{batch.tenant.name}</td>
+                  <td>{batch.agent ? `${batch.agent.name} (${batch.agent.code})` : 'Unassigned'}</td>
                   <td>{batch.package.name}</td>
                   <td>{batch.quantity}</td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(batch.faceValueUgx)}</td>
@@ -764,7 +792,7 @@ export default function VouchersManager() {
               <div>
                 <h2 className="modal-title">Preview AROFi PDF Template</h2>
                 <p className="page-subtitle" style={{ marginBottom: 0 }}>
-                  {printBatch.batchNumber} uses real voucher codes from this batch. Scan QR to open the portal with the voucher ready.
+                  {printBatch.batchNumber} uses real voucher codes{printBatch.agent ? ` assigned to ${printBatch.agent.name}` : ''}. Scan QR to open the portal with the voucher ready.
                 </p>
               </div>
               <button
@@ -778,6 +806,7 @@ export default function VouchersManager() {
             <div style={{ display: 'grid', gap: 16 }}>
               <div style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
                 Showing all {printBatch.previewVouchers.length} generated vouchers in this batch. Download PDF prints this same voucher sheet.
+                {printBatch.agent ? ` Agent: ${printBatch.agent.name} (${printBatch.agent.code}).` : ''}
               </div>
               <div
                 style={{

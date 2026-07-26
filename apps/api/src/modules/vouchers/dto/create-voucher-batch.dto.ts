@@ -16,6 +16,10 @@ export class CreateVoucherBatchDto {
 
   @IsOptional()
   @IsUUID()
+  agentId?: string
+
+  @IsOptional()
+  @IsUUID()
   generatedByUserId?: string
 
   @IsOptional()

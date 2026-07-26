@@ -120,6 +120,14 @@ export class VouchersService {
               durationMinutes: true,
             },
           },
+          agent: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              phoneNumber: true,
+            },
+          },
           vouchers: {
             select: {
               id: true,
@@ -241,6 +249,7 @@ export class VouchersService {
           status: batch.status,
           tenant: batch.tenant,
           package: batch.package,
+          agent: batch.agent,
           generatedCount,
           soldCount,
           redeemedCount,
@@ -420,7 +429,7 @@ export class VouchersService {
   }
 
   async createBatch(dto: CreateVoucherBatchDto) {
-    const [template, pkg] = await Promise.all([
+    const [template, pkg, agent] = await Promise.all([
       dto.templateId
         ? this.prisma.voucherTemplate.findUnique({
             where: { id: dto.templateId },
@@ -435,6 +444,11 @@ export class VouchersService {
           },
         },
       }),
+      dto.agentId
+        ? this.prisma.agent.findUnique({
+            where: { id: dto.agentId },
+          })
+        : Promise.resolve(null),
     ])
 
     if (template && template.tenantId !== dto.tenantId) {
@@ -443,6 +457,10 @@ export class VouchersService {
 
     if (!pkg || pkg.tenantId !== dto.tenantId) {
       throw new NotFoundException('Package not found for this business')
+    }
+
+    if (dto.agentId && (!agent || agent.tenantId !== dto.tenantId)) {
+      throw new NotFoundException('Agent not found for this business')
     }
 
     if (template?.packageId && template.packageId !== dto.packageId) {
@@ -476,6 +494,7 @@ export class VouchersService {
           tenantId: dto.tenantId,
           packageId: dto.packageId,
           templateId: template?.id,
+          agentId: agent?.id,
           generatedByUserId: dto.generatedByUserId,
           batchNumber,
           prefix: codeModeLabel,
@@ -499,7 +518,7 @@ export class VouchersService {
         })),
       })
 
-      return tx.voucherBatch.findUnique({
+      const createdBatch = await tx.voucherBatch.findUniqueOrThrow({
         where: { id: batch.id },
         include: {
           package: {
@@ -507,12 +526,24 @@ export class VouchersService {
               id: true,
               name: true,
               code: true,
+              durationMinutes: true,
+            },
+          },
+          agent: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              phoneNumber: true,
             },
           },
           tenant: {
             select: {
               id: true,
               name: true,
+              domain: true,
+              supportPhone: true,
+              supportEmail: true,
             },
           },
           vouchers: {
@@ -525,6 +556,28 @@ export class VouchersService {
           },
         },
       })
+
+      return {
+        id: createdBatch.id,
+        batchNumber: createdBatch.batchNumber,
+        prefix: createdBatch.prefix,
+        quantity: createdBatch.quantity,
+        faceValueUgx: createdBatch.faceValueUgx,
+        status: createdBatch.status,
+        tenant: createdBatch.tenant,
+        package: createdBatch.package,
+        agent: createdBatch.agent,
+        generatedCount: createdBatch.vouchers.length,
+        soldCount: 0,
+        redeemedCount: 0,
+        remainingCount: createdBatch.vouchers.length,
+        previewVouchers: createdBatch.vouchers.map((voucher) => ({
+          id: voucher.id,
+          code: voucher.code,
+          status: voucher.status,
+        })),
+        createdAt: createdBatch.createdAt,
+      }
     })
   }
 

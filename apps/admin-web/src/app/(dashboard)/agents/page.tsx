@@ -1,5 +1,4 @@
 import RegisterAgentPanel from '@/components/RegisterAgentPanel'
-import SellVoucherPanel from '@/components/SellVoucherPanel'
 import { AdminSessionResponse, AgentsOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
@@ -24,7 +23,6 @@ export default async function AgentsPage() {
           <p className="page-subtitle">Register physical voucher sellers and track each agent's voucher sales for clean cash accountability.</p>
         </div>
         {canManageBusinessAgents && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <SellVoucherPanel />
           <RegisterAgentPanel />
         </div>}
       </div>
