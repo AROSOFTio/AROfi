@@ -19,7 +19,7 @@ export class ReferralsController {
 
   @RequirePermissions(PERMISSIONS.referralsRead)
   @Post('withdrawals')
-  requestWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Body() body: { amountUgx?: number; payoutPhone?: string }) {
+  requestWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Body() body: { amountUgx?: number; payoutNumberId?: string; secretKey?: string }) {
     return this.referralsService.requestWithdrawal(user.id, body)
   }
 
@@ -43,5 +43,27 @@ export class ReferralsController {
     @Body() body: { reason?: string },
   ) {
     return this.referralsService.rejectWithdrawal(transactionId, user.id, body.reason?.trim() || 'Rejected by Dev Admin')
+  }
+
+  @RequirePermissions(PERMISSIONS.all)
+  @Post('admin/profiles/:profileId/suspend')
+  suspendProfile(@CurrentUser() user: AuthenticatedAdminUser, @Param('profileId') profileId: string, @Body() body: { reason?: string }) {
+    return this.referralsService.suspendProfile(profileId, user.id, body.reason?.trim() || 'Suspended by Dev Admin')
+  }
+
+  @RequirePermissions(PERMISSIONS.all)
+  @Post('admin/profiles/:profileId/reactivate')
+  reactivateProfile(@CurrentUser() user: AuthenticatedAdminUser, @Param('profileId') profileId: string, @Body() body: { reason?: string }) {
+    return this.referralsService.reactivateProfile(profileId, user.id, body.reason?.trim() || 'Reactivated by Dev Admin')
+  }
+
+  @RequirePermissions(PERMISSIONS.all)
+  @Post('admin/profiles/:profileId/adjust-wallet')
+  adjustWallet(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('profileId') profileId: string,
+    @Body() body: { amountUgx?: number; reason?: string },
+  ) {
+    return this.referralsService.adjustWallet(profileId, user.id, body)
   }
 }

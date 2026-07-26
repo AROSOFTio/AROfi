@@ -1,6 +1,7 @@
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
 import { AdminReferralWithdrawalActions } from '@/components/AdminReferralWithdrawalActions'
+import { AdminReferralProfileActions } from '@/components/AdminReferralProfileActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -116,11 +117,12 @@ export default async function AdminReferralManagementPage() {
                     <th>Referrals</th>
                     <th>Wallet</th>
                     <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {profiles.length === 0 && (
-                    <tr><td colSpan={6}><div className="empty-state"><p>No referral partners yet.</p></div></td></tr>
+                    <tr><td colSpan={7}><div className="empty-state"><p>No referral partners yet.</p></div></td></tr>
                   )}
                   {profiles.map((profile) => (
                     <tr key={profile.id}>
@@ -136,6 +138,7 @@ export default async function AdminReferralManagementPage() {
                         <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{formatCurrency(profile.pendingBalanceUgx)} pending</div>
                       </td>
                       <td><span className={getStatusBadgeClass(profile.status)}>{profile.status.toLowerCase()}</span></td>
+                      <td><AdminReferralProfileActions profileId={profile.id} status={profile.status} /></td>
                     </tr>
                   ))}
                 </tbody>

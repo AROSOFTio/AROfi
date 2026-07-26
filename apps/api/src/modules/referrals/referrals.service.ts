@@ -501,6 +501,104 @@ export class ReferralsService {
     })
   }
 
+  async suspendProfile(profileId: string, adminUserId: string, reason: string) {
+    const profile = await this.prisma.referralProfile.update({
+      where: { id: profileId },
+      data: {
+        status: ReferralProfileStatus.SUSPENDED,
+        referralPrivilegesSuspendedAt: new Date(),
+        suspensionReason: reason,
+      },
+    })
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId: profile.tenantId,
+        userId: adminUserId,
+        action: 'referral.profile_suspended',
+        entity: 'ReferralProfile',
+        entityId: profile.id,
+        severity: AuditSeverity.WARNING,
+        details: { reason },
+      },
+    })
+    return profile
+  }
+
+  async reactivateProfile(profileId: string, adminUserId: string, reason: string) {
+    const profile = await this.prisma.referralProfile.update({
+      where: { id: profileId },
+      data: {
+        status: ReferralProfileStatus.ACTIVE,
+        referralPrivilegesSuspendedAt: null,
+        suspensionReason: null,
+      },
+    })
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId: profile.tenantId,
+        userId: adminUserId,
+        action: 'referral.profile_reactivated',
+        entity: 'ReferralProfile',
+        entityId: profile.id,
+        severity: AuditSeverity.INFO,
+        details: { reason },
+      },
+    })
+    return profile
+  }
+
+  async adjustWallet(profileId: string, adminUserId: string, dto: { amountUgx?: number; reason?: string }) {
+    const amountUgx = Number(dto.amountUgx)
+    const reason = dto.reason?.trim()
+    if (!Number.isFinite(amountUgx) || amountUgx === 0) {
+      throw new BadRequestException('Wallet adjustment amount must be a non-zero number')
+    }
+    if (!reason) {
+      throw new BadRequestException('Wallet adjustment reason is required')
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.referralProfile.findUnique({ where: { id: profileId } })
+      if (!profile) throw new NotFoundException('Referral profile not found')
+      const newBalance = profile.availableBalanceUgx + Math.round(amountUgx)
+      if (newBalance < 0) throw new BadRequestException('Wallet adjustment cannot make the referral wallet negative')
+      const updated = await tx.referralProfile.update({
+        where: { id: profile.id },
+        data: { availableBalanceUgx: newBalance },
+      })
+      const adjustment = await tx.referralWalletTransaction.create({
+        data: {
+          referrerProfileId: profile.id,
+          type: ReferralWalletTransactionType.ADMIN_ADJUSTMENT,
+          status: ReferralWalletTransactionStatus.AVAILABLE,
+          amountUgx: Math.round(amountUgx),
+          previousBalanceUgx: profile.availableBalanceUgx,
+          newBalanceUgx: updated.availableBalanceUgx,
+          description: `Dev Admin wallet adjustment: ${reason}`,
+          adminUserId,
+        },
+      })
+      await tx.auditLog.create({
+        data: {
+          tenantId: profile.tenantId,
+          userId: adminUserId,
+          action: 'referral.wallet_adjusted',
+          entity: 'ReferralWalletTransaction',
+          entityId: adjustment.id,
+          severity: AuditSeverity.WARNING,
+          details: {
+            profileId: profile.id,
+            amountUgx: Math.round(amountUgx),
+            previousBalanceUgx: profile.availableBalanceUgx,
+            newBalanceUgx: updated.availableBalanceUgx,
+            reason,
+          },
+        },
+      })
+      return adjustment
+    })
+  }
+
   private async ensureProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
