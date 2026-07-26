@@ -1,5 +1,6 @@
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { AdminReferralWithdrawalActions } from '@/components/AdminReferralWithdrawalActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,6 +66,7 @@ export default async function AdminReferralManagementPage() {
   const profiles = data?.profiles ?? []
   const relationships = data?.relationships ?? []
   const commissions = data?.commissions ?? []
+  const withdrawals = (data?.walletTransactions ?? []).filter((entry) => entry.type.includes('WITHDRAWAL'))
 
   return (
     <>
@@ -202,6 +204,39 @@ export default async function AdminReferralManagementPage() {
                       <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(commission.amountUgx)}</td>
                       <td><span className={getStatusBadgeClass(commission.status)}>{commission.status.toLowerCase()}</span></td>
                       <td style={{ fontSize: 12 }}>{formatDate(commission.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="card-header">
+              <span className="card-title">Referral Withdrawals</span>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {withdrawals.length === 0 && (
+                    <tr><td colSpan={5}><div className="empty-state"><p>No referral withdrawal requests yet.</p></div></td></tr>
+                  )}
+                  {withdrawals.map((withdrawal) => (
+                    <tr key={withdrawal.id}>
+                      <td>{withdrawal.description}</td>
+                      <td>{formatCurrency(withdrawal.amountUgx)}</td>
+                      <td><span className={getStatusBadgeClass(withdrawal.status)}>{withdrawal.status.toLowerCase()}</span></td>
+                      <td style={{ fontSize: 12 }}>{formatDate(withdrawal.createdAt)}</td>
+                      <td>{withdrawal.status === 'PENDING' ? <AdminReferralWithdrawalActions transactionId={withdrawal.id} /> : 'No action'}</td>
                     </tr>
                   ))}
                 </tbody>

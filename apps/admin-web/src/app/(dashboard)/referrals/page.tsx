@@ -1,5 +1,6 @@
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
+import { ReferralWithdrawalPanel } from '@/components/ReferralWithdrawalPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -106,6 +107,8 @@ export default async function ReferralProgrammePage() {
               <p className="field-hint">Share this link with WiFi vendors. Commission is credited after a referred business completes a qualifying Pro subscription payment.</p>
             </div>
           </div>
+
+          <ReferralWithdrawalPanel availableBalanceUgx={data.summary.availableWalletBalanceUgx} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-header">

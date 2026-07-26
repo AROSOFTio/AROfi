@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import {
   NotificationAudience,
   Prisma,
@@ -254,6 +254,149 @@ export class ReferralsService {
     }
   }
 
+  async requestWithdrawal(userId: string, dto: { amountUgx?: number; payoutPhone?: string }) {
+    const amountUgx = this.positiveInt(dto.amountUgx, 'amountUgx')
+    const payoutPhone = dto.payoutPhone?.trim()
+    if (!payoutPhone) {
+      throw new BadRequestException('Enter the Mobile Money number for this referral withdrawal')
+    }
+
+    const settings = await this.prisma.platformSetting.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global' },
+      select: {
+        referralMinimumWithdrawalUgx: true,
+        referralMaximumWithdrawalUgx: true,
+        referralWithdrawalFeeBps: true,
+        referralWithdrawalFlatFeeUgx: true,
+      },
+    })
+    if (settings.referralMinimumWithdrawalUgx > 0 && amountUgx < settings.referralMinimumWithdrawalUgx) {
+      throw new BadRequestException(`Minimum referral withdrawal is UGX ${settings.referralMinimumWithdrawalUgx.toLocaleString('en-US')}`)
+    }
+    if (settings.referralMaximumWithdrawalUgx && amountUgx > settings.referralMaximumWithdrawalUgx) {
+      throw new BadRequestException(`Maximum referral withdrawal is UGX ${settings.referralMaximumWithdrawalUgx.toLocaleString('en-US')}`)
+    }
+    const feeUgx = Math.round((amountUgx * settings.referralWithdrawalFeeBps) / 10000) + settings.referralWithdrawalFlatFeeUgx
+    const totalDebitUgx = amountUgx + feeUgx
+
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.referralProfile.findUnique({
+        where: { userId },
+        include: { user: { select: { tenantId: true } } },
+      })
+      if (!profile) throw new NotFoundException('Referral profile not found')
+      if (profile.status !== ReferralProfileStatus.ACTIVE) {
+        throw new BadRequestException('Referral withdrawals are not available while this profile is under review')
+      }
+      if (profile.availableBalanceUgx < totalDebitUgx) {
+        throw new BadRequestException(`Insufficient referral wallet balance. Available balance is UGX ${profile.availableBalanceUgx.toLocaleString('en-US')}.`)
+      }
+
+      const updated = await tx.referralProfile.update({
+        where: { id: profile.id },
+        data: {
+          availableBalanceUgx: { decrement: totalDebitUgx },
+          registeredPayoutPhone: payoutPhone,
+        },
+      })
+      const withdrawal = await tx.referralWalletTransaction.create({
+        data: {
+          referrerProfileId: profile.id,
+          type: ReferralWalletTransactionType.WITHDRAWAL_REQUEST,
+          status: ReferralWalletTransactionStatus.PENDING,
+          amountUgx,
+          previousBalanceUgx: profile.availableBalanceUgx,
+          newBalanceUgx: updated.availableBalanceUgx,
+          description: 'Referral wallet withdrawal requested',
+          metadata: { payoutPhone, feeUgx, totalDebitUgx },
+        },
+      })
+      await tx.notification.create({
+        data: {
+          title: 'Referral withdrawal requested',
+          body: `Referral withdrawal request received for UGX ${amountUgx.toLocaleString('en-UG')}.`,
+          audience: NotificationAudience.SINGLE_BUSINESS,
+          tenantId: profile.tenantId ?? profile.user.tenantId,
+        },
+      })
+      return withdrawal
+    })
+  }
+
+  async approveWithdrawal(transactionId: string, adminUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const withdrawal = await tx.referralWalletTransaction.findUnique({
+        where: { id: transactionId },
+        include: { referrerProfile: { include: { user: { select: { tenantId: true } } } } },
+      })
+      if (!withdrawal) throw new NotFoundException('Referral withdrawal not found')
+      if (withdrawal.type !== ReferralWalletTransactionType.WITHDRAWAL_REQUEST || withdrawal.status !== ReferralWalletTransactionStatus.PENDING) {
+        throw new BadRequestException('Only pending referral withdrawal requests can be approved')
+      }
+      await tx.referralProfile.update({
+        where: { id: withdrawal.referrerProfileId },
+        data: { withdrawnAmountUgx: { increment: withdrawal.amountUgx } },
+      })
+      const paid = await tx.referralWalletTransaction.update({
+        where: { id: withdrawal.id },
+        data: {
+          type: ReferralWalletTransactionType.PAID_WITHDRAWAL,
+          status: ReferralWalletTransactionStatus.PAID,
+          adminUserId,
+          description: 'Referral wallet withdrawal approved and marked paid',
+        },
+      })
+      await tx.notification.create({
+        data: {
+          title: 'Referral withdrawal paid',
+          body: `Referral withdrawal of UGX ${withdrawal.amountUgx.toLocaleString('en-UG')} has been approved and marked paid.`,
+          audience: NotificationAudience.SINGLE_BUSINESS,
+          tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
+        },
+      })
+      return paid
+    })
+  }
+
+  async rejectWithdrawal(transactionId: string, adminUserId: string, reason: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const withdrawal = await tx.referralWalletTransaction.findUnique({
+        where: { id: transactionId },
+        include: { referrerProfile: { include: { user: { select: { tenantId: true } } } } },
+      })
+      if (!withdrawal) throw new NotFoundException('Referral withdrawal not found')
+      if (withdrawal.type !== ReferralWalletTransactionType.WITHDRAWAL_REQUEST || withdrawal.status !== ReferralWalletTransactionStatus.PENDING) {
+        throw new BadRequestException('Only pending referral withdrawal requests can be rejected')
+      }
+      const releaseAmount = Math.max(0, withdrawal.previousBalanceUgx - withdrawal.newBalanceUgx)
+      const profile = await tx.referralProfile.update({
+        where: { id: withdrawal.referrerProfileId },
+        data: { availableBalanceUgx: { increment: releaseAmount } },
+      })
+      const rejected = await tx.referralWalletTransaction.update({
+        where: { id: withdrawal.id },
+        data: {
+          type: ReferralWalletTransactionType.REJECTED_WITHDRAWAL,
+          status: ReferralWalletTransactionStatus.REJECTED,
+          adminUserId,
+          newBalanceUgx: profile.availableBalanceUgx,
+          description: `Referral wallet withdrawal rejected: ${reason}`,
+        },
+      })
+      await tx.notification.create({
+        data: {
+          title: 'Referral withdrawal rejected',
+          body: `Referral withdrawal of UGX ${withdrawal.amountUgx.toLocaleString('en-UG')} was rejected. ${reason}`,
+          audience: NotificationAudience.SINGLE_BUSINESS,
+          tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
+        },
+      })
+      return rejected
+    })
+  }
+
   private async ensureProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -274,6 +417,14 @@ export class ReferralsService {
         code: await this.generateCode(user.email),
       },
     })
+  }
+
+  private positiveInt(value: unknown, field: string) {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new BadRequestException(`${field} must be greater than zero`)
+    }
+    return Math.round(parsed)
   }
 
   private async generateCode(seed: string) {
