@@ -5520,11 +5520,6 @@ html[data-theme][data-accent-theme] {
   --aa-navigation-hover-text: var(--arofi-theme-accent-text);
   --aa-table-row-hover: var(--arofi-theme-accent-soft-2);
   --bg-hover: var(--arofi-theme-accent-soft-2);
-  --success-bg: var(--arofi-theme-accent-soft);
-  --success-fg: var(--arofi-theme-accent-text);
-  --success-border: var(--arofi-theme-accent-border);
-  --info-bg: var(--arofi-theme-accent-soft);
-  --info-fg: var(--arofi-theme-accent-text);
   --blue-light: var(--arofi-theme-accent-soft);
   --blue-mid: var(--arofi-theme-accent-border);
   --blue-bg: var(--arofi-theme-accent-soft);
@@ -5621,6 +5616,55 @@ html[data-theme][data-accent-theme] .chat-escalate-link {
   color: var(--arofi-theme-accent-text);
 }
 html[data-theme=dark][data-accent-theme=white] .msg-bubble.visitor { color: #101828; }
+
+/* Final semantic support palette.
+   Theme accents keep controlling brand UI, but status and money colours stay
+   consistent so every selected accent has readable supporting states. */
+html[data-theme="light"][data-accent-theme] {
+  --success-bg: #ecfdf5;
+  --success-fg: #047857;
+  --success-border: #a7f3d0;
+  --warn-bg: #fffbeb;
+  --warn-fg: #b45309;
+  --warn-border: #fde68a;
+  --danger-bg: #fef2f2;
+  --danger-fg: #b91c1c;
+  --danger-border: #fecaca;
+  --info-bg: var(--arofi-theme-accent-soft);
+  --info-fg: var(--arofi-theme-accent-text);
+  --info-border: var(--arofi-theme-accent-border);
+  --neutral-bg: #f8fafc;
+  --neutral-fg: #64748b;
+  --neutral-border: #e2e8f0;
+}
+
+html[data-theme="dark"][data-accent-theme] {
+  --success-bg: rgba(34, 197, 94, 0.13);
+  --success-fg: #4ade80;
+  --success-border: rgba(74, 222, 128, 0.34);
+  --warn-bg: rgba(245, 158, 11, 0.14);
+  --warn-fg: #fbbf24;
+  --warn-border: rgba(251, 191, 36, 0.34);
+  --danger-bg: rgba(239, 68, 68, 0.14);
+  --danger-fg: #f87171;
+  --danger-border: rgba(248, 113, 113, 0.34);
+  --info-bg: var(--arofi-theme-accent-soft);
+  --info-fg: var(--arofi-theme-accent-text);
+  --info-border: var(--arofi-theme-accent-border);
+  --neutral-bg: rgba(148, 163, 184, 0.10);
+  --neutral-fg: #94a3b8;
+  --neutral-border: rgba(148, 163, 184, 0.26);
+}
+
+html[data-theme][data-accent-theme] .badge-success { background: var(--success-bg) !important; color: var(--success-fg) !important; border-color: var(--success-border); }
+html[data-theme][data-accent-theme] .badge-warning { background: var(--warn-bg) !important; color: var(--warn-fg) !important; border-color: var(--warn-border); }
+html[data-theme][data-accent-theme] .badge-danger { background: var(--danger-bg) !important; color: var(--danger-fg) !important; border-color: var(--danger-border); }
+html[data-theme][data-accent-theme] .badge-info { background: var(--info-bg) !important; color: var(--info-fg) !important; border-color: var(--info-border); }
+html[data-theme][data-accent-theme] .sale-redeemed {
+  background: var(--success-bg) !important;
+  color: var(--success-fg) !important;
+  border-color: var(--success-border);
+}
 
 /* Phone fields use a real country selector and always keep the number input usable. */
 .phone-field {
