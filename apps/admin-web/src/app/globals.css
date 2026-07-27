@@ -2889,22 +2889,32 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 
 /* Dashboard date-range filter (picker + Filter button) */
 .date-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
 }
 .date-filter-input {
-  width: auto;
+  width: 100%;
   min-height: 38px;
-  min-width: 150px;
+  min-width: 0;
   font-size: 13px;
 }
 .date-filter-sep { font-size: 12.5px; color: var(--text-3); }
-.date-filter-btn { min-height: 38px; }
+.date-filter-btn { min-height: 38px; justify-self: start; }
 @media (max-width: 560px) {
-  .date-filter { width: 100%; }
-  .date-filter-input { flex: 1; min-width: 0; }
+  .date-filter {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+  .date-filter-sep {
+    margin-top: -4px;
+    margin-bottom: -2px;
+  }
+  .date-filter-btn {
+    width: 100%;
+    justify-self: stretch;
+  }
 }
 
 /* Dashboard System Insights card (live = green) */
@@ -3052,7 +3062,7 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   align-items: stretch;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 24px;
+  margin: 10px 0 28px;
 }
 .dashboard-insights-row .system-insights-card {
   flex: 1 1 300px;
@@ -3073,8 +3083,8 @@ form .stats-grid > .form-group { margin-bottom: 0; }
 /* Date filter pinned to the top of the System Insights card, compact so it
    doesn't dominate the card. */
 .system-insights-card-filter {
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 [data-theme="dark"] .system-insights-card-filter {
@@ -4987,16 +4997,16 @@ body {
 .nav-item {
   width: 100%;
   min-height: var(--aa-navigation-row-height);
-  padding: 0 12px 0 25px;
+  padding: 0 12px 0 16px;
   border: 0;
   border-left: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--aa-sidebar-text);
-  font-size: var(--aa-sidebar-font-size);
+  font-size: 14px;
   font-weight: var(--aa-font-weight-normal);
-  letter-spacing: 0;
-  line-height: var(--aa-navigation-row-height);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
   text-transform: none;
   transition: background-color var(--aa-transition-normal), color var(--aa-transition-normal), border-color var(--aa-transition-normal);
 }
@@ -5014,7 +5024,7 @@ body {
   border-left-color: var(--aa-sidebar-active-text);
 }
 
-.sidebar-group-label { gap: 10px; }
+.sidebar-group-label { gap: 7px; }
 .sidebar-group-label svg,
 .nav-item svg {
   width: var(--aa-icon-size);
@@ -5029,9 +5039,9 @@ body {
 
 .sidebar-group-items .nav-item {
   min-height: var(--aa-navigation-row-height);
-  padding-left: 52px;
-  font-size: var(--aa-submenu-font-size);
-  line-height: var(--aa-navigation-row-height);
+  padding-left: 30px;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .sidebar-group-items::before,

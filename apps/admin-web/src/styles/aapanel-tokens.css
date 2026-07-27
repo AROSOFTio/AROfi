@@ -2,9 +2,9 @@
 :root:not([data-theme="dark"]) {
   --aa-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --aa-font-family-legacy: v-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  --aa-body-font-size: 12px;
+  --aa-body-font-size: 14px;
   --aa-sidebar-font-size: 15px;
-  --aa-submenu-font-size: 12px;
+  --aa-submenu-font-size: 13px;
   --aa-table-font-size: 12px;
   --aa-table-header-font-size: 12.5px;
   --aa-form-label-font-size: 12px;
@@ -47,10 +47,10 @@
   --aa-text-subtle: #666;
   --aa-placeholder: #999;
   --aa-disabled-text: #999;
-  --aa-selected-nav-bg: rgba(32,165,58,.063);
-  --aa-selected-nav-text: #20a53a;
-  --aa-navigation-hover-bg: rgba(32,165,58,.1);
-  --aa-navigation-hover-text: #20a53a;
+  --aa-selected-nav-bg: #f3f4f6;
+  --aa-selected-nav-text: #111827;
+  --aa-navigation-hover-bg: #f8fafc;
+  --aa-navigation-hover-text: #111827;
   --aa-table-header: #f6f6f6;
   --aa-table-row-bg: #fff;
   --aa-table-row-hover: #f0f9f7;
@@ -94,9 +94,9 @@
 :root[data-theme="dark"] {
   --aa-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --aa-font-family-legacy: v-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  --aa-body-font-size: 12px;
+  --aa-body-font-size: 14px;
   --aa-sidebar-font-size: 15px;
-  --aa-submenu-font-size: 12px;
+  --aa-submenu-font-size: 13px;
   --aa-table-font-size: 12px;
   --aa-table-header-font-size: 12.5px;
   --aa-form-label-font-size: 12px;

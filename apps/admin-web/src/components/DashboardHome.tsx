@@ -643,12 +643,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
                 </div>
                 <div className="sale-amount-col">
                   {transaction.grossAmountUgx > 0 ? (
-                    <>
-                      <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
-                      {transaction.feeAmountUgx > 0 && (
-                        <div className="sale-fee">fee {formatCurrency(transaction.feeAmountUgx)}</div>
-                      )}
-                    </>
+                    <div className="sale-amount">+{formatCurrency(transaction.netAmountUgx)}</div>
                   ) : (
                     <div className="sale-redeemed">Redeemed</div>
                   )}

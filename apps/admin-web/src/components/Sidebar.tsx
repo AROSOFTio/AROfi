@@ -8,7 +8,6 @@ import {
   BarChart3,
   Bell,
   Building2,
-  ChevronDown,
   CreditCard,
   FileBarChart,
   FileText,
@@ -456,7 +455,6 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
             {isFoldable ? (
               <button type="button" className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`} aria-expanded={isOpen} onClick={() => setOpenGroup(isOpen ? null : group.label)}>
                 <span className="sidebar-group-label">{group.icon}{group.label}</span>
-                <ChevronDown className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true" />
               </button>
             ) : (
               <Link href={group.items[0].href} className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`}>
