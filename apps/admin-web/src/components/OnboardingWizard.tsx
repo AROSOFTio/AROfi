@@ -609,7 +609,7 @@ export default function OnboardingWizard({
       }} className="onboarding-modal-card">
         {/* Top Header */}
         <div className="onboarding-modal-header" style={{
-          background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, #0f172a 100%)',
+          background: 'var(--bg-card)',
           padding: 'clamp(14px, 3vw, 20px) clamp(16px, 5vw, 32px)',
           color: '#ffffff',
           position: 'relative',
@@ -653,7 +653,7 @@ export default function OnboardingWizard({
           }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
-              background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, var(--arofi-theme-accent-hover) 100%)',
+              background: 'var(--bg-card)',
               color: '#fff',
               padding: 6,
               borderRadius: 8,

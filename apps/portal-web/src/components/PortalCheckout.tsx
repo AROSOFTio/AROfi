@@ -127,7 +127,7 @@ const portalTemplateStyles: Record<
     noticeText: 'text-blue-700',
     iconText: 'text-blue-600',
     logoRing: 'border-blue-500/20 bg-blue-500/10',
-    connectedPanel: 'border-blue-200 bg-gradient-to-b from-blue-50 to-white',
+    connectedPanel: 'border-slate-200 bg-white',
     connectedMetric: 'border-blue-100 bg-white text-blue-700',
   },
   fresh: {
@@ -148,7 +148,7 @@ const portalTemplateStyles: Record<
     noticeText: 'text-emerald-700',
     iconText: 'text-emerald-600',
     logoRing: 'border-emerald-500/20 bg-emerald-500/10',
-    connectedPanel: 'border-emerald-200 bg-gradient-to-b from-emerald-50 to-white',
+    connectedPanel: 'border-slate-200 bg-white',
     connectedMetric: 'border-emerald-100 bg-white text-emerald-700',
   },
   midnight: {
@@ -169,7 +169,7 @@ const portalTemplateStyles: Record<
     noticeText: 'text-sky-200',
     iconText: 'text-sky-300',
     logoRing: 'border-sky-700 bg-slate-900',
-    connectedPanel: 'border-sky-900 bg-gradient-to-b from-slate-900 to-slate-950 text-white',
+    connectedPanel: 'border-slate-800 bg-slate-950 text-white',
     connectedMetric: 'border-sky-800 bg-slate-950 text-sky-300',
   },
   sunrise: {
@@ -190,7 +190,7 @@ const portalTemplateStyles: Record<
     noticeText: 'text-amber-700',
     iconText: 'text-amber-600',
     logoRing: 'border-amber-500/20 bg-amber-500/10',
-    connectedPanel: 'border-amber-200 bg-gradient-to-b from-amber-50 to-white',
+    connectedPanel: 'border-slate-200 bg-white',
     connectedMetric: 'border-amber-100 bg-white text-amber-700',
   },
   minimal: {
@@ -211,7 +211,7 @@ const portalTemplateStyles: Record<
     noticeText: 'text-slate-700',
     iconText: 'text-slate-950',
     logoRing: 'border-slate-200 bg-slate-50',
-    connectedPanel: 'border-slate-200 bg-gradient-to-b from-slate-50 to-white',
+    connectedPanel: 'border-slate-200 bg-white',
     connectedMetric: 'border-slate-200 bg-white text-slate-950',
   },
 }
@@ -1139,7 +1139,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   return (
     <div className="flex flex-1 flex-col gap-6">
       {initialView !== 'home' && (
-      <section className={`rounded-[28px] border bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6 ${portalStyle.panel}`}>
+      <section className={`rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 ${portalStyle.panel}`}>
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">

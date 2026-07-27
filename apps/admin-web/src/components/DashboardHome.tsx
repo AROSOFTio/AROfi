@@ -473,7 +473,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 4 }}>
         {/* Visual Credit Card Style Wallet Card */}
         <div style={{
-          background: 'linear-gradient(135deg, var(--arofi-theme-accent) 0%, var(--arofi-theme-accent-hover) 100%)',
+          background: 'var(--bg-card)',
           borderRadius: 14,
           padding: '24px 26px',
           color: '#ffffff',

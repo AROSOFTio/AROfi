@@ -67,8 +67,8 @@ export default function PwaInstallPrompt({ appName }: { appName: string }) {
   }
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-xl flex-col gap-3 rounded-2xl border border-emerald-200 bg-white/95 p-4 text-slate-900 shadow-2xl backdrop-blur sm:flex-row sm:items-center">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-xl font-black text-white">+</div>
+    <div className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-xl flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm sm:flex-row sm:items-center">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-slate-900 text-xl font-black text-white">+</div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-extrabold">Install {appName}</div>
         <div className="mt-1 text-xs leading-5 text-slate-600">

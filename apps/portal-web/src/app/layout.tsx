@@ -109,7 +109,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-slate-50 text-slate-950 antialiased">
-        <main className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eefdf3)]">
+        <main className="min-h-screen bg-slate-50">
           <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 sm:py-6">
             {children}
             <p className="pb-6 pt-10 text-center">

@@ -14,34 +14,34 @@
      contrast against the page (no border-radius/depth was perceptible no
      matter what each component styled). bg-app is now a soft off-white so
      white cards actually read as elevated surfaces. */
-  --bg-app:      #f6f7f9;
+  --bg-app:      #f5f6f8;
   --bg-card:     #ffffff;
   --bg-sidebar:  #ffffff;
-  --bg-hover:    #f4f4f5;
-  --border:      #dfe3e8;
-  --border-soft: #ebedf0;
+  --bg-hover:    #eef1f5;
+  --border:      #d8dee6;
+  --border-soft: #e7ebf0;
 
-  --text-1: #050505;
-  --text-2: #5f6673;
-  --text-3: #9aa3b2;
+  --text-1: #0f172a;
+  --text-2: #475569;
+  --text-3: #64748b;
   --text-primary: var(--text-1);
   --text-secondary: var(--text-2);
   --text-muted: var(--text-3);
 
   /* Brand accent (AROFi blue #2563EB). Kept under --green* names so every
      existing reference recolors instantly. */
-  --green:       #2563EB;
-  --green-light: #eff6ff;
-  --green-mid:   #93c5fd;
-  --green-dark:  #1d4ed8;
-  --green-soft:  #dbeafe;
-  --brand:       #2563EB;
-  --brand-2:     #3b82f6;
+  --green:       #1d4ed8;
+  --green-light: #eff4ff;
+  --green-mid:   #bfd2ff;
+  --green-dark:  #1e3a8a;
+  --green-soft:  #dbe6ff;
+  --brand:       #1d4ed8;
+  --brand-2:     #2563eb;
 
   /* Glassy translucent surfaces */
-  --glass-bg:     rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.6);
-  --glass-blur:   16px;
+  --glass-bg:     rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-blur:   0px;
 
   --success-bg:  #f0fdf4;
   --success-fg:  #15803d;
@@ -52,8 +52,8 @@
   --info-bg:     #eff6ff;
   --info-fg:     #1d4ed8;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
   --sidebar-width: 270px;
   --titlebar-height: 33px;
   --topbar-height: 54px;
@@ -156,12 +156,12 @@
 html { -webkit-font-smoothing: antialiased; }
 
 body {
-  font-family: var(--font-geist-sans), var(--font-inter), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg-app);
   color: var(--text-1);
   font-size: 14px;
-  line-height: 1.5;
-  letter-spacing: -0.006em;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   transition: background 0.2s, color 0.2s;
 }
 

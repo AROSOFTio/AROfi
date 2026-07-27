@@ -1,6 +1,6 @@
 :root[data-theme="light"],
 :root:not([data-theme="dark"]) {
-  --aa-font-family: PingFang SC, Inter, Microsoft YaHei, Segoe UI, sans-serif;
+  --aa-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --aa-font-family-legacy: v-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   --aa-body-font-size: 12px;
   --aa-sidebar-font-size: 15px;
@@ -92,7 +92,7 @@
 }
 
 :root[data-theme="dark"] {
-  --aa-font-family: PingFang SC, Inter, Microsoft YaHei, Segoe UI, sans-serif;
+  --aa-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --aa-font-family-legacy: v-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   --aa-body-font-size: 12px;
   --aa-sidebar-font-size: 15px;
