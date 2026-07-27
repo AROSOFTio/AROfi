@@ -205,11 +205,6 @@ const navItems: NavGroup[] = [
     items: [{ href: '/payments', label: 'Payment Health', required: ['payments.read'], platformOnly: true }]
   },
   {
-    label: 'Referral Management',
-    icon: <Share2 size={17} />,
-    items: [{ href: '/admin/referrals', label: 'Referral Management', required: ['ALL'], platformOnly: true }]
-  },
-  {
     label: 'Transactions',
     icon: <CreditCard size={17} />,
     items: [{ href: '/transactions', label: 'Transactions', required: ['billing.read'], platformOnly: true }]
@@ -283,9 +278,12 @@ const navItems: NavGroup[] = [
     items: [{ href: '/feature-limits', label: 'Feature Limits', required: ['feature_limits.read'], platformOnly: true }]
   },
   {
-    label: 'Commission Rates',
-    icon: <Percent size={17} />,
-    items: [{ href: '/admin/settings/commission', label: 'Commission Rates', required: ['settings.manage'], platformOnly: true }]
+    label: 'Referrals',
+    icon: <Share2 size={17} />,
+    items: [
+      { href: '/admin/referrals', label: 'Referral Management', required: ['ALL'], platformOnly: true },
+      { href: '/admin/settings/commission', label: 'Referral Commission', required: ['settings.manage'], platformOnly: true },
+    ]
   },
   {
     label: 'Audit Logs',

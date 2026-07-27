@@ -7,6 +7,7 @@ type GlobalRates = {
   freeVoucherFeePercent: number | null
   proMobileMoneyFeePercent: number | null
   proVoucherFeePercent: number | null
+  referralCommissionPercent: number | null
 }
 
 type TenantRate = {
@@ -25,10 +26,11 @@ type CommissionRatesResponse = {
 }
 
 const RATE_FIELDS: Array<{ key: keyof GlobalRates; label: string }> = [
-  { key: 'freeMobileMoneyFeePercent', label: 'Free — Mobile Money Fee' },
-  { key: 'freeVoucherFeePercent', label: 'Free — Voucher Fee' },
-  { key: 'proMobileMoneyFeePercent', label: 'Pro — Mobile Money Fee' },
-  { key: 'proVoucherFeePercent', label: 'Pro — Voucher Fee' },
+  { key: 'freeMobileMoneyFeePercent', label: 'Free - Mobile Money Fee' },
+  { key: 'freeVoucherFeePercent', label: 'Free - Voucher Fee' },
+  { key: 'proMobileMoneyFeePercent', label: 'Pro - Mobile Money Fee' },
+  { key: 'proVoucherFeePercent', label: 'Pro - Voucher Fee' },
+  { key: 'referralCommissionPercent', label: 'Referral Partner Commission' },
 ]
 
 export default function CommissionRatesPage() {
@@ -36,10 +38,8 @@ export default function CommissionRatesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-
   const [globalForm, setGlobalForm] = useState<Record<string, string>>({})
   const [savingGlobal, setSavingGlobal] = useState(false)
-
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null)
   const [tenantForm, setTenantForm] = useState<{ mm: string; voucher: string }>({ mm: '', voucher: '' })
   const [savingTenant, setSavingTenant] = useState(false)
@@ -73,14 +73,14 @@ export default function CommissionRatesPage() {
         const val = globalForm[key]
         if (val !== undefined && val !== '') {
           const num = parseFloat(val)
-          if (!isNaN(num)) payload[key] = num
+          if (!Number.isNaN(num)) payload[key] = num
         }
       }
       await clientPatchApi('/system/settings', payload)
-      setSuccess('Global rates saved successfully.')
+      setSuccess('Commission settings saved successfully.')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save global rates')
+      setError(err instanceof Error ? err.message : 'Failed to save commission settings')
     } finally {
       setSavingGlobal(false)
     }
@@ -126,7 +126,7 @@ export default function CommissionRatesPage() {
         tenantMobileMoneyFeePercent: null,
         tenantVoucherFeePercent: null,
       })
-      setSuccess('Override cleared — business will use global tier rate.')
+      setSuccess('Override cleared - business will use global tier rate.')
       setEditingTenantId(null)
       await load()
     } catch (err) {
@@ -146,16 +146,14 @@ export default function CommissionRatesPage() {
     )
   }
 
-  if (loading) {
-    return <div style={{ padding: 32, color: 'var(--text-2)' }}>Loading commission rates...</div>
-  }
+  if (loading) return <div style={{ padding: 32, color: 'var(--text-2)' }}>Loading commission rates...</div>
 
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Commission Rates</h1>
-          <p className="page-subtitle">Set global fee percentages by plan tier. Use per-business overrides for negotiated arrangements.</p>
+          <p className="page-subtitle">Set global fee percentages by plan tier, plus the referral commission paid to partners. Use per-business overrides for negotiated arrangements.</p>
         </div>
       </div>
 
@@ -170,7 +168,33 @@ export default function CommissionRatesPage() {
         </div>
       )}
 
-      {/* Global Rates */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-header">
+          <span className="card-title">Referral Programme Commission</span>
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Paid to referral partners when a qualifying subscription is confirmed</span>
+        </div>
+        <div style={{ padding: '0 20px 20px' }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Referral Partner Commission</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number"
+              className="form-input"
+              min="0"
+              max="100"
+              step="0.1"
+              placeholder="0"
+              value={globalForm.referralCommissionPercent ?? ''}
+              onChange={(e) => setGlobalForm((prev) => ({ ...prev, referralCommissionPercent: e.target.value }))}
+              style={{ width: 100 }}
+            />
+            <span style={{ color: 'var(--text-2)', fontSize: 14, fontWeight: 600 }}>%</span>
+          </div>
+          <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-3)' }}>
+            This is the platform-wide referral percentage used for partner commissions.
+          </p>
+        </div>
+      </div>
+
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header">
           <span className="card-title">Global Default Rates</span>
@@ -178,7 +202,7 @@ export default function CommissionRatesPage() {
         </div>
         <div style={{ padding: '0 20px 20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
-            {RATE_FIELDS.map(({ key, label }) => (
+            {RATE_FIELDS.filter((field) => field.key !== 'referralCommissionPercent').map(({ key, label }) => (
               <div key={key}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>{label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -199,19 +223,13 @@ export default function CommissionRatesPage() {
             ))}
           </div>
           <div style={{ marginTop: 20 }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void saveGlobal()}
-              disabled={savingGlobal}
-            >
+            <button type="button" className="btn btn-primary" onClick={() => void saveGlobal()} disabled={savingGlobal}>
               {savingGlobal ? 'Saving...' : 'Save Global Rates'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Per-Business Overrides */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">Per-Business Overrides</span>
@@ -273,20 +291,10 @@ export default function CommissionRatesPage() {
                       </td>
                       <td colSpan={2}>
                         <span style={{ display: 'inline-flex', gap: 6 }}>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            onClick={() => void saveTenantOverride(tenant.id)}
-                            disabled={savingTenant}
-                          >
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => void saveTenantOverride(tenant.id)} disabled={savingTenant}>
                             {savingTenant ? '...' : 'Save'}
                           </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => setEditingTenantId(null)}
-                            disabled={savingTenant}
-                          >
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingTenantId(null)} disabled={savingTenant}>
                             Cancel
                           </button>
                         </span>
@@ -308,23 +316,13 @@ export default function CommissionRatesPage() {
                       </td>
                       <td>
                         {(tenant.overrideMobileMoneyFeePercent != null || tenant.overrideVoucherFeePercent != null) && (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            style={{ color: '#ef4444', fontSize: 12 }}
-                            onClick={() => void clearTenantOverride(tenant.id)}
-                            disabled={savingTenant}
-                          >
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ color: '#ef4444', fontSize: 12 }} onClick={() => void clearTenantOverride(tenant.id)} disabled={savingTenant}>
                             Clear
                           </button>
                         )}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => startEditTenant(tenant)}
-                        >
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEditTenant(tenant)}>
                           {(tenant.overrideMobileMoneyFeePercent != null || tenant.overrideVoucherFeePercent != null) ? 'Edit Override' : 'Set Override'}
                         </button>
                       </td>
