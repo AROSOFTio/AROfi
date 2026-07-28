@@ -41,7 +41,7 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
       setOpen(false)
       router.refresh()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not submit referral withdrawal')
+      setError(caught instanceof Error ? caught.message : 'Could not withdraw referral earnings')
     } finally {
       setSaving(false)
     }
@@ -63,14 +63,23 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
         <strong>{formatCurrency(availableBalanceUgx)}</strong>
       </div>
       <button className="btn btn-primary referral-withdraw-submit" type="button" disabled={availableBalanceUgx <= 0 || payoutNumbers.length === 0} onClick={() => setOpen(true)}>
-        Request Withdrawal
+        Withdraw
       </button>
       {payoutNumbers.length === 0 && <p className="field-hint">Register and verify up to two payout numbers before withdrawing referral earnings.</p>}
-      <Modal open={open} onClose={() => !saving && setOpen(false)} title="Request referral withdrawal" closeDisabled={saving}>
+      <Modal open={open} onClose={() => !saving && setOpen(false)} title="Withdraw referral earnings" closeDisabled={saving}>
         <form onSubmit={submit} className="form-grid referral-withdraw-grid">
           <label className="form-group">
-            <span className="form-label">Amount UGX</span>
-            <input className="form-input" value={amountUgx} onChange={(event) => setAmountUgx(event.target.value)} inputMode="numeric" required />
+            <span className="form-label">Amount to withdraw</span>
+            <input
+              className="form-input amount-input"
+              name="referralWithdrawAmountUgx"
+              value={amountUgx}
+              onChange={(event) => setAmountUgx(event.target.value)}
+              placeholder="Enter amount in UGX"
+              inputMode="numeric"
+              autoComplete="off"
+              required
+            />
           </label>
           <label className="form-group">
             <span className="form-label">Payout Number</span>
@@ -91,7 +100,7 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
               Cancel
             </button>
             <button className="btn btn-primary" type="submit" disabled={saving || availableBalanceUgx <= 0 || payoutNumbers.length === 0}>
-              {saving ? 'Submitting...' : 'Submit Request'}
+              {saving ? 'Withdrawing...' : 'Withdraw'}
             </button>
           </div>
         </form>

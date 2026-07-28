@@ -163,9 +163,9 @@ export class MailService {
   }): Promise<boolean> {
     const amount = `UGX ${input.amountUgx.toLocaleString('en-UG')}`
     const statusCopy: Record<typeof input.status, { subject: string; lead: string }> = {
-      REQUESTED: { subject: `Withdrawal requested — ${amount}`, lead: 'Your withdrawal request has been submitted and is awaiting review.' },
-      APPROVED: { subject: `Withdrawal approved — ${amount}`, lead: 'Your withdrawal request has been approved and will be processed shortly.' },
-      REJECTED: { subject: `Withdrawal rejected — ${amount}`, lead: 'Your withdrawal request was rejected.' },
+      REQUESTED: { subject: `Withdrawal started — ${amount}`, lead: 'Your withdrawal has started and is being checked for payout.' },
+      APPROVED: { subject: `Withdrawal approved — ${amount}`, lead: 'Your withdrawal passed the safety check and will be processed shortly.' },
+      REJECTED: { subject: `Withdrawal stopped — ${amount}`, lead: 'Your withdrawal could not be approved for payout.' },
       PROCESSING: { subject: `Withdrawal processing — ${amount}`, lead: 'Your withdrawal is now being sent to your mobile money number.' },
       COMPLETED: { subject: `Withdrawal completed — ${amount}`, lead: 'Your withdrawal has been paid out successfully.' },
       FAILED: { subject: `Withdrawal failed — ${amount}`, lead: 'Your withdrawal could not be completed.' },

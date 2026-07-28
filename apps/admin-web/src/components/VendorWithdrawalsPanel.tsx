@@ -157,7 +157,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
     setMessage('')
     setError('')
     setModalError('')
-    setProgress(activeAction === 'withdraw' ? 'Validating payout number, wallet balance, and secret key.' : 'Saving changes.')
+    setProgress(activeAction === 'withdraw' ? 'Checking payout number, wallet balance, and secret key.' : 'Saving changes.')
     try {
       await callback()
       setProgress('Refreshing live wallet and payout records.')
@@ -224,7 +224,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   async function withdraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedNumber) {
-      setModalError('Select a verified payout number before requesting withdrawal.')
+      setModalError('Select a verified payout number before withdrawing.')
       return
     }
     if (!selectedIsPrimary) {
@@ -240,7 +240,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
       return
     }
 
-    await run('Withdrawal submitted successfully. The wallet balance has refreshed.', 'withdraw', () =>
+    await run('Withdrawal started. The wallet balance has refreshed.', 'withdraw', () =>
       clientPostApi(
         '/wallets/withdrawals',
         {
@@ -479,14 +479,17 @@ function WithdrawModal({
       <p className="field-hint" style={{ marginTop: 8 }}>Available balance: {formatCurrency(availableUgx)}</p>
       <form onSubmit={onSubmit} className="withdraw-step-form" style={{ marginTop: 18 }}>
         <label className="form-group">
-          <span className="form-label">Amount (UGX)</span>
+          <span className="form-label">Amount to withdraw</span>
           <input
             className="form-input amount-input"
             type="number"
+            name="withdrawAmountUgx"
             min={Math.max(1, minimumPayoutUgx)}
             value={withdrawAmount}
             onChange={(event) => onWithdrawAmount(event.target.value)}
-            placeholder={minimumPayoutUgx > 0 ? `${minimumPayoutUgx}` : 'Amount UGX'}
+            placeholder="Enter amount in UGX"
+            autoComplete="off"
+            inputMode="numeric"
             disabled={busy}
             required
           />
@@ -557,7 +560,7 @@ function WithdrawModal({
 
         {blockedReason && <div className="inline-warning">{blockedReason}</div>}
 
-        <FormProcessStatus busy={busy} error={modalError} text={progress || 'Withdrawal requests are validated against the live wallet balance.'} />
+        <FormProcessStatus busy={busy} error={modalError} text={progress || 'Withdrawals are checked against your live wallet balance before payout.'} />
 
         <div className="withdraw-action-row">
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>

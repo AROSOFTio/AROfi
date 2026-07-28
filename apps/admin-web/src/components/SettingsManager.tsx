@@ -196,7 +196,7 @@ const tabDescriptions: Record<(typeof tabs)[number], string> = {
   Security: 'Protect your account, email, devices, and business terms.',
   'Subscription Plan': 'See or change the plan for this business.',
 }
-const vendorTabs: Array<(typeof tabs)[number]> = ['Business Profile', 'Payment & Fees', 'Password', 'Security', 'Subscription Plan']
+const vendorTabs: Array<(typeof tabs)[number]> = ['Business Profile', 'Appearance', 'Payment & Fees', 'Password', 'Security', 'Subscription Plan']
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const renewalRuleOptions = ['MANUAL_RENEWAL', 'AUTO_RENEWAL_WHEN_AVAILABLE', 'DISABLED']
 const portalTemplates = ['classic', 'fresh', 'sunrise']
@@ -367,8 +367,9 @@ export default function SettingsManager({
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab')
-    const nextTab = tabs.includes(requestedTab as (typeof tabs)[number])
-      ? requestedTab as (typeof tabs)[number]
+    const normalizedTab = requestedTab === 'Themes' ? 'Appearance' : requestedTab
+    const nextTab = tabs.includes(normalizedTab as (typeof tabs)[number])
+      ? normalizedTab as (typeof tabs)[number]
       : 'Business Profile'
     if (visibleTabs.includes(nextTab)) {
       setActiveTab(nextTab)
@@ -486,12 +487,16 @@ export default function SettingsManager({
       // mounted, so the payload must be scoped to that tab or saving one tab
       // would silently blank out every other tab's vendor settings.
       const payload: Record<string, unknown> = {}
+      if (activeTab === 'Appearance') {
+        Object.assign(payload, {
+          portalTemplate: stringValue(form, 'portalTemplate'),
+        })
+      }
       if (activeTab === 'Business Profile') {
         Object.assign(payload, {
           businessName: stringValue(form, 'businessName'),
           logoUrl: stringValue(form, 'logoUrl'),
           brandColor: stringValue(form, 'brandColor'),
-          portalTemplate: stringValue(form, 'portalTemplate'),
           // Support phone/email are Dev-Admin-only here — vendors request
           // changes via SupportContactChangePanel instead (see below).
           ...(isDevAdmin
@@ -537,7 +542,7 @@ export default function SettingsManager({
       const tenantQuery = isDevAdmin ? `?tenantId=${tenant.tenant.id}` : ''
       const saved = await clientPatchApi<TenantSettings>(`/system/tenant-settings${tenantQuery}`, payload)
       setTenant(saved)
-      setMessage('Business settings saved and audit logged.')
+      setMessage(activeTab === 'Appearance' ? 'Customer login theme saved.' : 'Business settings saved and audit logged.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not save settings')
     } finally {
@@ -578,18 +583,36 @@ export default function SettingsManager({
 
             <div className="card">
               <div className="card-header">
-                <span className="card-title">WiFi Login Page Theme</span>
+                <span className="card-title">WiFi Login Page Designer</span>
                 <span className="badge badge-success">Customer portal</span>
               </div>
               <div className="settings-card-body">
                 <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 20px' }}>
-                  Select the captive portal theme customers see when buying access, redeeming vouchers, logging in, or checking session usage.
+                  Edit the full customer login page customers see when buying access, redeeming vouchers, logging in, or checking session usage.
                 </p>
                 <Link href="/admin/settings/templates" className="btn btn-primary">
-                  Open WiFi Login Page Themes
+                  Open WiFi Login Page Designer
                 </Link>
               </div>
             </div>
+
+            {tenantForm && (
+              <form className="card" onSubmit={saveTenant}>
+                <div className="card-header">
+                  <span className="card-title">Customer Login Page Theme</span>
+                  <span className="badge badge-success">Every plan</span>
+                </div>
+                <div className="settings-card-body">
+                  <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.5, margin: '0 0 18px' }}>
+                    Choose the simple preset customers see on the WiFi login page. This is separate from your business profile and is not locked to Pro.
+                  </p>
+                  <div className="form-grid">
+                    <Select name="portalTemplate" label="Customer Login Theme" defaultValue={tenantForm.portalTemplate ?? tenant?.tenant.portalTemplate ?? 'classic'} options={portalTemplates} />
+                  </div>
+                  <button className="btn btn-primary" disabled={saving} style={{ marginTop: 18 }}>{saving ? 'Saving...' : 'Save Customer Login Theme'}</button>
+                </div>
+              </form>
+            )}
           </>
         )}
 
@@ -641,12 +664,12 @@ export default function SettingsManager({
                   <FormSubheading text="Disbursement Routes" />
                   <Select name="mtnDisbursementProvider" label="MTN Disbursement Route" defaultValue={platformForm.mtnDisbursementProvider} options={providerOptions} />
                   <Select name="airtelDisbursementProvider" label="Airtel Disbursement Route" defaultValue={platformForm.airtelDisbursementProvider} options={providerOptions} />
-                  <FormSubheading text="Approval Rules" />
-                  <Input name="requireApprovalAboveAmountUgx" label="Review Withdrawals Above UGX" defaultValue={platformForm.requireApprovalAboveAmountUgx ?? ''} />
-                  <Check name="instantWithdrawalsEnabled" label="Instant withdrawals enabled by default" defaultChecked={platformForm.instantWithdrawalsEnabled} />
-                  <Check name="requireApprovalForFirstWithdrawal" label="Review first withdrawal" defaultChecked={platformForm.requireApprovalForFirstWithdrawal} />
+                  <FormSubheading text="Automatic Payout Safety" />
+                  <Input name="requireApprovalAboveAmountUgx" label="Hold only withdrawals above UGX" defaultValue={platformForm.requireApprovalAboveAmountUgx ?? ''} />
+                  <Check name="instantWithdrawalsEnabled" label="Pay verified withdrawals automatically" defaultChecked={platformForm.instantWithdrawalsEnabled} />
+                  <Check name="requireApprovalForFirstWithdrawal" label="Hold first withdrawal for safety check" defaultChecked={platformForm.requireApprovalForFirstWithdrawal} />
                   <Check name="payoutNumberChangeRequiresApproval" label="Payout number changes require approval" defaultChecked={platformForm.payoutNumberChangeRequiresApproval} />
-                  <Check name="requireWithdrawalApproval" label="Force review for every withdrawal" defaultChecked={platformForm.requireWithdrawalApproval} />
+                  <Check name="requireWithdrawalApproval" label="Emergency mode: hold every withdrawal" defaultChecked={platformForm.requireWithdrawalApproval} />
                   <FormSubheading text="Security Limits" />
                   <Input name="failedSecretAttemptsBeforeLock" label="Failed Secret Attempts Before Lock" defaultValue={platformForm.failedSecretAttemptsBeforeLock} />
                   <Input name="withdrawalLockMinutes" label="Withdrawal Lock Minutes" defaultValue={platformForm.withdrawalLockMinutes} />
@@ -731,7 +754,6 @@ export default function SettingsManager({
                   )}
                   <Input name="logoUrl" label="Logo URL" defaultValue={tenantForm.logoUrl ?? tenant?.tenant.logoUrl ?? ''} />
                   <Input name="brandColor" label="Brand Color" defaultValue={tenantForm.brandColor ?? tenant?.tenant.brandColor ?? ''} />
-                  <Select name="portalTemplate" label="Portal Template" defaultValue={tenantForm.portalTemplate ?? tenant?.tenant.portalTemplate ?? 'classic'} options={portalTemplates} />
                 </>
               )}
               {activeTab === 'Payment & Fees' && (
@@ -772,7 +794,7 @@ export default function SettingsManager({
                 </>
               )}
               {activeTab === 'Withdrawals' && (
-                <ReadOnly label="Withdrawal Safety" value="Registered payout number, secret key, balance, minimum amount, and approval policy are enforced by the backend." />
+                <ReadOnly label="Automatic Withdrawal Safety" value="Verified payout number, secret key, wallet balance, minimum amount, and safety holds are checked before payout." />
               )}
             </div>
             <button className="btn btn-primary" disabled={saving} style={{ marginTop: 18 }}>{saving ? 'Saving...' : 'Save Business Settings'}</button>
