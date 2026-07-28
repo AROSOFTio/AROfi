@@ -6918,6 +6918,9 @@ textarea.form-input {
    Windows/Office-style UI face first and bring core app text up slightly. */
 :root {
   --app-font-sans: Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --sidebar-width: 232px;
+  --aa-expanded-sidebar-width: 232px;
+  --aa-mobile-drawer-width: 260px;
 }
 
 html,
@@ -6947,11 +6950,17 @@ textarea {
 }
 
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width) !important;
+}
+
+.main-content {
+  margin-left: var(--sidebar-width) !important;
+  min-width: 0;
+  width: calc(100% - var(--sidebar-width));
 }
 
 .sidebar-logo {
-  padding: 16px 14px;
+  padding: 14px 12px;
 }
 
 .sidebar-group-toggle,
@@ -6968,7 +6977,7 @@ textarea {
 }
 
 .sidebar-group-label {
-  gap: 11px;
+  gap: 9px;
 }
 
 .sidebar-group-label svg,
@@ -6984,7 +6993,7 @@ textarea {
 
 .sidebar-group-items .nav-item {
   min-height: 36px;
-  padding-left: 38px !important;
+  padding-left: 34px !important;
   font-size: 14px !important;
 }
 
@@ -7104,6 +7113,94 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   .page-title,
   .dashboard-header-compact .page-title {
     font-size: 22px !important;
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .sidebar {
+    width: min(82vw, var(--aa-mobile-drawer-width)) !important;
+    transform: translateX(-105%) !important;
+    pointer-events: none;
+  }
+
+  .mobile-nav-open .sidebar {
+    transform: translateX(0) !important;
+    pointer-events: auto;
+  }
+}
+
+/* Global shell authority: keep tenant dashboards, reseller views, and platform
+   admin aligned to the same sidebar/content geometry. */
+.dashboard-shell {
+  min-width: 0;
+}
+
+.main-content,
+.content {
+  max-width: none;
+}
+
+@media (min-width: 769px) {
+  .mobile-nav-backdrop,
+  .mobile-nav-close {
+    display: none !important;
+  }
+
+  .sidebar {
+    transform: none !important;
+    pointer-events: auto !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    padding-inline: 12px !important;
+  }
+
+  .topbar-title {
+    font-size: 15px !important;
+  }
+
+  .mobile-nav-close {
+    left: auto !important;
+    right: 12px !important;
+  }
+}
+
+/* Date filters must stay readable and side-by-side, including inside the
+   System Insights card on narrow screens. */
+.date-filter,
+.system-insights-card-filter .date-filter {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto !important;
+  align-items: center;
+  gap: 10px !important;
+}
+
+.date-filter-sep,
+.system-insights-card-filter .date-filter-sep {
+  display: none !important;
+}
+
+.date-filter-input,
+.system-insights-card-filter .date-filter-input {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+@media (max-width: 560px) {
+  .date-filter,
+  .system-insights-card-filter .date-filter {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  .date-filter-btn,
+  .system-insights-card-filter .date-filter-btn {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }
 
