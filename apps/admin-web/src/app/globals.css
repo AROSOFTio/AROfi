@@ -6913,5 +6913,198 @@ textarea.form-input {
   border-color: var(--border-soft) !important;
 }
 
+/* Readability authority: the previous admin scale used Geist at many 12-13px
+   sizes, which looked too thin and small in the SaaS console. Use the newer
+   Windows/Office-style UI face first and bring core app text up slightly. */
+:root {
+  --app-font-sans: Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html,
+body {
+  font-family: var(--app-font-sans) !important;
+  font-size: 15px;
+  letter-spacing: -0.006em;
+  text-rendering: optimizeLegibility;
+}
+
+body,
+.dashboard-shell,
+.main-content,
+.content,
+.card,
+.dashboard-panel,
+.stat-card,
+.tenant-stat,
+.tenant-stat-compact,
+.system-insights-card,
+table,
+button,
+input,
+select,
+textarea {
+  font-family: var(--app-font-sans) !important;
+}
+
+.sidebar {
+  width: 260px;
+}
+
+.sidebar-logo {
+  padding: 16px 14px;
+}
+
+.sidebar-group-toggle,
+.nav-item {
+  min-height: 39px;
+  font-size: 14.5px !important;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.sidebar-group-toggle.active,
+.nav-item.active {
+  font-weight: 650;
+}
+
+.sidebar-group-label {
+  gap: 11px;
+}
+
+.sidebar-group-label svg,
+.nav-item svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar-group-items {
+  gap: 3px;
+  margin: 3px 0 4px;
+}
+
+.sidebar-group-items .nav-item {
+  min-height: 36px;
+  padding-left: 38px !important;
+  font-size: 14px !important;
+}
+
+.tenant-switcher,
+.topbar-title {
+  font-size: 14.5px !important;
+  font-weight: 650;
+}
+
+.content {
+  font-size: 14.5px;
+}
+
+.page-title,
+.dashboard-header-compact .page-title {
+  font-size: 25px !important;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.page-subtitle,
+.dashboard-panel-subtitle,
+.field-hint,
+.stat-change,
+.tenant-stat-note {
+  font-size: 14px !important;
+  line-height: 1.45;
+}
+
+.card-title,
+.dashboard-panel-title,
+.section-title,
+.system-insights-card-title {
+  font-size: 15.5px !important;
+  font-weight: 700;
+}
+
+.stat-label,
+.tenant-stat-title,
+.tenant-stat-compact-title,
+.label-text,
+.form-label {
+  font-size: 12.5px !important;
+  font-weight: 700;
+}
+
+.stat-value,
+.tenant-stat-value,
+.tenant-stat-compact-value,
+.card-value {
+  font-size: 22px !important;
+  font-weight: 750;
+}
+
+table {
+  font-size: 14px !important;
+}
+
+th {
+  font-size: 12.5px !important;
+  font-weight: 700;
+}
+
+td {
+  font-size: 14px !important;
+  line-height: 1.45;
+}
+
+.form-input,
+select.form-input,
+textarea.form-input {
+  min-height: 38px;
+  font-size: 14px !important;
+}
+
+select.form-input {
+  height: 38px;
+}
+
+.btn,
+.btn-block,
+button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobile-nav-close) {
+  min-height: 34px;
+  font-size: 14px !important;
+  font-weight: 650;
+}
+
+.btn-sm,
+.badge {
+  font-size: 12.5px !important;
+}
+
+.dashboard-action-item strong {
+  font-size: 19px;
+}
+
+.dashboard-action-item span,
+.sale-title,
+.sale-meta,
+.sale-amount,
+.sale-fee,
+.recent-sales-footer,
+.sic-metric span {
+  font-size: 14.5px !important;
+}
+
+.sic-metric strong {
+  font-size: 22px;
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    font-size: 15px;
+  }
+
+  .page-title,
+  .dashboard-header-compact .page-title {
+    font-size: 22px !important;
+  }
+}
 
 
