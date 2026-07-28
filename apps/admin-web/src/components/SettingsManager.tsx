@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
@@ -200,10 +200,17 @@ const vendorTabs: Array<(typeof tabs)[number]> = ['Business Profile', 'Appearanc
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const renewalRuleOptions = ['MANUAL_RENEWAL', 'AUTO_RENEWAL_WHEN_AVAILABLE', 'DISABLED']
 const portalTemplates = ['classic', 'fresh', 'sunrise']
+const brandColorOptions = ['#2563EB', '#15803D', '#B7791F', '#F97316', '#0F172A', 'custom']
 const optionLabels: Record<string, string> = {
   classic: 'Blue',
   fresh: 'Green',
   sunrise: 'Gold',
+  '#2563EB': 'Blue',
+  '#15803D': 'Green',
+  '#B7791F': 'Gold',
+  '#F97316': 'Orange',
+  '#0F172A': 'Navy',
+  custom: 'Custom hex code',
 }
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
 
@@ -679,9 +686,11 @@ export default function SettingsManager({
                 <>
                   <Check name="routerAutoConnectEnabled" label="Enable router auto-connect after payment" defaultChecked={platformForm.routerAutoConnectEnabled} />
                   <TextArea name="captivePortalFallbackMessage" label="Captive Portal Fallback Message" defaultValue={platformForm.captivePortalFallbackMessage} />
-                  <FormSubheading text="Router Limits by Plan" />
-                  <Input name="freeRouterLimit" label="Starter Router Limit" defaultValue={platformForm.freeRouterLimit} />
-                  <Input name="proRouterLimit" label="Pro Router Limit" defaultValue={platformForm.proRouterLimit} />
+                  <FormSubheading text="Router Policy by Plan" />
+                  <input type="hidden" name="freeRouterLimit" value={platformForm.freeRouterLimit} />
+                  <input type="hidden" name="proRouterLimit" value={platformForm.proRouterLimit} />
+                  <ReadOnly label="Starter Routers" value="Unlimited" />
+                  <ReadOnly label="Pro Routers" value="Unlimited" />
                   <FormSubheading text="Analytics History Window by Plan (days)" />
                   <Input name="freeAnalyticsHistoryDays" label="Starter History (days)" defaultValue={platformForm.freeAnalyticsHistoryDays} />
                   <Input name="proAnalyticsHistoryDays" label="Pro History (days)" defaultValue={platformForm.proAnalyticsHistoryDays} />
@@ -752,8 +761,8 @@ export default function SettingsManager({
                       <ReadOnly label="Support Email" value={tenantForm.supportEmail ?? tenant?.tenant.supportEmail ?? 'Not set'} />
                     </>
                   )}
-                  <Input name="logoUrl" label="Logo URL" defaultValue={tenantForm.logoUrl ?? tenant?.tenant.logoUrl ?? ''} />
-                  <Input name="brandColor" label="Brand Color" defaultValue={tenantForm.brandColor ?? tenant?.tenant.brandColor ?? ''} />
+                  <LogoUploadField defaultValue={tenantForm.logoUrl ?? tenant?.tenant.logoUrl ?? ''} />
+                  <BrandColorField defaultValue={tenantForm.brandColor ?? tenant?.tenant.brandColor ?? '#2563EB'} />
                 </>
               )}
               {activeTab === 'Payment & Fees' && (
@@ -1094,6 +1103,70 @@ function Select({ name, label, defaultValue, options }: { name: string; label: s
         {options.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option.replace(/_/g, ' ')}</option>)}
       </select>
     </label>
+  )
+}
+
+function LogoUploadField({ defaultValue }: { defaultValue: string }) {
+  const [logoValue, setLogoValue] = useState(defaultValue)
+  const [fileName, setFileName] = useState('')
+
+  function handleLogoFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => setLogoValue(typeof reader.result === 'string' ? reader.result : '')
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <div className="form-group">
+      <span className="form-label">Upload Logo</span>
+      <input type="hidden" name="logoUrl" value={logoValue} />
+      <label className="upload-box">
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogoFile} />
+        <span className="upload-box-title">{fileName || (logoValue ? 'Logo selected' : 'Choose logo file')}</span>
+        <span className="upload-box-hint">PNG, JPG, WebP or SVG. Recommended square logo.</span>
+      </label>
+      {logoValue && (
+        <div className="brand-preview-row">
+          <img src={logoValue} alt="Uploaded business logo preview" />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setLogoValue(''); setFileName('') }}>
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BrandColorField({ defaultValue }: { defaultValue: string }) {
+  const isPreset = brandColorOptions.includes(defaultValue)
+  const [mode, setMode] = useState(isPreset ? defaultValue : 'custom')
+  const [customColor, setCustomColor] = useState(isPreset ? '#2563EB' : defaultValue)
+  const value = mode === 'custom' ? customColor : mode
+
+  return (
+    <div className="form-group">
+      <span className="form-label">Brand Colour</span>
+      <input type="hidden" name="brandColor" value={value} />
+      <div className="brand-color-grid">
+        <select className="form-input" value={mode} onChange={(event) => setMode(event.target.value)}>
+          {brandColorOptions.map((option) => <option key={option} value={option}>{optionLabels[option]}</option>)}
+        </select>
+        <input className="form-input" type="color" value={value} onChange={(event) => { setMode('custom'); setCustomColor(event.target.value) }} />
+      </div>
+      {mode === 'custom' && (
+        <input
+          className="form-input"
+          value={customColor}
+          onChange={(event) => setCustomColor(event.target.value)}
+          placeholder="#2563EB"
+          pattern="^#[0-9A-Fa-f]{6}$"
+          style={{ marginTop: 10 }}
+        />
+      )}
+    </div>
   )
 }
 

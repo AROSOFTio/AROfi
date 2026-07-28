@@ -83,7 +83,7 @@ const faqs = [
   },
   {
     q: 'How many routers or hotspot sites can I run?',
-    a: 'Starter supports up to 5 routers and Pro supports up to 10. If you need more capacity, contact support and we will help you plan the cleanest setup.',
+    a: 'Both Starter and Pro support unlimited routers and hotspot sites. Pro is for operators who want lower fees, deeper history, custom branding, and priority support.',
   },
   {
     q: 'Do you support vouchers as well as mobile money?',
@@ -108,8 +108,8 @@ const pricingTiers = [
     priceUgx: 0,
     period: null,
     commissionSummary: 'Gateway fee 3–8% · Voucher 2%',
-    routerLimit: 'Up to 5 Routers/Hotspots',
-    features: ['Cloud WinBox Tunnels', 'Free Analytics', 'AROFi branding'],
+    routerLimit: 'Unlimited routers and hotspots',
+    features: ['Unlimited routers and hotspots', 'MTN MoMo & Airtel collection', 'Voucher sales and wallets', 'Cloud WinBox tunnels', 'Live sales dashboard', 'AROFi branding'],
     featured: false,
   },
   {
@@ -118,15 +118,18 @@ const pricingTiers = [
     priceUgx: 20000,
     period: '/month',
     commissionSummary: 'Gateway fee 3–5% · Voucher 0%',
-    routerLimit: 'Up to 10 Routers/Hotspots',
-    features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
+    routerLimit: 'Unlimited routers and hotspots',
+    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom logo and colours', '30-day analytics history', 'Priority support'],
     featured: true,
   },
 ]
 
-// Decorative, illustrative figures for the hero preview — not live data.
+// Decorative baseline figures for the hero preview. Public live stats are added on top.
+const demoBaseStats = { revenueUgx: 526000, activeSessions: 417, routersOnline: 82, routersTotal: 99 }
 const demoBars = [38, 52, 41, 64, 58, 79, 92]
 const demoFeed = [
+  { who: 'Live payment added', plan: 'just now', amount: '+UGX 2,000' },
+  { who: 'Live session added', plan: 'Kira Road', amount: '+1 user' },
   { who: 'MoMo payment', plan: '4 HR', amount: 'UGX 1,500' },
   { who: 'Voucher redeemed', plan: '1 HR', amount: 'UGX 500' },
   { who: 'New session', plan: 'Mutungo Hill', amount: 'live' },
@@ -161,9 +164,10 @@ export default function RootPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [stats, setStats] = useState<PublicStats | null>(null)
 
-  const revenue = useCountUp(stats?.salesTodayUgx ?? 0)
-  const sessions = useCountUp(stats?.activeSessions ?? 0)
-  const routers = useCountUp(stats?.liveRouters ?? 0)
+  const revenue = useCountUp(demoBaseStats.revenueUgx + (stats?.salesTodayUgx ?? 0))
+  const sessions = useCountUp(demoBaseStats.activeSessions + (stats?.activeSessions ?? 0))
+  const routers = useCountUp(demoBaseStats.routersOnline + (stats?.liveRouters ?? 0))
+  const totalRouters = demoBaseStats.routersTotal + (stats?.routers ?? 0)
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/public/stats`, { cache: 'no-store' })
@@ -301,7 +305,7 @@ export default function RootPage() {
               </div>
               <div className="home-metric">
                 <span>Routers online</span>
-                <strong>{routers}/{stats?.routers ?? '—'}</strong>
+                <strong>{routers}/{totalRouters}</strong>
               </div>
             </div>
 
@@ -322,7 +326,7 @@ export default function RootPage() {
               ))}
             </div>
           </div>
-          <div className="home-console-foot">Illustrative preview · real figures appear after sign-in</div>
+          <div className="home-console-foot">Illustrative baseline · live public activity is added on top</div>
         </div>
       </section>
 

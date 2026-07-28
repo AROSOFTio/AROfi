@@ -27,15 +27,15 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
   FREE: {
     name: 'Starter (Free)',
     amountUgx: 0,
-    routerLimit: 'Up to 5 Routers',
-    features: ['Cloud WinBox Tunnels', '7-day analytics history', 'AROFi branding'],
+    routerLimit: 'Unlimited Routers',
+    features: ['Unlimited routers and hotspots', 'MTN MoMo & Airtel collection', 'Voucher sales and wallets', 'Cloud WinBox Tunnels', 'Live sales dashboard', 'AROFi branding'],
   },
   PRO: {
     name: 'Pro Plan',
     amountUgx: 20000,
     durationDays: 30,
-    routerLimit: 'Up to 10 Routers',
-    features: ['Cloud WinBox Tunnels', 'Custom Branding', '30-day analytics history'],
+    routerLimit: 'Unlimited Routers',
+    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom branding', '30-day analytics history', 'Priority support'],
   },
 }
 
