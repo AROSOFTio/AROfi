@@ -6695,5 +6695,145 @@ textarea.form-input {
   }
 }
 
+/* Compact correction after review: remove loud SaaS hero feel and keep density. */
+.dashboard-header-compact {
+  margin-bottom: 12px;
+}
+
+.dashboard-header-compact .page-title {
+  font-size: 25px;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.dashboard-action-card {
+  margin-bottom: 12px !important;
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-action-card .card-header {
+  min-height: 46px;
+  padding: 0 16px;
+}
+
+.dashboard-action-card .card-title {
+  font-size: 15px;
+}
+
+.dashboard-action-card .action-center-grid {
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.dashboard-action-item {
+  min-height: 70px;
+  padding: 14px 16px;
+  border-radius: 13px;
+}
+
+.dashboard-action-item svg {
+  width: 21px;
+  height: 21px;
+  padding: 7px;
+  border-radius: 11px;
+}
+
+.dashboard-action-item strong {
+  font-size: 18px;
+  line-height: 1.05;
+}
+
+.dashboard-action-item span {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.dashboard-insights-row {
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.tenant-stat-compact {
+  min-height: 124px;
+  padding: 16px;
+  border-radius: 15px;
+}
+
+.tenant-stat-icon-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+
+.tenant-stat-icon-mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tenant-stat-compact-head {
+  gap: 9px;
+  margin-bottom: 8px;
+}
+
+.tenant-stat-compact-title {
+  font-size: 12px !important;
+}
+
+.tenant-stat-compact-value {
+  font-size: clamp(24px, 2vw, 30px) !important;
+}
+
+.tenant-stat-compact-split {
+  margin-top: 10px;
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.split-label {
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.system-insights-card {
+  min-height: 124px;
+  padding: 14px 16px;
+  border-radius: 15px;
+}
+
+.system-insights-card-filter {
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.date-filter-input,
+.date-filter-btn {
+  min-height: 38px;
+  font-size: 14px;
+}
+
+.system-insights-card-title {
+  font-size: 15px;
+}
+
+.sic-metric {
+  min-height: 60px;
+  padding: 10px;
+  border-radius: 13px;
+}
+
+.sic-metric svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sic-metric strong {
+  font-size: 20px;
+}
+
+.sic-metric span {
+  font-size: 12px;
+}
+
 
 

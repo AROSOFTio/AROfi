@@ -18,7 +18,7 @@ import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
-import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck, Store, Ticket, FileBarChart, Router, Activity, Banknote, RadioTower, Sparkles } from 'lucide-react'
+import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck, Store, Ticket, FileBarChart, Router, Activity, Banknote } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -395,17 +395,8 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         />
       )}
       <DashboardAutoRefresh />
-      <div className="dashboard-hero">
-        <div>
-          <span className="dashboard-eyebrow"><Sparkles size={18} /> Live business command center</span>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="dashboard-hero-copy">Sales, internet sessions, wallet health, and router signals in one calm view.</p>
-        </div>
-        <div className="dashboard-hero-signals" aria-label="Live platform signals">
-          <span><RadioTower size={18} /> {onlineRouters} online</span>
-          <span><Users size={18} /> {billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0} active</span>
-          <span><Banknote size={18} /> {formatCurrency(billing?.summary.todayGrossSalesUgx ?? 0)} today</span>
-        </div>
+      <div className="dashboard-header dashboard-header-compact">
+        <h1 className="page-title">Dashboard</h1>
       </div>
 
       <ComplianceBanner status={complianceStatus as any} tenantId={session?.user.tenantId} />
