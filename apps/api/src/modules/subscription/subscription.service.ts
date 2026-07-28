@@ -642,12 +642,21 @@ export class SubscriptionService implements OnModuleInit, OnModuleDestroy {
             tenantId,
           },
         })
-        await this.referralsService.recordQualifiedSubscriptionPayment({
+        const referralCommission = await this.referralsService.recordQualifiedSubscriptionPayment({
           tenantId,
           subscriptionPaymentId: payment.id,
+          plan: payment.plan as SubscriptionPlanTier,
           amountUgx: payment.amountUgx,
           paidAt: new Date(),
           tx,
+        })
+        await tx.platformSetting.update({
+          where: { id: PLATFORM_SETTINGS_ID },
+          data: {
+            platformWalletBalanceUgx: {
+              increment: Math.max(0, payment.amountUgx - (referralCommission?.amountUgx ?? 0)),
+            },
+          },
         })
       })
     } else if (status === PaymentStatus.FAILED || status === PaymentStatus.CANCELLED || status === PaymentStatus.EXPIRED) {

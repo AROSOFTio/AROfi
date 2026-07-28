@@ -1,4 +1,4 @@
-import { ReferralCommissionStatus, ReferralRelationshipStatus } from '@prisma/client'
+import { ReferralCommissionStatus, ReferralRelationshipStatus, SubscriptionPlanTier } from '@prisma/client'
 import { ReferralsService } from './referrals.service'
 
 describe('ReferralsService commission qualification', () => {
@@ -49,6 +49,7 @@ describe('ReferralsService commission qualification', () => {
       service.recordQualifiedSubscriptionPayment({
         tenantId: 'referred-business',
         subscriptionPaymentId: 'sub-pay-1',
+        plan: SubscriptionPlanTier.PRO,
         amountUgx: 20000,
         paidAt: new Date('2026-07-26T12:00:00Z'),
       }),
@@ -102,11 +103,38 @@ describe('ReferralsService commission qualification', () => {
       service.recordQualifiedSubscriptionPayment({
         tenantId: 'referred-business',
         subscriptionPaymentId: 'sub-pay-1',
+        plan: SubscriptionPlanTier.PRO,
         amountUgx: 20000,
         paidAt: new Date('2026-07-26T12:00:00Z'),
       }),
     ).resolves.toEqual({ id: 'existing-commission' })
 
+    expect(prisma.referralCommission.create).not.toHaveBeenCalled()
+  })
+
+  it('does not credit referral commission for non-Pro subscription payments', async () => {
+    const prisma = {
+      platformSetting: {
+        upsert: jest.fn(),
+      },
+      referralCommission: {
+        create: jest.fn(),
+      },
+    }
+
+    const service = new ReferralsService(prisma as never)
+
+    await expect(
+      service.recordQualifiedSubscriptionPayment({
+        tenantId: 'referred-business',
+        subscriptionPaymentId: 'sub-pay-free',
+        plan: SubscriptionPlanTier.FREE,
+        amountUgx: 20000,
+        paidAt: new Date('2026-07-26T12:00:00Z'),
+      }),
+    ).resolves.toBeNull()
+
+    expect(prisma.platformSetting.upsert).not.toHaveBeenCalled()
     expect(prisma.referralCommission.create).not.toHaveBeenCalled()
   })
 })

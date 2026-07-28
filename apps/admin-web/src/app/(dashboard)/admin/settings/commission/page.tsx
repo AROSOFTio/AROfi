@@ -30,7 +30,7 @@ const RATE_FIELDS: Array<{ key: keyof GlobalRates; label: string }> = [
   { key: 'freeVoucherFeePercent', label: 'Free - Voucher Fee' },
   { key: 'proMobileMoneyFeePercent', label: 'Pro - Mobile Money Fee' },
   { key: 'proVoucherFeePercent', label: 'Pro - Voucher Fee' },
-  { key: 'referralCommissionPercent', label: 'Referral Partner Commission' },
+  { key: 'referralCommissionPercent', label: 'Pro Referral Commission' },
 ]
 
 export default function CommissionRatesPage() {
@@ -153,7 +153,7 @@ export default function CommissionRatesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Commission Rates</h1>
-          <p className="page-subtitle">Set global fee percentages by plan tier, plus the referral commission paid to partners. Use per-business overrides for negotiated arrangements.</p>
+          <p className="page-subtitle">Set global fee percentages by plan tier, plus the referral commission paid only when a referred business pays for Pro.</p>
         </div>
       </div>
 
@@ -170,11 +170,11 @@ export default function CommissionRatesPage() {
 
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header">
-          <span className="card-title">Referral Programme Commission</span>
-          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Paid to referral partners when a qualifying subscription is confirmed</span>
+          <span className="card-title">Pro Referral Commission</span>
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Paid to referral partners only after a referred business pays for Pro</span>
         </div>
         <div style={{ padding: '0 20px 20px' }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Referral Partner Commission</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Pro Referral Commission</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
               type="number"
@@ -190,7 +190,7 @@ export default function CommissionRatesPage() {
             <span style={{ color: 'var(--text-2)', fontSize: 14, fontWeight: 600 }}>%</span>
           </div>
           <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-3)' }}>
-            This is the platform-wide referral percentage used for partner commissions.
+            Example: 30% means a UGX 20,000 Pro payment gives UGX 6,000 to the referrer and UGX 14,000 to the platform wallet.
           </p>
         </div>
       </div>

@@ -9,6 +9,7 @@ import {
   ReferralProfileStatus,
   ReferralWalletTransactionStatus,
   ReferralWalletTransactionType,
+  SubscriptionPlanTier,
 } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { PrismaService } from '../../prisma.service'
@@ -20,10 +21,15 @@ export class ReferralsService {
   async recordQualifiedSubscriptionPayment(input: {
     tenantId: string
     subscriptionPaymentId: string
+    plan: SubscriptionPlanTier
     amountUgx: number
     paidAt: Date
     tx?: Prisma.TransactionClient
   }) {
+    if (input.plan !== SubscriptionPlanTier.PRO) {
+      return null
+    }
+
     const client = input.tx ?? this.prisma
     const settings = await client.platformSetting.upsert({
       where: { id: 'global' },
@@ -50,7 +56,7 @@ export class ReferralsService {
 
     const existing = await client.referralCommission.findUnique({
       where: { subscriptionPaymentId: input.subscriptionPaymentId },
-      select: { id: true },
+      select: { id: true, amountUgx: true },
     })
     if (existing) {
       return existing
