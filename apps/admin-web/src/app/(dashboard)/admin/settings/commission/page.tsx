@@ -10,6 +10,14 @@ type GlobalRates = {
   referralCommissionPercent: number | null
 }
 
+const GLOBAL_RATE_PAYLOAD_KEYS: Record<keyof GlobalRates, string> = {
+  freeMobileMoneyFeePercent: 'mobileMoneyFeePercent',
+  freeVoucherFeePercent: 'voucherFeePercent',
+  proMobileMoneyFeePercent: 'proMobileMoneyFeePercent',
+  proVoucherFeePercent: 'proVoucherFeePercent',
+  referralCommissionPercent: 'referralCommissionPercent',
+}
+
 type TenantRate = {
   id: string
   name: string
@@ -73,7 +81,7 @@ export default function CommissionRatesPage() {
         const val = globalForm[key]
         if (val !== undefined && val !== '') {
           const num = parseFloat(val)
-          if (!Number.isNaN(num)) payload[key] = num
+          if (!Number.isNaN(num)) payload[GLOBAL_RATE_PAYLOAD_KEYS[key]] = num
         }
       }
       await clientPatchApi('/system/settings', payload)

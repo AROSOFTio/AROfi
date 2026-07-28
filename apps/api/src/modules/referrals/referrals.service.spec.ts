@@ -2,6 +2,8 @@ import { ReferralCommissionStatus, ReferralRelationshipStatus, SubscriptionPlanT
 import { ReferralsService } from './referrals.service'
 
 describe('ReferralsService commission qualification', () => {
+  const walletsService = { submitReservedWithdrawal: jest.fn() }
+
   it('credits an available referral commission once after a confirmed Pro payment', async () => {
     const prisma = {
       platformSetting: {
@@ -43,7 +45,7 @@ describe('ReferralsService commission qualification', () => {
       },
     }
 
-    const service = new ReferralsService(prisma as never)
+    const service = new ReferralsService(prisma as never, walletsService as never)
 
     await expect(
       service.recordQualifiedSubscriptionPayment({
@@ -97,7 +99,7 @@ describe('ReferralsService commission qualification', () => {
       },
     }
 
-    const service = new ReferralsService(prisma as never)
+    const service = new ReferralsService(prisma as never, walletsService as never)
 
     await expect(
       service.recordQualifiedSubscriptionPayment({
@@ -122,7 +124,7 @@ describe('ReferralsService commission qualification', () => {
       },
     }
 
-    const service = new ReferralsService(prisma as never)
+    const service = new ReferralsService(prisma as never, walletsService as never)
 
     await expect(
       service.recordQualifiedSubscriptionPayment({

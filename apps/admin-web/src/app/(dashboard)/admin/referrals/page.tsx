@@ -1,6 +1,5 @@
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
-import { AdminReferralWithdrawalActions } from '@/components/AdminReferralWithdrawalActions'
 import { AdminReferralProfileActions } from '@/components/AdminReferralProfileActions'
 
 export const dynamic = 'force-dynamic'
@@ -121,7 +120,7 @@ export default async function AdminReferralManagementPage() {
                     <th>Referrals</th>
                     <th>Wallet</th>
                     <th>Status</th>
-                    <th>Action</th>
+                    <th>Settlement</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -243,7 +242,7 @@ export default async function AdminReferralManagementPage() {
                       <td>{formatCurrency(withdrawal.amountUgx)}</td>
                       <td><span className={getStatusBadgeClass(withdrawal.status)}>{withdrawal.status.toLowerCase()}</span></td>
                       <td style={{ fontSize: 12 }}>{formatDate(withdrawal.createdAt)}</td>
-                      <td>{withdrawal.status === 'PENDING' ? <AdminReferralWithdrawalActions transactionId={withdrawal.id} /> : 'No action'}</td>
+                      <td className="muted-text">Provider tracked</td>
                     </tr>
                   ))}
                 </tbody>

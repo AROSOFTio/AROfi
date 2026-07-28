@@ -1207,7 +1207,7 @@ export class WalletsService {
 
     return wallet
   }
-  private async submitReservedWithdrawal(disbursementId: string) {
+  async submitReservedWithdrawal(disbursementId: string) {
     const disbursement = await this.prisma.disbursement.findUnique({
       where: { id: disbursementId },
       include: { billingTransaction: true, wallet: true },
@@ -1242,16 +1242,20 @@ export class WalletsService {
         ...this.objectMetadata(disbursement.metadata),
       })
     } catch (error) {
-      await this.releaseFailedWithdrawalReserve({
-        tenantId: disbursement.tenantId,
-        walletId: disbursement.walletId,
-        billingTransactionId: disbursement.billingTransactionId,
-        disbursementId: disbursement.id,
-        amountUgx: disbursement.amountUgx,
-        totalDebitUgx: disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx,
-        reference: disbursement.reference,
-        errorMessage: error instanceof Error ? error.message : 'Unable to submit withdrawal to provider',
-      })
+      const metadata = this.objectMetadata(disbursement.metadata)
+      const isReferralWithdrawal = typeof metadata.referralWalletTransactionId === 'string'
+      if (!isReferralWithdrawal) {
+        await this.releaseFailedWithdrawalReserve({
+          tenantId: disbursement.tenantId,
+          walletId: disbursement.walletId,
+          billingTransactionId: disbursement.billingTransactionId,
+          disbursementId: disbursement.id,
+          amountUgx: disbursement.amountUgx,
+          totalDebitUgx: disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx,
+          reference: disbursement.reference,
+          errorMessage: error instanceof Error ? error.message : 'Unable to submit withdrawal to provider',
+        })
+      }
       throw new ServiceUnavailableException(error instanceof Error ? error.message : 'Unable to submit withdrawal to provider')
     }
   }
@@ -1276,6 +1280,7 @@ export class WalletsService {
     payoutAmountUgx?: unknown
     totalDebitUgx?: unknown
     withdrawalFee?: unknown
+    referralWalletTransactionId?: unknown
   }) {
     const finalStatus = this.providerResponseCompleted(input.providerResponse)
       ? DisbursementStatus.COMPLETED
@@ -1316,6 +1321,25 @@ export class WalletsService {
         details: { status: finalStatus, providerReference: input.providerResponse.transactionReference },
         client: tx,
       })
+      if (typeof input.referralWalletTransactionId === 'string') {
+        const referralWithdrawal = await tx.referralWalletTransaction.update({
+          where: { id: input.referralWalletTransactionId },
+          data: {
+            type: finalStatus === DisbursementStatus.COMPLETED ? 'PAID_WITHDRAWAL' : 'WITHDRAWAL_PROCESSING',
+            status: finalStatus === DisbursementStatus.COMPLETED ? 'PAID' : 'PROCESSING',
+            description:
+              finalStatus === DisbursementStatus.COMPLETED
+                ? 'Referral wallet withdrawal paid by payout provider'
+                : 'Referral wallet withdrawal is processing with payout provider',
+          },
+        })
+        if (finalStatus === DisbursementStatus.COMPLETED) {
+          await tx.referralProfile.update({
+            where: { id: referralWithdrawal.referrerProfileId },
+            data: { withdrawnAmountUgx: { increment: referralWithdrawal.amountUgx } },
+          })
+        }
+      }
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { id: input.reserved.walletId } })
       return {
         disbursement,

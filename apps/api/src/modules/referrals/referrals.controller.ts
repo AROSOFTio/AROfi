@@ -49,12 +49,6 @@ export class ReferralsController {
   }
 
   @RequirePermissions(PERMISSIONS.all)
-  @Post('admin/withdrawals/:transactionId/approve')
-  approveWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('transactionId') transactionId: string) {
-    return this.referralsService.approveWithdrawal(transactionId, user.id)
-  }
-
-  @RequirePermissions(PERMISSIONS.all)
   @Post('admin/withdrawals/:transactionId/reject')
   rejectWithdrawal(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -76,13 +70,4 @@ export class ReferralsController {
     return this.referralsService.reactivateProfile(profileId, user.id, body.reason?.trim() || 'Reactivated by Dev Admin')
   }
 
-  @RequirePermissions(PERMISSIONS.all)
-  @Post('admin/profiles/:profileId/adjust-wallet')
-  adjustWallet(
-    @CurrentUser() user: AuthenticatedAdminUser,
-    @Param('profileId') profileId: string,
-    @Body() body: { amountUgx?: number; reason?: string },
-  ) {
-    return this.referralsService.adjustWallet(profileId, user.id, body)
-  }
 }

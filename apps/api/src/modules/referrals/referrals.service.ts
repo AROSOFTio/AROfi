@@ -1,6 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import {
   AuditSeverity,
+  BillingChannel,
+  BillingTransactionStatus,
+  BillingTransactionType,
+  DisbursementMethod,
+  DisbursementStatus,
+  LedgerDirection,
+  LedgerTransactionType,
   NotificationAudience,
   PayoutNumberStatus,
   Prisma,
@@ -12,11 +19,16 @@ import {
   SubscriptionPlanTier,
 } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
+import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { WalletsService } from '../wallets/wallets.service'
 
 @Injectable()
 export class ReferralsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly walletsService: WalletsService,
+  ) {}
 
   async recordQualifiedSubscriptionPayment(input: {
     tenantId: string
@@ -370,7 +382,7 @@ export class ReferralsService {
     const feeUgx = Math.round((amountUgx * settings.referralWithdrawalFeeBps) / 10000) + settings.referralWithdrawalFlatFeeUgx
     const totalDebitUgx = amountUgx + feeUgx
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const profile = await tx.referralProfile.findUnique({
         where: { userId },
         include: { user: { select: { tenantId: true } } },
@@ -400,30 +412,138 @@ export class ReferralsService {
         throw new BadRequestException(`Insufficient referral wallet balance. Available balance is UGX ${profile.availableBalanceUgx.toLocaleString('en-US')}.`)
       }
 
+      const reference = `REF-WD-${randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase()}`
+      const wallet = await tx.wallet.upsert({
+        where: { tenantId_ownerType_ownerReference: { tenantId, ownerType: 'TENANT', ownerReference: tenantId } },
+        update: {},
+        create: {
+          tenantId,
+          ownerType: 'TENANT',
+          ownerReference: tenantId,
+          currency: 'UGX',
+          balanceUgx: 0,
+        },
+      })
       const updated = await tx.referralProfile.update({
         where: { id: profile.id },
         data: {
           availableBalanceUgx: { decrement: totalDebitUgx },
-          withdrawnAmountUgx: { increment: amountUgx },
           registeredPayoutPhone: payoutNumber.normalizedPhone,
         },
       })
       const withdrawal = await tx.referralWalletTransaction.create({
         data: {
           referrerProfileId: profile.id,
-          type: ReferralWalletTransactionType.PAID_WITHDRAWAL,
-          status: ReferralWalletTransactionStatus.PAID,
+          type: ReferralWalletTransactionType.WITHDRAWAL_PROCESSING,
+          status: ReferralWalletTransactionStatus.PROCESSING,
           amountUgx,
           previousBalanceUgx: profile.availableBalanceUgx,
           newBalanceUgx: updated.availableBalanceUgx,
-          description: 'Referral wallet withdrawal auto-approved to registered payout number',
-          metadata: { payoutNumberId: payoutNumber.id, payoutPhone: payoutNumber.normalizedPhone, network: payoutNumber.network, feeUgx, totalDebitUgx },
+          description: 'Referral wallet withdrawal sent to payout provider',
+          metadata: { reference, payoutNumberId: payoutNumber.id, payoutPhone: payoutNumber.normalizedPhone, network: payoutNumber.network, feeUgx, totalDebitUgx },
+        },
+      })
+      const ledgerTransaction = await tx.ledgerTransaction.create({
+        data: {
+          tenantId,
+          walletId: wallet.id,
+          reference: `LEDGER-${reference}`,
+          type: LedgerTransactionType.DISBURSEMENT,
+          channel: BillingChannel.DISBURSEMENT,
+          description: 'Referral wallet withdrawal reserved',
+          grossAmountUgx: totalDebitUgx,
+          feeAmountUgx: feeUgx,
+          netAmountUgx: -totalDebitUgx,
+          sourceType: 'ReferralWithdrawal',
+          sourceId: withdrawal.id,
+          metadata: {
+            referralProfileId: profile.id,
+            referralWalletTransactionId: withdrawal.id,
+            payoutNumberId: payoutNumber.id,
+            payoutAmountUgx: amountUgx,
+            totalDebitUgx,
+            feeUgx,
+          },
+          entries: {
+            create: [
+              {
+                tenantId,
+                walletId: wallet.id,
+                accountCode: 'referral_wallet',
+                direction: LedgerDirection.DEBIT,
+                amountUgx: totalDebitUgx,
+                memo: 'Referral wallet withdrawal reserve',
+              },
+              {
+                tenantId,
+                accountCode: 'disbursement_clearing',
+                direction: LedgerDirection.CREDIT,
+                amountUgx,
+                memo: 'Referral payout reserve',
+              },
+              ...(feeUgx > 0
+                ? [{
+                    tenantId,
+                    accountCode: 'platform_revenue',
+                    direction: LedgerDirection.CREDIT,
+                    amountUgx: feeUgx,
+                    memo: 'Referral withdrawal charge',
+                  }]
+                : []),
+            ],
+          },
+        },
+      })
+      const billingTransaction = await tx.billingTransaction.create({
+        data: {
+          tenantId,
+          walletId: wallet.id,
+          ledgerTransactionId: ledgerTransaction.id,
+          channel: BillingChannel.DISBURSEMENT,
+          type: BillingTransactionType.AGENT_DISBURSEMENT,
+          status: BillingTransactionStatus.PENDING,
+          grossAmountUgx: totalDebitUgx,
+          feeAmountUgx: feeUgx,
+          netAmountUgx: -totalDebitUgx,
+          customerReference: payoutNumber.normalizedPhone,
+          externalReference: reference,
+          metadata: {
+            referralProfileId: profile.id,
+            referralWalletTransactionId: withdrawal.id,
+            payoutNumberId: payoutNumber.id,
+            payoutAmountUgx: amountUgx,
+            totalDebitUgx,
+            feeUgx,
+          },
+        },
+      })
+      const disbursement = await tx.disbursement.create({
+        data: {
+          tenantId,
+          walletId: wallet.id,
+          billingTransactionId: billingTransaction.id,
+          reference,
+          method: DisbursementMethod.MOBILE_MONEY,
+          status: DisbursementStatus.PROCESSING,
+          network: payoutNumber.network,
+          amountUgx,
+          destinationReference: payoutNumber.normalizedPhone,
+          notes: 'Referral withdrawal sent to payout provider.',
+          metadata: {
+            referralProfileId: profile.id,
+            referralWalletTransactionId: withdrawal.id,
+            payoutNumberId: payoutNumber.id,
+            requestedByUserId: userId,
+            payoutAmountUgx: amountUgx,
+            totalDebitUgx,
+            feeUgx,
+          },
         },
       })
       await tx.notification.create({
         data: {
-          title: 'Referral withdrawal approved',
-          body: `Referral withdrawal of UGX ${amountUgx.toLocaleString('en-UG')} was auto-approved to your registered payout number.`,
+          title: 'Referral withdrawal started',
+          body: `Referral withdrawal of UGX ${amountUgx.toLocaleString('en-UG')} has been sent to the payout provider.`,
           audience: NotificationAudience.SINGLE_BUSINESS,
           tenantId,
         },
@@ -432,9 +552,9 @@ export class ReferralsService {
         data: {
           tenantId,
           userId,
-          action: 'referral.withdrawal_auto_approved',
-          entity: 'ReferralWalletTransaction',
-          entityId: withdrawal.id,
+          action: 'referral.withdrawal_sent_to_provider',
+          entity: 'Disbursement',
+          entityId: disbursement.id,
           severity: AuditSeverity.INFO,
           details: {
             amountUgx,
@@ -444,62 +564,20 @@ export class ReferralsService {
             newBalanceUgx: updated.availableBalanceUgx,
             payoutNumberId: payoutNumber.id,
             payoutPhone: payoutNumber.normalizedPhone,
+            referralWalletTransactionId: withdrawal.id,
           },
         },
       })
-      return withdrawal
+      return { withdrawal, disbursementId: disbursement.id }
     })
-  }
 
-  async approveWithdrawal(transactionId: string, adminUserId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const withdrawal = await tx.referralWalletTransaction.findUnique({
-        where: { id: transactionId },
-        include: { referrerProfile: { include: { user: { select: { tenantId: true } } } } },
-      })
-      if (!withdrawal) throw new NotFoundException('Referral withdrawal not found')
-      if (withdrawal.type !== ReferralWalletTransactionType.WITHDRAWAL_REQUEST || withdrawal.status !== ReferralWalletTransactionStatus.PENDING) {
-        throw new BadRequestException('Only pending referral withdrawal requests can be approved')
-      }
-      await tx.referralProfile.update({
-        where: { id: withdrawal.referrerProfileId },
-        data: { withdrawnAmountUgx: { increment: withdrawal.amountUgx } },
-      })
-      const paid = await tx.referralWalletTransaction.update({
-        where: { id: withdrawal.id },
-        data: {
-          type: ReferralWalletTransactionType.PAID_WITHDRAWAL,
-          status: ReferralWalletTransactionStatus.PAID,
-          adminUserId,
-          description: 'Referral wallet withdrawal approved and marked paid',
-        },
-      })
-      await tx.notification.create({
-        data: {
-          title: 'Referral withdrawal paid',
-          body: `Referral withdrawal of UGX ${withdrawal.amountUgx.toLocaleString('en-UG')} has been approved and marked paid.`,
-          audience: NotificationAudience.SINGLE_BUSINESS,
-          tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
-        },
-      })
-      await tx.auditLog.create({
-        data: {
-          tenantId: withdrawal.referrerProfile.tenantId ?? withdrawal.referrerProfile.user.tenantId,
-          userId: adminUserId,
-          action: 'referral.withdrawal_paid',
-          entity: 'ReferralWalletTransaction',
-          entityId: withdrawal.id,
-          severity: AuditSeverity.INFO,
-          details: {
-            referrerProfileId: withdrawal.referrerProfileId,
-            amountUgx: withdrawal.amountUgx,
-            previousStatus: withdrawal.status,
-            newStatus: ReferralWalletTransactionStatus.PAID,
-          },
-        },
-      })
-      return paid
-    })
+    try {
+      await this.walletsService.submitReservedWithdrawal(result.disbursementId)
+    } catch (error) {
+      await this.restoreFailedReferralWithdrawal(result.withdrawal.id, error instanceof Error ? error.message : 'Unable to submit referral payout to provider')
+      throw error
+    }
+    return result.withdrawal
   }
 
   async rejectWithdrawal(transactionId: string, adminUserId: string, reason: string) {
@@ -603,55 +681,64 @@ export class ReferralsService {
     return profile
   }
 
-  async adjustWallet(profileId: string, adminUserId: string, dto: { amountUgx?: number; reason?: string }) {
-    const amountUgx = Number(dto.amountUgx)
-    const reason = dto.reason?.trim()
-    if (!Number.isFinite(amountUgx) || amountUgx === 0) {
-      throw new BadRequestException('Wallet adjustment amount must be a non-zero number')
-    }
-    if (!reason) {
-      throw new BadRequestException('Wallet adjustment reason is required')
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const profile = await tx.referralProfile.findUnique({ where: { id: profileId } })
-      if (!profile) throw new NotFoundException('Referral profile not found')
-      const newBalance = profile.availableBalanceUgx + Math.round(amountUgx)
-      if (newBalance < 0) throw new BadRequestException('Wallet adjustment cannot make the referral wallet negative')
-      const updated = await tx.referralProfile.update({
-        where: { id: profile.id },
-        data: { availableBalanceUgx: newBalance },
+  private async restoreFailedReferralWithdrawal(transactionId: string, reason: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const withdrawal = await tx.referralWalletTransaction.findUnique({
+        where: { id: transactionId },
+        include: { referrerProfile: true },
       })
-      const adjustment = await tx.referralWalletTransaction.create({
+      if (!withdrawal || withdrawal.status === ReferralWalletTransactionStatus.FAILED) return
+      const metadata =
+        typeof withdrawal.metadata === 'object' && withdrawal.metadata !== null && !Array.isArray(withdrawal.metadata)
+          ? withdrawal.metadata as Record<string, unknown>
+          : {}
+      const reference = typeof metadata.reference === 'string' ? metadata.reference : null
+      const releaseAmount = Math.max(0, withdrawal.previousBalanceUgx - withdrawal.newBalanceUgx)
+      const profile = await tx.referralProfile.update({
+        where: { id: withdrawal.referrerProfileId },
+        data: { availableBalanceUgx: { increment: releaseAmount } },
+      })
+      if (reference) {
+        const disbursement = await tx.disbursement.findUnique({
+          where: { reference },
+          select: { id: true, billingTransactionId: true },
+        })
+        if (disbursement) {
+          await tx.disbursement.update({
+            where: { id: disbursement.id },
+            data: {
+              status: DisbursementStatus.FAILED,
+              failedAt: new Date(),
+              notes: `Referral payout failed before provider acceptance: ${reason}`,
+            },
+          })
+          if (disbursement.billingTransactionId) {
+            await tx.billingTransaction.update({
+              where: { id: disbursement.billingTransactionId },
+              data: { status: BillingTransactionStatus.REVERSED },
+            })
+          }
+        }
+      }
+      await tx.referralWalletTransaction.update({
+        where: { id: withdrawal.id },
         data: {
-          referrerProfileId: profile.id,
-          type: ReferralWalletTransactionType.ADMIN_ADJUSTMENT,
-          status: ReferralWalletTransactionStatus.AVAILABLE,
-          amountUgx: Math.round(amountUgx),
-          previousBalanceUgx: profile.availableBalanceUgx,
-          newBalanceUgx: updated.availableBalanceUgx,
-          description: `Dev Admin wallet adjustment: ${reason}`,
-          adminUserId,
+          type: ReferralWalletTransactionType.FAILED_WITHDRAWAL,
+          status: ReferralWalletTransactionStatus.FAILED,
+          newBalanceUgx: profile.availableBalanceUgx,
+          description: `Referral withdrawal failed before payout: ${reason}`,
         },
       })
       await tx.auditLog.create({
         data: {
-          tenantId: profile.tenantId,
-          userId: adminUserId,
-          action: 'referral.wallet_adjusted',
+          tenantId: withdrawal.referrerProfile.tenantId,
+          action: 'referral.withdrawal_failed_restored',
           entity: 'ReferralWalletTransaction',
-          entityId: adjustment.id,
+          entityId: withdrawal.id,
           severity: AuditSeverity.WARNING,
-          details: {
-            profileId: profile.id,
-            amountUgx: Math.round(amountUgx),
-            previousBalanceUgx: profile.availableBalanceUgx,
-            newBalanceUgx: updated.availableBalanceUgx,
-            reason,
-          },
+          details: { transactionId, releasedAmountUgx: releaseAmount, reason },
         },
       })
-      return adjustment
     })
   }
 

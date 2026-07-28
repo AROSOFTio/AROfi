@@ -23,6 +23,8 @@ import {
   PaymentProvider,
   PaymentStatus,
   Prisma,
+  ReferralWalletTransactionStatus,
+  ReferralWalletTransactionType,
 } from '@prisma/client'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
@@ -1653,6 +1655,14 @@ export class PaymentsService {
     }
 
     const nextStatus = isSuccess ? DisbursementStatus.COMPLETED : DisbursementStatus.FAILED
+    const disbursementMetadata =
+      typeof disbursement.metadata === 'object' && disbursement.metadata !== null && !Array.isArray(disbursement.metadata)
+        ? disbursement.metadata as Record<string, unknown>
+        : {}
+    const referralWalletTransactionId =
+      typeof disbursementMetadata.referralWalletTransactionId === 'string'
+        ? disbursementMetadata.referralWalletTransactionId
+        : null
 
     await this.prisma.$transaction(async (tx) => {
       await tx.disbursement.update({
@@ -1666,9 +1676,7 @@ export class PaymentsService {
             ? 'Payout confirmed by Yo Uganda IPN callback.'
             : `Payout failed per Yo Uganda IPN callback. Status: ${rawStatus}`,
           metadata: this.toJsonValue({
-            ...(typeof disbursement.metadata === 'object' && disbursement.metadata !== null && !Array.isArray(disbursement.metadata)
-              ? disbursement.metadata as Record<string, unknown>
-              : {}),
+            ...disbursementMetadata,
             yoIpnPayload: payload,
             yoIpnStatus: rawStatus,
             yoIpnProcessedAt: new Date().toISOString(),
@@ -1677,7 +1685,43 @@ export class PaymentsService {
       })
 
       // On failure: reverse the wallet debit so the vendor gets their balance back
-      if (isFailed && disbursement.walletId && disbursement.billingTransactionId && disbursement.wallet) {
+      if (isFailed && referralWalletTransactionId) {
+        const referralWithdrawal = await tx.referralWalletTransaction.findUnique({
+          where: { id: referralWalletTransactionId },
+          include: { referrerProfile: true },
+        })
+        if (referralWithdrawal && referralWithdrawal.status !== ReferralWalletTransactionStatus.FAILED) {
+          const releaseAmount = Math.max(0, referralWithdrawal.previousBalanceUgx - referralWithdrawal.newBalanceUgx)
+          const profile = await tx.referralProfile.update({
+            where: { id: referralWithdrawal.referrerProfileId },
+            data: { availableBalanceUgx: { increment: releaseAmount } },
+          })
+          await tx.referralWalletTransaction.update({
+            where: { id: referralWithdrawal.id },
+            data: {
+              type: ReferralWalletTransactionType.FAILED_WITHDRAWAL,
+              status: ReferralWalletTransactionStatus.FAILED,
+              newBalanceUgx: profile.availableBalanceUgx,
+              description: `Referral payout failed per provider callback. Status: ${rawStatus}`,
+            },
+          })
+        }
+      } else if (isSuccess && referralWalletTransactionId) {
+        const referralWithdrawal = await tx.referralWalletTransaction.update({
+          where: { id: referralWalletTransactionId },
+          data: {
+            type: ReferralWalletTransactionType.PAID_WITHDRAWAL,
+            status: ReferralWalletTransactionStatus.PAID,
+            description: 'Referral payout confirmed by provider callback',
+          },
+        })
+        await tx.referralProfile.update({
+          where: { id: referralWithdrawal.referrerProfileId },
+          data: { withdrawnAmountUgx: { increment: referralWithdrawal.amountUgx } },
+        })
+      }
+
+      if (isFailed && !referralWalletTransactionId && disbursement.walletId && disbursement.billingTransactionId && disbursement.wallet) {
         const totalDebitUgx = disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx
 
         // Credit the wallet back
