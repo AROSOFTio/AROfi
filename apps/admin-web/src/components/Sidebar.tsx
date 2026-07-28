@@ -313,6 +313,18 @@ const tenantNavItems: NavGroup[] = [
     ],
   },
   {
+    label: 'Reports',
+    icon: <FileBarChart size={17} />,
+    items: [
+      { href: '/reports?type=sales', label: 'All Sales', required: ['reports.read'], tenantOnly: true },
+      { href: '/reports?type=mobile-money', label: 'Mobile Money Sales', required: ['reports.read'], tenantOnly: true },
+      { href: '/reports?type=vouchers', label: 'Voucher Sales', required: ['reports.read'], tenantOnly: true },
+      { href: '/reports?type=active-users', label: 'Active Users', required: ['sessions.read'], tenantOnly: true },
+      { href: '/reports?type=collections', label: 'Total Collected', required: ['reports.read'], tenantOnly: true },
+      { href: '/reports?type=agent-vouchers', label: 'Agent Voucher Sales', required: ['reports.read'], tenantOnly: true },
+    ],
+  },
+  {
     label: 'Network',
     icon: <Wifi size={17} />,
     items: [
@@ -336,6 +348,7 @@ const tenantNavItems: NavGroup[] = [
     icon: <Settings size={17} />,
     items: [
       { href: '/settings?tab=Business%20Profile', label: 'Business Info', tenantOnly: true },
+      { href: '/settings?tab=Themes', label: 'Theme', tenantOnly: true },
       { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payments & Fees', tenantOnly: true },
       { href: '/settings?tab=Password', label: 'Password', tenantOnly: true },
       { href: '/settings?tab=Security', label: 'Account Safety', tenantOnly: true },

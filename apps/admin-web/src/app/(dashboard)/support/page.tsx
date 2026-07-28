@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AdminSessionResponse, SupportTicketResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
+import { Modal } from '@/components/Modal'
 import { PhoneNumberField } from '@/components/PhoneNumberField'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, getStatusBadgeClass } from '@/lib/format'
@@ -79,6 +80,8 @@ export default function SupportPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<(typeof statusFilters)[number]>('ALL')
   const [createOpen, setCreateOpen] = useState(false)
+  const [replyOpen, setReplyOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [submittingAction, setSubmittingAction] = useState<'create' | 'reply' | 'status' | ''>('')
@@ -187,6 +190,7 @@ export default function SupportPage() {
       setMessage(isVendor ? 'Reply sent to support.' : 'Reply added to ticket.')
       event.currentTarget.reset()
       await loadData(selectedTicket.id)
+      setReplyOpen(false)
     } catch (caught) {
       const failure = caught instanceof Error ? caught.message : 'Unable to add reply'
       setError(failure)
@@ -221,6 +225,7 @@ export default function SupportPage() {
       })
       setMessage('Ticket status updated.')
       await loadData(selectedTicket.id)
+      setStatusOpen(false)
     } catch (caught) {
       const failure = caught instanceof Error ? caught.message : 'Unable to update ticket'
       setError(failure)
@@ -354,36 +359,16 @@ export default function SupportPage() {
             </div>
 
             <div className="card" style={{ margin: 0 }}>
-              <div className="card-header"><span className="card-title">{isVendor ? 'Reply to Support' : 'Attend Ticket'}</span></div>
-              {!isVendor && (
-                <form onSubmit={updateTicketStatus} style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, borderBottom: '1px solid var(--border)', alignItems: 'end' }}>
-                  <Field label="Status">
-                    <select name="status" className="form-input" defaultValue={selectedTicket.status}>
-                      {statuses.map((status) => <option key={status} value={status}>{status.toLowerCase().replace('_', ' ')}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Priority">
-                    <select name="priority" className="form-input" defaultValue={selectedTicket.priority}>
-                      {priorities.map((priority) => <option key={priority} value={priority}>{priority.toLowerCase()}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Assigned to"><input name="assignedTo" className="form-input" defaultValue={selectedTicket.assignedTo ?? session?.user.displayName ?? ''} /></Field>
-                  <button className="btn btn-ghost" disabled={submitting} style={{ height: 38 }}>{submitting && submittingAction === 'status' ? 'Updating...' : 'Update Status'}</button>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <FormProcessStatus busy={submittingAction === 'status'} error={submittingAction === 'status' ? formError : null} text={processText} />
-                  </div>
-                </form>
-              )}
-              <form onSubmit={updateTicket} style={{ padding: 20, display: 'grid', gap: 12 }}>
-                <Field label="Reply"><textarea name="body" className="form-input" rows={4} required maxLength={4000} /></Field>
-                {!isVendor && (
-                  <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                    <input name="isInternal" type="checkbox" /> Internal developer note
-                  </label>
-                )}
-                <FormProcessStatus busy={submittingAction === 'reply'} error={submittingAction === 'reply' ? formError : null} text={processText || 'Sending reply.'} />
-                <button className="btn btn-primary" disabled={submitting} style={{ justifySelf: 'start' }}>{submitting && submittingAction === 'reply' ? 'Sending reply...' : 'Send Reply'}</button>
-              </form>
+              <div className="card-header">
+                <span className="card-title">{isVendor ? 'Next Action' : 'Support Actions'}</span>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {!isVendor && <button type="button" className="btn btn-ghost" onClick={() => setStatusOpen(true)}>Update Status</button>}
+                  <button type="button" className="btn btn-primary" onClick={() => setReplyOpen(true)}>{isVendor ? 'Reply to Support' : 'Send Reply'}</button>
+                </div>
+              </div>
+              <div style={{ padding: 20, color: 'var(--text-secondary)' }}>
+                Replies and ticket changes open in focused popups so the conversation stays clean and easy to read.
+              </div>
             </div>
           </div>
         ) : (
@@ -395,12 +380,43 @@ export default function SupportPage() {
         )}
       </div>}
 
-      {isVendor && createOpen && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
-            <div className="modal-kicker">Business support</div>
-            <h2 className="modal-title">Submit Ticket</h2>
+      {selectedTicket && (
+        <Modal open={replyOpen} onClose={() => !submitting && setReplyOpen(false)} closeDisabled={submitting} kicker="Support reply" title={isVendor ? 'Reply to Support' : 'Send Support Reply'}>
+          <form onSubmit={updateTicket} style={{ marginTop: 20, display: 'grid', gap: 12 }}>
+            <Field label="Reply"><textarea name="body" className="form-input" rows={5} required maxLength={4000} /></Field>
+            {!isVendor && (
+              <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                <input name="isInternal" type="checkbox" /> Internal developer note
+              </label>
+            )}
+            <FormProcessStatus busy={submittingAction === 'reply'} error={submittingAction === 'reply' ? formError : null} text={processText || 'Sending reply and saving it in the ticket history.'} />
+            <button className="btn btn-primary btn-block" disabled={submitting}>{submitting && submittingAction === 'reply' ? 'Sending reply...' : 'Send Reply'}</button>
+          </form>
+        </Modal>
+      )}
+
+      {selectedTicket && !isVendor && (
+        <Modal open={statusOpen} onClose={() => !submitting && setStatusOpen(false)} closeDisabled={submitting} kicker="Ticket control" title="Update Ticket Status">
+          <form onSubmit={updateTicketStatus} style={{ marginTop: 20, display: 'grid', gap: 12 }}>
+            <Field label="Status">
+              <select name="status" className="form-input" defaultValue={selectedTicket.status}>
+                {statuses.map((status) => <option key={status} value={status}>{status.toLowerCase().replace('_', ' ')}</option>)}
+              </select>
+            </Field>
+            <Field label="Priority">
+              <select name="priority" className="form-input" defaultValue={selectedTicket.priority}>
+                {priorities.map((priority) => <option key={priority} value={priority}>{priority.toLowerCase()}</option>)}
+              </select>
+            </Field>
+            <Field label="Assigned to"><input name="assignedTo" className="form-input" defaultValue={selectedTicket.assignedTo ?? session?.user.displayName ?? ''} /></Field>
+            <FormProcessStatus busy={submittingAction === 'status'} error={submittingAction === 'status' ? formError : null} text={processText || 'Updating ticket status and saving an internal note.'} />
+            <button className="btn btn-primary btn-block" disabled={submitting}>{submitting && submittingAction === 'status' ? 'Updating...' : 'Update Status'}</button>
+          </form>
+        </Modal>
+      )}
+
+      {isVendor && (
+        <Modal open={createOpen} onClose={() => !submitting && setCreateOpen(false)} closeDisabled={submitting} kicker="Business support" title="Submit Ticket">
             <form onSubmit={async (event) => { if (await createTicket(event)) setCreateOpen(false) }} style={{ marginTop: 20, display: 'grid', gap: 12 }}>
               <Field label="Subject"><input name="subject" className="form-input" required maxLength={180} /></Field>
               <Field label="Category">
@@ -419,8 +435,7 @@ export default function SupportPage() {
               <FormProcessStatus busy={submittingAction === 'create'} error={submittingAction === 'create' ? formError : null} text={processText || 'Submitting ticket. The modal closes after the ticket is saved.'} />
               <button className="btn btn-primary btn-block" disabled={submitting}>{submitting ? 'Submitting ticket...' : 'Submit Ticket'}</button>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   )

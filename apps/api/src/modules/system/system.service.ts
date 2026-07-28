@@ -16,6 +16,7 @@ import {
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
+import { MailService } from '../mail/mail.service'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import type { AuthenticatedAdminUser } from '../auth/auth.module'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
@@ -37,7 +38,10 @@ type FeatureUsageSnapshot = {
 
 @Injectable()
 export class SystemService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async getPlatformSettings() {
     const settings = await this.prisma.platformSetting.upsert({
@@ -605,7 +609,7 @@ export class SystemService {
       : SubscriptionPlanTier.FREE
     const defaultPriority = effectiveTier === SubscriptionPlanTier.ENTERPRISE ? SupportTicketPriority.HIGH : SupportTicketPriority.NORMAL
 
-    return this.prisma.supportTicket.create({
+    const ticket = await this.prisma.supportTicket.create({
       data: {
         tenantId: dto.tenantId,
         reference,
@@ -632,6 +636,9 @@ export class SystemService {
         },
       },
     })
+
+    await this.notifySupportTicketCreated(ticket).catch(() => undefined)
+    return ticket
   }
 
   async updateSupportTicket(ticketId: string, dto: UpdateSupportTicketDto, tenantId?: string) {
@@ -701,7 +708,7 @@ export class SystemService {
         ? SupportTicketStatus.IN_PROGRESS
         : existing.status
 
-    await this.prisma.$transaction([
+    const [message] = await this.prisma.$transaction([
       this.prisma.supportTicketMessage.create({
         data: {
           ticketId,
@@ -721,7 +728,7 @@ export class SystemService {
       }),
     ])
 
-    return this.prisma.supportTicket.findUnique({
+    const ticket = await this.prisma.supportTicket.findUnique({
       where: { id: ticketId },
       include: {
         tenant: {
@@ -735,6 +742,109 @@ export class SystemService {
         },
       },
     })
+    if (ticket && !message.isInternal) {
+      await this.notifySupportTicketReply(ticket, message).catch(() => undefined)
+    }
+    return ticket
+  }
+
+  private async notifySupportTicketCreated(ticket: {
+    reference: string
+    subject: string
+    category: string
+    priority: SupportTicketPriority
+    email: string | null
+    phoneNumber: string | null
+    openedBy: string | null
+    tenant: { name: string } | null
+  }) {
+    const supportEmail = process.env.SUPPORT_EMAIL || 'support@arofi.net'
+    await this.mailService.sendMail({
+      to: supportEmail,
+      subject: `[AROFi Support] ${ticket.priority} ${ticket.reference} - ${ticket.subject}`,
+      html: this.supportEmailLayout([
+        ['Business', ticket.tenant?.name ?? 'Unknown business'],
+        ['Reference', ticket.reference],
+        ['Category', ticket.category],
+        ['Priority', ticket.priority],
+        ['Opened by', ticket.openedBy ?? 'Not provided'],
+        ['Requester email', ticket.email ?? 'Not provided'],
+        ['Phone', ticket.phoneNumber ?? 'Not provided'],
+      ], 'New support ticket received. Open the AROFi support queue to reply and keep the conversation tracked.'),
+      text: [
+        'New AROFi support ticket',
+        `Business: ${ticket.tenant?.name ?? 'Unknown business'}`,
+        `Reference: ${ticket.reference}`,
+        `Subject: ${ticket.subject}`,
+        `Category: ${ticket.category}`,
+        `Priority: ${ticket.priority}`,
+        `Opened by: ${ticket.openedBy ?? 'Not provided'}`,
+        `Requester email: ${ticket.email ?? 'Not provided'}`,
+        `Phone: ${ticket.phoneNumber ?? 'Not provided'}`,
+      ].join('\n'),
+    })
+  }
+
+  private async notifySupportTicketReply(
+    ticket: {
+      reference: string
+      subject: string
+      email: string | null
+      openedBy: string | null
+      tenant: { name: string } | null
+    },
+    message: { authorName: string; authorRole: string; body: string },
+  ) {
+    if (message.authorRole.toLowerCase().includes('business')) return
+    const to = ticket.email?.trim()
+    if (!to) return
+    await this.mailService.sendMail({
+      to,
+      subject: `AROFi support reply - ${ticket.reference}`,
+      html: this.supportEmailLayout([
+        ['Business', ticket.tenant?.name ?? 'Your business'],
+        ['Ticket', ticket.reference],
+        ['Subject', ticket.subject],
+        ['Reply from', message.authorName],
+      ], message.body),
+      text: [
+        `AROFi support replied to ${ticket.reference}`,
+        `Subject: ${ticket.subject}`,
+        `From: ${message.authorName}`,
+        '',
+        message.body,
+        '',
+        'This reply is also saved in your AROFi Support ticket history.',
+      ].join('\n'),
+    })
+  }
+
+  private supportEmailLayout(rows: Array<[string, string]>, body: string) {
+    const safeBody = this.escapeEmail(body).replace(/\r?\n/g, '<br/>')
+    return `
+      <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55;">
+        <h2 style="margin:0 0 14px;color:#2563eb;">AROFi Support</h2>
+        <table style="border-collapse:collapse;width:100%;max-width:680px;margin-bottom:18px;">
+          ${rows.map(([label, value]) => `
+            <tr>
+              <td style="padding:7px 0;color:#64748b;width:160px;">${this.escapeEmail(label)}</td>
+              <td style="padding:7px 0;font-weight:700;">${this.escapeEmail(value)}</td>
+            </tr>
+          `).join('')}
+        </table>
+        <div style="padding:14px 16px;border:1px solid #dbe3ef;border-radius:12px;background:#f8fafc;">${safeBody}</div>
+        <p style="margin-top:18px;color:#64748b;font-size:13px;">This message is tracked inside AROFi Support.</p>
+      </div>
+    `
+  }
+
+  private escapeEmail(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
   }
 
   private async buildFeatureUsageSnapshot(tenantId: string): Promise<FeatureUsageSnapshot> {

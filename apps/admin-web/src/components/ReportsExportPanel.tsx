@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Download, FileSpreadsheet, FileText, Table2 } from 'lucide-react'
 import { clientFetchApi } from '@/lib/client-api'
 
 const browserApiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
 type ReportType = 'sales' | 'disbursements' | 'vouchers'
+type ReportShortcut = ReportType | 'mobile-money' | 'active-users' | 'collections' | 'agent-vouchers'
 
 type ReportDefinition = {
   key: ReportType
@@ -40,6 +42,16 @@ const reportTypes: ReportDefinition[] = [
   },
 ]
 
+const shortcutMap: Record<ReportShortcut, { type: ReportType; channel?: string; search?: string; title?: string }> = {
+  sales: { type: 'sales' },
+  disbursements: { type: 'disbursements' },
+  vouchers: { type: 'vouchers' },
+  'mobile-money': { type: 'sales', channel: 'MOBILE_MONEY', title: 'Mobile Money Sales' },
+  'active-users': { type: 'sales', title: 'Active Users' },
+  collections: { type: 'sales', title: 'Total Amount Collected' },
+  'agent-vouchers': { type: 'vouchers', search: 'agent', title: 'Vouchers Sold by Agents' },
+}
+
 type PreviewResponse = {
   total: number
   columns: string[]
@@ -57,6 +69,7 @@ function formatCell(header: string, value: string | number) {
 }
 
 export default function ReportsExportPanel() {
+  const searchParams = useSearchParams()
   const [activeType, setActiveType] = useState<ReportType>('sales')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -68,6 +81,8 @@ export default function ReportsExportPanel() {
   const [error, setError] = useState<string | null>(null)
 
   const activeDefinition = useMemo(() => reportTypes.find((r) => r.key === activeType)!, [activeType])
+  const shortcut = searchParams.get('type') as ReportShortcut | null
+  const shortcutTitle = shortcut && shortcutMap[shortcut]?.title
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -80,9 +95,18 @@ export default function ReportsExportPanel() {
   }, [from, to, status, channel, search])
 
   useEffect(() => {
+    if (shortcut && shortcutMap[shortcut]) return
     setStatus('')
     setChannel('')
-  }, [activeType])
+  }, [activeType, shortcut])
+
+  useEffect(() => {
+    if (!shortcut || !shortcutMap[shortcut]) return
+    const next = shortcutMap[shortcut]
+    setActiveType(next.type)
+    setChannel(next.channel ?? '')
+    setSearch(next.search ?? '')
+  }, [shortcut])
 
   useEffect(() => {
     let cancelled = false
@@ -115,7 +139,7 @@ export default function ReportsExportPanel() {
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Reports</span>
+        <span className="card-title">{shortcutTitle ?? 'Reports'}</span>
       </div>
 
       <div style={{ padding: '0 20px 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>

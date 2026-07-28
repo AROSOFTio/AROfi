@@ -2,12 +2,12 @@
 import { useEffect, useState } from 'react'
 
 type ModeTheme = 'light' | 'dark'
-type AccentTheme = 'blue' | 'green' | 'white'
+type AccentTheme = 'blue' | 'green' | 'gold'
 
 const accentThemes: Array<{ key: AccentTheme; label: string; description: string; swatch: string }> = [
   { key: 'blue', label: 'Blue', description: 'Blue buttons, links, navigation, and logo.', swatch: '#2563eb' },
   { key: 'green', label: 'Green', description: 'Green buttons, links, navigation, and logo.', swatch: '#20a53a' },
-  { key: 'white', label: 'Neutral', description: 'Black, white, and grey throughout.', swatch: '#3a424d' },
+  { key: 'gold', label: 'Gold', description: 'Warm premium gold accents for buttons and navigation.', swatch: '#b7791f' },
 ]
 
 export default function ThemeToggle() {
@@ -36,7 +36,7 @@ export default function ThemeToggle() {
     savedAccent ||= cookieValues['arofi-accent-theme'] ?? null
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     const nextMode: ModeTheme = saved === 'dark' || saved === 'light' ? saved : prefersDark ? 'dark' : 'light'
-    const nextAccent: AccentTheme = savedAccent === 'green' || savedAccent === 'white' || savedAccent === 'blue' ? savedAccent : 'blue'
+    const nextAccent: AccentTheme = savedAccent === 'green' || savedAccent === 'gold' || savedAccent === 'blue' ? savedAccent : 'blue'
     setMode(nextMode)
     setAccent(nextAccent)
     setSavedMode(nextMode)

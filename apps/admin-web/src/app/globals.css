@@ -4836,14 +4836,14 @@ html[data-theme="dark"][data-accent-theme] {
   --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
 }
 
-:root[data-accent-theme="white"] {
-  --arofi-theme-accent: #3a424d;
-  --arofi-theme-accent-hover: #131313;
-  --arofi-theme-accent-soft: #f5f6f7;
-  --arofi-theme-accent-soft-2: #fafafa;
-  --arofi-theme-accent-border: #dcdfe6;
-  --arofi-theme-accent-text: #131313;
-  --arofi-logo-filter: grayscale(1) contrast(1.12);
+:root[data-accent-theme="gold"] {
+  --arofi-theme-accent: #b7791f;
+  --arofi-theme-accent-hover: #935f13;
+  --arofi-theme-accent-soft: #fff7e6;
+  --arofi-theme-accent-soft-2: #fffaf0;
+  --arofi-theme-accent-border: #f1d19b;
+  --arofi-theme-accent-text: #8a4f0a;
+  --arofi-logo-filter: hue-rotate(184deg) saturate(0.92);
 }
 
 :root[data-theme="dark"][data-accent-theme="blue"],
@@ -4867,14 +4867,14 @@ html[data-theme="dark"][data-accent-theme] {
   --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
 }
 
-:root[data-theme="dark"][data-accent-theme="white"] {
-  --arofi-theme-accent: #d9d9d9;
-  --arofi-theme-accent-hover: #ffffff;
-  --arofi-theme-accent-soft: rgba(255, 255, 255, 0.12);
-  --arofi-theme-accent-soft-2: rgba(255, 255, 255, 0.08);
-  --arofi-theme-accent-border: rgba(255, 255, 255, 0.26);
-  --arofi-theme-accent-text: #ffffff;
-  --arofi-logo-filter: grayscale(1) brightness(1.5);
+:root[data-theme="dark"][data-accent-theme="gold"] {
+  --arofi-theme-accent: #f4b84a;
+  --arofi-theme-accent-hover: #ffd37a;
+  --arofi-theme-accent-soft: rgba(244, 184, 74, 0.16);
+  --arofi-theme-accent-soft-2: rgba(244, 184, 74, 0.10);
+  --arofi-theme-accent-border: rgba(244, 184, 74, 0.38);
+  --arofi-theme-accent-text: #ffd37a;
+  --arofi-logo-filter: hue-rotate(184deg) saturate(0.92) brightness(1.08);
 }
 
 :root,
@@ -5533,16 +5533,16 @@ html[data-theme="light"][data-accent-theme="green"] {
   --ring: 132 62% 33%;
 }
 
-html[data-theme="light"][data-accent-theme="white"] {
-  --arofi-theme-accent: #3a424d;
-  --arofi-theme-accent-hover: #101828;
-  --arofi-theme-accent-soft: #f2f4f7;
-  --arofi-theme-accent-soft-2: #f8f9fa;
-  --arofi-theme-accent-border: #cfd4dc;
-  --arofi-theme-accent-text: #101828;
-  --arofi-logo-filter: grayscale(1) contrast(1.12);
-  --primary: 214 14% 26%;
-  --ring: 214 14% 26%;
+html[data-theme="light"][data-accent-theme="gold"] {
+  --arofi-theme-accent: #b7791f;
+  --arofi-theme-accent-hover: #935f13;
+  --arofi-theme-accent-soft: #fff7e6;
+  --arofi-theme-accent-soft-2: #fffaf0;
+  --arofi-theme-accent-border: #f1d19b;
+  --arofi-theme-accent-text: #8a4f0a;
+  --arofi-logo-filter: hue-rotate(184deg) saturate(0.92);
+  --primary: 35 71% 42%;
+  --ring: 35 71% 42%;
 }
 
 html[data-theme="dark"][data-accent-theme="blue"] {
@@ -5569,16 +5569,16 @@ html[data-theme="dark"][data-accent-theme="green"] {
   --ring: 134 62% 53%;
 }
 
-html[data-theme="dark"][data-accent-theme="white"] {
-  --arofi-theme-accent: #e4e7ec;
-  --arofi-theme-accent-hover: #ffffff;
-  --arofi-theme-accent-soft: rgba(255, 255, 255, 0.14);
-  --arofi-theme-accent-soft-2: rgba(255, 255, 255, 0.09);
-  --arofi-theme-accent-border: rgba(255, 255, 255, 0.30);
-  --arofi-theme-accent-text: #ffffff;
-  --arofi-logo-filter: grayscale(1) brightness(1.5);
-  --primary: 220 17% 91%;
-  --ring: 220 17% 91%;
+html[data-theme="dark"][data-accent-theme="gold"] {
+  --arofi-theme-accent: #f4b84a;
+  --arofi-theme-accent-hover: #ffd37a;
+  --arofi-theme-accent-soft: rgba(244, 184, 74, 0.16);
+  --arofi-theme-accent-soft-2: rgba(244, 184, 74, 0.10);
+  --arofi-theme-accent-border: rgba(244, 184, 74, 0.38);
+  --arofi-theme-accent-text: #ffd37a;
+  --arofi-logo-filter: hue-rotate(184deg) saturate(0.92) brightness(1.08);
+  --primary: 38 88% 62%;
+  --ring: 38 88% 62%;
 }
 
 html[data-theme][data-accent-theme] {

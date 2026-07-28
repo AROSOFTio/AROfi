@@ -85,6 +85,7 @@ export function RegisterModal({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState<TenantRegistrationResponse | null>(null)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
+  const googleSignupUrl = process.env.NEXT_PUBLIC_GOOGLE_SIGNUP_URL ?? ''
 
   // Plan selection (step 4)
   const [planChoice, setPlanChoice] = useState<PlanKey | null>(null)
@@ -310,6 +311,11 @@ export function RegisterModal({
         {step < 4 && <button type="button" className="modal-close" onClick={onClose}>Close</button>}
         <div className="modal-kicker">Step {step} of 5</div>
         <h2 className="modal-title">{stepTitles[step]}</h2>
+        {step === 1 && googleSignupUrl && (
+          <a className="btn btn-ghost btn-block" href={googleSignupUrl} style={{ marginTop: 16 }}>
+            Continue with Google
+          </a>
+        )}
         <div className="wizard-steps">
           {[1, 2, 3, 4, 5].map((item) => <span key={item} className={item <= step ? 'active' : ''} />)}
         </div>
