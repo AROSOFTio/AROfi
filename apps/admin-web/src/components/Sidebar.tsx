@@ -335,15 +335,11 @@ const tenantNavItems: NavGroup[] = [
     label: 'Settings',
     icon: <Settings size={17} />,
     items: [
-      { href: '/settings?tab=Business%20Profile', label: 'Profile', tenantOnly: true },
-      { href: '/settings?tab=Appearance', label: 'Themes', tenantOnly: true },
-      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payment', tenantOnly: true },
-      { href: '/settings?tab=Withdrawals', label: 'Withdrawals', tenantOnly: true },
-      { href: '/settings?tab=Router%20%26%20Portal', label: 'Router & Portal', tenantOnly: true },
-      { href: '/settings?tab=Voucher%20Printing', label: 'Voucher Printing', tenantOnly: true },
+      { href: '/settings?tab=Business%20Profile', label: 'Business Info', tenantOnly: true },
+      { href: '/settings?tab=Payment%20%26%20Fees', label: 'Payments & Fees', tenantOnly: true },
       { href: '/settings?tab=Password', label: 'Password', tenantOnly: true },
-      { href: '/settings?tab=Security', label: 'Security', tenantOnly: true },
-      { href: '/settings?tab=Subscription%20Plan', label: 'Plan', tenantOnly: true },
+      { href: '/settings?tab=Security', label: 'Account Safety', tenantOnly: true },
+      { href: '/settings?tab=Subscription%20Plan', label: 'My Plan', tenantOnly: true },
     ],
   },
   {
@@ -352,7 +348,7 @@ const tenantNavItems: NavGroup[] = [
     items: [
       { href: '/support', label: 'Tickets', required: ['support.read'], tenantOnly: true },
       { href: '/feedback', label: 'Feedback', tenantOnly: true },
-      { href: '/docs/getting-started', label: 'Guide', tenantOnly: true },
+      { href: '/support?view=documentation', label: 'Documentation', tenantOnly: true },
     ],
   },
 ]

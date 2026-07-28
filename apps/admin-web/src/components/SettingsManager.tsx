@@ -175,27 +175,28 @@ function planPriceLabel(plan: SubscriptionPlanCatalogItem) {
 
 const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Password', 'Security', 'Subscription Plan'] as const
 const tabLabels: Record<(typeof tabs)[number], string> = {
-  'Business Profile': 'Profile',
-  Appearance: 'Themes',
-  'Payment & Fees': 'Payment',
+  'Business Profile': 'Business Info',
+  Appearance: 'Appearance',
+  'Payment & Fees': 'Payments & Fees',
   Withdrawals: 'Withdrawals',
   'Router & Portal': 'Router & Portal',
   'Voucher Printing': 'Voucher Printing',
   Password: 'Password',
-  Security: 'Security',
-  'Subscription Plan': 'Plan',
+  Security: 'Account Safety',
+  'Subscription Plan': 'My Plan',
 }
 const tabDescriptions: Record<(typeof tabs)[number], string> = {
-  'Business Profile': 'Business identity, branding, and support contacts.',
-  Appearance: 'Dashboard appearance and customer WiFi login page themes.',
-  'Payment & Fees': 'Payment methods, collection routes, and applicable fees.',
-  Withdrawals: 'Payout limits, fees, approval rules, and safety controls.',
-  'Router & Portal': 'Router connection behavior and customer portal defaults.',
-  'Voucher Printing': 'Default voucher layout and redemption behavior.',
-  Password: 'Change your account password and close other remembered sessions.',
-  Security: 'Account email, device binding, verification, and operating terms.',
-  'Subscription Plan': 'View or change the plan for this business.',
+  'Business Profile': 'Your business name, logo, and customer support contact.',
+  Appearance: 'Dashboard appearance and WiFi login page look.',
+  'Payment & Fees': 'See what customers can pay with and the service fees applied.',
+  Withdrawals: 'Platform payout limits, review rules, and safety controls.',
+  'Router & Portal': 'Router connection and customer portal defaults.',
+  'Voucher Printing': 'Voucher print format and redemption defaults.',
+  Password: 'Change the password used to sign in.',
+  Security: 'Protect your account, email, devices, and business terms.',
+  'Subscription Plan': 'See or change the plan for this business.',
 }
+const vendorTabs: Array<(typeof tabs)[number]> = ['Business Profile', 'Payment & Fees', 'Password', 'Security', 'Subscription Plan']
 const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']
 const renewalRuleOptions = ['MANUAL_RENEWAL', 'AUTO_RENEWAL_WHEN_AVAILABLE', 'DISABLED']
 const portalTemplates = ['classic', 'fresh', 'sunrise']
@@ -362,13 +363,19 @@ export default function SettingsManager({
     tenant?.settings.tenantVoucherFeePercent ??
     platform?.voucherFeePercent ??
     2
+  const visibleTabs = isDevAdmin ? tabs : vendorTabs
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab')
-    if (tabs.includes(requestedTab as (typeof tabs)[number])) {
-      setActiveTab(requestedTab as (typeof tabs)[number])
+    const nextTab = tabs.includes(requestedTab as (typeof tabs)[number])
+      ? requestedTab as (typeof tabs)[number]
+      : 'Business Profile'
+    if (visibleTabs.includes(nextTab)) {
+      setActiveTab(nextTab)
+    } else {
+      setActiveTab('Business Profile')
     }
-  }, [searchParams])
+  }, [searchParams, visibleTabs])
 
   async function savePlatform(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

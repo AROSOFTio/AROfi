@@ -6835,5 +6835,83 @@ textarea.form-input {
   font-size: 12px;
 }
 
+/* Flat SaaS authority: no gradients or decorative patterning in the app shell,
+   dashboard, settings, support, docs, cards, and operational surfaces. */
+.main-content,
+.content,
+.tenant-dashboard,
+.dashboard-panel,
+.dashboard-action-card,
+.dashboard-action-item,
+.dashboard-insights-row,
+.tenant-stat,
+.tenant-stat-compact,
+.system-insights-card,
+.wallet-showcase-card,
+.card,
+.stat-card,
+.metric-card,
+.ui-card,
+.check-card,
+.appearance-accent-card,
+.support-ticket-row,
+.support-doc-card,
+.home-panel,
+.home-feature,
+.home-contact-card,
+.referral-card,
+.referral-hero {
+  background-image: none !important;
+}
+
+.wallet-showcase-card {
+  background: #174ea6 !important;
+}
+
+.stat-card,
+.tenant-stat,
+.tenant-stat-compact,
+.system-insights-card,
+.dashboard-panel,
+.dashboard-action-card,
+.support-doc-card {
+  background: var(--bg-card) !important;
+}
+
+.support-docs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.support-doc-card {
+  margin-bottom: 0;
+}
+
+.support-doc-card ol {
+  margin: 0;
+  padding: 14px 18px 16px 34px;
+  color: var(--text-2);
+  display: grid;
+  gap: 8px;
+}
+
+.support-doc-card li,
+.support-doc-card p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.support-doc-card p {
+  margin: 0;
+  padding: 14px 16px 16px;
+  color: var(--text-2);
+}
+
+.settings-grid .metric-card {
+  background: #f8fafc !important;
+  border-color: var(--border-soft) !important;
+}
+
 
 

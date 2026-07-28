@@ -15,6 +15,62 @@ const categories = ['Router setup', 'Payment issue', 'Customer connection', 'Vou
 const priorities = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
 const statuses = ['OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED']
 const statusFilters = ['ALL', 'OPEN', 'IN_PROGRESS', 'PENDING_CUSTOMER', 'RESOLVED', 'CLOSED'] as const
+const documentationSections = [
+  {
+    title: 'Add another router',
+    steps: [
+      'Open Network, then Routers.',
+      'Click Add Router and enter the router name, public IP or host, API port, username, and password.',
+      'Save it, then check the router status. Healthy means AROFi can reach it.',
+      'If it does not connect, confirm the router has internet, API service is enabled, firewall allows the server IP, and credentials are correct.',
+    ],
+  },
+  {
+    title: 'Sell internet to a customer',
+    steps: [
+      'Open Sell Internet, then Internet Plans to create the package.',
+      'Use Vouchers when you want printed or prepaid access codes.',
+      'Use Customers to check who bought, what they used, and when access expires.',
+      'If a customer paid but is not online, open Support and submit a Customer connection ticket with the phone number and time of payment.',
+    ],
+  },
+  {
+    title: 'Fix payment or voucher errors',
+    steps: [
+      'Open Money, then Transactions to confirm whether the payment is completed, pending, or failed.',
+      'Open Sales to confirm the sale reached the ledger.',
+      'For vouchers, open Sell Internet, then Vouchers and search the voucher code.',
+      'If money was deducted but no access was given, submit a Payment issue ticket with the customer phone number, amount, and time.',
+    ],
+  },
+  {
+    title: 'Withdraw money',
+    steps: [
+      'Open Money, then Wallet.',
+      'Confirm your available balance and payout number.',
+      'Click Withdraw Money and enter the amount and secret PIN.',
+      'If the payout number is wrong, submit a support ticket before withdrawing. Some changes must be verified first.',
+    ],
+  },
+  {
+    title: 'Check live users and router health',
+    steps: [
+      'Open Network, then Online Users to see active customer sessions.',
+      'Open Network, then Routers to see whether each router is healthy.',
+      'Use Remote Access only when you need to enter the router remotely.',
+      'If users are offline but the router is healthy, check the package expiry, payment status, and voucher status first.',
+    ],
+  },
+  {
+    title: 'Get help from AROFi support',
+    steps: [
+      'Open Support, then Tickets.',
+      'Click Submit Ticket.',
+      'Choose the closest category and include phone number, voucher code, router name, amount, and exact time where possible.',
+      'Keep replies inside the ticket so support can see the full history.',
+    ],
+  },
+]
 
 export default function SupportPage() {
   const searchParams = useSearchParams()
@@ -34,6 +90,7 @@ export default function SupportPage() {
   const isVendor = isVendorWorkspace(session?.user)
   const allTickets = data?.items ?? []
   const feedbackOnly = searchParams.get('view') === 'feedback'
+  const documentationOnly = searchParams.get('view') === 'documentation'
   const tickets = useMemo(
     () => allTickets.filter((ticket) => (!feedbackOnly || ticket.category.startsWith('Product feedback')) && (statusFilter === 'ALL' || ticket.status === statusFilter)),
     [allTickets, feedbackOnly, statusFilter],
@@ -178,17 +235,41 @@ export default function SupportPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isVendor ? 'Support Tickets' : feedbackOnly ? 'Feedback' : 'Developer Support Queue'}</h1>
+          <h1 className="page-title">{documentationOnly ? 'Documentation' : isVendor ? 'Support Tickets' : feedbackOnly ? 'Feedback' : 'Developer Support Queue'}</h1>
           <p className="page-subtitle">
-            {isVendor
+            {documentationOnly
+              ? 'Simple operating guide for routers, sales, payments, withdrawals, and support.'
+              : isVendor
               ? 'Submit router, payment, wallet, voucher, and customer connection issues for developer admin support.'
               : feedbackOnly
                 ? 'Review product suggestions, improvement recommendations, ratings, and user comments.'
                 : 'Attend business tickets, assign ownership, update status, and reply with clear next steps.'}
           </p>
         </div>
-        {isVendor && <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Submit Ticket</button>}
+        {isVendor && !documentationOnly && <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Submit Ticket</button>}
       </div>
+
+      {documentationOnly && (
+        <div className="support-docs-grid">
+          {documentationSections.map((section) => (
+            <section className="card support-doc-card" key={section.title}>
+              <div className="card-header">
+                <span className="card-title">{section.title}</span>
+              </div>
+              <ol>
+                {section.steps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {documentationOnly && (
+        <div className="card support-doc-card">
+          <div className="card-header"><span className="card-title">When to submit a ticket</span></div>
+          <p>Submit a ticket when a payment was deducted but access did not activate, a router is unreachable, a voucher cannot be redeemed, a withdrawal is stuck, or you need verified support contact changes.</p>
+        </div>
+      )}
 
       {(message || error) && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -199,14 +280,14 @@ export default function SupportPage() {
         </div>
       )}
 
-      <div className="stats-grid" style={{ marginBottom: 20 }}>
+      {!documentationOnly && <div className="stats-grid" style={{ marginBottom: 20 }}>
         <Stat label="Total" value={`${data?.summary.totalTickets ?? 0}`} color="blue" />
         <Stat label="Open" value={`${data?.summary.open ?? 0}`} color="amber" />
         <Stat label="In Progress" value={`${data?.summary.inProgress ?? 0}`} color="purple" />
         <Stat label="Critical" value={`${data?.summary.critical ?? 0}`} color="green" />
-      </div>
+      </div>}
 
-      <div className="support-layout">
+      {!documentationOnly && <div className="support-layout">
         <div className="card" style={{ margin: 0 }}>
           <div className="card-header">
             <span className="card-title">{isVendor ? 'My Tickets' : 'Ticket Queue'}</span>
@@ -312,7 +393,7 @@ export default function SupportPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {isVendor && createOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
