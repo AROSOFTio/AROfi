@@ -18,6 +18,16 @@ import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 import { PhoneNumberField } from '@/components/PhoneNumberField'
 
+function formatAmountInput(value: string) {
+  const digits = value.replace(/\D/g, '')
+  if (!digits) return ''
+  return Number(digits).toLocaleString('en-US')
+}
+
+function parseAmountInput(value: string) {
+  return Number(value.replace(/\D/g, '') || 0)
+}
+
 type PayoutNumber = {
   id: string
   network: 'MTN' | 'AIRTEL'
@@ -106,7 +116,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   const minimumPayoutUgx = profile?.rules?.minimumPayoutUgx ?? 0
 
   const withdrawalMath = useMemo(() => {
-    const amountUgx = Math.max(0, Number(withdrawAmount || 0))
+    const amountUgx = Math.max(0, parseAmountInput(withdrawAmount))
     const percentageFeeUgx = Math.round((amountUgx * feeBps) / 10000)
     const feeAmountUgx = amountUgx > 0 ? percentageFeeUgx + flatFeeUgx : 0
     const totalDebitUgx = amountUgx + feeAmountUgx
@@ -482,11 +492,10 @@ function WithdrawModal({
           <span className="form-label">Amount to withdraw</span>
           <input
             className="form-input amount-input"
-            type="number"
+            type="text"
             name="withdrawAmountUgx"
-            min={Math.max(1, minimumPayoutUgx)}
             value={withdrawAmount}
-            onChange={(event) => onWithdrawAmount(event.target.value)}
+            onChange={(event) => onWithdrawAmount(formatAmountInput(event.target.value))}
             placeholder="Enter amount in UGX"
             autoComplete="off"
             inputMode="numeric"

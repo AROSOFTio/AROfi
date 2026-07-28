@@ -3666,8 +3666,16 @@ html[data-theme="dark"][data-accent-theme] {
 .primary-star { margin-left: auto; color: #f59e0b; fill: #f59e0b; }
 .muted-icon { margin-left: auto; color: var(--text-3); }
 .withdraw-step-form { display: grid; gap: 16px; }
-.amount-input { font-size: 18px; font-weight: 800; }
-.amount-input::placeholder { color: var(--text-3); font-weight: 650; }
+.amount-input {
+  min-height: 46px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  color: var(--text-1);
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+.amount-input::placeholder { color: var(--text-3); font-weight: 500; letter-spacing: 0; }
 .destination-list { display: grid; gap: 10px; }
 .destination-phone { font-weight: 800; }
 .destination-check { margin-left: auto; color: var(--withdraw-blue); opacity: 0; }

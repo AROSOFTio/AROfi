@@ -14,6 +14,16 @@ type PayoutNumber = {
   isPrimary: boolean
 }
 
+function formatAmountInput(value: string) {
+  const digits = value.replace(/\D/g, '')
+  if (!digits) return ''
+  return Number(digits).toLocaleString('en-US')
+}
+
+function parseAmountInput(value: string) {
+  return Number(value.replace(/\D/g, '') || 0)
+}
+
 export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: { availableBalanceUgx: number; payoutNumbers: PayoutNumber[] }) {
   const router = useRouter()
   const [amountUgx, setAmountUgx] = useState('')
@@ -31,7 +41,7 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
     setError('')
     try {
       await clientPostApi('/referrals/withdrawals', {
-        amountUgx: Number(amountUgx),
+        amountUgx: parseAmountInput(amountUgx),
         payoutNumberId,
         secretKey,
       })
@@ -74,7 +84,7 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
               className="form-input amount-input"
               name="referralWithdrawAmountUgx"
               value={amountUgx}
-              onChange={(event) => setAmountUgx(event.target.value)}
+              onChange={(event) => setAmountUgx(formatAmountInput(event.target.value))}
               placeholder="Enter amount in UGX"
               inputMode="numeric"
               autoComplete="off"
