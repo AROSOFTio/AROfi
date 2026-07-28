@@ -18,7 +18,7 @@ import { DashboardAutoRefresh } from '@/components/DashboardAutoRefresh'
 import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesMixChart } from '@/components/charts/SalesMixChart'
 import { RouterUsageChart } from '@/components/charts/RouterUsageChart'
-import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck, Store, Ticket, FileBarChart, Router } from 'lucide-react'
+import { Cpu, Database, Users, Wallet, CreditCard, ArrowUpRight, CheckCircle2, AlertCircle, ShieldCheck, Store, Ticket, FileBarChart, Router, Activity, Banknote, RadioTower, Sparkles } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 
 type DashboardSearchParams = { range?: string; from?: string; to?: string }
@@ -395,40 +395,49 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         />
       )}
       <DashboardAutoRefresh />
-      <div className="dashboard-header">
-        <h1 className="page-title">Dashboard</h1>
+      <div className="dashboard-hero">
+        <div>
+          <span className="dashboard-eyebrow"><Sparkles size={18} /> Live business command center</span>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="dashboard-hero-copy">Sales, internet sessions, wallet health, and router signals in one calm view.</p>
+        </div>
+        <div className="dashboard-hero-signals" aria-label="Live platform signals">
+          <span><RadioTower size={18} /> {onlineRouters} online</span>
+          <span><Users size={18} /> {billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0} active</span>
+          <span><Banknote size={18} /> {formatCurrency(billing?.summary.todayGrossSalesUgx ?? 0)} today</span>
+        </div>
       </div>
 
       <ComplianceBanner status={complianceStatus as any} tenantId={session?.user.tenantId} />
 
       {/* Quick Actions — the day-to-day operator tasks, one click deep. */}
-      <div className="card" style={{ marginBottom: 14 }}>
+      <div className="card dashboard-action-card" style={{ marginBottom: 14 }}>
         <div className="card-header">
           <span className="card-title">Quick Actions</span>
         </div>
         <div className="action-center-grid">
-          <a href="/agents" className="action-center-item">
+          <a href="/agents" className="action-center-item dashboard-action-item">
             <Store size={20} />
             <div>
               <strong>Sell</strong>
               <span>Sell a voucher to a walk-in customer</span>
             </div>
           </a>
-          <a href="/vouchers" className="action-center-item">
+          <a href="/vouchers" className="action-center-item dashboard-action-item">
             <Ticket size={20} />
             <div>
               <strong>Vouchers</strong>
               <span>Generate a new voucher batch</span>
             </div>
           </a>
-          <a href="/reports" className="action-center-item">
+          <a href="/reports" className="action-center-item dashboard-action-item">
             <FileBarChart size={20} />
             <div>
               <strong>Reports</strong>
               <span>Export sales, vouchers &amp; payouts</span>
             </div>
           </a>
-          <a href="/admin/settings/routers?add=true" className="action-center-item">
+          <a href="/admin/settings/routers?add=true" className="action-center-item dashboard-action-item">
             <Router size={20} />
             <div>
               <strong>Add Router</strong>
@@ -446,6 +455,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <div className="dashboard-insights-row">
         <DashboardStatTodayMonth
           title="Gross Sales"
+          icon={<Banknote size={24} />}
           filteredUgx={billing?.summary.grossSalesUgx ?? billing?.summary.totalSalesUgx ?? 0}
           dateRangeLabel={dateRange}
           todayUgx={billing?.summary.todayGrossSalesUgx ?? 0}
@@ -453,12 +463,13 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         />
         <DashboardStatTodayMonth
           title="Net Earnings"
+          icon={<Wallet size={24} />}
           filteredUgx={billing?.summary.netEarningsUgx ?? billing?.summary.vendorNetUgx ?? 0}
           dateRangeLabel={dateRange}
           todayUgx={billing?.summary.todayNetEarningsUgx ?? 0}
           monthUgx={billing?.summary.monthNetEarningsUgx ?? 0}
         />
-        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} />
+        <DashboardStatCompact title="Pending Withdrawals" value={formatCurrency(billing?.summary.pendingWithdrawalUgx ?? 0)} icon={<Activity size={24} />} />
         <SystemInsightsCompact
           live={liveRouters > 0}
           activeUsers={billing?.summary.activeUsers ?? sessions?.summary.activeSessions ?? 0}
@@ -472,19 +483,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       {/* Modern Wallet Card & Disbursement Settings Panel */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 4 }}>
         {/* Visual Credit Card Style Wallet Card */}
-        <div style={{
-          background: 'var(--bg-card)',
-          borderRadius: 14,
-          padding: '24px 26px',
-          color: '#ffffff',
-          position: 'relative',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: 228,
-          boxShadow: '0 10px 25px -8px var(--arofi-theme-accent-border)',
-        }}>
+        <div className="wallet-showcase-card">
           {/* Card background shape accents */}
           <div style={{
             position: 'absolute',
@@ -493,7 +492,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
             width: 148,
             height: 148,
             borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: 'rgba(37, 99, 235, 0.08)',
             pointerEvents: 'none'
           }} />
           <div style={{
@@ -503,7 +502,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
             width: 168,
             height: 168,
             borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.04)',
+            background: 'rgba(15, 23, 42, 0.04)',
             pointerEvents: 'none'
           }} />
 
@@ -514,8 +513,8 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
               <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', opacity: 0.9 }}>AROFi WALLET</span>
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.75)', mixBlendMode: 'overlay' }} />
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.45)', marginLeft: -9, mixBlendMode: 'overlay' }} />
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(37,99,235,0.22)' }} />
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(22,163,74,0.2)', marginLeft: -9 }} />
             </div>
           </div>
 
@@ -631,7 +630,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
             {recentTransactions.length === 0 && <div className="empty-state"><p>No recent sales yet.</p></div>}
             {recentTransactions.slice(0, 6).map((transaction) => (
               <div className="recent-sale" key={transaction.id}>
-                <div className="sale-avatar">{transaction.voucher ? '[]' : initialsFor(transaction.customerReference ?? 'Customer')}</div>
+                <div className="sale-avatar">{transaction.voucher ? <Ticket size={18} /> : initialsFor(transaction.customerReference ?? 'Customer')}</div>
                 <div>
                   <div className="sale-title">{transaction.customerReference ?? transaction.voucher?.code ?? 'Customer'}</div>
                   {transaction.channel === 'MOBILE_MONEY' && transaction.payment?.phoneNumber && transaction.customerReference !== transaction.payment.phoneNumber && (
@@ -820,16 +819,21 @@ function DashboardStatCompact({
   value,
   mmUgx,
   voucherUgx,
+  icon,
 }: {
   title: string
   value: string
   mmUgx?: number
   voucherUgx?: number
+  icon?: ReactNode
 }) {
   const hasSplit = (mmUgx !== undefined || voucherUgx !== undefined) && (mmUgx! + (voucherUgx ?? 0)) > 0
   return (
     <div className="tenant-stat-compact">
-      <div className="tenant-stat-compact-title">{title}</div>
+      <div className="tenant-stat-compact-head">
+        {icon && <span className="tenant-stat-icon-mark">{icon}</span>}
+        <div className="tenant-stat-compact-title">{title}</div>
+      </div>
       <div className="tenant-stat-compact-value">{value}</div>
       {hasSplit && (
         <div className="tenant-stat-compact-split">
@@ -851,12 +855,14 @@ function DashboardStatCompact({
 
 function DashboardStatTodayMonth({
   title,
+  icon,
   filteredUgx,
   dateRangeLabel,
   todayUgx,
   monthUgx,
 }: {
   title: string
+  icon?: ReactNode
   filteredUgx: number
   dateRangeLabel: string
   todayUgx: number
@@ -864,7 +870,10 @@ function DashboardStatTodayMonth({
 }) {
   return (
     <div className="tenant-stat-compact">
-      <div className="tenant-stat-compact-title">{title}</div>
+      <div className="tenant-stat-compact-head">
+        {icon && <span className="tenant-stat-icon-mark">{icon}</span>}
+        <div className="tenant-stat-compact-title">{title}</div>
+      </div>
       <div className="tenant-stat-compact-value">{formatCurrency(filteredUgx)}</div>
       <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: -2, marginBottom: 4 }}>{dateRangeLabel}</div>
       <div className="tenant-stat-compact-split">

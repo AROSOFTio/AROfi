@@ -421,7 +421,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <img src="/logo.png" alt="AROFi" />
+        <img src="/logo.svg" alt="AROFi" />
         <div>
           <h1>ARO<span>Fi</span></h1>
           <p>{workspaceLabel}</p>

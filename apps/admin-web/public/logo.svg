@@ -1,0 +1,11 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AROFi">
+  <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
+  <path d="M80 192L120 68C122.4 60.6 133.6 60.6 136 68L176 192H142L128 146L114 192H80Z" fill="#2563EB"/>
+  <path d="M128 83L104 168H121L128 146L135 168H152L128 83Z" fill="#1D4ED8"/>
+  <circle cx="128" cy="68" r="16" fill="#0F2D5C"/>
+  <path d="M88 94C75.6 81.6 75.6 61.4 88 49" stroke="#2563EB" stroke-width="15" stroke-linecap="round"/>
+  <path d="M64 118C38.3 92.3 38.3 50.7 64 25" stroke="#2563EB" stroke-width="15" stroke-linecap="round"/>
+  <path d="M168 94C180.4 81.6 180.4 61.4 168 49" stroke="#2563EB" stroke-width="15" stroke-linecap="round"/>
+  <path d="M192 118C217.7 92.3 217.7 50.7 192 25" stroke="#2563EB" stroke-width="15" stroke-linecap="round"/>
+  <path d="M82 201H174" stroke="#0F172A" stroke-opacity="0.16" stroke-width="10" stroke-linecap="round"/>
+</svg>
