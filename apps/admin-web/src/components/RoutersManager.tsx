@@ -14,7 +14,7 @@ import FormProcessStatus from '@/components/FormProcessStatus'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate, formatLatency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
-import { DNS_BOOTSTRAP, buildSetupFallbackCommand } from '@/lib/mikrotik-commands'
+import { buildRemoteAccessInstallCommand, buildSetupFallbackCommand } from '@/lib/mikrotik-commands'
 
 type GroupFormState = {
   tenantId: string
@@ -511,8 +511,8 @@ export default function RoutersManager() {
     }
 
     const router = selectedSetup.router
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin + '/api' : '')
-    const command = `${DNS_BOOTSTRAP}/tool fetch url="${apiBaseUrl}/mikrotik/remote-access/install/${router.remoteToken}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://arofi.net'
+    const command = buildRemoteAccessInstallCommand(router.remoteToken, origin)
 
     await navigator.clipboard.writeText(command)
     setSuccess('Automatic installation command copied to clipboard.')
@@ -950,7 +950,7 @@ export default function RoutersManager() {
                   lineHeight: 1.6,
                   userSelect: 'all'
                 }}>
-                  {`${DNS_BOOTSTRAP}/tool fetch url="${typeof window !== 'undefined' ? window.location.origin : ''}/api/mikrotik/remote-access/install/${selectedSetup.router.remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`}
+                  {buildRemoteAccessInstallCommand(selectedSetup.router.remoteToken, typeof window !== 'undefined' ? window.location.origin : 'https://arofi.net')}
                 </div>
                 <button type="button" className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => void copyRemoteInstallCommand()}>
                   Copy command

@@ -30,7 +30,7 @@ import {
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { formatDate } from '@/lib/format'
 import { PhoneNumberField } from '@/components/PhoneNumberField'
-import { DNS_BOOTSTRAP } from '@/lib/mikrotik-commands'
+import { buildRemoteAccessInstallCommand } from '@/lib/mikrotik-commands'
 
 export default function SettingsRoutersPage() {
   const [loading, setLoading] = useState(true)
@@ -371,10 +371,9 @@ export default function SettingsRoutersPage() {
   }
 
   function buildRemoteInstallCommand(router: any) {
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || `${origin}/api`
     if (!router.remoteToken) return ''
-    return `${DNS_BOOTSTRAP}/tool fetch url="${apiBaseUrl}/mikrotik/remote-access/install/${router.remoteToken}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://arofi.net'
+    return buildRemoteAccessInstallCommand(router.remoteToken, origin)
   }
 
   function formatSecondsDuration(seconds?: number | null) {
@@ -1110,7 +1109,7 @@ export default function SettingsRoutersPage() {
       {/* MODAL: Setup Script */}
       {scriptModal && (
         <div className="modal-overlay" onClick={() => setScriptModal(null)}>
-          <div className="modal-card" style={{ width: 'min(720px, 100%)' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" style={{ width: 'min(1080px, calc(100vw - 32px))' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
               <div style={{ display: 'grid', gap: 3 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Router Setup Script — {scriptModal.router.name}</h3>
@@ -1127,18 +1126,23 @@ export default function SettingsRoutersPage() {
                   Router registered. Run both scripts below for billing, monitoring, and remote support to work.
                 </div>
               )}
-              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>1. Onboarding script</strong>
-              <div style={{ padding: 14, background: '#0b1220', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <pre style={{ margin: 0, fontSize: 11.5, color: '#dbe7ff', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.6, userSelect: 'all' }}>
-                  {scriptModal.command}
-                </pre>
-              </div>
-
-              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>2. Remote access script</strong>
-              <div style={{ padding: 14, background: '#0b1220', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <pre style={{ margin: 0, fontSize: 11.5, color: '#dbe7ff', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.6, userSelect: 'all' }}>
-                  {scriptModal.remoteCommand || 'Remote access script unavailable - reopen this router menu after registration refreshes.'}
-                </pre>
+              <div className="router-script-grid">
+                <div className="router-script-panel">
+                  <strong>1. Onboarding script</strong>
+                  <div className="router-script-code">
+                    <pre>
+                      {scriptModal.command}
+                    </pre>
+                  </div>
+                </div>
+                <div className="router-script-panel">
+                  <strong>2. Remote access script</strong>
+                  <div className="router-script-code">
+                    <pre>
+                      {scriptModal.remoteCommand || 'Remote access script unavailable - reopen this router menu after registration refreshes.'}
+                    </pre>
+                  </div>
+                </div>
               </div>
 
               <div style={{ padding: 12, background: 'var(--amber-light)', border: '1px solid var(--amber-mid)', borderRadius: 8, fontSize: 12.5, color: 'var(--amber-dark)', lineHeight: 1.5 }}>

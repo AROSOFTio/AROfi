@@ -6,9 +6,17 @@
 // any router out of the box.
 export const DNS_BOOTSTRAP = ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
 
+export function absoluteApiOrigin(configuredApiUrl?: string | null, browserOrigin?: string) {
+  const configured = configuredApiUrl?.trim()
+  const origin = browserOrigin || (typeof window !== 'undefined' ? window.location.origin : 'https://arofi.net')
+  if (!configured) return `${origin}/api`
+  if (/^https?:\/\//i.test(configured)) return configured.replace(/\/$/, '')
+  return `${origin}${configured.startsWith('/') ? configured : `/${configured}`}`.replace(/\/$/, '')
+}
+
 export function buildRemoteAccessInstallCommand(remoteToken: string | null | undefined, origin?: string) {
-  const host = origin || (typeof window !== 'undefined' ? window.location.origin : 'https://arofi.net')
-  return `${DNS_BOOTSTRAP}/tool fetch url="${host}/api/mikrotik/remote-access/install/${remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+  const apiOrigin = absoluteApiOrigin(process.env.NEXT_PUBLIC_API_URL, origin)
+  return `${DNS_BOOTSTRAP}/tool fetch url="${apiOrigin}/mikrotik/remote-access/install/${remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
 }
 
 export function buildSetupFallbackCommand(registrationKey: string) {
