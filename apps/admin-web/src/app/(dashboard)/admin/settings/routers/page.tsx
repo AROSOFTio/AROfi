@@ -7,6 +7,8 @@ import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '
 import { useRealtimeRefresh } from '@/lib/realtime'
 import type { 
   RouterOverviewResponse, 
+  RouterCompensationOverview,
+  RouterSetupResponse,
   HotspotOverviewResponse, 
   TenantOverviewResponse,
   AdminSessionResponse 
@@ -28,6 +30,7 @@ import {
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { formatDate } from '@/lib/format'
 import { PhoneNumberField } from '@/components/PhoneNumberField'
+import { DNS_BOOTSTRAP } from '@/lib/mikrotik-commands'
 
 export default function SettingsRoutersPage() {
   const [loading, setLoading] = useState(true)
@@ -82,9 +85,12 @@ export default function SettingsRoutersPage() {
   const [renameName, setRenameName] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [scriptModal, setScriptModal] = useState<{ router: any; command: string } | null>(null)
+  const [scriptModal, setScriptModal] = useState<{ router: any; command: string; remoteCommand?: string; postRegister?: boolean } | null>(null)
   const [scriptCopied, setScriptCopied] = useState(false)
+  const [remoteScriptCopied, setRemoteScriptCopied] = useState(false)
   const [loadingScript, setLoadingScript] = useState<string | null>(null)
+  const [compensationModal, setCompensationModal] = useState<{ router: any; overview: RouterCompensationOverview } | null>(null)
+  const [loadingCompensation, setLoadingCompensation] = useState<string | null>(null)
   const [deleteModalRouter, setDeleteModalRouter] = useState<any | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -178,7 +184,7 @@ export default function SettingsRoutersPage() {
         .filter(Boolean)
         .slice(0, 12)
 
-      await clientPostApi('/routers', {
+      const setup = await clientPostApi<RouterSetupResponse>('/routers', {
         ...routerForm,
         locationText: routerForm.locationText || undefined,
         ispName: routerForm.ispName || undefined,
@@ -186,12 +192,18 @@ export default function SettingsRoutersPage() {
         managerPhone: routerForm.managerPhone || undefined,
         groupId: routerForm.groupId || undefined,
         hotspotId: routerForm.hotspotId || undefined,
-        host: routerForm.host || '192.168.88.1',
+        host: routerForm.host || '',
         apiPort: Number.isFinite(apiPort) ? apiPort : undefined,
         portalWalledGardenHosts: portalWalledGardenHosts.length > 0 ? portalWalledGardenHosts : undefined,
       })
       
       setAddModalOpen(false)
+      setScriptModal({
+        router: setup.router,
+        command: setup.oneRunCommand ?? setup.provisioningScript ?? 'Script unavailable - please contact support.',
+        remoteCommand: buildRemoteInstallCommand(setup.router),
+        postRegister: true,
+      })
       // Reset form
       setRouterForm(prev => ({
         ...prev,
@@ -314,14 +326,64 @@ export default function SettingsRoutersPage() {
     setActiveMenuId(null)
     setLoadingScript(router.id)
     try {
-      const setup = await clientFetchApi<{ oneRunCommand?: string }>(`/routers/${router.id}/setup`)
-      const command = setup.oneRunCommand ?? 'Script unavailable — please contact support.'
-      setScriptModal({ router, command })
+      const setup = await clientFetchApi<RouterSetupResponse>(`/routers/${router.id}/setup`)
+      const command = setup.oneRunCommand ?? setup.provisioningScript ?? 'Script unavailable - please contact support.'
+      setScriptModal({ router: setup.router, command, remoteCommand: buildRemoteInstallCommand(setup.router) })
     } catch {
       alert('Could not load setup script. Please try again.')
     } finally {
       setLoadingScript(null)
     }
+  }
+
+  const handleShowCompensation = async (router: any) => {
+    setActiveMenuId(null)
+    setLoadingCompensation(router.id)
+    try {
+      const compensation = await clientFetchApi<RouterCompensationOverview>(`/routers/${router.id}/compensation`)
+      setCompensationModal({ router, overview: compensation })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not load compensation details.')
+    } finally {
+      setLoadingCompensation(null)
+    }
+  }
+
+  const handleToggleCompensation = async (enabled: boolean) => {
+    if (!compensationModal) return
+    try {
+      const settings = await clientPostApi<{ autoCompensateRouterOutages: boolean }>('/routers/compensation/settings', { enabled })
+      setCompensationModal((previous) => previous ? { ...previous, overview: { ...previous.overview, settings } } : previous)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not update compensation setting.')
+    }
+  }
+
+  const handleManualCompensation = async () => {
+    if (!compensationModal) return
+    try {
+      await clientPostApi(`/routers/${compensationModal.router.id}/compensation/manual`, {})
+      const compensation = await clientFetchApi<RouterCompensationOverview>(`/routers/${compensationModal.router.id}/compensation`)
+      setCompensationModal((previous) => previous ? { ...previous, overview: compensation } : previous)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not compensate latest outage.')
+    }
+  }
+
+  function buildRemoteInstallCommand(router: any) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || `${origin}/api`
+    if (!router.remoteToken) return ''
+    return `${DNS_BOOTSTRAP}/tool fetch url="${apiBaseUrl}/mikrotik/remote-access/install/${router.remoteToken}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+  }
+
+  function formatSecondsDuration(seconds?: number | null) {
+    if (!seconds || seconds <= 0) return '0 min'
+    const minutes = Math.max(1, Math.round(seconds / 60))
+    if (minutes < 60) return `${minutes} min`
+    const hours = Math.floor(minutes / 60)
+    const remainder = minutes % 60
+    return `${hours} hr${hours === 1 ? '' : 's'}${remainder ? ` ${remainder} min` : ''}`
   }
 
   if (loading && tenants.length === 0) {
@@ -492,6 +554,16 @@ export default function SettingsRoutersPage() {
                               >
                                 <FileCode size={14} style={{ marginRight: 8 }} />
                                 {loadingScript === router.id ? 'Loading...' : 'Get Setup Script'}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px' }}
+                                onClick={() => void handleShowCompensation(router)}
+                                disabled={loadingCompensation === router.id}
+                              >
+                                <RefreshCw size={14} style={{ marginRight: 8 }} /> {loadingCompensation === router.id ? 'Loading...' : 'Compensation'}
                               </button>
 
                               <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
@@ -772,18 +844,6 @@ export default function SettingsRoutersPage() {
                     </select>
                   </div>
 
-                  {/* Management Host/IP */}
-                  <div className="form-group">
-                    <label className="form-label">Management Host / IP</label>
-                    <input
-                      className="form-input"
-                      type="text"
-                      value={routerForm.host}
-                      onChange={(e) => setRouterForm(prev => ({ ...prev, host: e.target.value }))}
-                      placeholder="e.g. 192.168.88.1"
-                    />
-                  </div>
-
                   {/* TTL checkbox */}
                   <div className="form-group" style={{ display: 'flex', alignItems: 'center', height: '100%', paddingTop: 20 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
@@ -980,6 +1040,73 @@ export default function SettingsRoutersPage() {
         </div>
       )}
 
+      {/* MODAL: Compensation */}
+      {compensationModal && (
+        <div className="modal-overlay" onClick={() => setCompensationModal(null)}>
+          <div className="modal-card" style={{ width: 'min(780px, 100%)' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gap: 3 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Outage Compensation - {compensationModal.router.name}</h3>
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: 0 }}>
+                  Auto compensation is the default. When this router comes back online, overlapping customer packages are extended by the offline time.
+                </p>
+              </div>
+              <button type="button" className="btn btn-ghost" style={{ padding: 4, flexShrink: 0 }} onClick={() => setCompensationModal(null)}>x</button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: 12, border: '1px solid var(--border)', borderRadius: 10 }}>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={compensationModal.overview.settings.autoCompensateRouterOutages !== false}
+                    onChange={(event) => void handleToggleCompensation(event.target.checked)}
+                  />
+                  Auto compensate users
+                </label>
+                <button type="button" className="btn btn-primary" onClick={() => void handleManualCompensation()}>
+                  Compensate latest outage now
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Recent outages</strong>
+                  {compensationModal.overview.outages.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>No outages recorded yet.</span>}
+                  {compensationModal.overview.outages.slice(0, 4).map((outage) => (
+                    <div key={outage.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'grid', gap: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <strong style={{ fontSize: 12.5 }}>{formatSecondsDuration(outage.durationSeconds)}</strong>
+                        <span className={outage.status === 'COMPENSATED' ? 'badge badge-success' : outage.status === 'OPEN' ? 'badge badge-warning' : 'badge badge-info'}>
+                          {outage.status.toLowerCase().replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{formatDate(outage.offlineAt)} - {outage.restoredAt ? formatDate(outage.restoredAt) : 'ongoing'}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{outage.affectedActivations} package(s), {formatSecondsDuration(outage.totalSecondsCredited)} credited</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Recent customer credits</strong>
+                  {compensationModal.overview.compensations.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>No customer compensation credits yet.</span>}
+                  {compensationModal.overview.compensations.slice(0, 4).map((credit) => (
+                    <div key={credit.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'grid', gap: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <strong style={{ fontSize: 12.5 }}>{credit.activation.package.name}</strong>
+                        <span className="badge badge-success">+{formatSecondsDuration(credit.secondsCredited)}</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{credit.accessPhoneNumber ?? credit.customerReference ?? 'Customer'}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>New expiry {formatDate(credit.newEndsAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Setup Script */}
       {scriptModal && (
         <div className="modal-overlay" onClick={() => setScriptModal(null)}>
@@ -995,9 +1122,22 @@ export default function SettingsRoutersPage() {
             </div>
 
             <div style={{ display: 'grid', gap: 12 }}>
+              {scriptModal.postRegister && (
+                <div style={{ padding: 12, background: 'var(--blue-light)', border: '1px solid var(--blue-mid)', borderRadius: 8, fontSize: 12.5, color: 'var(--arofi-theme-accent-text)', lineHeight: 1.5 }}>
+                  Router registered. Run both scripts below for billing, monitoring, and remote support to work.
+                </div>
+              )}
+              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>1. Onboarding script</strong>
               <div style={{ padding: 14, background: '#0b1220', borderRadius: 10, border: '1px solid var(--border)' }}>
                 <pre style={{ margin: 0, fontSize: 11.5, color: '#dbe7ff', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.6, userSelect: 'all' }}>
                   {scriptModal.command}
+                </pre>
+              </div>
+
+              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>2. Remote access script</strong>
+              <div style={{ padding: 14, background: '#0b1220', borderRadius: 10, border: '1px solid var(--border)' }}>
+                <pre style={{ margin: 0, fontSize: 11.5, color: '#dbe7ff', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.6, userSelect: 'all' }}>
+                  {scriptModal.remoteCommand || 'Remote access script unavailable - reopen this router menu after registration refreshes.'}
                 </pre>
               </div>
 
@@ -1005,8 +1145,26 @@ export default function SettingsRoutersPage() {
                 <strong>How to run:</strong> Open WinBox → click Terminal → paste the command above → press Enter. Wait for it to finish (about 30 seconds).
               </div>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12.5 }}>
+                <a href="/docs/getting-started#run-onboarding-script" target="_blank" rel="noopener noreferrer">Video: onboarding script</a>
+                <a href="/docs/getting-started#run-remote-access-script" target="_blank" rel="noopener noreferrer">Video: remote access script</a>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-ghost" onClick={() => setScriptModal(null)}>Close</button>
+                {scriptModal.remoteCommand && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(scriptModal.remoteCommand || '')
+                      setRemoteScriptCopied(true)
+                      setTimeout(() => setRemoteScriptCopied(false), 2000)
+                    }}
+                  >
+                    {remoteScriptCopied ? 'Remote copied!' : 'Copy Remote Script'}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -1016,7 +1174,7 @@ export default function SettingsRoutersPage() {
                     setTimeout(() => setScriptCopied(false), 2000)
                   }}
                 >
-                  {scriptCopied ? 'Copied!' : 'Copy Command'}
+                  {scriptCopied ? 'Onboarding copied!' : 'Copy Onboarding Script'}
                 </button>
               </div>
             </div>

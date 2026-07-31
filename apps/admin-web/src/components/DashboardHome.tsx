@@ -369,12 +369,21 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       <DashboardAutoRefresh />
       <div className="dashboard-header dashboard-header-compact">
         <h1 className="page-title">Dashboard</h1>
+        <div className="quick-menu">
+          <button type="button" className="btn btn-ghost quick-menu-trigger">Quick</button>
+          <div className="quick-menu-panel">
+            <a href="/agents" className="quick-menu-item"><Store size={16} /><span>Sell voucher</span></a>
+            <a href="/vouchers" className="quick-menu-item"><Ticket size={16} /><span>Vouchers</span></a>
+            <a href="/reports" className="quick-menu-item"><FileBarChart size={16} /><span>Reports</span></a>
+            <a href="/admin/settings/routers?add=true" className="quick-menu-item"><Router size={16} /><span>Add router</span></a>
+          </div>
+        </div>
       </div>
 
       <ComplianceBanner status={complianceStatus as any} tenantId={session?.user.tenantId} />
 
       {/* Quick Actions — the day-to-day operator tasks, one click deep. */}
-      <div className="card dashboard-action-card" style={{ marginBottom: 14 }}>
+      <div className="card dashboard-action-card" style={{ display: 'none', marginBottom: 14 }}>
         <div className="card-header">
           <span className="card-title">Quick Actions</span>
         </div>

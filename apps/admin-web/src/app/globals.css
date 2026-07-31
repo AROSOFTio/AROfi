@@ -6505,6 +6505,60 @@ textarea.form-input {
   box-shadow: 0 16px 28px rgba(15, 23, 42, 0.1);
 }
 
+.quick-menu {
+  position: relative;
+  display: inline-flex;
+  margin-left: auto;
+  z-index: 30;
+}
+
+.quick-menu-trigger {
+  min-width: 78px;
+  justify-content: center;
+}
+
+.quick-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  display: none;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.quick-menu:hover .quick-menu-panel,
+.quick-menu:focus-within .quick-menu-panel {
+  display: grid;
+  gap: 4px;
+}
+
+.quick-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.quick-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--arofi-theme-accent-text);
+}
+
+.quick-menu-item svg {
+  color: var(--arofi-theme-accent-text);
+  flex: 0 0 auto;
+}
+
 .dashboard-insights-row {
   gap: 14px;
   margin-bottom: 18px;

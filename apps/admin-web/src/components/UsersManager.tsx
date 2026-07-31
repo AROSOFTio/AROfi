@@ -280,7 +280,20 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
               </div>
               <div className="form-group" style={{ marginTop: 14 }}>
                 <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Role</label>
-                <div style={{ display: 'grid', gap: 8, maxHeight: 280, overflowY: 'auto', paddingRight: 2 }}>
+                <select
+                  className="form-input"
+                  value={form.roleName}
+                  onChange={(event) => setForm((previous) => ({ ...previous, roleName: event.target.value }))}
+                  required
+                >
+                  {roles.filter((role) => role.name !== 'SuperAdmin').map((role) => (
+                    <option key={role.id} value={role.name}>{formatRoleName(role.name)}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35, margin: '6px 0 0' }}>
+                  {getRoleDescription(form.roleName)}
+                </p>
+                <div style={{ display: 'none', gap: 8, maxHeight: 280, overflowY: 'auto', paddingRight: 2 }}>
                   {roles.filter((role) => role.name !== 'SuperAdmin').map((role) => {
                     const selected = form.roleName === role.name
                     return (
