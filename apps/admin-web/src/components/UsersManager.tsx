@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { UsersOverviewResponse } from '@/lib/admin-types'
 import FormProcessStatus from '@/components/FormProcessStatus'
-import { clientFetchApi, clientPostApi } from '@/lib/client-api'
+import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDate, formatMegabytes, formatRoleName, getRoleDescription, getStatusBadgeClass } from '@/lib/format'
 import CustomerDetailModal from '@/components/CustomerDetailModal'
 
@@ -44,6 +44,8 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   const [customers, setCustomers] = useState<CustomerDirectory | null>(null)
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<UsersOverviewResponse['users'][number] | null>(null)
+  const [editForm, setEditForm] = useState<UserFormState>({ firstName: '', lastName: '', email: '', password: '', roleName: 'WifiAdmin' })
   const [detailReference, setDetailReference] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [processText, setProcessText] = useState('')
@@ -68,6 +70,73 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
   })
 
   const users = data?.users ?? []
+
+  function beginEditUser(user: UsersOverviewResponse['users'][number]) {
+    setEditingUser(user)
+    setEditForm({
+      firstName: user.firstName ?? '',
+      lastName: user.lastName ?? '',
+      email: user.email,
+      password: '',
+      roleName: user.role.name,
+    })
+    setError(null)
+  }
+
+  async function refreshUsers() {
+    setData(await clientFetchApi<UsersOverviewResponse>('/users'))
+  }
+
+  async function submitEditUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editingUser) return
+    setIsSubmitting(true)
+    setError(null)
+    setProcessText('Updating staff user.')
+    try {
+      await clientPatchApi(`/users/${editingUser.id}`, {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email,
+        roleName: editForm.roleName,
+        password: editForm.password || undefined,
+      })
+      await refreshUsers()
+      setEditingUser(null)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update staff user')
+    } finally {
+      setIsSubmitting(false)
+      setProcessText('')
+    }
+  }
+
+  async function toggleUserActive(user: UsersOverviewResponse['users'][number]) {
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await clientPostApi(`/users/${user.id}/${user.isActive ? 'deactivate' : 'activate'}`, {})
+      await refreshUsers()
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update user status')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function deleteUser(user: UsersOverviewResponse['users'][number]) {
+    if (!window.confirm('Delete this staff user? This disables their login access.')) return
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await clientDeleteApi(`/users/${user.id}`)
+      await refreshUsers()
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to delete staff user')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -173,12 +242,13 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                 <th>Permissions</th>
                 <th>Status</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="empty-state">
                       <p>No staff users have been created yet.</p>
                     </div>
@@ -197,6 +267,15 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
                   <td>{user.role.permissions.includes('ALL') ? 'All permissions' : `${user.role.permissions.length} permissions`}</td>
                   <td><span className={getStatusBadgeClass(user.isActive ? 'ACTIVE' : 'INACTIVE')}>{user.isActive ? 'active' : 'inactive'}</span></td>
                   <td style={{ fontSize: 12 }}>{formatDate(user.createdAt)}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn btn-ghost" onClick={() => beginEditUser(user)}>Edit</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => void toggleUserActive(user)} disabled={isSubmitting}>
+                        {user.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button type="button" className="btn btn-ghost" style={{ color: 'var(--danger-fg)' }} onClick={() => void deleteUser(user)} disabled={isSubmitting}>Delete</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -327,6 +406,45 @@ export default function UsersManager({ initialData }: { initialData: UsersOvervi
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
                 <button className="secondary-button" type="button" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</button>
                 <button className="primary-button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating user...' : 'Create User'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingUser && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <button className="modal-close" type="button" onClick={() => setEditingUser(null)} disabled={isSubmitting}>Close</button>
+            <div className="modal-kicker">Business Access</div>
+            <h2 className="modal-title">Edit Staff User</h2>
+            <form onSubmit={submitEditUser}>
+              <div className="form-grid">
+                <Field label="First Name" value={editForm.firstName} onChange={(value) => setEditForm((previous) => ({ ...previous, firstName: value }))} required />
+                <Field label="Last Name" value={editForm.lastName} onChange={(value) => setEditForm((previous) => ({ ...previous, lastName: value }))} required />
+                <Field label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm((previous) => ({ ...previous, email: value }))} required />
+                <Field label="New Password" type="password" value={editForm.password} onChange={(value) => setEditForm((previous) => ({ ...previous, password: value }))} />
+              </div>
+              <div className="form-group" style={{ marginTop: 14 }}>
+                <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Role</label>
+                <select
+                  className="form-input"
+                  value={editForm.roleName}
+                  onChange={(event) => setEditForm((previous) => ({ ...previous, roleName: event.target.value }))}
+                  required
+                >
+                  {roles.filter((role) => role.name !== 'SuperAdmin').map((role) => (
+                    <option key={role.id} value={role.name}>{formatRoleName(role.name)}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35, margin: '6px 0 0' }}>
+                  {getRoleDescription(editForm.roleName)}
+                </p>
+              </div>
+              <FormProcessStatus busy={isSubmitting} error={error} text={processText || 'Updating staff user.'} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                <button className="secondary-button" type="button" onClick={() => setEditingUser(null)} disabled={isSubmitting}>Cancel</button>
+                <button className="primary-button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
               </div>
             </form>
           </div>

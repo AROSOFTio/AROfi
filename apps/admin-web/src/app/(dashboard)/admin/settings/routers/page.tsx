@@ -91,6 +91,7 @@ export default function SettingsRoutersPage() {
   const [loadingScript, setLoadingScript] = useState<string | null>(null)
   const [compensationModal, setCompensationModal] = useState<{ router: any; overview: RouterCompensationOverview } | null>(null)
   const [loadingCompensation, setLoadingCompensation] = useState<string | null>(null)
+  const [remoteAction, setRemoteAction] = useState<string | null>(null)
   const [deleteModalRouter, setDeleteModalRouter] = useState<any | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -349,6 +350,46 @@ export default function SettingsRoutersPage() {
     }
   }
 
+  const handleOpenRemotePort = async (routerId: string) => {
+    setActiveMenuId(null)
+    setRemoteAction(routerId)
+    try {
+      await clientPostApi(`/routers/${routerId}/remote-access/open`, {})
+      await loadData(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not open remote port')
+    } finally {
+      setRemoteAction(null)
+    }
+  }
+
+  const handleCloseRemotePort = async (routerId: string) => {
+    setActiveMenuId(null)
+    setRemoteAction(routerId)
+    try {
+      await clientPostApi(`/routers/${routerId}/remote-access/close`, {})
+      await loadData(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not close remote port')
+    } finally {
+      setRemoteAction(null)
+    }
+  }
+
+  const handleTestRemotePort = async (routerId: string) => {
+    setActiveMenuId(null)
+    setRemoteAction(routerId)
+    try {
+      const result = await clientPostApi<{ reachable: boolean; message: string }>(`/routers/${routerId}/remote-access/test`, {})
+      alert(result.message || (result.reachable ? 'Remote port is reachable.' : 'Remote port is not reachable.'))
+      await loadData(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not test remote port')
+    } finally {
+      setRemoteAction(null)
+    }
+  }
+
   const handleToggleCompensation = async (enabled: boolean) => {
     if (!compensationModal) return
     try {
@@ -594,6 +635,38 @@ export default function SettingsRoutersPage() {
 
                               <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
                               <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', padding: '4px 12px', fontWeight: 600 }}>Remote Access</span>
+
+                              {!router.isRemotePortOpen ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px' }}
+                                  onClick={() => void handleOpenRemotePort(router.id)}
+                                  disabled={remoteAction === router.id}
+                                >
+                                  <Globe size={14} style={{ marginRight: 8 }} /> {remoteAction === router.id ? 'Opening...' : 'Open Port'}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px' }}
+                                  onClick={() => void handleCloseRemotePort(router.id)}
+                                  disabled={remoteAction === router.id}
+                                >
+                                  <Globe size={14} style={{ marginRight: 8 }} /> {remoteAction === router.id ? 'Closing...' : 'Close Port'}
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                style={{ justifyContent: 'flex-start', fontSize: 13, height: 'auto', padding: '8px 12px' }}
+                                onClick={() => void handleTestRemotePort(router.id)}
+                                disabled={remoteAction === router.id}
+                              >
+                                <Radio size={14} style={{ marginRight: 8 }} /> Test Remote Port
+                              </button>
 
                               <button 
                                 type="button" 

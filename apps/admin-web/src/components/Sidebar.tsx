@@ -12,6 +12,7 @@ import {
   FileBarChart,
   FileText,
   Gauge,
+  Globe,
   LayoutDashboard,
   LayoutTemplate,
   LifeBuoy,
@@ -66,6 +67,11 @@ const navItems: NavGroup[] = [
     label: 'Router Observability',
     icon: <Gauge size={17} />,
     items: [{ href: '/admin/router', label: 'Router Observability', required: ['routers.read'], tenantOnly: true }]
+  },
+  {
+    label: 'Remote Access',
+    icon: <Globe size={17} />,
+    items: [{ href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true }]
   },
   {
     label: 'Hotspots',
@@ -228,6 +234,11 @@ const navItems: NavGroup[] = [
     items: [{ href: '/admin/router', label: 'Observability', required: ['routers.read'], platformOnly: true }]
   },
   {
+    label: 'Remote Access',
+    icon: <Globe size={17} />,
+    items: [{ href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], platformOnly: true }]
+  },
+  {
     label: 'Sessions & RADIUS',
     icon: <RadioTower size={17} />,
     items: [{ href: '/sessions', label: 'Sessions & RADIUS', required: ['sessions.read'], platformOnly: true }]
@@ -320,6 +331,7 @@ const tenantNavItems: NavGroup[] = [
       { href: '/admin/settings/routers', label: 'Routers', required: ['routers.read'], tenantOnly: true },
       { href: '/hotspots', label: 'Access Points', required: ['hotspots.read'], tenantOnly: true },
       { href: '/sessions', label: 'Online Users', required: ['sessions.read'], tenantOnly: true },
+      { href: '/admin/remote-access', label: 'Remote Access', required: ['routers.read'], tenantOnly: true },
     ],
   },
   {

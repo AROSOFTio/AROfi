@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
 import type { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
@@ -52,6 +52,38 @@ export class AgentsController {
       ...dto,
       tenantId,
     })
+  }
+
+  @RequirePermissions(PERMISSIONS.agentsManage)
+  @Patch(':agentId')
+  updateAgent(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('agentId') agentId: string,
+    @Body() dto: Partial<CreateAgentDto> & { status?: string },
+  ) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.agentsService.updateAgent(agentId, dto, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.agentsManage)
+  @Post(':agentId/deactivate')
+  deactivateAgent(@CurrentUser() user: AuthenticatedAdminUser, @Param('agentId') agentId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.agentsService.updateAgent(agentId, { status: 'DISABLED' }, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.agentsManage)
+  @Post(':agentId/activate')
+  activateAgent(@CurrentUser() user: AuthenticatedAdminUser, @Param('agentId') agentId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.agentsService.updateAgent(agentId, { status: 'ACTIVE' }, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.agentsManage)
+  @Delete(':agentId')
+  deleteAgent(@CurrentUser() user: AuthenticatedAdminUser, @Param('agentId') agentId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.agentsService.deleteAgent(agentId, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.floatManage)

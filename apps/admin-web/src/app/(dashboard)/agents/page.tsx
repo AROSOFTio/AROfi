@@ -1,5 +1,5 @@
 import RegisterAgentPanel from '@/components/RegisterAgentPanel'
-import GenerateAgentVouchersPanel from '@/components/GenerateAgentVouchersPanel'
+import AgentActionsPanel from '@/components/AgentActionsPanel'
 import { AdminSessionResponse, AgentsOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import { formatBasisPoints, formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
@@ -93,7 +93,7 @@ export default async function AgentsPage() {
                     <span className={getStatusBadgeClass(agent.status)}>{agent.status.toLowerCase()}</span>
                   </td>
                   <td>
-                    {canManageBusinessAgents && <GenerateAgentVouchersPanel agent={agent} />}
+                    <AgentActionsPanel agent={agent} canManage={canManageBusinessAgents} />
                   </td>
                 </tr>
               ))}

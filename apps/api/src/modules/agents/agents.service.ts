@@ -276,6 +276,67 @@ export class AgentsService {
     })
   }
 
+  async updateAgent(agentId: string, dto: Partial<CreateAgentDto> & { status?: string }, tenantId?: string) {
+    const existing = await this.prisma.agent.findFirst({
+      where: { id: agentId, ...(tenantId ? { tenantId } : {}) },
+      include: { tenant: { select: { id: true, name: true } } },
+    })
+    if (!existing) {
+      throw new NotFoundException('Agent not found')
+    }
+
+    const data: Prisma.AgentUpdateInput = {}
+    if (dto.code !== undefined) data.code = dto.code.trim().toUpperCase()
+    if (dto.name !== undefined) data.name = dto.name.trim()
+    if (dto.phoneNumber !== undefined) data.phoneNumber = this.normalizePhoneNumber(dto.phoneNumber)
+    if (dto.email !== undefined) data.email = dto.email?.trim() || null
+    if (dto.type !== undefined) data.type = dto.type
+    if (dto.territory !== undefined) data.territory = dto.territory?.trim() || null
+    if (dto.commissionRateBps !== undefined) data.commissionRateBps = dto.commissionRateBps
+    if (dto.floatLimitUgx !== undefined) data.floatLimitUgx = dto.floatLimitUgx
+    if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null
+    if (dto.status !== undefined) {
+      if (!Object.values(AgentStatus).includes(dto.status as AgentStatus)) {
+        throw new BadRequestException('Invalid agent status')
+      }
+      data.status = dto.status as AgentStatus
+    }
+
+    const updated = await this.prisma.agent.update({
+      where: { id: agentId },
+      data,
+      include: { tenant: { select: { id: true, name: true } }, wallet: true },
+    })
+    return {
+      ...updated,
+      tenant: updated.tenant,
+      walletBalanceUgx: updated.wallet?.balanceUgx ?? 0,
+      availableFloatUgx: updated.wallet?.balanceUgx ?? 0,
+    }
+  }
+
+  async deleteAgent(agentId: string, tenantId?: string) {
+    const agent = await this.prisma.agent.findFirst({
+      where: { id: agentId, ...(tenantId ? { tenantId } : {}) },
+      include: {
+        commissions: { select: { id: true }, take: 1 },
+        transactions: { select: { id: true }, take: 1 },
+        voucherBatches: { select: { id: true }, take: 1 },
+        settlements: { select: { id: true }, take: 1 },
+        disbursements: { select: { id: true }, take: 1 },
+      },
+    })
+    if (!agent) {
+      throw new NotFoundException('Agent not found')
+    }
+    const hasHistory = agent.commissions.length > 0 || agent.transactions.length > 0 || agent.voucherBatches.length > 0 || agent.settlements.length > 0 || agent.disbursements.length > 0
+    if (hasHistory) {
+      return this.updateAgent(agentId, { status: 'DISABLED' }, tenantId)
+    }
+    await this.prisma.agent.delete({ where: { id: agentId } })
+    return { deleted: true }
+  }
+
   async loadFloat(agentId: string, dto: AgentFloatAdjustmentDto, tenantId?: string) {
     void agentId
     void dto

@@ -2,11 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Injectable,
   Module,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -22,6 +24,10 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { RoleCatalogService } from '../auth/role-catalog.service'
 import { CreateUserDto } from './dto/create-user.dto'
+
+type UpdateUserInput = Partial<Pick<CreateUserDto, 'firstName' | 'lastName' | 'email' | 'password' | 'roleName'>> & {
+  isActive?: boolean
+}
 
 class JwtAuthGuard extends AuthGuard('jwt') {}
 
@@ -119,6 +125,55 @@ export class UsersService {
     })
 
     return this.toPublicUser(user)
+  }
+
+  async update(userId: string, dto: UpdateUserInput, scopedTenantId: string | undefined, actor: AuthenticatedAdminUser) {
+    await this.roleCatalogService.ensureStandardRoles()
+    const existing = await this.prisma.user.findFirst({
+      where: { id: userId, ...(scopedTenantId ? { tenantId: scopedTenantId } : {}) },
+      include: { role: true, tenant: true },
+    })
+    if (!existing) {
+      throw new BadRequestException('User not found')
+    }
+    if (existing.id === actor.id && dto.isActive === false) {
+      throw new BadRequestException('You cannot deactivate your own account')
+    }
+
+    const data: Record<string, unknown> = {}
+    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim()
+    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim()
+    if (dto.email !== undefined) {
+      const email = dto.email.toLowerCase().trim()
+      const duplicate = await this.prisma.user.findFirst({ where: { email, id: { not: userId } } })
+      if (duplicate) throw new BadRequestException('A user with this email already exists')
+      data.email = email
+    }
+    if (dto.password) data.password = await bcrypt.hash(dto.password, 10)
+    if (dto.isActive !== undefined) data.isActive = dto.isActive
+    if (dto.roleName) {
+      const role = await this.prisma.role.findUnique({ where: { name: dto.roleName } })
+      if (!role) throw new BadRequestException('Selected role does not exist')
+      if (!actor.permissions.includes(PERMISSIONS.all) && role.permissions.includes(PERMISSIONS.all)) {
+        throw new ForbiddenException('Business users cannot assign platform administrator accounts')
+      }
+      data.roleId = role.id
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+      include: { role: true, tenant: true },
+    })
+    return this.toPublicUser(user)
+  }
+
+  async deactivate(userId: string, scopedTenantId: string | undefined, actor: AuthenticatedAdminUser) {
+    return this.update(userId, { isActive: false }, scopedTenantId, actor)
+  }
+
+  async activate(userId: string, scopedTenantId: string | undefined, actor: AuthenticatedAdminUser) {
+    return this.update(userId, { isActive: true }, scopedTenantId, actor)
   }
 
   async listCustomers(scopedTenantId: string | undefined, filters: { search?: string; from?: string; to?: string }) {
@@ -429,6 +484,34 @@ export class UsersController {
   create(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateUserDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
     return this.usersService.create(dto, tenantId, user)
+  }
+
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @Patch(':userId')
+  update(@CurrentUser() user: AuthenticatedAdminUser, @Param('userId') userId: string, @Body() dto: UpdateUserInput) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.usersService.update(userId, dto, scopedTenantId, user)
+  }
+
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @Post(':userId/deactivate')
+  deactivate(@CurrentUser() user: AuthenticatedAdminUser, @Param('userId') userId: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.usersService.deactivate(userId, scopedTenantId, user)
+  }
+
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @Post(':userId/activate')
+  activate(@CurrentUser() user: AuthenticatedAdminUser, @Param('userId') userId: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.usersService.activate(userId, scopedTenantId, user)
+  }
+
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @Delete(':userId')
+  delete(@CurrentUser() user: AuthenticatedAdminUser, @Param('userId') userId: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user)
+    return this.usersService.deactivate(userId, scopedTenantId, user)
   }
 }
 
