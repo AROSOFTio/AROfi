@@ -139,4 +139,104 @@ describe('ReferralsService commission qualification', () => {
     expect(prisma.platformSetting.upsert).not.toHaveBeenCalled()
     expect(prisma.referralCommission.create).not.toHaveBeenCalled()
   })
+
+  it('holds approved commission when a holding period is configured', async () => {
+    const prisma = {
+      platformSetting: {
+        upsert: jest.fn().mockResolvedValue({
+          referralProgramEnabled: true,
+          referralCommissionBps: 2500,
+          referralCommissionBasis: 'PRO_SUBSCRIPTION_PAYMENT',
+          referralHoldingPeriodDays: 7,
+        }),
+      },
+      referralRelationship: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'rel-2',
+          referrerProfileId: 'profile-2',
+          status: ReferralRelationshipStatus.PENDING,
+          referrerProfile: { tenantId: 'referrer-business', user: { id: 'referrer-user' } },
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      referralCommission: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'commission-2', status: ReferralCommissionStatus.APPROVED }),
+      },
+      referralProfile: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ pendingBalanceUgx: 1000, availableBalanceUgx: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      referralWalletTransaction: { create: jest.fn().mockResolvedValue({}) },
+      notification: { create: jest.fn().mockResolvedValue({}) },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    }
+
+    const service = new ReferralsService(prisma as never, walletsService as never)
+    const paidAt = new Date('2026-07-26T12:00:00Z')
+
+    await service.recordQualifiedSubscriptionPayment({
+      tenantId: 'referred-business',
+      subscriptionPaymentId: 'sub-pay-held',
+      plan: SubscriptionPlanTier.PRO,
+      amountUgx: 20000,
+      paidAt,
+    })
+
+    expect(prisma.referralCommission.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amountUgx: 5000,
+          status: ReferralCommissionStatus.APPROVED,
+          holdUntil: new Date('2026-08-02T12:00:00Z'),
+        }),
+      }),
+    )
+    expect(prisma.referralProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { pendingBalanceUgx: { increment: 5000 } },
+      }),
+    )
+  })
+
+  it('does not credit rejected or suspicious referral relationships', async () => {
+    for (const status of [ReferralRelationshipStatus.REJECTED, ReferralRelationshipStatus.SUSPICIOUS]) {
+      const prisma = {
+        platformSetting: {
+          upsert: jest.fn().mockResolvedValue({
+            referralProgramEnabled: true,
+            referralCommissionBps: 3000,
+            referralCommissionBasis: 'PRO_SUBSCRIPTION_PAYMENT',
+            referralHoldingPeriodDays: 0,
+          }),
+        },
+        referralRelationship: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'rel-blocked',
+            referrerProfileId: 'profile-blocked',
+            status,
+            referrerProfile: { tenantId: 'referrer-business', user: { id: 'referrer-user' } },
+          }),
+        },
+        referralCommission: {
+          findUnique: jest.fn(),
+          create: jest.fn(),
+        },
+      }
+      const service = new ReferralsService(prisma as never, walletsService as never)
+
+      await expect(
+        service.recordQualifiedSubscriptionPayment({
+          tenantId: 'referred-business',
+          subscriptionPaymentId: `sub-pay-${status}`,
+          plan: SubscriptionPlanTier.PRO,
+          amountUgx: 20000,
+          paidAt: new Date('2026-07-26T12:00:00Z'),
+        }),
+      ).resolves.toBeNull()
+
+      expect(prisma.referralCommission.findUnique).not.toHaveBeenCalled()
+      expect(prisma.referralCommission.create).not.toHaveBeenCalled()
+    }
+  })
 })

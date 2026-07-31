@@ -23,6 +23,7 @@ export type RealtimeEventType =
   | 'router.online'
   | 'router.stale'
   | 'router.offline'
+  | 'router.compensation_processed'
   | 'disconnect.requested'
   | 'disconnect.succeeded'
   | 'disconnect.failed'

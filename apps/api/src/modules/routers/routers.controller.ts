@@ -94,6 +94,27 @@ export class RoutersController {
     return this.routersService.testRemoteAccess(routerId, tenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.routersRead)
+  @Get(':routerId/compensation')
+  getCompensationOverview(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.getCompensationOverview(routerId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post(':routerId/compensation/manual')
+  manuallyCompensateLatestOutage(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routersService.manuallyCompensateLatestOutage(routerId, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @Post('compensation/settings')
+  updateCompensationSettings(@CurrentUser() user: AuthenticatedAdminUser, @Body() body: { enabled?: boolean }) {
+    const tenantId = this.accessScope.requireTenantScope(user, user.tenantId ?? undefined)
+    return this.routersService.updateCompensationSettings(tenantId, body.enabled !== false)
+  }
+
   @RequirePermissions(PERMISSIONS.routersManage)
   @Post('remote-access/enable-all')
   enableAllRemotePorts(@CurrentUser() user: AuthenticatedAdminUser) {

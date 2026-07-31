@@ -19,9 +19,6 @@ type RegisterFormState = {
   lastName: string
   email: string
   phoneNumber: string
-  supportPhone: string
-  supportEmail: string
-  brandColor: string
   password: string
   confirmPassword: string
 }
@@ -35,9 +32,6 @@ const initialFormState: RegisterFormState = {
   lastName: '',
   email: '',
   phoneNumber: '',
-  supportPhone: '',
-  supportEmail: '',
-  brandColor: '',
   password: '',
   confirmPassword: '',
 }
@@ -136,11 +130,6 @@ export function RegisterModal({
       return
     }
 
-    if (step === 3 && formState.supportPhone && validatePhoneNumber(formState.supportPhone)) {
-      setError(validatePhoneNumber(formState.supportPhone))
-      return
-    }
-
     if (step < 3) {
       setStep((current) => current + 1)
       return
@@ -167,9 +156,6 @@ export function RegisterModal({
           lastName: formState.lastName.trim(),
           email: formState.email.trim(),
           phoneNumber: formState.phoneNumber,
-          supportPhone: formState.supportPhone.trim() || undefined,
-          supportEmail: formState.supportEmail.trim() || undefined,
-          brandColor: formState.brandColor.trim() || undefined,
           password: formState.password,
         }),
       })
@@ -408,8 +394,8 @@ export function RegisterModal({
                     value={formState.accountType}
                     onChange={(event) => setFormState((previous) => ({ ...previous, accountType: event.target.value as RegisterFormState['accountType'] }))}
                   >
-                    <option value="WIFI_VENDOR">WiFi Vendor</option>
-                    <option value="RESELLER">Reseller / Referral Partner</option>
+                    <option value="WIFI_VENDOR">WiFi Business Owner</option>
+                    <option value="RESELLER">AroFi Sales Partner</option>
                   </select>
                 </div>
                 <Field label="Business Name" value={formState.tenantName} onChange={(value) => setFormState((previous) => ({ ...previous, tenantName: value }))} required />
@@ -437,12 +423,6 @@ export function RegisterModal({
               <div className="stats-grid">
                 <Field label="Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} required />
                 <Field label="Confirm Password" type="password" value={formState.confirmPassword} onChange={(value) => setFormState((previous) => ({ ...previous, confirmPassword: value }))} required />
-                <div className="form-group">
-                  <label className="form-label">Support Phone</label>
-                  <PhoneNumberField value={formState.supportPhone} onChange={(value) => setFormState((previous) => ({ ...previous, supportPhone: value }))} />
-                </div>
-                <Field label="Support Email" type="email" value={formState.supportEmail} onChange={(value) => setFormState((previous) => ({ ...previous, supportEmail: value }))} />
-                <Field label="Brand Color" value={formState.brandColor} onChange={(value) => setFormState((previous) => ({ ...previous, brandColor: value }))} placeholder="#475467" />
               </div>
             )}
             {error && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{error}</p>}

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   AdminSessionResponse,
   HotspotOverviewResponse,
+  RouterCompensationOverview,
   RouterOverviewResponse,
   RouterSetupResponse,
   TenantOverviewResponse,
@@ -98,6 +99,15 @@ function parseHosts(value: string) {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
+function formatSecondsDuration(seconds?: number | null) {
+  if (!seconds || seconds <= 0) return '0 min'
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const remainder = minutes % 60
+  return `${hours} hr${hours === 1 ? '' : 's'}${remainder ? ` ${remainder} min` : ''}`
+}
+
 export default function RoutersManager() {
   const searchParams = useSearchParams()
   const [overview, setOverview] = useState<RouterOverviewResponse | null>(null)
@@ -107,6 +117,7 @@ export default function RoutersManager() {
   const [groupForm, setGroupForm] = useState<GroupFormState>(initialGroupForm)
   const [routerForm, setRouterForm] = useState<RouterFormState>(initialRouterForm)
   const [selectedSetup, setSelectedSetup] = useState<RouterSetupResponse | null>(null)
+  const [compensationOverview, setCompensationOverview] = useState<RouterCompensationOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingSetup, setLoadingSetup] = useState(false)
   const [submittingGroup, setSubmittingGroup] = useState(false)
@@ -210,7 +221,12 @@ export default function RoutersManager() {
     try {
       setLoadingSetup(true)
       setError(null)
-      setSelectedSetup(await clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`))
+      const [setup, compensation] = await Promise.all([
+        clientFetchApi<RouterSetupResponse>(`/routers/${routerId}/setup`),
+        clientFetchApi<RouterCompensationOverview>(`/routers/${routerId}/compensation`).catch(() => null),
+      ])
+      setSelectedSetup(setup)
+      setCompensationOverview(compensation)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load router setup')
     } finally {
@@ -281,14 +297,8 @@ export default function RoutersManager() {
       })
       setRouterProcessText('Generating RouterOS setup details and refreshing inventory.')
       setSelectedSetup(setup)
-      // The success message below promises "the one-run command below" --
-      // that command lives on the Onboarding Script tab, not Overview (which
-      // defaults to showing a "Remote WinBox Access" panel that's an
-      // unrelated, optional feature). Without this, people were copying the
-      // wrong command because it was the first "copy a command" button they
-      // saw.
       setActiveRouterView('setup')
-      setSuccess('Router registered successfully. Copy the one-run WinBox command below.')
+      setSuccess('Router registered successfully. Run the onboarding script and remote access script so this router can bill customers and support can reach it.')
       setRouterForm((previous) => ({
         ...initialRouterForm(),
         tenantId: previous.tenantId,
@@ -404,6 +414,33 @@ export default function RoutersManager() {
       setError(requestError instanceof Error ? requestError.message : 'Unable to enable all remote ports')
     } finally {
       setEnablingAll(false)
+    }
+  }
+
+  async function handleToggleAutoCompensation(enabled: boolean) {
+    try {
+      setError(null)
+      setSuccess(null)
+      const settings = await clientPostApi<{ autoCompensateRouterOutages: boolean }>('/routers/compensation/settings', { enabled })
+      setCompensationOverview((previous) => previous
+        ? { ...previous, settings }
+        : { settings, outages: [], compensations: [] })
+      setSuccess(enabled ? 'Automatic outage compensation is enabled.' : 'Automatic outage compensation is disabled.')
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update compensation setting')
+    }
+  }
+
+  async function handleManualCompensation() {
+    if (!selectedSetup?.router.id) return
+    try {
+      setError(null)
+      setSuccess(null)
+      await clientPostApi(`/routers/${selectedSetup.router.id}/compensation/manual`, {})
+      setSuccess('Latest resolved outage was compensated.')
+      await loadSetup(selectedSetup.router.id)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to compensate latest outage')
     }
   }
 
@@ -633,6 +670,67 @@ export default function RoutersManager() {
         </div>
       </div>}
 
+      {activeRouterView === 'overview' && selectedSetup?.router && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="card-header">
+            <span className="card-title">Outage Compensation</span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)', fontWeight: 700 }}>
+                <input
+                  type="checkbox"
+                  checked={compensationOverview?.settings.autoCompensateRouterOutages !== false}
+                  onChange={(event) => void handleToggleAutoCompensation(event.target.checked)}
+                />
+                Auto compensate
+              </label>
+              <button type="button" className="btn btn-ghost" onClick={() => void handleManualCompensation()}>
+                Compensate latest outage
+              </button>
+            </div>
+          </div>
+          <div style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <strong style={{ fontSize: 13, color: 'var(--text-1)' }}>Recent outages</strong>
+              {(compensationOverview?.outages.length ?? 0) === 0 && (
+                <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>No router outages recorded yet.</span>
+              )}
+              {compensationOverview?.outages.slice(0, 4).map((outage) => (
+                <div key={outage.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'grid', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{formatSecondsDuration(outage.durationSeconds)}</span>
+                    <span className={outage.status === 'COMPENSATED' ? 'badge badge-success' : outage.status === 'OPEN' ? 'badge badge-warning' : 'badge badge-info'}>
+                      {outage.status.toLowerCase().replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{formatDate(outage.offlineAt)} - {outage.restoredAt ? formatDate(outage.restoredAt) : 'ongoing'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                    {outage.affectedActivations} package(s), {formatSecondsDuration(outage.totalSecondsCredited)} credited
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <strong style={{ fontSize: 13, color: 'var(--text-1)' }}>Recent customer credits</strong>
+              {(compensationOverview?.compensations.length ?? 0) === 0 && (
+                <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>No customer compensation credits yet.</span>
+              )}
+              {compensationOverview?.compensations.slice(0, 4).map((compensation) => (
+                <div key={compensation.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'grid', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{compensation.activation.package.name}</span>
+                    <span className="badge badge-success">+{formatSecondsDuration(compensation.secondsCredited)}</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {compensation.accessPhoneNumber ?? compensation.customerReference ?? 'Customer'}
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>New expiry {formatDate(compensation.newEndsAt)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {groupModalOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submittingGroup && setGroupModalOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
@@ -691,10 +789,11 @@ export default function RoutersManager() {
             <div className="card-header">
               <div style={{ display: 'grid', gap: 2 }}>
                 <span className="card-title">Run on {selectedSetup.router.name}</span>
-                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Paste this one line into WinBox → New Terminal, then press Enter. It will not change your admin login or WAN.</span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Run the onboarding script first, then run the remote access script from the Remote Access tab. Both scripts are required for billing, monitoring, and support to work correctly.</span>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy command</button>
+                <button type="button" className="btn btn-primary" onClick={() => void copyScript()}>Copy onboarding script</button>
+                <button type="button" className="btn btn-ghost" onClick={() => { setActiveRouterView('remote'); setRemoteTab('install') }}>Remote access script</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void copyMobileSetupLink()}>Copy phone setup link</button>
                 <button type="button" className="btn btn-ghost" onClick={downloadScript}>Download .rsc</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void handleRotateSecret(selectedSetup.router.id)}>Rotate secret</button>
@@ -709,6 +808,10 @@ export default function RoutersManager() {
                 <span className="badge badge-info">{selectedSetup.router.onboardingStatus ?? 'SCRIPT_GENERATED'}</span>
                 <span className={selectedSetup.router.provisioningCallbackReceived ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.provisioningCallbackReceived ? 'Callback received' : 'Waiting for callback'}</span>
                 <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12.5 }}>
+                <a href="/docs/getting-started#run-onboarding-script" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Video: run onboarding script</a>
+                <a href="/docs/getting-started#run-remote-access-script" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Video: run remote access script</a>
               </div>
             </div>
           </div>
@@ -1013,7 +1116,6 @@ function RouterCreateCard({
           {showAdvanced && (
             <div className="form-grid" style={{ marginBottom: 12 }}>
               <SelectField label="Link a hotspot site" value={formState.hotspotId} onChange={(value) => setFormState((previous) => ({ ...previous, hotspotId: value }))} options={[{ value: '', label: 'Link later' }, ...hotspots.map((hotspot) => ({ value: hotspot.id, label: hotspot.name }))]} />
-              <InputField label="Management host / IP" value={formState.host} onChange={(value) => setFormState((previous) => ({ ...previous, host: value }))} placeholder="Only for API health checks" />
               <div className="form-span-2">
                 <label style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
                   <input type="checkbox" checked={formState.ttlAntiTetheringEnabled} onChange={(event) => setFormState((previous) => ({ ...previous, ttlAntiTetheringEnabled: event.target.checked }))} />

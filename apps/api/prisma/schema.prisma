@@ -321,6 +321,18 @@ enum RouterScriptMode {
   FRESH_FULL_CAPTIVE_WIFI
 }
 
+enum RouterOutageStatus {
+  OPEN
+  RESOLVED
+  COMPENSATED
+  COMPENSATION_SKIPPED
+}
+
+enum RouterCompensationMode {
+  AUTO
+  MANUAL
+}
+
 enum RadiusCredentialStatus {
   ACTIVE
   DISABLED
@@ -431,6 +443,8 @@ model Tenant {
   routerGroups        RouterGroup[]
   routers             Router[]
   routerHealthChecks  RouterHealthCheck[]
+  routerOutages       RouterOutage[]
+  routerCompensations RouterCompensation[]
   radiusClients       RadiusClient[]
   nasClients          NasClient[]
   radiusEvents        RadiusEvent[]
@@ -826,6 +840,8 @@ model Router {
   healthChecks          RouterHealthCheck[]
   radiusEvents          RadiusEvent[]
   sessions              NetworkSession[]
+  outages               RouterOutage[]
+  compensations         RouterCompensation[]
 
   @@unique([tenantId, host])
   @@index([tenantId, status])
@@ -849,6 +865,56 @@ model RouterHealthCheck {
 
   @@index([tenantId, checkedAt])
   @@index([routerId, checkedAt])
+}
+
+model RouterOutage {
+  id                      String             @id @default(uuid())
+  tenantId                String
+  tenant                  Tenant             @relation(fields: [tenantId], references: [id])
+  routerId                String
+  router                  Router             @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  offlineAt               DateTime
+  restoredAt              DateTime?
+  durationSeconds         Int?
+  status                  RouterOutageStatus @default(OPEN)
+  autoCompensate          Boolean            @default(true)
+  compensationProcessedAt DateTime?
+  affectedActivations     Int                @default(0)
+  totalSecondsCredited    Int                @default(0)
+  notes                   String?
+  metadata                Json?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  compensations           RouterCompensation[]
+
+  @@index([tenantId, status, offlineAt])
+  @@index([routerId, status, offlineAt])
+}
+
+model RouterCompensation {
+  id                String                 @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id])
+  routerId          String
+  router            Router                 @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  outageId          String
+  outage            RouterOutage           @relation(fields: [outageId], references: [id], onDelete: Cascade)
+  activationId      String
+  activation        PackageActivation      @relation(fields: [activationId], references: [id], onDelete: Cascade)
+  mode              RouterCompensationMode @default(AUTO)
+  secondsCredited   Int
+  previousEndsAt    DateTime
+  newEndsAt         DateTime
+  customerReference String?
+  accessPhoneNumber String?
+  notifiedEmailAt   DateTime?
+  notifiedTextAt    DateTime?
+  createdAt         DateTime               @default(now())
+
+  @@unique([outageId, activationId])
+  @@index([tenantId, createdAt])
+  @@index([routerId, createdAt])
+  @@index([activationId])
 }
 
 model RadiusClient {
@@ -1465,6 +1531,7 @@ model PackageActivation {
   reconnectionLogs    ReconnectionLog[]
   suspiciousAttempts  SuspiciousAccessAttempt[]
   disconnectionAttempts DisconnectionAttempt[]
+  routerCompensations RouterCompensation[]
 
   @@index([tenantId, status, endsAt])
   @@index([accessPhoneNumber, status])

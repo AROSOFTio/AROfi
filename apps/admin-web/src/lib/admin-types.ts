@@ -988,6 +988,35 @@ export type RouterSetupResponse = {
   } | null
 }
 
+export type RouterCompensationOverview = {
+  settings: {
+    autoCompensateRouterOutages: boolean
+  }
+  outages: Array<{
+    id: string
+    offlineAt: string
+    restoredAt?: string | null
+    durationSeconds?: number | null
+    status: string
+    affectedActivations: number
+    totalSecondsCredited: number
+  }>
+  compensations: Array<{
+    id: string
+    secondsCredited: number
+    previousEndsAt: string
+    newEndsAt: string
+    accessPhoneNumber?: string | null
+    customerReference?: string | null
+    createdAt: string
+    activation: {
+      package: {
+        name: string
+      }
+    }
+  }>
+}
+
 export type SessionItem = {
   id: string
   radiusSessionId: string

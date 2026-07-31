@@ -8,7 +8,6 @@ import {
   PackageCatalogResponse,
   PlatformWithdrawalsResponse,
 } from '@/lib/admin-types'
-import OnboardingWizard from '@/components/OnboardingWizard'
 import ComplianceBanner from '@/components/ComplianceBanner'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
@@ -344,21 +343,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
   ])
   const complianceStatus = compliance?.status ?? 'NOT_SUBMITTED'
 
-  const hasRouter = Boolean(routers?.routers && routers.routers.length > 0)
-  const hasPackage = Boolean(packages?.items && packages.items.length > 0)
-  const hasVouchers = Boolean(vouchers?.batches && vouchers.batches.length > 0)
-  const firstRouter = routers?.routers?.[0] || null
-
-  const prefs = (tenantSettings?.settings?.routerOnboardingPreferences as Record<string, any> | null) ?? {}
-  const onboardingCompletedAt = prefs.onboardingCompletedAt
-  const selfServiceOnboarding = Boolean(prefs.selfServiceOnboarding)
-
-  // Self-service tenants should be able to leave and come back mid-flow
-  // without losing the guided router/package/voucher setup path.
-  const onboardingIncomplete =
-    selfServiceOnboarding &&
-    !onboardingCompletedAt &&
-    (!hasRouter || !hasPackage || !hasVouchers)
+  void tenantSettings
 
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []
@@ -381,19 +366,6 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
   return (
     <div className="tenant-dashboard">
-      {onboardingIncomplete && (
-        <OnboardingWizard
-          session={session!}
-          initialHasRouter={hasRouter}
-          initialRouter={firstRouter}
-          initialHasPackage={hasPackage}
-          initialHasVouchers={hasVouchers}
-          onComplete={async () => {
-            'use server'
-            // Managed on client side
-          }}
-        />
-      )}
       <DashboardAutoRefresh />
       <div className="dashboard-header dashboard-header-compact">
         <h1 className="page-title">Dashboard</h1>

@@ -10,7 +10,12 @@ import {
 } from '@nestjs/common'
 import {
   Prisma,
+  NotificationAudience,
+  PackageActivationStatus,
   RadiusEventType,
+  RadiusCredentialStatus,
+  RouterCompensationMode,
+  RouterOutageStatus,
   RouterConnectionMode,
   RouterOnboardingStatus,
   RouterScriptMode,
@@ -2319,10 +2324,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
         if (isOffline && !hasAlerted) {
           this.alertedRouters.add(router.id)
+          const offlineAt = new Date()
           await this.prisma.router.update({
             where: { id: router.id },
-            data: { lastOfflineAt: new Date() },
+            data: { lastOfflineAt: offlineAt },
           })
+          await this.openRouterOutage(router, offlineAt, live.secondsSinceLastSignal)
           this.realtimeEvents.publish('router.offline', {
             tenantId: router.tenantId,
             routerId: router.id,
@@ -2336,10 +2343,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           await this.sendRouterAlert(router, 'OFFLINE', live.secondsSinceLastSignal)
         } else if (!isOffline && hasAlerted) {
           this.alertedRouters.delete(router.id)
+          const restoredAt = new Date()
           await this.prisma.router.update({
             where: { id: router.id },
-            data: { lastReconnectedAt: new Date() },
+            data: { lastReconnectedAt: restoredAt },
           })
+          await this.resolveRouterOutage(router, restoredAt)
           this.realtimeEvents.publish('router.online', {
             tenantId: router.tenantId,
             routerId: router.id,
@@ -2351,6 +2360,468 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Error checking router alerts: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  async getCompensationOverview(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({ where: { id: routerId }, select: { tenantId: true } })
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const [settings, outages, compensations] = await Promise.all([
+      this.getRouterCompensationSettings(router.tenantId),
+      this.prisma.routerOutage.findMany({
+        where: { routerId },
+        orderBy: { offlineAt: 'desc' },
+        take: 20,
+      }),
+      this.prisma.routerCompensation.findMany({
+        where: { routerId },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: {
+          activation: {
+            select: {
+              id: true,
+              customerReference: true,
+              accessPhoneNumber: true,
+              package: { select: { name: true } },
+            },
+          },
+        },
+      }),
+    ])
+
+    return {
+      settings,
+      outages,
+      compensations,
+    }
+  }
+
+  async updateCompensationSettings(tenantId: string, enabled: boolean) {
+    const current = await this.prisma.tenantSetting.findUnique({
+      where: { tenantId },
+      select: { routerOnboardingPreferences: true },
+    })
+    const prefs = this.asPreferences(current?.routerOnboardingPreferences)
+    const nextPrefs = {
+      ...prefs,
+      autoCompensateRouterOutages: enabled,
+    }
+
+    await this.prisma.tenantSetting.upsert({
+      where: { tenantId },
+      update: { routerOnboardingPreferences: nextPrefs as Prisma.InputJsonValue },
+      create: { tenantId, routerOnboardingPreferences: nextPrefs as Prisma.InputJsonValue },
+    })
+
+    return { autoCompensateRouterOutages: enabled }
+  }
+
+  async manuallyCompensateLatestOutage(routerId: string, tenantId?: string) {
+    const router = await this.prisma.router.findUnique({ where: { id: routerId }, select: { tenantId: true } })
+    if (!router) {
+      throw new NotFoundException('Router not found')
+    }
+    if (tenantId && router.tenantId !== tenantId) {
+      throw new NotFoundException('Router not found')
+    }
+
+    const outage = await this.prisma.routerOutage.findFirst({
+      where: {
+        routerId,
+        status: { in: [RouterOutageStatus.RESOLVED, RouterOutageStatus.COMPENSATION_SKIPPED] },
+        restoredAt: { not: null },
+      },
+      orderBy: { restoredAt: 'desc' },
+    })
+    if (!outage) {
+      throw new NotFoundException('No resolved uncompensated outage found for this router')
+    }
+
+    return this.processOutageCompensation(outage.id, RouterCompensationMode.MANUAL)
+  }
+
+  private async openRouterOutage(router: { id: string; tenantId: string }, offlineAt: Date, secondsSinceLastSignal: number | null) {
+    const existing = await this.prisma.routerOutage.findFirst({
+      where: { routerId: router.id, status: RouterOutageStatus.OPEN },
+      select: { id: true },
+    })
+    if (existing) {
+      return existing
+    }
+
+    const settings = await this.getRouterCompensationSettings(router.tenantId)
+    return this.prisma.routerOutage.create({
+      data: {
+        tenantId: router.tenantId,
+        routerId: router.id,
+        offlineAt,
+        autoCompensate: settings.autoCompensateRouterOutages,
+        metadata: {
+          secondsSinceLastSignal,
+          source: 'router-alert-loop',
+        } as Prisma.InputJsonValue,
+      },
+    })
+  }
+
+  private async resolveRouterOutage(router: { id: string; tenantId: string; name?: string }, restoredAt: Date) {
+    const outage = await this.prisma.routerOutage.findFirst({
+      where: { routerId: router.id, status: RouterOutageStatus.OPEN },
+      orderBy: { offlineAt: 'desc' },
+    })
+    if (!outage) {
+      return null
+    }
+
+    const durationSeconds = Math.max(0, Math.round((restoredAt.getTime() - outage.offlineAt.getTime()) / 1000))
+    const updated = await this.prisma.routerOutage.update({
+      where: { id: outage.id },
+      data: {
+        restoredAt,
+        durationSeconds,
+        status: RouterOutageStatus.RESOLVED,
+      },
+    })
+
+    if (!updated.autoCompensate) {
+      await this.prisma.routerOutage.update({
+        where: { id: updated.id },
+        data: { status: RouterOutageStatus.COMPENSATION_SKIPPED, notes: 'Automatic compensation is disabled for this business.' },
+      })
+      return updated
+    }
+
+    return this.processOutageCompensation(updated.id, RouterCompensationMode.AUTO)
+  }
+
+  private async processOutageCompensation(outageId: string, mode: RouterCompensationMode) {
+    const outage = await this.prisma.routerOutage.findUnique({
+      where: { id: outageId },
+      include: {
+        router: { select: { id: true, tenantId: true, name: true, hotspotId: true } },
+        compensations: { select: { id: true } },
+      },
+    })
+    if (!outage || !outage.restoredAt) {
+      throw new NotFoundException('Resolved router outage not found')
+    }
+    if (outage.compensations.length > 0) {
+      return {
+        outageId,
+        affectedActivations: outage.affectedActivations,
+        totalSecondsCredited: outage.totalSecondsCredited,
+        alreadyProcessed: true,
+      }
+    }
+    if (mode === RouterCompensationMode.AUTO && !outage.autoCompensate) {
+      await this.prisma.routerOutage.update({
+        where: { id: outage.id },
+        data: { status: RouterOutageStatus.COMPENSATION_SKIPPED },
+      })
+      return { outageId, affectedActivations: 0, totalSecondsCredited: 0, skipped: true }
+    }
+
+    const candidates = await this.prisma.packageActivation.findMany({
+      where: {
+        tenantId: outage.tenantId,
+        status: { in: [PackageActivationStatus.ACTIVE, PackageActivationStatus.EXPIRED] },
+        startedAt: { lt: outage.restoredAt },
+        endsAt: { gt: outage.offlineAt },
+        OR: [
+          { routerId: outage.routerId },
+          ...(outage.router.hotspotId ? [{ hotspotId: outage.router.hotspotId }] : []),
+        ],
+      },
+      include: {
+        radiusCredential: true,
+        package: { select: { name: true } },
+      },
+      take: 1000,
+    })
+
+    let affectedActivations = 0
+    let totalSecondsCredited = 0
+    const createdCompensations: Array<{
+      id: string
+      customerReference: string | null
+      accessPhoneNumber: string | null
+      secondsCredited: number
+      newEndsAt: Date
+      packageName: string
+    }> = []
+
+    for (const activation of candidates) {
+      const overlapStart = new Date(Math.max(activation.startedAt.getTime(), outage.offlineAt.getTime()))
+      const overlapEnd = new Date(Math.min(activation.endsAt.getTime(), outage.restoredAt.getTime()))
+      const secondsCredited = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / 1000)
+      if (secondsCredited <= 0) {
+        continue
+      }
+
+      try {
+        const compensation = await this.prisma.$transaction(async (tx) => {
+          const current = await tx.packageActivation.findUnique({
+            where: { id: activation.id },
+            include: { radiusCredential: true, package: { select: { name: true } } },
+          })
+          if (!current) {
+            return null
+          }
+          const existing = await tx.routerCompensation.findUnique({
+            where: { outageId_activationId: { outageId: outage.id, activationId: current.id } },
+          })
+          if (existing) {
+            return null
+          }
+
+          const previousEndsAt = current.endsAt
+          const extensionBase = previousEndsAt.getTime() > outage.restoredAt!.getTime()
+            ? previousEndsAt
+            : outage.restoredAt!
+          const newEndsAt = new Date(extensionBase.getTime() + secondsCredited * 1000)
+
+          await tx.packageActivation.update({
+            where: { id: current.id },
+            data: {
+              endsAt: newEndsAt,
+              status: PackageActivationStatus.ACTIVE,
+              metadata: this.mergeJsonObject(current.metadata, {
+                lastRouterCompensationAt: new Date().toISOString(),
+                lastRouterOutageId: outage.id,
+              }) as Prisma.InputJsonValue,
+            },
+          })
+
+          if (current.radiusCredential) {
+            await tx.radiusCredential.update({
+              where: { id: current.radiusCredential.id },
+              data: {
+                expiresAt: newEndsAt,
+                status: RadiusCredentialStatus.ACTIVE,
+              },
+            })
+          }
+
+          return tx.routerCompensation.create({
+            data: {
+              tenantId: outage.tenantId,
+              routerId: outage.routerId,
+              outageId: outage.id,
+              activationId: current.id,
+              mode,
+              secondsCredited,
+              previousEndsAt,
+              newEndsAt,
+              customerReference: current.customerReference,
+              accessPhoneNumber: current.accessPhoneNumber,
+            },
+          })
+        })
+
+        if (!compensation) {
+          continue
+        }
+        affectedActivations += 1
+        totalSecondsCredited += secondsCredited
+        createdCompensations.push({
+          id: compensation.id,
+          customerReference: compensation.customerReference,
+          accessPhoneNumber: compensation.accessPhoneNumber,
+          secondsCredited,
+          newEndsAt: compensation.newEndsAt,
+          packageName: activation.package.name,
+        })
+      } catch (error) {
+        this.logger.warn(
+          `Failed to compensate activation ${activation.id} for outage ${outage.id}: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
+
+    const finalStatus = affectedActivations > 0
+      ? RouterOutageStatus.COMPENSATED
+      : RouterOutageStatus.COMPENSATION_SKIPPED
+    await this.prisma.routerOutage.update({
+      where: { id: outage.id },
+      data: {
+        status: finalStatus,
+        compensationProcessedAt: new Date(),
+        affectedActivations,
+        totalSecondsCredited,
+        notes: affectedActivations > 0
+          ? `Credited ${affectedActivations} activation(s).`
+          : 'No active package overlapped this outage.',
+      },
+    })
+
+    await this.notifyCompensationSummary(outage, affectedActivations, totalSecondsCredited, mode)
+    for (const compensation of createdCompensations) {
+      void this.notifyCompensatedCustomer(compensation, outage.router.name)
+    }
+
+    this.realtimeEvents.publish('router.compensation_processed', {
+      tenantId: outage.tenantId,
+      routerId: outage.routerId,
+      data: {
+        outageId: outage.id,
+        mode,
+        affectedActivations,
+        totalSecondsCredited,
+      },
+    })
+
+    return { outageId, affectedActivations, totalSecondsCredited }
+  }
+
+  private async getRouterCompensationSettings(tenantId: string) {
+    const settings = await this.prisma.tenantSetting.findUnique({
+      where: { tenantId },
+      select: { routerOnboardingPreferences: true },
+    })
+    const prefs = this.asPreferences(settings?.routerOnboardingPreferences)
+    return {
+      autoCompensateRouterOutages: prefs.autoCompensateRouterOutages !== false,
+    }
+  }
+
+  private asPreferences(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? { ...(value as Record<string, unknown>) }
+      : {}
+  }
+
+  private mergeJsonObject(value: unknown, patch: Record<string, unknown>) {
+    return {
+      ...this.asPreferences(value),
+      ...patch,
+    }
+  }
+
+  private formatDuration(seconds: number) {
+    const minutes = Math.max(1, Math.round(seconds / 60))
+    if (minutes < 60) {
+      return `${minutes} minute${minutes === 1 ? '' : 's'}`
+    }
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    return `${hours} hour${hours === 1 ? '' : 's'}${remainingMinutes ? ` ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}` : ''}`
+  }
+
+  private async notifyCompensationSummary(
+    outage: { id: string; tenantId: string; routerId: string; router: { name: string }; offlineAt: Date; restoredAt: Date | null },
+    affectedActivations: number,
+    totalSecondsCredited: number,
+    mode: RouterCompensationMode,
+  ) {
+    const duration = this.formatDuration(totalSecondsCredited)
+    await this.prisma.notification.create({
+      data: {
+        tenantId: outage.tenantId,
+        audience: NotificationAudience.SINGLE_BUSINESS,
+        title: affectedActivations > 0 ? 'Router outage compensation applied' : 'Router outage reviewed',
+        body: affectedActivations > 0
+          ? `${outage.router.name} came back online. AROFi ${mode === RouterCompensationMode.AUTO ? 'automatically' : 'manually'} extended ${affectedActivations} active package(s), adding ${duration} in total.`
+          : `${outage.router.name} came back online. No active customer package overlapped this outage, so no compensation was needed.`,
+      },
+    })
+  }
+
+  private async notifyCompensatedCustomer(input: {
+    id: string
+    customerReference: string | null
+    accessPhoneNumber: string | null
+    secondsCredited: number
+    newEndsAt: Date
+    packageName: string
+  }, routerName: string) {
+    const duration = this.formatDuration(input.secondsCredited)
+    const message = `Your ${input.packageName} internet package has been extended by ${duration} because ${routerName} was offline. New expiry: ${input.newEndsAt.toLocaleString('en-UG')}.`
+    let notifiedEmailAt: Date | undefined
+    let notifiedTextAt: Date | undefined
+
+    if (input.customerReference && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.customerReference)) {
+      const sent = await this.mailService.sendMail({
+        to: input.customerReference,
+        subject: 'Your AROFi internet package was extended',
+        html: `<p>${message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
+        text: message,
+      })
+      if (sent) {
+        notifiedEmailAt = new Date()
+      }
+    }
+
+    if (input.accessPhoneNumber) {
+      const sent = await this.sendCompensationText(input.accessPhoneNumber, message)
+      if (sent) {
+        notifiedTextAt = new Date()
+      }
+    }
+
+    if (notifiedEmailAt || notifiedTextAt) {
+      await this.prisma.routerCompensation.update({
+        where: { id: input.id },
+        data: {
+          notifiedEmailAt,
+          notifiedTextAt,
+        },
+      })
+    }
+  }
+
+  private async sendCompensationText(phoneNumber: string, message: string) {
+    const normalized = phoneNumber.replace(/[^\d]/g, '')
+    const wahaUrl = process.env.WHATSAPP_GATEWAY_URL
+    const wahaApiKey = process.env.WHATSAPP_GATEWAY_API_KEY
+    const legacyUrl = process.env.ROUTER_ALERTS_WHATSAPP_URL
+    const legacyApiKey = process.env.ROUTER_ALERTS_WHATSAPP_API_KEY
+    if (!normalized || (!wahaUrl && !legacyUrl)) {
+      return false
+    }
+
+    try {
+      if (wahaUrl) {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (wahaApiKey) {
+          headers['X-Api-Key'] = wahaApiKey
+        }
+        await fetch(`${wahaUrl.replace(/\/$/, '')}/api/sendText`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            chatId: `${normalized}@c.us`,
+            text: message,
+            session: 'default',
+          }),
+        })
+        return true
+      }
+
+      if (legacyUrl?.includes('callmebot.com')) {
+        const url = `${legacyUrl}?phone=${normalized}&text=${encodeURIComponent(message)}&apikey=${legacyApiKey || ''}`
+        await fetch(url, { method: 'GET' })
+        return true
+      }
+
+      if (legacyUrl) {
+        await fetch(legacyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: normalized, message }),
+        })
+        return true
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to send compensation text to ${normalized}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    return false
   }
 
   private async sendRouterAlert(router: any, state: 'ONLINE' | 'OFFLINE', secondsOffline: number | null) {

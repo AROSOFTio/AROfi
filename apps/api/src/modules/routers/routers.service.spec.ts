@@ -1,4 +1,4 @@
-import { RouterConnectionMode, RouterScriptMode } from '@prisma/client'
+import { PackageActivationStatus, RouterCompensationMode, RouterConnectionMode, RouterOutageStatus, RouterScriptMode } from '@prisma/client'
 import { RoutersService } from './routers.service'
 
 describe('RoutersService', () => {
@@ -442,5 +442,98 @@ describe('RoutersService', () => {
       )
       expect(mailService.sendMail).not.toHaveBeenCalled()
     })
+  })
+
+  it('extends packages by the outage overlap from router recovery time', async () => {
+    const outage = {
+      id: 'outage-1',
+      tenantId: 'tenant-1',
+      routerId: 'router-1',
+      offlineAt: new Date('2026-07-31T10:00:00Z'),
+      restoredAt: new Date('2026-07-31T11:00:00Z'),
+      autoCompensate: true,
+      affectedActivations: 0,
+      totalSecondsCredited: 0,
+      router: { id: 'router-1', tenantId: 'tenant-1', name: 'Main Router', hotspotId: 'hotspot-1' },
+      compensations: [],
+    }
+    const activation = {
+      id: 'activation-1',
+      tenantId: 'tenant-1',
+      status: PackageActivationStatus.EXPIRED,
+      startedAt: new Date('2026-07-31T09:30:00Z'),
+      endsAt: new Date('2026-07-31T10:30:00Z'),
+      customerReference: 'customer-1',
+      accessPhoneNumber: null,
+      metadata: null,
+      radiusCredential: { id: 'credential-1' },
+      package: { name: '1 Hour' },
+    }
+    const tx = {
+      packageActivation: {
+        findUnique: jest.fn().mockResolvedValue(activation),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      radiusCredential: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      routerCompensation: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'comp-1', ...data })),
+      },
+    }
+    const prisma = {
+      routerOutage: {
+        findUnique: jest.fn().mockResolvedValue(outage),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      packageActivation: {
+        findMany: jest.fn().mockResolvedValue([activation]),
+      },
+      notification: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+      routerCompensation: {
+        update: jest.fn().mockResolvedValue({}),
+      },
+      $transaction: jest.fn((callback) => callback(tx)),
+    }
+    const realtime = { publish: jest.fn() }
+    const mail = { sendMail: jest.fn().mockResolvedValue(false), sendOperationalAlertEmail: jest.fn() }
+    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtime as never, mail as never)
+
+    await expect((service as any).processOutageCompensation('outage-1', RouterCompensationMode.AUTO)).resolves.toMatchObject({
+      affectedActivations: 1,
+      totalSecondsCredited: 1800,
+    })
+
+    expect(tx.packageActivation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'activation-1' },
+        data: expect.objectContaining({
+          status: PackageActivationStatus.ACTIVE,
+          endsAt: new Date('2026-07-31T11:30:00Z'),
+        }),
+      }),
+    )
+    expect(tx.radiusCredential.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'credential-1' },
+        data: expect.objectContaining({
+          status: 'ACTIVE',
+          expiresAt: new Date('2026-07-31T11:30:00Z'),
+        }),
+      }),
+    )
+    expect(prisma.routerOutage.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: 'outage-1' },
+        data: expect.objectContaining({
+          status: RouterOutageStatus.COMPENSATED,
+          affectedActivations: 1,
+          totalSecondsCredited: 1800,
+        }),
+      }),
+    )
   })
 })
