@@ -821,7 +821,7 @@ model Router {
   radiusNasIpAddress    String?
   hotspotServerName     String?
   portalWalledGardenHosts String[]
-  ttlAntiTetheringEnabled Boolean @default(false)
+  ttlAntiTetheringEnabled Boolean @default(true)
   tags                  String[]
   remotePort            Int?                 @unique
   isRemotePortOpen      Boolean              @default(false)

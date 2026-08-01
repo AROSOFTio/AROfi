@@ -13,7 +13,6 @@ import {
   NotificationAudience,
   PackageActivationStatus,
   RadiusEventType,
-  RadiusCredentialStatus,
   RouterCompensationMode,
   RouterOutageStatus,
   RouterConnectionMode,
@@ -35,6 +34,7 @@ import { MikrotikService } from './mikrotik.service'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RemoteProxyService } from './remote-proxy.service'
 import { accountingLiveCutoff, isLiveAccountingRow } from '../radius/accounting-liveness'
+import { RadiusCredentialService } from '../radius/radius-credential.service'
 
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
@@ -136,6 +136,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     private readonly remoteProxyService: RemoteProxyService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly mailService: MailService,
+    private readonly radiusCredentialService: RadiusCredentialService,
   ) {}
 
   onModuleInit() {
@@ -694,7 +695,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         radiusNasIpAddress: nasIpAddress,
         hotspotServerName: dto.hotspotServerName,
         portalWalledGardenHosts: dto.portalWalledGardenHosts ?? [],
-        ttlAntiTetheringEnabled: dto.ttlAntiTetheringEnabled ?? false,
+        ttlAntiTetheringEnabled: true,
         tags: dto.tags ?? [],
         radiusClient: {
           create: {
@@ -1062,7 +1063,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         adminPassword,
         hotspotServerName: router.hotspotServerName,
         portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
-        ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
+        ttlAntiTetheringEnabled: true,
         mode: router.lastScriptMode,
         portalBaseUrl: this.buildTenantWifiLoginUrl(router.tenant),
         hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,
@@ -1129,7 +1130,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       adminPassword,
       hotspotServerName: router.hotspotServerName,
       portalHosts: this.resolvePortalHosts(router.portalWalledGardenHosts),
-      ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled,
+      ttlAntiTetheringEnabled: true,
       mode: router.lastScriptMode,
       portalBaseUrl: this.buildTenantWifiLoginUrl(router.tenant),
       hotspotNetworkName: router.siteLabel ?? router.name,
@@ -1708,7 +1709,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       routerOsVersion: router.routerOsVersion,
       hotspotServerName: router.hotspotServerName,
       portalWalledGardenHosts: router.portalWalledGardenHosts ?? [],
-      ttlAntiTetheringEnabled: router.ttlAntiTetheringEnabled ?? false,
+      ttlAntiTetheringEnabled: true,
       verificationStatus: router.verificationStatus,
       onboardingStatus: router.onboardingStatus,
       registrationKey: router.registrationKey,
@@ -2142,15 +2143,17 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return { ...probe, testedAt }
   }
 
-  async enableAllRemotePorts() {
+  async enableAllRemotePorts(tenantId?: string) {
     const routers = await this.prisma.router.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         remotePort: { not: null },
         remoteSstpIp: { not: null },
       },
     })
 
     await this.prisma.router.updateMany({
+      where: tenantId ? { tenantId } : undefined,
       data: {
         isRemotePortOpen: true,
         remoteAccessEnabled: true,
@@ -2189,7 +2192,10 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     // "expected end of command".
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
-      `# Generated dynamically for ${router.name}`,
+      `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
+      `:local sstpOk 0`,
+      `:local sstpTarget "${domain}:${sstpPort}"`,
+      `:do { /interface sstp-client disable [find name="${remoteClientName}"] } on-error={}`,
       `:do { /interface sstp-client remove [find name="${remoteClientName}"] } on-error={}`,
       `:do { /ppp profile remove [find name="AROFi_Profile"] } on-error={}`,
       // NO on-up script here. This profile previously re-fetched and
@@ -2207,8 +2213,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // never touch hotspot/RADIUS/firewall config on its own. Re-running the
       // provisioning script is now only ever a deliberate operator action.
       `/ppp profile add name="AROFi_Profile"`,
-      `:local sstpOk 0`,
-      `:do { /interface sstp-client add name="${remoteClientName}" connect-to="${domain}" port=${sstpPort} user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=no keepalive-timeout=60 verify-server-certificate=no; :set sstpOk 1 } on-error={}`,
+      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,
+      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,
       // The SSTP tunnel interface must NOT be added to the router's "LAN"
       // interface list. It served no purpose here — WinBox/API remote access
       // connects over the tunnel's own PPP-assigned IP directly, never via
@@ -2218,8 +2224,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // traffic, this silently gave devices a path to the internet that
       // bypassed the hotspot/RADIUS gate entirely — customers online with no
       // voucher or payment. Remote access still works fully without it.
-      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client blocked - device-mode restricts it."; :put "Run this command then press the RESET button on the router within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." } else={ :log info "AROFi Remote Access configured." }`,
+      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
+      `:if ($sstpOk = 1) do={ :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
     ].join('\n')
+  }
+
+  private sanitizeRouterOsComment(value: string) {
+    return value.replace(/[^\x20-\x7E]/g, '').replace(/["\\]/g, '').slice(0, 80)
   }
 
   private async syncAllRouterVpnCredentialsToRadius() {
@@ -2598,15 +2609,14 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
             },
           })
 
-          if (current.radiusCredential) {
-            await tx.radiusCredential.update({
-              where: { id: current.radiusCredential.id },
-              data: {
-                expiresAt: newEndsAt,
-                status: RadiusCredentialStatus.ACTIVE,
-              },
-            })
-          }
+          await this.radiusCredentialService.provisionForActivation(tx, {
+            tenantId: outage.tenantId,
+            activationId: current.id,
+            username: current.radiusUsername,
+            password: current.radiusPassword,
+            boundMacAddress: current.boundMacAddress,
+            routerId: current.routerId ?? outage.routerId,
+          })
 
           return tx.routerCompensation.create({
             data: {

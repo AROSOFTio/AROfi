@@ -16,7 +16,7 @@ export function absoluteApiOrigin(configuredApiUrl?: string | null, browserOrigi
 
 export function buildRemoteAccessInstallCommand(remoteToken: string | null | undefined, origin?: string) {
   const apiOrigin = absoluteApiOrigin(process.env.NEXT_PUBLIC_API_URL, origin)
-  return `${DNS_BOOTSTRAP}/tool fetch url="${apiOrigin}/mikrotik/remote-access/install/${remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+  return `${DNS_BOOTSTRAP}:do { /file remove "vpn.rsc" } on-error={}; /tool fetch url="${apiOrigin}/mikrotik/remote-access/install/${remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
 }
 
 export function buildSetupFallbackCommand(registrationKey: string) {

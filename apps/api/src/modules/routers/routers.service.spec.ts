@@ -37,7 +37,7 @@ describe('RoutersService', () => {
       encrypt: jest.fn((value: string) => `encrypted:${value}`),
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never, { provisionForActivation: jest.fn() } as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
     jest.spyOn(service, 'getRouterSetup').mockResolvedValue({ id: 'router-1' } as never)
 
@@ -130,7 +130,7 @@ describe('RoutersService', () => {
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
       maskCiphertext: jest.fn(() => '********'),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never, { provisionForActivation: jest.fn() } as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
 
     return { service, prisma, tx, credentials }
@@ -271,7 +271,7 @@ describe('RoutersService', () => {
           ]),
         },
       }
-      const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
+      const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never, { provisionForActivation: jest.fn() } as never)
 
       await expect((service as any).allocateRemoteAccessEndpoint()).resolves.toEqual({
         remotePort: 31001,
@@ -289,14 +289,14 @@ describe('RoutersService', () => {
           }),
         },
       }
-      const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never)
+      const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never, { provisionForActivation: jest.fn() } as never)
 
       const script = await service.getRemoteAccessInstallScript('token-1')
 
       expect(script).toContain('add-default-route=no')
-      expect(script).toContain('connect-to="arofi.net"')
-      expect(script).toContain('port=4443')
-      expect(script).not.toContain('connect-to="arofi.net:4443"')
+      expect(script).toContain(':local sstpTarget "arofi.net:4443"')
+      expect(script).toContain('connect-to=$sstpTarget')
+      expect(script).not.toContain(' port=4443')
       expect(script).not.toContain('use-peer-dns=')
       expect(script).not.toContain('/system script add')
     })
@@ -406,6 +406,7 @@ describe('RoutersService', () => {
         {} as never,
         { publish: jest.fn() } as never,
         mailService as never,
+        { provisionForActivation: jest.fn() } as never,
       )
       return { service, mailService }
     }
@@ -500,7 +501,8 @@ describe('RoutersService', () => {
     }
     const realtime = { publish: jest.fn() }
     const mail = { sendMail: jest.fn().mockResolvedValue(false), sendOperationalAlertEmail: jest.fn() }
-    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtime as never, mail as never)
+    const radiusCredentialService = { provisionForActivation: jest.fn().mockResolvedValue({}) }
+    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtime as never, mail as never, radiusCredentialService as never)
 
     await expect((service as any).processOutageCompensation('outage-1', RouterCompensationMode.AUTO)).resolves.toMatchObject({
       affectedActivations: 1,
@@ -516,13 +518,12 @@ describe('RoutersService', () => {
         }),
       }),
     )
-    expect(tx.radiusCredential.update).toHaveBeenCalledWith(
+    expect(radiusCredentialService.provisionForActivation).toHaveBeenCalledWith(
+      tx,
       expect.objectContaining({
-        where: { id: 'credential-1' },
-        data: expect.objectContaining({
-          status: 'ACTIVE',
-          expiresAt: new Date('2026-07-31T11:30:00Z'),
-        }),
+        tenantId: 'tenant-1',
+        activationId: 'activation-1',
+        routerId: 'router-1',
       }),
     )
     expect(prisma.routerOutage.update).toHaveBeenLastCalledWith(
