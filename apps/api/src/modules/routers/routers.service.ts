@@ -25,6 +25,7 @@ import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { RealtimeEventsService } from '../events/realtime-events.service'
 import { MailService } from '../mail/mail.service'
+import { SmsService } from '../sms/sms.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { CreateRouterDto } from './dto/create-router.dto'
@@ -137,6 +138,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly mailService: MailService,
     private readonly radiusCredentialService: RadiusCredentialService,
+    private readonly smsService: SmsService,
   ) {}
 
   onModuleInit() {
@@ -2565,6 +2567,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       secondsCredited: number
       newEndsAt: Date
       packageName: string
+      tenantId: string
     }> = []
 
     for (const activation of candidates) {
@@ -2646,6 +2649,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
           secondsCredited,
           newEndsAt: compensation.newEndsAt,
           packageName: activation.package.name,
+          tenantId: outage.tenantId,
         })
       } catch (error) {
         this.logger.warn(
@@ -2749,6 +2753,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     secondsCredited: number
     newEndsAt: Date
     packageName: string
+    tenantId?: string | null
   }, routerName: string) {
     const duration = this.formatDuration(input.secondsCredited)
     const message = `Your ${input.packageName} internet package has been extended by ${duration} because ${routerName} was offline. New expiry: ${input.newEndsAt.toLocaleString('en-UG')}.`
@@ -2768,7 +2773,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (input.accessPhoneNumber) {
-      const sent = await this.sendCompensationText(input.accessPhoneNumber, message)
+      const sent = await this.smsService.sendText({
+        tenantId: input.tenantId,
+        to: input.accessPhoneNumber,
+        body: message,
+        templateKey: 'router_compensation',
+      })
       if (sent) {
         notifiedTextAt = new Date()
       }

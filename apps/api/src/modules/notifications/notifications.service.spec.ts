@@ -37,12 +37,16 @@ describe('NotificationsService delivery', () => {
     const whatsAppService = {
       sendTextMessage: jest.fn().mockResolvedValue(options?.whatsAppDelivered ?? true),
     }
+    const smsService = {
+      sendBusinessSms: jest.fn().mockResolvedValue({ attempted: 1, delivered: 1, failed: 0 }),
+    }
 
     return {
-      service: new NotificationsService(prisma as never, mailService as never, whatsAppService as never),
+      service: new NotificationsService(prisma as never, mailService as never, whatsAppService as never, smsService as never),
       prisma,
       mailService,
       whatsAppService,
+      smsService,
     }
   }
 
@@ -65,6 +69,7 @@ describe('NotificationsService delivery', () => {
       inbox: { businesses: 1 },
       email: { businesses: 1, attempted: 3, delivered: 3, failed: 0 },
       whatsapp: { businesses: 1, attempted: 1, delivered: 1, failed: 0 },
+      sms: { businesses: 1, attempted: 1, delivered: 1, failed: 0 },
     })
   })
 

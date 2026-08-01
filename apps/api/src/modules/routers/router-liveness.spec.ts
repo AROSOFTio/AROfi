@@ -4,7 +4,7 @@ import { RoutersService } from './routers.service'
 // resolveRouterLiveState is private; exercised via `as any` the same way the
 // existing routers.service.spec.ts does for other private methods.
 function buildService() {
-  return new RoutersService({} as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, {} as never, {} as never)
+  return new RoutersService({} as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, {} as never, {} as never, { sendText: jest.fn() } as never)
 }
 
 describe('RoutersService router liveness state machine', () => {
@@ -79,7 +79,7 @@ describe('RoutersService heartbeat publishes realtime events', () => {
       },
     }
     const realtimeEvents = { publish: jest.fn() }
-    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtimeEvents as never, {} as never, {} as never)
+    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtimeEvents as never, {} as never, {} as never, { sendText: jest.fn() } as never)
 
     await service.recordRouterHeartbeatByKey('reg-key', '203.0.113.10')
 
@@ -104,7 +104,7 @@ describe('RoutersService heartbeat publishes realtime events', () => {
       },
     }
     const realtimeEvents = { publish: jest.fn() }
-    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtimeEvents as never, {} as never, {} as never)
+    const service = new RoutersService(prisma as never, {} as never, {} as never, {} as never, realtimeEvents as never, {} as never, {} as never, { sendText: jest.fn() } as never)
 
     await service.recordRouterHeartbeatByKey('reg-key', '203.0.113.10')
 

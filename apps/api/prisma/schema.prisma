@@ -409,6 +409,18 @@ enum SupportTicketChannel {
   CHAT
 }
 
+enum SmsProvider {
+  AFRICAS_TALKING
+  DISABLED
+}
+
+enum SmsMessageStatus {
+  SKIPPED
+  QUEUED
+  SENT
+  FAILED
+}
+
 model Tenant {
   id                  String               @id @default(uuid())
   name                String
@@ -465,6 +477,7 @@ model Tenant {
   kycDocuments        KycDocument[]
   complianceProfile   ComplianceProfile?
   notifications       Notification[]
+  smsMessages         SmsMessage[]
   referredRelationships ReferralRelationship[] @relation("ReferredTenant")
 }
 
@@ -2104,4 +2117,27 @@ model NotificationRead {
 
   @@unique([notificationId, userId])
   @@index([userId, readAt])
+}
+
+model SmsMessage {
+  id                String           @id @default(uuid())
+  tenantId          String?
+  tenant            Tenant?          @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  provider          SmsProvider      @default(AFRICAS_TALKING)
+  status            SmsMessageStatus @default(QUEUED)
+  templateKey       String?
+  recipient         String
+  normalizedRecipient String?
+  body              String
+  segments          Int              @default(1)
+  estimatedCostUgx  Int?
+  providerMessageId String?
+  providerResponse  Json?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime         @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+  @@index([normalizedRecipient, createdAt])
 }

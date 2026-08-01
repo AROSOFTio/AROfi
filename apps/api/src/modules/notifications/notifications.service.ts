@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundEx
 import { NotificationAudience } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { MailService } from '../mail/mail.service'
+import { SmsService } from '../sms/sms.service'
 import { WhatsAppService } from '../whatsapp/whatsapp.service'
 import { CreateNotificationDto } from './dto/create-notification.dto'
 
@@ -15,6 +16,7 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly smsService: SmsService,
   ) {}
 
   async listForUser(userId: string, tenantId?: string | null) {
@@ -154,7 +156,7 @@ export class NotificationsService {
       Boolean(business.supportPhone || business.complianceProfile?.phoneNumber),
     ).length
 
-    const [emailResults, whatsAppResults] = await Promise.all([
+    const [emailResults, whatsAppResults, smsResults] = await Promise.all([
       Promise.all(
         emailAddresses.map((to) =>
           this.mailService.sendBusinessNotificationEmail({
@@ -172,7 +174,21 @@ export class NotificationsService {
           ),
         ),
       ),
+      Promise.all(
+        businesses.map((business) =>
+          this.smsService.sendBusinessSms({
+            tenantId: business.id,
+            title: notification.title,
+            message: notification.body,
+            phoneNumbers: this.uniqueContacts([business.supportPhone, business.complianceProfile?.phoneNumber]),
+            templateKey: 'admin_notification',
+          }),
+        ),
+      ),
     ])
+
+    const smsAttempted = smsResults.reduce((total, result) => total + result.attempted, 0)
+    const smsDelivered = smsResults.reduce((total, result) => total + result.delivered, 0)
 
     const delivery = {
       inbox: { businesses: businesses.length },
@@ -188,11 +204,17 @@ export class NotificationsService {
         delivered: whatsAppResults.filter(Boolean).length,
         failed: whatsAppResults.filter((result) => !result).length,
       },
+      sms: {
+        businesses: businessesWithPhone,
+        attempted: smsAttempted,
+        delivered: smsDelivered,
+        failed: smsAttempted - smsDelivered,
+      },
     }
 
-    if (delivery.email.failed > 0 || delivery.whatsapp.failed > 0) {
+    if (delivery.email.failed > 0 || delivery.whatsapp.failed > 0 || delivery.sms.failed > 0) {
       this.logger.warn(
-        `Notification ${notification.id} saved in-app, with external delivery failures: email ${delivery.email.delivered}/${delivery.email.attempted}, WhatsApp ${delivery.whatsapp.delivered}/${delivery.whatsapp.attempted}`,
+        `Notification ${notification.id} saved in-app, with external delivery failures: email ${delivery.email.delivered}/${delivery.email.attempted}, WhatsApp ${delivery.whatsapp.delivered}/${delivery.whatsapp.attempted}, SMS ${delivery.sms.delivered}/${delivery.sms.attempted}`,
       )
     }
 
