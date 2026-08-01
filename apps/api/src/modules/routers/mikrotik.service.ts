@@ -733,11 +733,23 @@ export class MikrotikService {
     .find-wrap{display:flex;justify-content:center}
     .find-panel{display:none;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-top:12px}
     .find-panel.on{display:block}
+    .tv-voucher{margin-top:12px;background:#fff;border:1px solid #bfdbfe;border-radius:12px;padding:12px}
+    .tv-voucher label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#1d4ed8}
+    .tv-voucher input[type=checkbox]{width:16px;height:16px}
+    .tv-voucher .tv-mac-wrap{display:none;margin-top:10px}
+    .tv-voucher.on .tv-mac-wrap{display:block}
+    .tv-note{font-size:11px;line-height:1.45;color:#64748b;margin-top:6px}
     .section-label{text-align:center;font-size:14px;color:#334155;margin-top:20px}
+    .section-sub{text-align:center;font-size:12px;line-height:1.45;color:#64748b;margin:6px auto 0;max-width:390px}
     .pkgs{display:grid;grid-template-columns:1fr;gap:12px;margin-top:24px}
     @media(min-width:520px){.pkgs{grid-template-columns:1fr 1fr}}
     .pkg{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;text-align:left;box-shadow:0 1px 2px rgba(15,23,42,.05);cursor:pointer;transition:border-color .15s}
     .pkg.sel{border-color:#2563EB}
+    .tv-section{display:none;margin-top:24px;padding:16px;border:1px solid #bfdbfe;background:#f8fbff;border-radius:16px}
+    .tv-section .section-label{margin-top:0;font-weight:800;color:#1d4ed8}
+    .tv-section .pkgs{margin-top:14px}
+    .tv-section .pkg{border-color:#bfdbfe;background:#fff}
+    .tv-section .pkg.sel{border-color:#2563EB;box-shadow:0 0 0 2px rgba(37,99,235,.12)}
     .pkg .pk-name{display:block;font-size:16px;font-weight:700;color:#334155;line-height:1.2}
     .pkg .pk-dur{display:block;font-size:12px;color:#64748b;margin-top:2px}
     .pkg .pk-price{font-size:14px;font-weight:800;color:#2563EB;white-space:nowrap}
@@ -762,6 +774,9 @@ export class MikrotikService {
     .pay-box .pclose{position:absolute;top:12px;right:14px;background:none;border:1px solid #e2e8f0;border-radius:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:2px 7px}
     .pay-box .pname{font-size:18px;font-weight:800;color:#020617;margin-bottom:4px;padding-right:28px}
     .pay-box .psub{font-size:13px;color:#64748b;margin-bottom:14px}
+    .tv-pay-note{display:none;margin:-2px 0 12px;border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:10px;font-size:12px;line-height:1.45;font-weight:700}
+    .tv-pay-fields{display:none}
+    .tv-pay-fields label{display:block;font-size:12px;font-weight:800;color:#334155;margin-bottom:6px}
     .iw{position:relative;margin-bottom:13px}
     input[type=text],input[type=tel]{width:100%;background:#fff;border:1px solid #cbd5e1;padding:12px 14px;border-radius:10px;color:#020617;font-size:15px;outline:none;transition:border-color .18s}
     input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
@@ -794,6 +809,13 @@ export class MikrotikService {
         <input type="text" id="vcode" placeholder="Enter your voucher code">
         <button class="connect-btn" id="vbtn" onclick="login()">Connect</button>
       </div>
+      <div class="tv-voucher" id="tvVoucherBox">
+        <label><input type="checkbox" id="vTvMode" onchange="toggleVoucherTv()"> Connect voucher to a Smart TV</label>
+        <div class="tv-mac-wrap">
+          <input type="text" id="vTvMac" placeholder="TV wireless MAC, e.g. AA:BB:CC:DD:EE:FF">
+          <div class="tv-note">On the TV: Settings - Network - WiFi details. Use the Wireless MAC address.</div>
+        </div>
+      </div>
       <div class="find-wrap">
         <div class="find-link" onclick="toggleFind()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -809,6 +831,11 @@ export class MikrotikService {
 
       <p class="section-label">Select a package and pay with Mobile Money</p>
       <div class="pkgs" id="plist"></div>
+      <div id="tvSection" class="tv-section">
+        <p class="section-label">Smart TV connection</p>
+        <p class="section-sub">For TVs that cannot open the portal: choose a TV package, enter the TV wireless MAC, pay from your phone, then reconnect the TV to this WiFi.</p>
+        <div class="pkgs" id="tvList"></div>
+      </div>
       <div id="multiSection" style="display:none">
         <p class="section-label">Multi-device packages</p>
         <div class="pkgs" id="multiList"></div>
@@ -841,6 +868,14 @@ export class MikrotikService {
       <button type="button" class="pclose" onclick="closePay()">&times;</button>
       <div class="pname" id="payPkgName"></div>
       <div class="psub" id="paySub"></div>
+      <div class="tv-pay-note" id="tvPayNote">Smart TV package: this activates the TV MAC address, not this phone. Enter TV MAC first, then the Mobile Money number that will approve payment.</div>
+      <div class="tv-pay-fields" id="tvPayFields">
+        <label for="tvmac">Smart TV wireless MAC address</label>
+        <div class="iw">
+          <input type="text" id="tvmac" placeholder="AA:BB:CC:DD:EE:FF">
+        </div>
+        <div class="tv-note" style="margin-top:-8px;margin-bottom:12px">Find it on most TVs under Settings - Network - WiFi details. After payment, open the TV WiFi list and select this WiFi again.</div>
+      </div>
       <div class="iw">
         <input type="tel" id="phone" placeholder="07XX XXX XXX">
       </div>
@@ -856,7 +891,7 @@ export class MikrotikService {
   <script>
     var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}",CONNECTED="${connectedUrl}";
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
-    var pkgs=[],selId=null;
+    var pkgs=[],selId=null,selTv=false;
     // Try HTTPS API first; if the captive-portal mini-browser blocks it (clock
     // wrong, cert issue, CORS), retry the same path over plain HTTP fallback IP.
     function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(e)ajax(m,APIFB+p,d,cb);else cb(null,r);});}
@@ -911,6 +946,24 @@ export class MikrotikService {
       document.getElementById('findPanel').classList.toggle('on');
     }
 
+    function isTvPkg(p){
+      var h=((p&&p.name)||'')+' '+((p&&p.code)||'')+' '+((p&&p.description)||'');
+      h=h.toLowerCase();
+      return h.indexOf('tv')>=0||h.indexOf('smart')>=0||h.indexOf('stream')>=0;
+    }
+
+    function normMac(v){
+      var c=(v||'').replace(/[^a-fA-F0-9]/g,'').toUpperCase();
+      if(!/^[A-F0-9]{12}$/.test(c))return '';
+      return c.match(/.{1,2}/g).join(':');
+    }
+
+    function toggleVoucherTv(){
+      var on=document.getElementById('vTvMode').checked;
+      document.getElementById('tvVoucherBox').classList.toggle('on',on);
+      if(on)setTimeout(function(){document.getElementById('vTvMac').focus();},50);
+    }
+
     function load(){
       apiCall('GET', '/api/portal/context?mac='+encodeURIComponent(mac)+'&ip='+encodeURIComponent(ip)+'&routerKey='+encodeURIComponent(RKEY)+'&server='+encodeURIComponent(srv)+'&loginUrl='+encodeURIComponent(lo), null, function(err, d){
         if(err){
@@ -950,16 +1003,20 @@ export class MikrotikService {
         }
 
         var el=document.getElementById('plist');el.innerHTML='';
+        var tvl=document.getElementById('tvList');tvl.innerHTML='';
         var ml=document.getElementById('multiList');ml.innerHTML='';
-        var mc=0;
+        var mc=0,tc=0;
         pkgs.forEach(function(p){
           var limit=parseInt(p.deviceLimit||1,10)||1;
           var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;
           var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');
           c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">UGX '+fn(p.amountUgx)+'</span><span class="pk-buy">BUY</span>';
           c.onclick=function(){selPkg(p.id);};
-          if(limit>1){ml.appendChild(c);mc++;}else{el.appendChild(c);}
+          if(isTvPkg(p)){tvl.appendChild(c);tc++;}
+          else if(limit>1){ml.appendChild(c);mc++;}
+          else{el.appendChild(c);}
         });
+        document.getElementById('tvSection').style.display=tc>0?'block':'none';
         document.getElementById('multiSection').style.display=mc>0?'block':'none';
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
@@ -983,11 +1040,14 @@ export class MikrotikService {
 
       var pkg=null;
       for(var j=0;j<pkgs.length;j++){if(pkgs[j].id===id){pkg=pkgs[j];break;}}
+      selTv=isTvPkg(pkg);
       document.getElementById('payPkgName').textContent=pkg?('Pay UGX '+fn(pkg.amountUgx)):'';
       document.getElementById('paySub').textContent=pkg?(pkg.name+' · '+fdur(pkg.durationMinutes)):'';
+      document.getElementById('tvPayNote').style.display=selTv?'block':'none';
+      document.getElementById('tvPayFields').style.display=selTv?'block':'none';
       document.getElementById('pbtn').disabled=false;
       document.getElementById('payOverlay').classList.add('on');
-      document.getElementById('phone').focus();
+      setTimeout(function(){document.getElementById(selTv?'tvmac':'phone').focus();},50);
     }
 
     function closePay(){
@@ -997,14 +1057,25 @@ export class MikrotikService {
     function login(){
       var code=document.getElementById('vcode').value.trim().toUpperCase().replace(/\\s+/g,'');
       if(!code){sst('Enter your voucher code.','err');return;}
+      var tvMode=document.getElementById('vTvMode').checked;
+      var targetMac=mac;
+      if(tvMode){
+        targetMac=normMac(document.getElementById('vTvMac').value);
+        if(!targetMac){sst('Enter the Smart TV wireless MAC address before connecting this voucher.','err');return;}
+      }
       var b=document.getElementById('vbtn');
       b.disabled=true;b.textContent='Logging in...';
       sst('Verifying voucher...','info');
 
-      apiCall('POST', '/api/portal/redeem-voucher', {code:code,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
+      apiCall('POST', '/api/portal/redeem-voucher', {code:code,macAddress:targetMac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
         if(err){
           sst(err.message||'Failed','err');b.disabled=false;b.textContent='Login';
         } else {
+          if(tvMode){
+            b.disabled=false;b.textContent='Connect';
+            sst('Voucher activated for Smart TV '+targetMac+'. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');
+            return;
+          }
           sst('Success! Connecting...','ok');
           conn(res.reconnect);
         }
@@ -1017,6 +1088,11 @@ export class MikrotikService {
       var c=ph.replace(/\\D/g,'');
       if(c.indexOf('0')===0)c='256'+c.substring(1);else if(c.indexOf('256')!==0)c='256'+c;
       if(!/^256\\d{9}$/.test(c)){sst('Enter a valid Mobile Money number.','err');return;}
+      var payMac=mac;
+      if(selTv){
+        payMac=normMac(document.getElementById('tvmac').value);
+        if(!payMac){sst('Enter the Smart TV wireless MAC address before paying for this TV package.','err');return;}
+      }
       
       sst('Initiating payment...','info');
       var b=document.getElementById('pbtn');b.disabled=true;
@@ -1024,13 +1100,13 @@ export class MikrotikService {
       var pfx=c.substring(3,5);
       var net=(pfx==='70'||pfx==='75'||pfx==='74')?'AIRTEL':'MTN';
       
-      apiCall('POST', '/api/payments/portal/initiate', {packageId:selId,phoneNumber:c,customerReference:c,network:net,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, pmt){
+      apiCall('POST', '/api/payments/portal/initiate', {packageId:selId,phoneNumber:c,customerReference:selTv?payMac:c,network:net,macAddress:payMac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, pmt){
         if(err){ sst(err.message||'Failed','err');b.disabled=false;return; }
         if(pmt.status==='FAILED'){ sst(pmt.statusMessage||'Failed','err');b.disabled=false;return; }
         
         var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
         if(cu){window.location.href=cu;return;}
-        sst('Enter your Mobile Money PIN on your phone. Waiting for approval...','info');
+        sst(selTv?'Enter your Mobile Money PIN. After approval, reconnect the Smart TV to WiFi.':'Enter your Mobile Money PIN on your phone. Waiting for approval...','info');
         poll(pmt.id,pmt.statusToken);
       });
     }
@@ -1040,7 +1116,14 @@ export class MikrotikService {
         if(++n>120){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
         apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
           if(err) return;
-          if(p.activation){if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}}
+          if(p.activation){
+            if(selTv){
+              clearInterval(iv);
+              document.getElementById('pbtn').disabled=false;
+              closePay();
+              var tvm=normMac(document.getElementById('tvmac').value);
+              sst('Payment approved. Smart TV '+tvm+' is active. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');
+            }else if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}}
           else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
         });
       },1500);
