@@ -7706,4 +7706,37 @@ html[data-theme="dark"] .wallet-showcase-card {
   box-shadow: 0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14) !important;
 }
 
+html[data-theme="dark"] .page-title,
+html[data-theme="dark"] .card-title,
+html[data-theme="dark"] .dashboard-panel-title,
+html[data-theme="dark"] .system-insights-card-title,
+html[data-theme="dark"] .tenant-stat-compact-title,
+html[data-theme="dark"] .tenant-stat-title,
+html[data-theme="dark"] .stat-label,
+html[data-theme="dark"] .stat-value,
+html[data-theme="dark"] .tenant-stat-compact-value,
+html[data-theme="dark"] .tenant-stat-value,
+html[data-theme="dark"] .sic-metric strong,
+html[data-theme="dark"] .sale-title,
+html[data-theme="dark"] .sale-amount {
+  color: var(--text-1) !important;
+}
+
+html[data-theme="dark"] .page-subtitle,
+html[data-theme="dark"] .dashboard-panel-subtitle,
+html[data-theme="dark"] .stat-change,
+html[data-theme="dark"] .tenant-stat-note,
+html[data-theme="dark"] .split-label,
+html[data-theme="dark"] .sic-metric span,
+html[data-theme="dark"] .sale-meta,
+html[data-theme="dark"] .recent-sales-footer {
+  color: var(--text-3) !important;
+}
+
+html[data-theme="dark"] .tenant-stat-icon-mark,
+html[data-theme="dark"] .sic-metric {
+  background: var(--bg-sidebar) !important;
+  border-color: var(--border-soft) !important;
+}
+
 

@@ -1,13 +1,23 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { PackageStatus } from '@prisma/client'
+import {
+  PackageActivationSource,
+  PackageActivationStatus,
+  PackageStatus,
+  Prisma,
+} from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { RadiusCredentialService } from '../radius/radius-credential.service'
 import { CreatePackageDto } from './dto/create-package.dto'
 import { CreatePackagePriceDto } from './dto/create-package-price.dto'
+import { CreateTvActivationDto } from './dto/create-tv-activation.dto'
 import { UpdatePackageDto } from './dto/update-package.dto'
 
 @Injectable()
 export class PackagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly radiusCredentialService: RadiusCredentialService,
+  ) {}
 
   async getCatalog(tenantId?: string) {
     const items = await this.prisma.package.findMany({
@@ -208,5 +218,160 @@ export class PackagesService {
         },
       })
     })
+  }
+
+  async createTvActivation(packageId: string, tenantId: string, dto: CreateTvActivationDto) {
+    const normalizedMac = this.normalizeMac(dto.macAddress)
+    if (!normalizedMac) {
+      throw new BadRequestException('Enter a valid TV MAC address')
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const pkg = await tx.package.findUnique({
+        where: { id: packageId },
+        include: {
+          prices: {
+            where: { endsAt: null },
+            take: 1,
+          },
+        },
+      })
+
+      if (!pkg || pkg.tenantId !== tenantId || pkg.status === PackageStatus.ARCHIVED) {
+        throw new NotFoundException('TV package not found')
+      }
+
+      const [router, hotspot, activeForMac] = await Promise.all([
+        dto.routerId
+          ? tx.router.findFirst({
+              where: { id: dto.routerId, tenantId },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve(null),
+        dto.hotspotId
+          ? tx.hotspot.findFirst({
+              where: { id: dto.hotspotId, tenantId },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve(null),
+        tx.packageActivation.findFirst({
+          where: {
+            tenantId,
+            boundMacAddress: normalizedMac,
+            status: PackageActivationStatus.ACTIVE,
+            endsAt: { gt: new Date() },
+          },
+          include: {
+            package: {
+              select: { id: true, name: true, code: true },
+            },
+            radiusCredential: {
+              select: { username: true, status: true, expiresAt: true },
+            },
+          },
+        }),
+      ])
+
+      if (dto.routerId && !router) {
+        throw new NotFoundException('Router not found for this business')
+      }
+
+      if (dto.hotspotId && !hotspot) {
+        throw new NotFoundException('Hotspot not found for this business')
+      }
+
+      if (activeForMac) {
+        throw new BadRequestException(
+          `This TV already has an active package (${activeForMac.package.name}) until ${activeForMac.endsAt.toISOString()}`,
+        )
+      }
+
+      const startedAt = new Date()
+      const endsAt = new Date(startedAt.getTime() + pkg.durationMinutes * 60 * 1000)
+      const username = normalizedMac
+      const password = normalizedMac
+      const customerName = dto.customerName?.trim() || `Smart TV ${normalizedMac}`
+      const phoneNumber = dto.phoneNumber?.trim() || null
+
+      const activation = await tx.packageActivation.create({
+        data: {
+          tenantId,
+          packageId: pkg.id,
+          hotspotId: hotspot?.id,
+          routerId: router?.id,
+          source: PackageActivationSource.VOUCHER,
+          status: PackageActivationStatus.ACTIVE,
+          customerReference: customerName,
+          accessPhoneNumber: phoneNumber,
+          durationMinutes: pkg.durationMinutes,
+          dataLimitMb: pkg.dataLimitMb,
+          deviceLimit: 1,
+          downloadSpeedKbps: pkg.downloadSpeedKbps,
+          uploadSpeedKbps: pkg.uploadSpeedKbps,
+          radiusUsername: username,
+          radiusPassword: password,
+          boundMacAddress: normalizedMac,
+          firstSeenAt: startedAt,
+          startedAt,
+          endsAt,
+          metadata: {
+            source: 'SMART_TV_MANUAL',
+            createdFrom: 'admin_packages_tv',
+            macAddress: normalizedMac,
+            customerName,
+            phoneNumber,
+            priceUgx: pkg.prices[0]?.amountUgx ?? 0,
+          } satisfies Prisma.InputJsonValue,
+        },
+        include: {
+          package: {
+            select: { id: true, name: true, code: true },
+          },
+          hotspot: {
+            select: { id: true, name: true },
+          },
+        },
+      })
+
+      const credential = await this.radiusCredentialService.provisionForActivation(tx, {
+        tenantId,
+        activationId: activation.id,
+        username,
+        password,
+        boundMacAddress: normalizedMac,
+        routerId: router?.id ?? null,
+      })
+
+      return {
+        activated: true,
+        activation,
+        credential: {
+          username: credential.username,
+          boundMacAddress: credential.boundMacAddress,
+          expiresAt: credential.expiresAt,
+          status: credential.status,
+        },
+        router,
+        hotspot,
+        instructions: [
+          'Connect the Smart TV to the hotspot WiFi.',
+          'If it is already connected, turn WiFi off and on again so the router asks RADIUS again.',
+          'The TV should receive internet automatically without opening the captive portal.',
+        ],
+      }
+    })
+  }
+
+  private normalizeMac(value?: string | null) {
+    if (!value) {
+      return undefined
+    }
+
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return undefined
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':')
   }
 }

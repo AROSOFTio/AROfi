@@ -21,6 +21,12 @@ type PackageFormState = {
   isFeatured: boolean
 }
 
+type TvActivationFormState = {
+  macAddress: string
+  customerName: string
+  phoneNumber: string
+}
+
 const initialFormState: PackageFormState = {
   tenantId: '',
   name: '',
@@ -48,6 +54,7 @@ export default function PackagesManager() {
   const [catalog, setCatalog] = useState<PackageCatalogResponse | null>(null)
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
   const [formState, setFormState] = useState<PackageFormState>(initialFormState)
+  const [packageView, setPackageView] = useState<'internet' | 'tv'>('internet')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [processText, setProcessText] = useState('')
@@ -55,6 +62,13 @@ export default function PackagesManager() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [tvActivationPackage, setTvActivationPackage] = useState<PackageCatalogResponse['items'][number] | null>(null)
+  const [tvActivationForm, setTvActivationForm] = useState<TvActivationFormState>({
+    macAddress: '',
+    customerName: '',
+    phoneNumber: '',
+  })
+  const [activatingTv, setActivatingTv] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -89,6 +103,65 @@ export default function PackagesManager() {
     setCreateOpen(true)
   }
 
+  function startCreateTvPackage() {
+    setPackageView('tv')
+    setEditingId(null)
+    setFormError(null)
+    setProcessText('')
+    setFormState((previous) => ({
+      ...initialFormState,
+      tenantId: previous.tenantId,
+      name: 'Smart TV Daily',
+      code: 'TV-DAILY',
+      description: 'Smart TV streaming access. Connect the TV once, then keep it bound to that TV device.',
+      durationMinutes: String(24 * 60),
+      dataLimitMb: '',
+      deviceLimit: '1',
+      downloadSpeedKbps: '8192',
+      uploadSpeedKbps: '2048',
+      initialPriceUgx: '3000',
+      isFeatured: true,
+    }))
+    setCreateOpen(true)
+  }
+
+  function startTvActivation(item: PackageCatalogResponse['items'][number]) {
+    setError(null)
+    setSuccess(null)
+    setTvActivationPackage(item)
+    setTvActivationForm({
+      macAddress: '',
+      customerName: '',
+      phoneNumber: '',
+    })
+  }
+
+  async function handleTvActivation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!tvActivationPackage) {
+      return
+    }
+
+    setActivatingTv(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await clientPostApi(`/packages/${tvActivationPackage.id}/tv-activations`, {
+        tenantId: tvActivationPackage.tenant.id,
+        macAddress: tvActivationForm.macAddress.trim(),
+        customerName: tvActivationForm.customerName.trim() || undefined,
+        phoneNumber: tvActivationForm.phoneNumber.trim() || undefined,
+      })
+      setSuccess('Smart TV activated. Turn the TV WiFi off and on once; it should connect without opening the portal.')
+      setTvActivationPackage(null)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to activate this TV')
+    } finally {
+      setActivatingTv(false)
+    }
+  }
+
   async function handleDelete(packageId: string) {
     setDeleting(true)
     setError(null)
@@ -107,6 +180,11 @@ export default function PackagesManager() {
   }
 
   const items = catalog?.items ?? []
+  const isTvPackage = (item: PackageCatalogResponse['items'][number]) => {
+    const haystack = `${item.name} ${item.code} ${item.description ?? ''}`.toLowerCase()
+    return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
+  }
+  const visibleItems = items.filter((item) => packageView === 'tv' ? isTvPackage(item) : !isTvPackage(item))
 
   useEffect(() => {
     void loadData()
@@ -202,7 +280,7 @@ export default function PackagesManager() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Manage Packages</h1>
-          <p className="page-subtitle">Create and manage your Hotspot packages and PPPoE subscription plans.</p>
+          <p className="page-subtitle">Create and manage customer WiFi, voucher, PPPoE, and Smart TV access packages.</p>
         </div>
       </div>
 
@@ -310,12 +388,88 @@ export default function PackagesManager() {
         </div>
       )}
 
+      {tvActivationPackage && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !activatingTv && setTvActivationPackage(null)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setTvActivationPackage(null)} disabled={activatingTv}>Close</button>
+            <div className="modal-kicker">Smart TV access</div>
+            <h2 className="modal-title">Connect TV to {tvActivationPackage.name}</h2>
+            <p className="page-subtitle" style={{ marginTop: 6 }}>
+              Smart TVs often do not open captive portal pages. Enter the TV MAC address here, then reconnect the TV to WiFi.
+            </p>
+            <form onSubmit={handleTvActivation} style={{ marginTop: 18 }}>
+              <div className="form-group">
+                <label className="form-label">TV MAC Address</label>
+                <input
+                  className="form-input"
+                  value={tvActivationForm.macAddress}
+                  onChange={(event) => setTvActivationForm((previous) => ({ ...previous, macAddress: event.target.value }))}
+                  placeholder="AA:BB:CC:DD:EE:FF"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="stats-grid" style={{ marginTop: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Customer / Room Name</label>
+                  <input
+                    className="form-input"
+                    value={tvActivationForm.customerName}
+                    onChange={(event) => setTvActivationForm((previous) => ({ ...previous, customerName: event.target.value }))}
+                    placeholder="Room 12 TV"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phone (optional)</label>
+                  <input
+                    className="form-input"
+                    value={tvActivationForm.phoneNumber}
+                    onChange={(event) => setTvActivationForm((previous) => ({ ...previous, phoneNumber: event.target.value }))}
+                    placeholder="0771 234 567"
+                  />
+                </div>
+              </div>
+              <div className="info-panel" style={{ marginTop: 12 }}>
+                <strong>How to get the TV MAC:</strong> On most TVs, open Settings - Network - WiFi - Advanced / Status. Copy the Wireless MAC address, not Bluetooth MAC.
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setTvActivationPackage(null)} disabled={activatingTv}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={activatingTv}>
+                  {activatingTv ? 'Activating...' : 'Activate TV'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {error && !formError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
       {success && !submitting && <p style={{ color: 'var(--success-fg)', fontSize: 13, marginBottom: 10 }}>{success}</p>}
 
       <div className="table-toolbar">
-        <input className="form-input" placeholder="Filter packages..." style={{ width: 244 }} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="theme-switch" role="group" aria-label="Package section">
+            <button
+              type="button"
+              className={`theme-switch-option ${packageView === 'internet' ? 'active' : ''}`}
+              onClick={() => setPackageView('internet')}
+            >
+              Internet
+            </button>
+            <button
+              type="button"
+              className={`theme-switch-option ${packageView === 'tv' ? 'active' : ''}`}
+              onClick={() => setPackageView('tv')}
+            >
+              TV / Smart TV
+            </button>
+          </div>
+          <input className="form-input" placeholder="Filter packages..." style={{ width: 244 }} />
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={startCreateTvPackage}>
+            + TV Package
+          </button>
           <button type="button" className="btn btn-primary" onClick={startCreate}>
             + Create Package
           </button>
@@ -324,6 +478,11 @@ export default function PackagesManager() {
       </div>
 
       <div className="card">
+        {packageView === 'tv' && (
+          <div className="info-panel" style={{ margin: '0 0 12px' }}>
+            <strong>TV connection flow:</strong> create a TV package, click Connect TV, enter the TV wireless MAC address, then reconnect the TV to WiFi. The router will allow it by MAC without a portal popup.
+          </div>
+        )}
         <div className="table-wrap">
           <table>
             <thead>
@@ -336,7 +495,7 @@ export default function PackagesManager() {
                 <th>Speed Limit</th>
                 <th>Data Limit</th>
                 <th>Status</th>
-                <th></th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -349,16 +508,16 @@ export default function PackagesManager() {
                   </td>
                 </tr>
               )}
-              {!loading && items.length === 0 && (
+              {!loading && visibleItems.length === 0 && (
                 <tr>
                   <td colSpan={9}>
                     <div className="empty-state">
-                      <p>No packages found yet.</p>
+                      <p>{packageView === 'tv' ? 'No TV packages yet. Create one for Smart TV streaming access.' : 'No internet packages found yet.'}</p>
                     </div>
                   </td>
                 </tr>
               )}
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <tr key={item.id}>
                   <td><input type="checkbox" aria-label={`Select ${item.name}`} /></td>
                   <td>
@@ -394,7 +553,12 @@ export default function PackagesManager() {
                         </button>
                       </span>
                     ) : (
-                      <span style={{ display: 'inline-flex', gap: 6 }}>
+                      <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {packageView === 'tv' && (
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => startTvActivation(item)}>
+                            Connect TV
+                          </button>
+                        )}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Edit</button>
                         <button
                           type="button"

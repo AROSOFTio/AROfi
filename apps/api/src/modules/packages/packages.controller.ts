@@ -7,6 +7,7 @@ import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { CreatePackageDto } from './dto/create-package.dto'
 import { CreatePackagePriceDto } from './dto/create-package-price.dto'
+import { CreateTvActivationDto } from './dto/create-tv-activation.dto'
 import { UpdatePackageDto } from './dto/update-package.dto'
 import { PackagesService } from './packages.service'
 
@@ -62,6 +63,17 @@ export class PackagesController {
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.packagesService.addPricing(packageId, dto, tenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.packagesManage)
+  @Post(':packageId/tv-activations')
+  createTvActivation(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('packageId') packageId: string,
+    @Body() dto: CreateTvActivationDto,
+  ) {
+    const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
+    return this.packagesService.createTvActivation(packageId, tenantId, dto)
   }
 }
 

@@ -50,6 +50,18 @@ function hasUsableReconnect(payment?: PortalPayment | null) {
   return Boolean(payment?.reconnect?.username && payment.reconnect.password)
 }
 
+function isTvPackage(pkg?: Pick<PortalPackage, 'name' | 'code'> & { description?: string | null } | null) {
+  if (!pkg) return false
+  const haystack = `${pkg.name} ${pkg.code} ${pkg.description ?? ''}`.toLowerCase()
+  return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
+}
+
+function normalizeMacInput(value: string) {
+  const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+  if (!/^[A-F0-9]{12}$/.test(compact)) return ''
+  return compact.match(/.{1,2}/g)?.join(':') ?? ''
+}
+
 function stashCompanionCodes(codes: string[]) {
   if (typeof window === 'undefined' || codes.length === 0) return
   try {
@@ -380,6 +392,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [phoneNumber, setPhoneNumber] = useState('')
   const [customerReference, setCustomerReference] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
+  const [tvMacAddress, setTvMacAddress] = useState('')
+  const [voucherTvMode, setVoucherTvMode] = useState(false)
   const [isContextLoading, setIsContextLoading] = useState(!cachedCtx)
   const [contextUnresolved, setContextUnresolved] = useState(false)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
@@ -403,6 +417,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     tenantDomain: '',
   })
   const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
+  const selectedIsTvPackage = isTvPackage(selectedPackage)
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -479,6 +494,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
+    const tvMac = voucherTvMode ? normalizeMacInput(tvMacAddress) : ''
+    if (voucherTvMode && !tvMac) {
+      setErrorMessage('Enter the Smart TV wireless MAC address before redeeming this voucher.')
+      return
+    }
+
     setIsVoucherLoading(true)
 
     try {
@@ -491,7 +512,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           code: codeToRedeem,
           phoneNumber: phoneNumber || undefined,
           customerReference: customerReference || phoneNumber || undefined,
-          macAddress: hotspotParams.macAddress || undefined,
+          macAddress: tvMac || hotspotParams.macAddress || undefined,
           clientIp: hotspotParams.clientIp || undefined,
           loginUrl: hotspotParams.loginUrl || undefined,
           routerId: hotspotParams.routerId || undefined,
@@ -508,6 +529,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       const redemption = body as PortalRedeemVoucherResponse
       setVoucherCode('')
+      if (tvMac) {
+        setStatusMessage(`Voucher ${redemption.voucher.code} activated for Smart TV ${tvMac}. Turn the TV WiFi off and on once.`)
+        await loadContext(phoneNumber || undefined, portalToken, hotspotParams)
+        return
+      }
       setStatusMessage(`Voucher ${redemption.voucher.code} redeemed successfully.`)
 
       const companionCodes = redemption.companionVoucherCodes ?? []
@@ -558,7 +584,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     } finally {
       setIsVoucherLoading(false)
     }
-  }, [hotspotParams, phoneNumber, customerReference, portalToken, voucherCode])
+  }, [hotspotParams, phoneNumber, customerReference, portalToken, voucherCode, voucherTvMode, tvMacAddress])
 
   useEffect(() => {
     if (!qrVoucherCode || qrVoucherRedeemAttempted || isContextLoading || isVoucherLoading) return
@@ -841,7 +867,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const payment = await readJson<PortalPayment>(response)
     setCurrentPayment(payment)
 
-    if (payment.activation && hasUsableReconnect(payment)) {
+    if (payment.activation && isTvPackage(payment.package)) {
+      setCheckoutOpen(false)
+      setErrorMessage('')
+      setStatusMessage(`Payment confirmed. Smart TV access is active. Turn the TV WiFi off and on once.`)
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(paymentReturnStorageKey)
+      }
+    } else if (payment.activation && hasUsableReconnect(payment)) {
       setErrorMessage('')
       setStatusMessage('')
       // Payment confirmed — close checkout modal and auto-connect immediately.
@@ -893,6 +926,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
+    const tvMac = selectedIsTvPackage ? normalizeMacInput(tvMacAddress) : ''
+    if (selectedIsTvPackage && !tvMac) {
+      setErrorMessage('Enter the Smart TV wireless MAC address before paying for this TV package.')
+      return
+    }
+
     setIsPaymentLoading(true)
 
     try {
@@ -910,7 +949,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           customerReference: customerReference || normalizedPhone,
           network: detectedNetwork,
           idempotencyKey: crypto.randomUUID(),
-          macAddress: hotspotParams.macAddress || undefined,
+          macAddress: tvMac || hotspotParams.macAddress || undefined,
           clientIp: hotspotParams.clientIp || undefined,
           loginUrl: hotspotParams.loginUrl || undefined,
           routerId: hotspotParams.routerId || undefined,
@@ -935,7 +974,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       // Yo! Uganda sends a direct USSD push — no checkout redirect needed.
       // Just show the PIN prompt message and start polling.
-      if (payment.activation && hasUsableReconnect(payment)) {
+      if (selectedIsTvPackage && payment.activation) {
+        setCheckoutOpen(false)
+        setStatusMessage(`Payment confirmed. Smart TV ${tvMac} is activated. Turn the TV WiFi off and on once.`)
+        await loadContext(payment.phoneNumber, portalToken, hotspotParams)
+      } else if (payment.activation && hasUsableReconnect(payment)) {
         // Instantly confirmed (rare edge case)
         setCheckoutOpen(false)
         await handleCompletedPayment(payment)
@@ -943,7 +986,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         setStatusMessage('Payment confirmed. Preparing router login now...')
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       } else {
-        setStatusMessage('Enter your Mobile Money PIN on your phone to approve.')
+        setStatusMessage(selectedIsTvPackage ? 'Enter your Mobile Money PIN. After approval, reconnect the Smart TV to WiFi.' : 'Enter your Mobile Money PIN on your phone to approve.')
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       }
     } catch (error) {
@@ -1266,6 +1309,28 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 </button>
               </div>
 
+              <label className={`mt-3 flex items-center gap-2 text-xs font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>
+                <input
+                  type="checkbox"
+                  checked={voucherTvMode}
+                  onChange={(event) => setVoucherTvMode(event.target.checked)}
+                />
+                Connect this voucher to a Smart TV
+              </label>
+              {voucherTvMode && (
+                <div className="mt-2">
+                  <input
+                    value={tvMacAddress}
+                    onChange={(event) => setTvMacAddress(event.target.value)}
+                    placeholder="TV wireless MAC address, e.g. AA:BB:CC:DD:EE:FF"
+                    className={`w-full rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`}
+                  />
+                  <p className={`mt-1 text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    Find it on the TV under Settings - Network - WiFi details. After activation, turn TV WiFi off and on.
+                  </p>
+                </div>
+              )}
+
               <Link href="/login" className={`mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border px-4 py-2 text-xs font-medium ${portalStyle.link}`}>
                 <LogIn className="h-3 w-3" />
                 Already bought? Find My Voucher
@@ -1358,6 +1423,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h2 className="text-lg font-extrabold text-slate-950">Pay {formatCurrency(selectedPackage.amountUgx)}</h2>
+                        {selectedIsTvPackage && (
+                          <p className="mt-1 text-xs font-semibold text-blue-700">This payment activates the Smart TV MAC address, not this phone.</p>
+                        )}
                         <p className="mt-1 text-sm text-slate-600">{selectedPackage.name} · {formatDuration(selectedPackage.durationMinutes)}</p>
                       </div>
                       <button type="button" onClick={() => {
@@ -1377,7 +1445,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                           <Loader2 className="h-4 w-4 animate-spin" />
                           {statusMessage}
                         </div>
-                        <div className={`mt-1 text-xs ${portalStyle.noticeText}`}>This page will auto-connect once approved.</div>
+                        <div className={`mt-1 text-xs ${portalStyle.noticeText}`}>
+                          {selectedIsTvPackage ? 'After approval, reconnect the Smart TV to WiFi.' : 'This page will auto-connect once approved.'}
+                        </div>
                       </div>
                     )}
 
@@ -1410,6 +1480,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                           )}
                         </div>
                       </label>
+
+                      {selectedIsTvPackage && (
+                        <label className="block text-sm font-bold text-slate-700">
+                          Smart TV Wireless MAC Address
+                          <input
+                            value={tvMacAddress}
+                            onChange={(event) => setTvMacAddress(event.target.value)}
+                            placeholder="AA:BB:CC:DD:EE:FF"
+                            required
+                            className={`mt-2 w-full rounded-lg border bg-white px-3 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
+                          />
+                          <span className="mt-1 block text-xs font-medium text-slate-500">
+                            On most TVs: Settings - Network - WiFi details. After payment, turn TV WiFi off and on.
+                          </span>
+                        </label>
+                      )}
 
                       <button
                         type="submit"

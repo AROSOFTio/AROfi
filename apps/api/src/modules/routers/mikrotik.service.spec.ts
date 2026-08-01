@@ -34,7 +34,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=1m')
-    expect(script).toContain('login-by=cookie,http-pap')
+    expect(script).toContain('login-by=mac,cookie,http-pap')
     expect(script).toContain('/ip hotspot ip-binding remove [find type=bypassed]')
     expect(script).toContain('keep-result=no')
     expect(script).toContain('arofiHeartbeatUrl')
