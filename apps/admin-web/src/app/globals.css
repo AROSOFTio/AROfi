@@ -7354,21 +7354,25 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
 /* Mobile-first dashboard tightening: most operators use this on phones. */
 .dashboard-wallet-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 1fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(250px, 0.95fr) minmax(270px, 1fr) minmax(270px, 1fr);
   gap: 12px;
   align-items: stretch;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .wallet-showcase-card {
   isolation: isolate;
   min-height: 188px !important;
   padding: 18px !important;
-  border-color: rgba(20, 184, 166, 0.36) !important;
+  border-color: var(--arofi-theme-accent-border) !important;
   border-radius: 16px !important;
   background:
-    linear-gradient(135deg, #07111f 0%, #123c74 54%, #0f766e 100%) !important;
-  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.18), inset 0 1px 0 rgba(255,255,255,0.18) !important;
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--arofi-theme-accent) 88%, #0f172a 12%) 0%,
+      color-mix(in srgb, var(--arofi-theme-accent-hover) 84%, #0f172a 16%) 62%,
+      color-mix(in srgb, var(--arofi-theme-accent) 78%, #ffffff 22%) 100%) !important;
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--arofi-theme-accent) 24%, transparent), inset 0 1px 0 rgba(255,255,255,0.18) !important;
   transform: translateZ(0);
 }
 
@@ -7379,8 +7383,8 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   z-index: 0;
   opacity: 0.28;
   background-image:
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 1px, transparent 1px 18px),
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.12) 0 1px, transparent 1px 18px);
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.16) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.1) 0 1px, transparent 1px 18px);
   mask-image: linear-gradient(135deg, transparent 0%, #000 24%, #000 78%, transparent 100%);
 }
 
@@ -7523,24 +7527,24 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   }
 
   .dashboard-header-compact {
-    align-items: stretch !important;
+    align-items: center !important;
     gap: 10px !important;
   }
 
   .quick-menu {
-    width: 100%;
-    margin-left: 0;
+    width: auto;
+    margin-left: auto;
   }
 
   .quick-menu-trigger {
-    width: 100%;
+    width: auto;
     min-height: 42px;
   }
 
   .quick-menu-panel {
-    left: 0;
-    right: auto;
-    width: 100%;
+    left: auto;
+    right: 0;
+    width: min(78vw, 240px);
   }
 
   .dashboard-insights-row {
@@ -7562,11 +7566,19 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   }
 
   .dashboard-wallet-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
   }
 
   .dashboard-wallet-grid > :last-child {
     grid-column: auto;
+  }
+
+  .dashboard-wallet-grid > * {
+    scroll-snap-align: start;
   }
 
   .wallet-showcase-card {
@@ -7575,16 +7587,15 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
 }
 
 @media (max-width: 430px) {
-  .dashboard-insights-row {
-    grid-template-columns: 1fr !important;
-  }
+  .dashboard-insights-row { grid-template-columns: 1fr 1fr !important; }
 
   .tenant-stat-compact {
     min-height: 104px !important;
   }
 
   .system-insights-card-metrics {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(3, minmax(92px, 1fr)) !important;
+    overflow-x: auto;
   }
 
   .sic-metric {
