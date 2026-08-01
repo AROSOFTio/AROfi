@@ -5,6 +5,7 @@ import {
   RouterStatus,
 } from '@prisma/client'
 import * as net from 'net'
+import * as tls from 'tls'
 
 type ProvisioningInput = {
   routerName: string
@@ -94,6 +95,43 @@ export class MikrotikService {
 
       socket.connect(port, host)
     })
+  }
+
+  async removeHotspotActiveSession(input: {
+    host: string
+    port: number
+    useTls?: boolean
+    username: string
+    password: string
+    hotspotUsername?: string | null
+    macAddress?: string | null
+    timeoutMs?: number
+  }) {
+    const client = await RouterOsApiClient.connect({
+      host: input.host,
+      port: input.port,
+      useTls: input.useTls,
+      timeoutMs: input.timeoutMs ?? 5000,
+    })
+
+    try {
+      await client.login(input.username, input.password)
+      const rows = await client.command([
+        '/ip/hotspot/active/print',
+        '=.proplist=.id,user,mac-address,address',
+        ...(input.hotspotUsername ? [`?user=${input.hotspotUsername}`] : []),
+        ...(input.macAddress ? [`?mac-address=${this.normalizeMac(input.macAddress) ?? input.macAddress}`] : []),
+      ])
+      const ids = rows.map((row) => row['.id']).filter((id): id is string => Boolean(id))
+
+      for (const id of ids) {
+        await client.command(['/ip/hotspot/active/remove', `=numbers=${id}`])
+      }
+
+      return { removed: ids.length }
+    } finally {
+      client.close()
+    }
   }
 
   // Single command the operator pastes into WinBox Terminal. Built server-side
@@ -1103,6 +1141,17 @@ export class MikrotikService {
     return value.replace(/"/g, '\\"')
   }
 
+  private normalizeMac(value?: string | null) {
+    if (!value) {
+      return null
+    }
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return null
+    }
+    return compact.match(/.{1,2}/g)?.join(':') ?? null
+  }
+
   private escapeHtml(value: string) {
     return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
   }
@@ -1175,5 +1224,183 @@ export class MikrotikService {
       `  :if ($arofiTmpIface != "" && $arofiTmpIface != "${excluded}") do={ :set ${varName} $arofiTmpIface }`,
       `}`,
     ]
+  }
+}
+
+type RouterOsApiConnectInput = {
+  host: string
+  port: number
+  useTls?: boolean
+  timeoutMs: number
+}
+
+class RouterOsApiClient {
+  private constructor(
+    private readonly socket: net.Socket | tls.TLSSocket,
+    private readonly timeoutMs: number,
+  ) {}
+
+  static connect(input: RouterOsApiConnectInput) {
+    return new Promise<RouterOsApiClient>((resolve, reject) => {
+      const socket = input.useTls
+        ? tls.connect({
+            host: input.host,
+            port: input.port,
+            rejectUnauthorized: false,
+          })
+        : net.createConnection({ host: input.host, port: input.port })
+      const timer = setTimeout(() => {
+        socket.destroy()
+        reject(new Error('RouterOS API connection timed out'))
+      }, input.timeoutMs)
+
+      socket.once('connect', () => {
+        clearTimeout(timer)
+        socket.setTimeout(input.timeoutMs)
+        resolve(new RouterOsApiClient(socket, input.timeoutMs))
+      })
+      socket.once('error', (error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+      socket.once('timeout', () => {
+        socket.destroy()
+        reject(new Error('RouterOS API request timed out'))
+      })
+    })
+  }
+
+  async login(username: string, password: string) {
+    await this.command(['/login', `=name=${username}`, `=password=${password}`])
+  }
+
+  async command(words: string[]) {
+    await this.writeSentence(words)
+    return this.readReply()
+  }
+
+  close() {
+    this.socket.destroy()
+  }
+
+  private writeSentence(words: string[]) {
+    return new Promise<void>((resolve, reject) => {
+      const chunks = words.flatMap((word) => [this.encodeLength(Buffer.byteLength(word)), Buffer.from(word)])
+      chunks.push(Buffer.from([0]))
+      this.socket.write(Buffer.concat(chunks), (error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve()
+        }
+      })
+    })
+  }
+
+  private async readReply() {
+    const rows: Array<Record<string, string>> = []
+    while (true) {
+      const sentence = await this.readSentence()
+      const marker = sentence[0]
+      if (marker === '!done') {
+        return rows
+      }
+      if (marker === '!trap' || marker === '!fatal') {
+        const message =
+          sentence
+            .map((word) => word.match(/^=message=(.*)$/)?.[1])
+            .find(Boolean) ?? marker
+        throw new Error(`RouterOS API error: ${message}`)
+      }
+      if (marker === '!re') {
+        const row: Record<string, string> = {}
+        for (const word of sentence.slice(1)) {
+          const match = word.match(/^=([^=]+)=(.*)$/)
+          if (match) {
+            row[match[1]] = match[2]
+          }
+        }
+        rows.push(row)
+      }
+    }
+  }
+
+  private async readSentence() {
+    const words: string[] = []
+    while (true) {
+      const length = await this.readLength()
+      if (length === 0) {
+        return words
+      }
+      words.push((await this.readBytes(length)).toString('utf8'))
+    }
+  }
+
+  private async readLength() {
+    const first = (await this.readBytes(1))[0]
+    if ((first & 0x80) === 0x00) return first
+    if ((first & 0xc0) === 0x80) return ((first & ~0xc0) << 8) + (await this.readBytes(1))[0]
+    if ((first & 0xe0) === 0xc0) {
+      const rest = await this.readBytes(2)
+      return ((first & ~0xe0) << 16) + (rest[0] << 8) + rest[1]
+    }
+    if ((first & 0xf0) === 0xe0) {
+      const rest = await this.readBytes(3)
+      return ((first & ~0xf0) << 24) + (rest[0] << 16) + (rest[1] << 8) + rest[2]
+    }
+    const rest = await this.readBytes(4)
+    return (rest[0] << 24) + (rest[1] << 16) + (rest[2] << 8) + rest[3]
+  }
+
+  private readBytes(length: number) {
+    return new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = []
+      let total = 0
+      const timer = setTimeout(() => {
+        cleanup()
+        reject(new Error('RouterOS API read timed out'))
+      }, this.timeoutMs)
+      const cleanup = () => {
+        clearTimeout(timer)
+        this.socket.off('data', onData)
+        this.socket.off('error', onError)
+        this.socket.off('close', onClose)
+      }
+      const onData = (chunk: Buffer) => {
+        chunks.push(chunk)
+        total += chunk.length
+        if (total >= length) {
+          cleanup()
+          const buffer = Buffer.concat(chunks, total)
+          const wanted = buffer.subarray(0, length)
+          const extra = buffer.subarray(length)
+          if (extra.length > 0) {
+            this.socket.unshift(extra)
+          }
+          resolve(wanted)
+        }
+      }
+      const onError = (error: Error) => {
+        cleanup()
+        reject(error)
+      }
+      const onClose = () => {
+        cleanup()
+        reject(new Error('RouterOS API connection closed'))
+      }
+      this.socket.on('data', onData)
+      this.socket.once('error', onError)
+      this.socket.once('close', onClose)
+    })
+  }
+
+  private encodeLength(length: number) {
+    if (length < 0x80) return Buffer.from([length])
+    if (length < 0x4000) return Buffer.from([(length >> 8) | 0x80, length & 0xff])
+    if (length < 0x200000) return Buffer.from([(length >> 16) | 0xc0, (length >> 8) & 0xff, length & 0xff])
+    if (length < 0x10000000) {
+      return Buffer.from([(length >> 24) | 0xe0, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff])
+    }
+    return Buffer.from([0xf0, (length >> 24) & 0xff, (length >> 16) & 0xff, (length >> 8) & 0xff, length & 0xff])
   }
 }

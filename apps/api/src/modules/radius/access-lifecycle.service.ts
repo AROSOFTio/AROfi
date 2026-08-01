@@ -18,6 +18,8 @@ import { RealtimeEventsService } from '../events/realtime-events.service'
 import { RadiusCredentialService } from './radius-credential.service'
 import { RadiusSignalSyncService } from './radius-signal-sync.service'
 import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
+import { MikrotikService } from '../routers/mikrotik.service'
+import { RouterCredentialsService } from '../routers/router-credentials.service'
 
 // Failed CoA/Disconnect-Requests retry with exponential backoff before being
 // declared FAILED (which raises an operator alert). Base delay doubles per
@@ -38,6 +40,8 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     private readonly mailService: MailService,
     private readonly signalSync: RadiusSignalSyncService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly mikrotikService: MikrotikService,
+    private readonly routerCredentialsService: RouterCredentialsService,
   ) { }
 
   // Best-effort, fire-and-forget: a slow/broken mail server must never delay
@@ -399,10 +403,20 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
             lastError = err
           }
         }
+        let routerLogoutRemoved = 0
+        if (!delivered) {
+          try {
+            routerLogoutRemoved = await this.logoutHotspotActiveSession(attempt)
+            delivered = routerLogoutRemoved > 0
+          } catch (routerError) {
+            lastError = routerError
+          }
+        }
+
         if (!delivered) {
           throw lastError instanceof Error
             ? lastError
-            : new Error(`All CoA targets failed (${targets.join(', ')})`)
+            : new Error(`All CoA/API logout targets failed (${targets.join(', ')})`)
         }
 
         await this.prisma.disconnectionAttempt.update({
@@ -410,7 +424,9 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
           data: {
             status: DisconnectionStatus.SUCCESS,
             completedAt: new Date(),
-            message: 'RADIUS Disconnect-Request sent successfully',
+            message: routerLogoutRemoved > 0
+              ? `RouterOS HotSpot active session removed (${routerLogoutRemoved}) after CoA fallback`
+              : 'RADIUS Disconnect-Request sent successfully',
           },
         })
         this.realtimeEvents.publish('disconnect.succeeded', {
@@ -427,6 +443,54 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         await this.handleDisconnectFailure(attempt, error)
       }
     }
+  }
+
+  private async logoutHotspotActiveSession(attempt: {
+    routerId: string | null
+    username: string | null
+    macAddress?: string | null
+  }) {
+    if (!attempt.routerId) {
+      throw new Error('RouterOS logout fallback unavailable: no router is linked to the session')
+    }
+
+    const router = await this.prisma.router.findUnique({
+      where: { id: attempt.routerId },
+      select: {
+        host: true,
+        apiPort: true,
+        connectionMode: true,
+        username: true,
+        passwordCiphertext: true,
+        remoteSstpIp: true,
+      },
+    })
+    if (!router) {
+      throw new Error('RouterOS logout fallback unavailable: router not found')
+    }
+
+    const password = this.routerCredentialsService.decrypt(router.passwordCiphertext)
+    const targetHost = router.remoteSstpIp || router.host
+    if (!targetHost) {
+      throw new Error('RouterOS logout fallback unavailable: router has no management host')
+    }
+
+    const result = await this.mikrotikService.removeHotspotActiveSession({
+      host: targetHost,
+      port: router.apiPort,
+      useTls: router.connectionMode === 'ROUTEROS_API_SSL',
+      username: router.username,
+      password,
+      hotspotUsername: attempt.username,
+      macAddress: attempt.macAddress,
+      timeoutMs: 5000,
+    })
+
+    if (result.removed <= 0) {
+      throw new Error('RouterOS logout fallback found no matching active HotSpot session')
+    }
+
+    return result.removed
   }
 
   // A failed CoA retries with exponential backoff; only after the retry

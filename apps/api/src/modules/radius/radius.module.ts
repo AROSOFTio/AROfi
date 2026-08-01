@@ -9,6 +9,8 @@ import { AccessLifecycleService } from './access-lifecycle.service'
 import { RadiusDbListenerService } from './radius-db-listener.service'
 import { RadiusSignalSyncService } from './radius-signal-sync.service'
 import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
+import { MikrotikService } from '../routers/mikrotik.service'
+import { RouterCredentialsService } from '../routers/router-credentials.service'
 
 @Module({
   imports: [AuthModule, MailModule],
@@ -21,6 +23,8 @@ import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.
     RadiusDbListenerService,
     AccessLifecycleService,
     YoUgandaDisbursementService,
+    MikrotikService,
+    RouterCredentialsService,
   ],
   exports: [RadiusService, RadiusCredentialService, RadiusAuthorizationPolicyService],
 })

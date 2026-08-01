@@ -3,6 +3,7 @@ import {
   PackageActivationStatus,
   Prisma,
   RadiusCredentialStatus,
+  SessionStatus,
   SuspiciousAccessAttemptType,
 } from '@prisma/client'
 
@@ -70,6 +71,28 @@ export class RadiusAuthorizationPolicyService {
     } else if (boundMac !== observedMac) {
       await this.recordSuspicious(tx, activation, input, SuspiciousAccessAttemptType.SECOND_DEVICE, 'Credential attempted from a second MAC address')
       return { accepted: false, reason: 'Credential is already bound to another device', activation }
+    }
+
+    const concurrentSession = await tx.networkSession.findFirst({
+      where: {
+        username: input.username,
+        status: SessionStatus.ACTIVE,
+        macAddress: { not: observedMac },
+      },
+      select: {
+        id: true,
+        macAddress: true,
+      },
+    })
+    if (concurrentSession) {
+      await this.recordSuspicious(
+        tx,
+        activation,
+        input,
+        SuspiciousAccessAttemptType.SECOND_DEVICE,
+        `Concurrent session exists on another MAC address (${concurrentSession.macAddress ?? 'unknown'})`,
+      )
+      return { accepted: false, reason: 'Concurrent session exists for another device', activation }
     }
 
     // Every credential is locked to exactly one MAC, full stop. Packages with

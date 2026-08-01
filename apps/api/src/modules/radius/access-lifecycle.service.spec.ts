@@ -47,12 +47,21 @@ function buildHarness() {
       count: jest.fn().mockResolvedValue(0),
     },
     router: {
+      findUnique: jest.fn().mockResolvedValue({
+        host: '198.51.100.10',
+        apiPort: 8728,
+        connectionMode: 'ROUTEROS_API',
+        username: 'admin',
+        passwordCiphertext: 'ciphertext',
+        remoteSstpIp: '10.8.0.2',
+      }),
       update: jest.fn().mockResolvedValue({}),
     },
     packageActivation: {
       findMany: jest.fn().mockResolvedValue([activation]),
     },
     disconnectionAttempt: {
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({}),
     },
     auditLog: {
@@ -70,6 +79,12 @@ function buildHarness() {
   }
   const realtimeEvents = { publish: jest.fn() }
   const signalSync = { syncRecent: jest.fn().mockResolvedValue(undefined) }
+  const mikrotikService = {
+    removeHotspotActiveSession: jest.fn().mockResolvedValue({ removed: 1 }),
+  }
+  const routerCredentialsService = {
+    decrypt: jest.fn().mockReturnValue('router-password'),
+  }
 
   const service = new AccessLifecycleService(
     prisma as never,
@@ -78,9 +93,11 @@ function buildHarness() {
     mailService as never,
     signalSync as never,
     realtimeEvents as never,
+    mikrotikService as never,
+    routerCredentialsService as never,
   )
 
-  return { service, prisma, tx, radiusCredentialService, mailService, realtimeEvents, activation, session }
+  return { service, prisma, tx, radiusCredentialService, mailService, realtimeEvents, activation, session, mikrotikService, routerCredentialsService }
 }
 
 describe('AccessLifecycleService bundle expiry', () => {
@@ -194,6 +211,40 @@ describe('AccessLifecycleService disconnect retries and alerts', () => {
     expect(publishedTypes).toContain('disconnect.failed')
     expect(publishedTypes).toContain('alert')
     expect(mailService.sendOperationalAlertEmail).toHaveBeenCalled()
+  })
+
+  it('can remove a live MikroTik HotSpot session through RouterOS API fallback', async () => {
+    const { service, prisma, mikrotikService, routerCredentialsService } = buildHarness()
+
+    const removed = await (
+      service as never as {
+        logoutHotspotActiveSession: (attempt: {
+          routerId: string
+          username: string
+          macAddress: string
+        }) => Promise<number>
+      }
+    ).logoutHotspotActiveSession({
+      routerId: 'router-1',
+      username: 'arofi-user',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+    })
+
+    expect(removed).toBe(1)
+    expect(prisma.router.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'router-1' } }),
+    )
+    expect(routerCredentialsService.decrypt).toHaveBeenCalledWith('ciphertext')
+    expect(mikrotikService.removeHotspotActiveSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: '10.8.0.2',
+        port: 8728,
+        username: 'admin',
+        password: 'router-password',
+        hotspotUsername: 'arofi-user',
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+      }),
+    )
   })
 })
 
