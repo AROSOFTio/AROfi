@@ -210,7 +210,8 @@ export class RadiusSignalSyncService {
       // billed correctly while the dashboard's "Active Users" stayed at 0
       // forever. Recompute it here whenever a session's ACTIVE/CLOSED status
       // actually changes, so it reflects reality within one accounting cycle.
-      if (!existing || existing.status !== sessionStatus) {
+      const affectsLiveCount = existing?.status === SessionStatus.ACTIVE || sessionStatus === SessionStatus.ACTIVE
+      if (affectsLiveCount && (!existing || existing.status !== sessionStatus)) {
         const liveCount = await this.prisma.networkSession.count({
           where: { routerId: router.id, status: SessionStatus.ACTIVE, lastAccountingAt: { gte: accountingLiveCutoff(now) } },
         })
@@ -414,8 +415,8 @@ export class RadiusSignalSyncService {
 
     const normalizedUsername = username.trim()
     const cred = await this.prisma.radiusCredential.findFirst({
-      where: { username: normalizedUsername },
-      select: { routerId: true, tenantId: true, activationId: true },
+      where: { username: { equals: normalizedUsername, mode: 'insensitive' } },
+      select: { routerId: true, tenantId: true, activationId: true, activation: { select: { routerId: true } } },
     })
     const activationFromUsername =
       cred
@@ -427,17 +428,9 @@ export class RadiusSignalSyncService {
 
     const tenantId = cred?.tenantId ?? activationFromUsername?.tenantId ?? null
 
-    let routerId = cred?.routerId ?? activationFromUsername?.routerId ?? null
-
-    // QR-scan/portal redemptions often have no routerKey, so the credential
-    // carries routerId=null. Fall back to the activation's router.
-    if (!routerId && cred?.activationId) {
-      const activation = await this.prisma.packageActivation.findUnique({
-        where: { id: cred.activationId },
-        select: { routerId: true },
-      })
-      routerId = activation?.routerId ?? null
-    }
+    // QR-scan/portal redemptions often have no routerKey on the credential.
+    // The activation is the durable source of the router that sold the access.
+    let routerId = cred?.routerId ?? cred?.activation?.routerId ?? activationFromUsername?.routerId ?? null
 
     // Router-generated accounting rows sometimes use the router UUID as the
     // username (for example, when MikroTik reports this as a NAS client).

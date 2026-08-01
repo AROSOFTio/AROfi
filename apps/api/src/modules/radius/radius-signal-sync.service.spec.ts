@@ -220,7 +220,14 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
       existingSession: null,
     })
 
-    await service.processAcctRow(buildAcctRow({ username: 'router-1' }) as never)
+    prisma.router.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'router-1' })
+    prisma.packageActivation.findFirst
+      .mockResolvedValueOnce({ id: 'activation-1', voucherRedemptionId: null })
+      .mockResolvedValueOnce(null)
+
+    await service.processAcctRow(buildAcctRow({ username: 'router-router-1', nasipaddress: '192.0.2.250' }) as never)
 
     expect(prisma.router.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({

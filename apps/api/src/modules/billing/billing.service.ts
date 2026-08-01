@@ -348,7 +348,7 @@ export class BillingService {
         ],
       },
     } satisfies Prisma.BillingTransactionWhereInput
-    const [transactions, wallets, ledgerEntries, disbursements, activeUsers, onlineRouters, dataUsage, todaySales, monthSales] = await Promise.all([
+    const [transactions, wallets, ledgerEntries, disbursements, activeUsers, activeNetworkSessions, onlineRouters, dataUsage, todaySales, monthSales] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: transactionWhere,
         include: this.transactionInclude,
@@ -417,6 +417,13 @@ export class BillingService {
         },
         _sum: {
           activeSessionCount: true,
+        },
+      }),
+      this.prisma.networkSession.count({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          status: 'ACTIVE',
+          lastAccountingAt: { gte: routerActiveUserCutoff },
         },
       }),
       // router.status is a persisted column that's only written at onboarding
@@ -522,7 +529,7 @@ export class BillingService {
         pendingWithdrawalUgx,
         completedWithdrawalUgx,
         failedWithdrawalUgx,
-        activeUsers: activeUsers._sum.activeSessionCount ?? 0,
+        activeUsers: Math.max(activeUsers._sum.activeSessionCount ?? 0, activeNetworkSessions),
         onlineRouters,
         dataUsedMb: Math.round(((inputBytes + outputBytes) / (1024 * 1024)) * 100) / 100,
       },

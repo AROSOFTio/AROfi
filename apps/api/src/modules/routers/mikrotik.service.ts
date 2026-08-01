@@ -562,14 +562,17 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
-    // 2s production default: liveness recovers within a few seconds even for
-    // routers behind NAT. Active user counts still come from RADIUS/accounting.
-    const intervalSeconds = 2
-    // Static URL only: RouterOS 7.23 can choke on saved url=("..." . $var)
-    // heartbeat scripts.
+    // 1s heartbeat: router-side /ip hotspot active is the fastest source of
+    // truth for "who is online right now", especially when accounting stop
+    // rows arrive before the router has fully removed a client.
+    const intervalSeconds = 1
     const source =
-      `:do { /tool fetch url=${heartbeatUrl} check-certificate=no keep-result=no } ` +
-      `on-error={ :do { /tool fetch url=${fallbackHeartbeatUrl} keep-result=no } on-error={} }`
+      `:local arofiActiveUsers 0; ` +
+      `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={}; ` +
+      `:local arofiHeartbeatUrl "${heartbeatUrl}?activeUsers=$arofiActiveUsers"; ` +
+      `:local arofiHeartbeatFallback "${fallbackHeartbeatUrl}?activeUsers=$arofiActiveUsers"; ` +
+      `:do { /tool fetch url=$arofiHeartbeatUrl check-certificate=no keep-result=no } ` +
+      `on-error={ :do { /tool fetch url=$arofiHeartbeatFallback keep-result=no } on-error={} }`
     return [
       `/system script remove [find name="arofi-heartbeat"]`,
       `/system script add name="arofi-heartbeat" source="${this.escape(source)}"`,

@@ -40,7 +40,7 @@ import { RadiusCredentialService } from '../radius/radius-credential.service'
 @Injectable()
 export class RoutersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutersService.name)
-  // The router heartbeats every 2s (see MikrotikService.buildHeartbeatScheduler).
+  // The router heartbeats every 1s (see MikrotikService.buildHeartbeatScheduler).
   // State machine, driven by the freshest signal of any kind:
   //   LIVE    — signal within ROUTER_LIVE_WINDOW_SECONDS (~2 missed beats)
   //   STALE   — suspected offline: no signal within the live window but
@@ -462,13 +462,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const credentialsForOpenSessions = openSessionUsernames.length
       ? await this.prisma.radiusCredential.findMany({
           where: { username: { in: openSessionUsernames }, ...(tenantId ? { tenantId } : {}) },
-          select: { username: true, routerId: true },
+          select: { username: true, routerId: true, activation: { select: { routerId: true } } },
         })
       : []
     const routerIdByUsername = new Map(
       credentialsForOpenSessions
-        .filter((credential): credential is { username: string; routerId: string } => Boolean(credential.routerId))
-        .map((credential) => [credential.username, credential.routerId]),
+        .map((credential) => [credential.username, credential.routerId ?? credential.activation.routerId ?? null] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
     )
     const activeAccountingByRouterId = new Map<string, number>()
     for (const row of recentAccountingRows) {

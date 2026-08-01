@@ -190,7 +190,7 @@ export class SessionsService {
 
     return {
       summary: {
-        activeSessions: routerActiveUsers._sum.activeSessionCount ?? 0,
+        activeSessions: Math.max(routerActiveUsers._sum.activeSessionCount ?? 0, activeSessions.length),
         totalSessionsToday: sessionsToday.length,
         dataUsedTodayMb: totalDataTodayMb,
         averageSessionMinutes,
