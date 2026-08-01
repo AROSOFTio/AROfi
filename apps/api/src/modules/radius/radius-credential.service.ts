@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import {
   PackageActivationStatus,
   Prisma,
   RadiusCredentialStatus,
 } from '@prisma/client'
 import { randomBytes } from 'crypto'
+import { PrismaService } from '../../prisma.service'
 
 type ProvisionInput = {
   tenantId: string
@@ -16,8 +17,20 @@ type ProvisionInput = {
 }
 
 @Injectable()
-export class RadiusCredentialService {
+export class RadiusCredentialService implements OnModuleInit {
   private readonly logger = new Logger(RadiusCredentialService.name)
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    try {
+      await this.repairSmartTvMacLoginCredentials()
+    } catch (error) {
+      this.logger.warn(
+        `Smart TV MAC-login startup repair failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
 
   async provisionForActivation(tx: Prisma.TransactionClient, input: ProvisionInput) {
     const activation = await tx.packageActivation.findUnique({
@@ -173,5 +186,119 @@ export class RadiusCredentialService {
     const minutes = String(date.getUTCMinutes()).padStart(2, '0')
     const seconds = String(date.getUTCSeconds()).padStart(2, '0')
     return `${day} ${month} ${year} ${hours}:${minutes}:${seconds} UTC`
+  }
+
+  private async repairSmartTvMacLoginCredentials() {
+    const now = new Date()
+    const activations = await this.prisma.packageActivation.findMany({
+      where: {
+        status: PackageActivationStatus.ACTIVE,
+        endsAt: { gt: now },
+        boundMacAddress: { not: null },
+        package: {
+          OR: [
+            { name: { contains: 'tv', mode: 'insensitive' } },
+            { name: { contains: 'smart', mode: 'insensitive' } },
+            { name: { contains: 'stream', mode: 'insensitive' } },
+            { code: { contains: 'tv', mode: 'insensitive' } },
+            { description: { contains: 'tv', mode: 'insensitive' } },
+            { description: { contains: 'smart', mode: 'insensitive' } },
+            { description: { contains: 'stream', mode: 'insensitive' } },
+          ],
+        },
+      },
+      include: { radiusCredential: true },
+      take: 200,
+    })
+
+    let repaired = 0
+    for (const activation of activations) {
+      const mac = this.normalizeMac(activation.boundMacAddress)
+      if (!mac) continue
+      if (activation.radiusUsername === mac && activation.radiusCredential?.username === mac) continue
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const activeConflict = await tx.radiusCredential.findFirst({
+            where: {
+              username: mac,
+              activationId: { not: activation.id },
+              status: RadiusCredentialStatus.ACTIVE,
+              expiresAt: { gt: now },
+            },
+            select: { activationId: true },
+          })
+          if (activeConflict) return
+
+          await tx.radCheck.deleteMany({ where: { username: mac } })
+          await tx.radReply.deleteMany({ where: { username: mac } })
+          await tx.radiusCredential.deleteMany({
+            where: {
+              username: mac,
+              activationId: { not: activation.id },
+              OR: [{ expiresAt: { lte: now } }, { status: { not: RadiusCredentialStatus.ACTIVE } }],
+            },
+          })
+          await tx.packageActivation.updateMany({
+            where: {
+              radiusUsername: mac,
+              id: { not: activation.id },
+              OR: [{ endsAt: { lte: now } }, { status: { not: PackageActivationStatus.ACTIVE } }],
+            },
+            data: { radiusUsername: null, radiusPassword: null },
+          })
+          await tx.packageActivation.update({
+            where: { id: activation.id },
+            data: { radiusUsername: mac, radiusPassword: mac },
+          })
+          await tx.radiusCredential.upsert({
+            where: { activationId: activation.id },
+            update: {
+              username: mac,
+              password: mac,
+              status: RadiusCredentialStatus.ACTIVE,
+              boundMacAddress: mac,
+              routerId: activation.routerId,
+              expiresAt: activation.endsAt,
+            },
+            create: {
+              tenantId: activation.tenantId,
+              activationId: activation.id,
+              username: mac,
+              password: mac,
+              status: RadiusCredentialStatus.ACTIVE,
+              boundMacAddress: mac,
+              routerId: activation.routerId,
+              expiresAt: activation.endsAt,
+            },
+          })
+          await tx.radCheck.createMany({
+            data: [
+              { username: mac, attribute: 'Cleartext-Password', op: ':=', value: mac },
+              { username: mac, attribute: 'Expiration', op: ':=', value: this.formatRadiusExpiration(activation.endsAt) },
+            ],
+          })
+          await tx.radReply.create({
+            data: {
+              username: mac,
+              attribute: 'Session-Timeout',
+              op: '=',
+              value: Math.max(1, Math.floor((activation.endsAt.getTime() - Date.now()) / 1000)).toString(),
+            },
+          })
+        })
+        repaired += 1
+      } catch (error) {
+        this.logger.warn(
+          `Smart TV MAC-login repair skipped for activation=${activation.id} mac=${mac}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+      }
+    }
+
+    if (repaired > 0) {
+      this.logger.log(`Repaired ${repaired} active Smart TV MAC-login credential(s).`)
+    }
   }
 }
