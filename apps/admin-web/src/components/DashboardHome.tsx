@@ -453,62 +453,33 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
       </div>
 
       {/* Modern Wallet Card & Withdrawal Settings Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 4 }}>
+      <div className="dashboard-wallet-grid">
         {/* Visual Credit Card Style Wallet Card */}
         <div className="wallet-showcase-card">
-          {/* Card background shape accents */}
-          <div style={{
-            position: 'absolute',
-            top: -24,
-            right: -24,
-            width: 148,
-            height: 148,
-            borderRadius: '50%',
-            background: 'rgba(37, 99, 235, 0.08)',
-            pointerEvents: 'none'
-          }} />
-          <div style={{
-            position: 'absolute',
-            bottom: -44,
-            left: -24,
-            width: 168,
-            height: 168,
-            borderRadius: '50%',
-            background: 'rgba(15, 23, 42, 0.04)',
-            pointerEvents: 'none'
-          }} />
-
           {/* Top Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="wallet-card-head">
+            <div className="wallet-card-brand">
               <Wallet size={18} />
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', opacity: 0.9 }}>AROFi WALLET</span>
+              <span>AROFi Wallet</span>
             </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(37,99,235,0.22)' }} />
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(22,163,74,0.2)', marginLeft: -9 }} />
-            </div>
+            <div className="wallet-card-chip" aria-hidden="true"><span /><span /></div>
           </div>
 
           {/* Balance */}
-          <div style={{ zIndex: 2, marginTop: 10 }}>
-            <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 500 }}>Available Balance</div>
-            <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, letterSpacing: '-0.02em' }}>
-              {formatCurrency(availableUgx)}
-            </div>
+          <div className="wallet-card-balance">
+            <span>Available balance</span>
+            <strong>{formatCurrency(availableUgx)}</strong>
           </div>
 
           {/* Footer Details */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 2, marginTop: 10 }}>
+          <div className="wallet-card-meta">
             <div>
-              <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Owner</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{session?.user.tenantName || 'Business'}</div>
+              <span>Owner</span>
+              <strong>{session?.user.tenantName || 'Business'}</strong>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 9, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payout Network</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                {primaryNumber ? `${primaryNumber.network} Line` : 'None Configured'}
-              </div>
+            <div>
+              <span>Payout</span>
+              <strong>{primaryNumber ? `${primaryNumber.network} Line` : 'Not set'}</strong>
             </div>
           </div>
         </div>
