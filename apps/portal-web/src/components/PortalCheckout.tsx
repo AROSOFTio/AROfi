@@ -67,6 +67,15 @@ function normalizeMacInput(value: string) {
   return compact.match(/.{1,2}/g)?.join(':') ?? ''
 }
 
+function formatMacInput(value: string) {
+  return value
+    .replace(/[^a-fA-F0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 12)
+    .match(/.{1,2}/g)
+    ?.join(':') ?? ''
+}
+
 function isMultiDevicePackage(pkg?: PortalPackage | null) {
   return (pkg?.deviceLimit ?? 1) > 1
 }
@@ -535,6 +544,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           routerId: hotspotParams.routerId || undefined,
           routerKey: hotspotParams.routerKey || undefined,
           hotspotServerName: hotspotParams.hotspotServerName || undefined,
+          targetDevice: tvMac ? 'SMART_TV' : undefined,
         }),
       })
 
@@ -547,7 +557,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       const redemption = body as PortalRedeemVoucherResponse
       setVoucherCode('')
       if (tvMac) {
-        setStatusMessage(`Voucher ${redemption.voucher.code} activated for Smart TV ${tvMac}. Turn the TV WiFi off and on once.`)
+        setStatusMessage(`Voucher ${redemption.voucher.code} activated for Smart TV ${tvMac}. On the TV, open WiFi settings and select this WiFi again.`)
         setSmartTvNotice({ macAddress: tvMac, packageName: redemption.redemption.package.name, source: 'voucher' })
         await loadContext(phoneNumber || undefined, portalToken, hotspotParams)
         return
@@ -1379,12 +1389,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 <div className="mt-2">
                   <input
                     value={tvMacAddress}
-                    onChange={(event) => setTvMacAddress(event.target.value)}
+                    onChange={(event) => setTvMacAddress(formatMacInput(event.target.value))}
                     placeholder="TV wireless MAC address, e.g. AA:BB:CC:DD:EE:FF"
                     className={`w-full rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`}
                   />
                   <p className={`mt-1 text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-500'}`}>
-                    Find it on the TV under Settings - Network - WiFi details. After activation, turn TV WiFi off and on.
+                    On the TV: go to the client WiFi name, click that same WiFi name/details, then copy the Device MAC Address.
                   </p>
                 </div>
               )}
@@ -1516,14 +1526,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                           Smart TV Wireless MAC Address
                           <input
                             value={tvMacAddress}
-                            onChange={(event) => setTvMacAddress(event.target.value)}
+                            onChange={(event) => setTvMacAddress(formatMacInput(event.target.value))}
                             placeholder="AA:BB:CC:DD:EE:FF"
                             required
                             autoFocus={!selectedIsTvPackage}
                             className={`mt-2 w-full rounded-lg border bg-white px-3 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
                           />
                           <span className="mt-1 block text-xs font-medium text-slate-500">
-                            On most TVs: Settings - Network - WiFi details. Use the Wireless MAC address, then enter your Mobile Money number below.
+                            On the TV: go to the client WiFi name, click that same WiFi name/details, then copy the Device MAC Address.
                           </span>
                         </label>
                       )}

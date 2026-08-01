@@ -44,4 +44,8 @@ export class RedeemVoucherDto {
   @IsOptional()
   @IsString()
   userAgent?: string
+
+  @IsOptional()
+  @IsString()
+  targetDevice?: string
 }

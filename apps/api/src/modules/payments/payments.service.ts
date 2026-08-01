@@ -984,6 +984,9 @@ export class PaymentsService {
           reference: payment.externalReference,
         }
 
+        const paymentMacAddress = this.readMetadataString(payment.metadata, 'macAddress')
+        const smartTvCredential = paymentMacAddress && this.isSmartTvPackage(packageRecord)
+
         const activation = await this.packageActivationService.activateInTransaction(tx, {
           tenantId: payment.tenantId,
           packageId: payment.packageId,
@@ -996,7 +999,9 @@ export class PaymentsService {
           deviceLimit: packageRecord.deviceLimit,
           downloadSpeedKbps: packageRecord.downloadSpeedKbps,
           uploadSpeedKbps: packageRecord.uploadSpeedKbps,
-          boundMacAddress: this.readMetadataString(payment.metadata, 'macAddress'),
+          radiusUsername: smartTvCredential ? paymentMacAddress : undefined,
+          radiusPassword: smartTvCredential ? paymentMacAddress : undefined,
+          boundMacAddress: paymentMacAddress,
           firstSeenIp: this.readMetadataString(payment.metadata, 'clientIp'),
           routerId: this.readMetadataString(payment.metadata, 'routerId'),
           hotspotServerName: this.readMetadataString(payment.metadata, 'hotspotServerName'),
@@ -1005,12 +1010,13 @@ export class PaymentsService {
             providerReference,
             provider: payment.provider,
             method: payment.method,
-            macAddress: this.readMetadataString(payment.metadata, 'macAddress'),
+            macAddress: paymentMacAddress,
             clientIp: this.readMetadataString(payment.metadata, 'clientIp'),
             routerId: this.readMetadataString(payment.metadata, 'routerId'),
             routerKey: this.readMetadataString(payment.metadata, 'routerKey'),
             hotspotServerName: this.readMetadataString(payment.metadata, 'hotspotServerName'),
             loginUrl: this.readMetadataString(payment.metadata, 'loginUrl'),
+            targetDevice: smartTvCredential ? 'SMART_TV' : undefined,
           }),
         })
 
@@ -1806,5 +1812,11 @@ export class PaymentsService {
     )
 
     return { received: true, matched: true, processed: true, status: nextStatus }
+  }
+
+  private isSmartTvPackage(pkg?: { name?: string | null; code?: string | null; description?: string | null }) {
+    if (!pkg) return false
+    const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
+    return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
   }
 }

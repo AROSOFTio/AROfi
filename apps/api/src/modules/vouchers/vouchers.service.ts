@@ -1043,6 +1043,10 @@ export class VouchersService {
         throw new NotFoundException('Package not found for voucher redemption')
       }
 
+      const smartTvCredential =
+        normalizedMac &&
+        (dto.targetDevice?.toUpperCase() === 'SMART_TV' || this.isSmartTvPackage(packageRecord))
+
       if (!wasSold) {
         receiptInfo = {
           tenantId: voucher.tenantId,
@@ -1068,8 +1072,8 @@ export class VouchersService {
         deviceLimit: packageRecord.deviceLimit,
         downloadSpeedKbps: packageRecord.downloadSpeedKbps,
         uploadSpeedKbps: packageRecord.uploadSpeedKbps,
-        radiusUsername: voucher.code,
-        radiusPassword: voucher.code,
+        radiusUsername: smartTvCredential ? normalizedMac : voucher.code,
+        radiusPassword: smartTvCredential ? normalizedMac : voucher.code,
         boundMacAddress: normalizedMac,
         firstSeenIp: dto.clientIp,
         routerId: dto.routerId,
@@ -1081,6 +1085,7 @@ export class VouchersService {
           clientIp: dto.clientIp,
           routerId: dto.routerId,
           hotspotServerName: dto.hotspotServerName,
+          targetDevice: smartTvCredential ? 'SMART_TV' : undefined,
         } as Prisma.InputJsonValue,
       })
 
@@ -1726,6 +1731,12 @@ export class VouchersService {
     }
 
     return compact.match(/.{1,2}/g)?.join(':')
+  }
+
+  private isSmartTvPackage(pkg?: { name?: string | null; code?: string | null; description?: string | null }) {
+    if (!pkg) return false
+    const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
+    return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
   }
 
   private async refreshBatchStatus(batchId: string, tx?: Prisma.TransactionClient) {

@@ -3,6 +3,7 @@ import {
   PackageActivationSource,
   PackageActivationStatus,
   Prisma,
+  RadiusCredentialStatus,
   VoucherBatchStatus,
 } from '@prisma/client'
 import { RadiusCredentialService } from '../radius/radius-credential.service'
@@ -58,6 +59,41 @@ export class PackageActivationService {
 
     const startedAt = new Date()
     const endsAt = new Date(startedAt.getTime() + input.durationMinutes * 60 * 1000)
+    const normalizedRadiusUsername = input.radiusUsername?.trim() || null
+
+    if (normalizedRadiusUsername) {
+      const conflictingActiveCredential = await tx.radiusCredential.findFirst({
+        where: {
+          username: normalizedRadiusUsername,
+          status: RadiusCredentialStatus.ACTIVE,
+          expiresAt: { gt: startedAt },
+        },
+        select: { activationId: true },
+      })
+
+      if (conflictingActiveCredential) {
+        throw new Error('This Smart TV already has an active package. Wait for it to expire or use the existing connection.')
+      }
+
+      await tx.radCheck.deleteMany({ where: { username: normalizedRadiusUsername } })
+      await tx.radReply.deleteMany({ where: { username: normalizedRadiusUsername } })
+      await tx.radiusCredential.deleteMany({
+        where: {
+          username: normalizedRadiusUsername,
+          OR: [{ expiresAt: { lte: startedAt } }, { status: { not: RadiusCredentialStatus.ACTIVE } }],
+        },
+      })
+      await tx.packageActivation.updateMany({
+        where: {
+          radiusUsername: normalizedRadiusUsername,
+          OR: [{ endsAt: { lte: startedAt } }, { status: { not: PackageActivationStatus.ACTIVE } }],
+        },
+        data: {
+          radiusUsername: null,
+          radiusPassword: null,
+        },
+      })
+    }
 
     const activation = await tx.packageActivation.create({
       data: {

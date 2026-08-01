@@ -55,4 +55,9 @@ export class PortalRedeemVoucherDto {
   @IsString()
   @MaxLength(512)
   loginUrl?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  targetDevice?: string
 }

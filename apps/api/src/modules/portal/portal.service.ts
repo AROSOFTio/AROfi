@@ -247,6 +247,7 @@ export class PortalService {
         clientIp: dto.clientIp,
         routerId: resolvedHotspot.routerId,
         hotspotServerName: resolvedHotspot.hotspotServerName,
+        targetDevice: dto.targetDevice,
         userAgent,
       })
     } catch (error) {

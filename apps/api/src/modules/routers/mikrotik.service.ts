@@ -812,8 +812,8 @@ export class MikrotikService {
       <div class="tv-voucher" id="tvVoucherBox">
         <label><input type="checkbox" id="vTvMode" onchange="toggleVoucherTv()"> Connect voucher to a Smart TV</label>
         <div class="tv-mac-wrap">
-          <input type="text" id="vTvMac" placeholder="TV wireless MAC, e.g. AA:BB:CC:DD:EE:FF">
-          <div class="tv-note">On the TV: Settings - Network - WiFi details. Use the Wireless MAC address.</div>
+          <input type="text" id="vTvMac" placeholder="TV wireless MAC, e.g. AA:BB:CC:DD:EE:FF" oninput="this.value=fmtMac(this.value)">
+          <div class="tv-note">On the TV: go to the client WiFi name, click that same WiFi name/details, then copy the Device MAC Address.</div>
         </div>
       </div>
       <div class="find-wrap">
@@ -872,9 +872,9 @@ export class MikrotikService {
       <div class="tv-pay-fields" id="tvPayFields">
         <label for="tvmac">Smart TV wireless MAC address</label>
         <div class="iw">
-          <input type="text" id="tvmac" placeholder="AA:BB:CC:DD:EE:FF">
+          <input type="text" id="tvmac" placeholder="AA:BB:CC:DD:EE:FF" oninput="this.value=fmtMac(this.value)">
         </div>
-        <div class="tv-note" style="margin-top:-8px;margin-bottom:12px">Find it on most TVs under Settings - Network - WiFi details. After payment, open the TV WiFi list and select this WiFi again.</div>
+        <div class="tv-note" style="margin-top:-8px;margin-bottom:12px">On the TV: go to the client WiFi name, click that same WiFi name/details, then copy the Device MAC Address. After payment, select this WiFi again.</div>
       </div>
       <div class="iw">
         <input type="tel" id="phone" placeholder="07XX XXX XXX">
@@ -956,6 +956,12 @@ export class MikrotikService {
       var c=(v||'').replace(/[^a-fA-F0-9]/g,'').toUpperCase();
       if(!/^[A-F0-9]{12}$/.test(c))return '';
       return c.match(/.{1,2}/g).join(':');
+    }
+
+    function fmtMac(v){
+      var c=(v||'').replace(/[^a-fA-F0-9]/g,'').toUpperCase().slice(0,12);
+      var m=c.match(/.{1,2}/g);
+      return m?m.join(':'):'';
     }
 
     function toggleVoucherTv(){
@@ -1067,7 +1073,7 @@ export class MikrotikService {
       b.disabled=true;b.textContent='Logging in...';
       sst('Verifying voucher...','info');
 
-      apiCall('POST', '/api/portal/redeem-voucher', {code:code,macAddress:targetMac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, res){
+      apiCall('POST', '/api/portal/redeem-voucher', {code:code,macAddress:targetMac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo,targetDevice:tvMode?'SMART_TV':undefined}, function(err, res){
         if(err){
           sst(err.message||'Failed','err');b.disabled=false;b.textContent='Login';
         } else {
