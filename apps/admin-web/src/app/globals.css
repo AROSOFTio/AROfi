@@ -7612,4 +7612,98 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
   }
 }
 
+/* Premium dark mode authority. Keep dark mode clean and grey-led like a
+   server control panel; accents should guide actions, not tint every surface. */
+html[data-theme="dark"] {
+  --bg-app: #1f2024;
+  --bg-card: #26282d;
+  --bg-sidebar: #222429;
+  --bg-hover: #2e3137;
+  --bg-soft: #2a2c31;
+  --bg-panel: #24262b;
+  --border: #3b3f47;
+  --border-soft: #30343b;
+  --text-1: #f3f4f6;
+  --text-2: #d7dbe2;
+  --text-3: #a8b0bd;
+  --text-primary: #f3f4f6;
+  --text-secondary: #d7dbe2;
+  --text-muted: #a8b0bd;
+  --aa-page-bg: #1f2024;
+  --aa-surface: #26282d;
+  --aa-card-bg: #26282d;
+  --aa-input-bg: #222429;
+  --aa-border: #3b3f47;
+  --aa-border-soft: #30343b;
+  --aa-text: #d7dbe2;
+  --aa-text-strong: #f3f4f6;
+  --aa-text-muted: #a8b0bd;
+  --aa-text-subtle: #c8ced8;
+  --aa-placeholder: #8f98a7;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.22);
+  --shadow-md: 0 10px 24px rgba(0,0,0,0.24);
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .main-content {
+  background: var(--bg-app) !important;
+  color: var(--text-1) !important;
+}
+
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .topbar {
+  background: var(--bg-sidebar) !important;
+  border-color: var(--border-soft) !important;
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .dashboard-panel,
+html[data-theme="dark"] .tenant-stat,
+html[data-theme="dark"] .tenant-stat-compact,
+html[data-theme="dark"] .system-insights-card,
+html[data-theme="dark"] .quick-menu-panel,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .modal-content {
+  background: var(--bg-card) !important;
+  border-color: var(--border) !important;
+  color: var(--text-1) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html[data-theme="dark"] .form-input,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background: var(--bg-sidebar) !important;
+  border-color: var(--border) !important;
+  color: var(--text-1) !important;
+}
+
+html[data-theme="dark"] .nav-item,
+html[data-theme="dark"] .sidebar-group-toggle {
+  color: var(--text-2) !important;
+}
+
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .sidebar-group-toggle:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-1) !important;
+}
+
+html[data-theme="dark"] .nav-item.active,
+html[data-theme="dark"] .sidebar-group-toggle.active {
+  background: var(--arofi-theme-accent-soft) !important;
+  color: var(--arofi-theme-accent-text) !important;
+}
+
+html[data-theme="dark"] .wallet-showcase-card {
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--arofi-theme-accent) 42%, #2a2c31 58%) 0%,
+      color-mix(in srgb, var(--arofi-theme-accent-hover) 32%, #24262b 68%) 62%,
+      color-mix(in srgb, var(--arofi-theme-accent) 28%, #30343b 72%) 100%) !important;
+  border-color: color-mix(in srgb, var(--arofi-theme-accent) 42%, var(--border) 58%) !important;
+  box-shadow: 0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14) !important;
+}
+
 
