@@ -314,7 +314,7 @@ export class WalletsService {
     const currentSecretOk = existing && dto.currentSecretKey ? await bcrypt.compare(dto.currentSecretKey, existing.secretHash) : false
 
     if (!passwordOk && !currentSecretOk) {
-      throw new BadRequestException(existing ? 'Enter your current password or current withdrawal secret to change the secret code' : 'Enter your current password to set the withdrawal secret code')
+      throw new BadRequestException(existing ? 'Enter your current password or current withdrawal code to change the code' : 'Enter your current password to set the withdrawal code')
     }
 
     const secretHash = await bcrypt.hash(dto.secretKey, 12)
@@ -437,7 +437,7 @@ export class WalletsService {
     }
 
     if (!dto.acceptFinalTerms) {
-      throw new BadRequestException('Accept the final disbursement terms before requesting withdrawal')
+      throw new BadRequestException('Accept the final withdrawal terms before requesting withdrawal')
     }
 
     const [profile, tenantSettings, platformSettings, pendingNumberChange] = await Promise.all([
@@ -456,7 +456,7 @@ export class WalletsService {
       }),
     ])
     if (!profile) {
-      throw new BadRequestException('Set your disbursement secret key before requesting withdrawal')
+      throw new BadRequestException('Set your withdrawal code before requesting withdrawal')
     }
 
     if (!tenantSettings.kycCompleted) throw new BadRequestException('Complete business verification before withdrawing')
@@ -470,7 +470,7 @@ export class WalletsService {
     const secretOk = await bcrypt.compare(dto.secretKey, profile.secretHash)
     if (!secretOk) {
       await this.recordFailedSecretAttempt(tenantId, profile.id, platformSettings, userId)
-      throw new BadRequestException('Invalid disbursement secret key')
+      throw new BadRequestException('Invalid withdrawal code')
     }
 
     if (profile.failedSecretAttempts > 0 || profile.withdrawalLockedUntil) {

@@ -241,6 +241,7 @@ export default function SettingsManager({
   const [subStatus, setSubStatus] = useState(initialSubscriptionStatus)
   const [planSaving, setPlanSaving] = useState(false)
   const [planPhoneNumber, setPlanPhoneNumber] = useState('')
+  const [planPaymentModalOpen, setPlanPaymentModalOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
   const pollRef = useRef<number | null>(null)
@@ -323,6 +324,7 @@ export default function SettingsManager({
     try {
       const statusResponse = await clientPostApi<SubscriptionStatus>('/subscription/checkout', { phoneNumber: planPhoneNumber })
       setSubStatus(statusResponse)
+      setPlanPaymentModalOpen(false)
       startPolling()
     } catch (caught) {
       setCheckoutLoading(false)
@@ -668,9 +670,9 @@ export default function SettingsManager({
                   <Input name="withdrawalFeePercent" label="Withdrawal Fee %" defaultValue={platformForm.withdrawalFeePercent} />
                   <Input name="withdrawalFlatFeeUgx" label="Withdrawal Flat Fee UGX" defaultValue={platformForm.withdrawalFlatFeeUgx} />
                   <Input name="maxPayoutNumbers" label="Max Payout Numbers" defaultValue={platformForm.maxPayoutNumbers} />
-                  <FormSubheading text="Disbursement Routes" />
-                  <Select name="mtnDisbursementProvider" label="MTN Disbursement Route" defaultValue={platformForm.mtnDisbursementProvider} options={providerOptions} />
-                  <Select name="airtelDisbursementProvider" label="Airtel Disbursement Route" defaultValue={platformForm.airtelDisbursementProvider} options={providerOptions} />
+                  <FormSubheading text="Withdrawal Routes" />
+                  <Select name="mtnDisbursementProvider" label="MTN Withdrawal Route" defaultValue={platformForm.mtnDisbursementProvider} options={providerOptions} />
+                  <Select name="airtelDisbursementProvider" label="Airtel Withdrawal Route" defaultValue={platformForm.airtelDisbursementProvider} options={providerOptions} />
                   <FormSubheading text="Automatic Payout Safety" />
                   <Input name="requireApprovalAboveAmountUgx" label="Hold only withdrawals above UGX" defaultValue={platformForm.requireApprovalAboveAmountUgx ?? ''} />
                   <Check name="instantWithdrawalsEnabled" label="Pay verified withdrawals automatically" defaultChecked={platformForm.instantWithdrawalsEnabled} />
@@ -678,7 +680,7 @@ export default function SettingsManager({
                   <Check name="payoutNumberChangeRequiresApproval" label="Payout number changes require approval" defaultChecked={platformForm.payoutNumberChangeRequiresApproval} />
                   <Check name="requireWithdrawalApproval" label="Emergency mode: hold every withdrawal" defaultChecked={platformForm.requireWithdrawalApproval} />
                   <FormSubheading text="Security Limits" />
-                  <Input name="failedSecretAttemptsBeforeLock" label="Failed Secret Attempts Before Lock" defaultValue={platformForm.failedSecretAttemptsBeforeLock} />
+                  <Input name="failedSecretAttemptsBeforeLock" label="Failed Withdrawal Code Attempts Before Lock" defaultValue={platformForm.failedSecretAttemptsBeforeLock} />
                   <Input name="withdrawalLockMinutes" label="Withdrawal Lock Minutes" defaultValue={platformForm.withdrawalLockMinutes} />
                 </>
               )}
@@ -803,7 +805,7 @@ export default function SettingsManager({
                 </>
               )}
               {activeTab === 'Withdrawals' && (
-                <ReadOnly label="Automatic Withdrawal Safety" value="Verified payout number, secret key, wallet balance, minimum amount, and safety holds are checked before payout." />
+                <ReadOnly label="Automatic Withdrawal Safety" value="Verified payout number, withdrawal code, wallet balance, minimum amount, and safety holds are checked before payout." />
               )}
             </div>
             <button className="btn btn-primary" disabled={saving} style={{ marginTop: 18 }}>{saving ? 'Saving...' : 'Save Business Settings'}</button>
@@ -867,18 +869,8 @@ export default function SettingsManager({
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <label className="form-group" style={{ flex: 1, minWidth: 180 }}>
-                    <span className="form-label">Mobile Money Number</span>
-                    <PhoneNumberField
-                      value={planPhoneNumber}
-                      onChange={setPlanPhoneNumber}
-                      required
-                      ugandaOnly
-                      mobileOnly
-                    />
-                  </label>
-                  <button type="button" className="btn btn-primary" disabled={checkoutLoading || !planPhoneNumber} onClick={handlePayNow}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button type="button" className="btn btn-primary" disabled={checkoutLoading} onClick={() => setPlanPaymentModalOpen(true)}>
                     {checkoutLoading ? 'Sending prompt...' : 'Pay Now'}
                   </button>
                   <button type="button" className="btn btn-ghost" disabled={checkoutLoading} onClick={handleSkipPayment}>
@@ -1061,6 +1053,35 @@ export default function SettingsManager({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {planPaymentModalOpen && subStatus?.pendingPlan && (
+        <div className="modal-overlay" onClick={() => !checkoutLoading && setPlanPaymentModalOpen(false)}>
+          <div className="modal-card" style={{ width: 'min(520px, calc(100vw - 32px))' }} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: 'grid', gap: 4, borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Pay {subStatus.pendingPlan} plan</h3>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Enter the Mobile Money number that should receive the approval prompt.</p>
+            </div>
+            {checkoutError && <div className="badge badge-danger" style={{ marginBottom: 12 }}>{checkoutError}</div>}
+            <label className="form-group">
+              <span className="form-label">Mobile Money Number</span>
+              <PhoneNumberField
+                value={planPhoneNumber}
+                onChange={setPlanPhoneNumber}
+                required
+                ugandaOnly
+                mobileOnly
+                autoFocus
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
+              <button type="button" className="btn btn-ghost" disabled={checkoutLoading} onClick={() => setPlanPaymentModalOpen(false)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={checkoutLoading || !planPhoneNumber} onClick={handlePayNow}>
+                {checkoutLoading ? 'Sending prompt...' : 'Send Payment Prompt'}
+              </button>
             </div>
           </div>
         </div>

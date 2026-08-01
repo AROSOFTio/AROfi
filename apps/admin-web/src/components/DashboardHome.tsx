@@ -452,7 +452,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
         />
       </div>
 
-      {/* Modern Wallet Card & Disbursement Settings Panel */}
+      {/* Modern Wallet Card & Withdrawal Settings Panel */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 12, marginBottom: 4 }}>
         {/* Visual Credit Card Style Wallet Card */}
         <div className="wallet-showcase-card">
@@ -513,11 +513,11 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
           </div>
         </div>
 
-        {/* Disbursement settings & actions */}
+        {/* Withdrawal settings & actions */}
         <div className="card" style={{ padding: 15, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', margin: 0 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Disbursement Settings</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Withdrawal Settings</span>
               <a href="/earnings" style={{ color: 'var(--green)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>Manage</a>
             </div>
 
@@ -529,7 +529,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
-                <span style={{ color: 'var(--text-2)' }}>Secret key verification</span>
+                <span style={{ color: 'var(--text-2)' }}>Withdrawal code</span>
                 <span>
                   {payoutProfile?.profile?.secretConfigured ? (
                     <span style={{ color: 'var(--arofi-theme-accent-text)', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>

@@ -25,7 +25,9 @@ import {
   Globe,
   Radio,
   FileCode,
-  Check
+  Check,
+  Copy,
+  PlayCircle
 } from 'lucide-react'
 import FormProcessStatus from '@/components/FormProcessStatus'
 import { formatDate } from '@/lib/format'
@@ -92,6 +94,7 @@ export default function SettingsRoutersPage() {
   const [compensationModal, setCompensationModal] = useState<{ router: any; overview: RouterCompensationOverview } | null>(null)
   const [loadingCompensation, setLoadingCompensation] = useState<string | null>(null)
   const [remoteAction, setRemoteAction] = useState<string | null>(null)
+  const [actionNotice, setActionNotice] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null)
   const [deleteModalRouter, setDeleteModalRouter] = useState<any | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -235,9 +238,10 @@ export default function SettingsRoutersPage() {
     try {
       setActiveMenuId(null)
       await clientPostApi(`/routers/${routerId}/health-check`, {})
+      setActionNotice({ tone: 'success', message: 'Router health check queued. Status will refresh automatically.' })
       await loadData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Test connection failed')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Test connection failed' })
     }
   }
 
@@ -330,8 +334,8 @@ export default function SettingsRoutersPage() {
       const setup = await clientFetchApi<RouterSetupResponse>(`/routers/${router.id}/setup`)
       const command = setup.oneRunCommand ?? setup.provisioningScript ?? 'Script unavailable - please contact support.'
       setScriptModal({ router: setup.router, command, remoteCommand: buildRemoteInstallCommand(setup.router) })
-    } catch {
-      alert('Could not load setup script. Please try again.')
+    } catch (err) {
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not load setup script. Please try again.' })
     } finally {
       setLoadingScript(null)
     }
@@ -344,7 +348,7 @@ export default function SettingsRoutersPage() {
       const compensation = await clientFetchApi<RouterCompensationOverview>(`/routers/${router.id}/compensation`)
       setCompensationModal({ router, overview: compensation })
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not load compensation details.')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not load compensation details.' })
     } finally {
       setLoadingCompensation(null)
     }
@@ -355,9 +359,10 @@ export default function SettingsRoutersPage() {
     setRemoteAction(routerId)
     try {
       await clientPostApi(`/routers/${routerId}/remote-access/open`, {})
+      setActionNotice({ tone: 'success', message: 'Remote WinBox port opened for this router.' })
       await loadData(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not open remote port')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not open remote port' })
     } finally {
       setRemoteAction(null)
     }
@@ -368,9 +373,10 @@ export default function SettingsRoutersPage() {
     setRemoteAction(routerId)
     try {
       await clientPostApi(`/routers/${routerId}/remote-access/close`, {})
+      setActionNotice({ tone: 'success', message: 'Remote WinBox port closed for this router.' })
       await loadData(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not close remote port')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not close remote port' })
     } finally {
       setRemoteAction(null)
     }
@@ -381,10 +387,13 @@ export default function SettingsRoutersPage() {
     setRemoteAction(routerId)
     try {
       const result = await clientPostApi<{ reachable: boolean; message: string }>(`/routers/${routerId}/remote-access/test`, {})
-      alert(result.message || (result.reachable ? 'Remote port is reachable.' : 'Remote port is not reachable.'))
+      setActionNotice({
+        tone: result.reachable ? 'success' : 'error',
+        message: result.message || (result.reachable ? 'Remote port is reachable.' : 'Remote port is not reachable.'),
+      })
       await loadData(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not test remote port')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not test remote port' })
     } finally {
       setRemoteAction(null)
     }
@@ -396,7 +405,7 @@ export default function SettingsRoutersPage() {
       const settings = await clientPostApi<{ autoCompensateRouterOutages: boolean }>('/routers/compensation/settings', { enabled })
       setCompensationModal((previous) => previous ? { ...previous, overview: { ...previous.overview, settings } } : previous)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not update compensation setting.')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not update compensation setting.' })
     }
   }
 
@@ -407,7 +416,7 @@ export default function SettingsRoutersPage() {
       const compensation = await clientFetchApi<RouterCompensationOverview>(`/routers/${compensationModal.router.id}/compensation`)
       setCompensationModal((previous) => previous ? { ...previous, overview: compensation } : previous)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not compensate latest outage.')
+      setActionNotice({ tone: 'error', message: err instanceof Error ? err.message : 'Could not compensate latest outage.' })
     }
   }
 
@@ -1179,15 +1188,24 @@ export default function SettingsRoutersPage() {
         </div>
       )}
 
+      {actionNotice && (
+        <div
+          className={`badge ${actionNotice.tone === 'success' ? 'badge-success' : actionNotice.tone === 'error' ? 'badge-danger' : 'badge-info'}`}
+          style={{ justifySelf: 'start', padding: '8px 12px' }}
+        >
+          {actionNotice.message}
+        </div>
+      )}
+
       {/* MODAL: Setup Script */}
       {scriptModal && (
         <div className="modal-overlay" onClick={() => setScriptModal(null)}>
-          <div className="modal-card" style={{ width: 'min(1080px, calc(100vw - 32px))' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" style={{ width: 'min(1180px, calc(100vw - 32px))' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
               <div style={{ display: 'grid', gap: 3 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Router Setup Script — {scriptModal.router.name}</h3>
+                <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Router Setup Flow - {scriptModal.router.name}</h3>
                 <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: 0 }}>
-                  Paste this command into the WinBox Terminal. It sets up the hotspot, RADIUS, and captive portal in one shot.
+                  Run these in order from WinBox Terminal. Onboarding connects billing first; remote access enables support and WinBox tools.
                 </p>
               </div>
               <button type="button" className="btn btn-ghost" style={{ padding: 4, flexShrink: 0 }} onClick={() => setScriptModal(null)}>×</button>
@@ -1201,58 +1219,85 @@ export default function SettingsRoutersPage() {
               )}
               <div className="router-script-grid">
                 <div className="router-script-panel">
-                  <strong>1. Onboarding script</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                    <div style={{ display: 'grid', gap: 3 }}>
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="badge badge-info">1</span>
+                        Onboarding script
+                      </strong>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Creates hotspot, RADIUS, captive portal, and anti-tethering rules.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(scriptModal.command)
+                        setScriptCopied(true)
+                        setTimeout(() => setScriptCopied(false), 2000)
+                      }}
+                    >
+                      {scriptCopied ? <Check size={14} /> : <Copy size={14} />}
+                      {scriptCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
                   <div className="router-script-code">
                     <pre>
                       {scriptModal.command}
                     </pre>
                   </div>
+                  <div style={{ padding: 10, background: 'var(--bg-muted, #f8fafc)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>Run first:</strong> Open WinBox, open Terminal, paste this command, press Enter, and wait until it finishes.
+                  </div>
+                  <a href="/docs/getting-started#run-onboarding-script" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <PlayCircle size={14} /> Video: onboarding script
+                  </a>
                 </div>
                 <div className="router-script-panel">
-                  <strong>2. Remote access script</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                    <div style={{ display: 'grid', gap: 3 }}>
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="badge badge-success">2</span>
+                        Remote access script
+                      </strong>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Enables secure WinBox support, port tests, reboot, and remote access tools.</span>
+                    </div>
+                    {scriptModal.remoteCommand && (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        onClick={() => {
+                          navigator.clipboard.writeText(scriptModal.remoteCommand || '')
+                          setRemoteScriptCopied(true)
+                          setTimeout(() => setRemoteScriptCopied(false), 2000)
+                        }}
+                      >
+                        {remoteScriptCopied ? <Check size={14} /> : <Copy size={14} />}
+                        {remoteScriptCopied ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
                   <div className="router-script-code">
                     <pre>
                       {scriptModal.remoteCommand || 'Remote access script unavailable - reopen this router menu after registration refreshes.'}
                     </pre>
                   </div>
+                  <div style={{ padding: 10, background: 'var(--bg-muted, #f8fafc)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>Run second:</strong> Paste after onboarding completes. The router row should then show remote address and test results.
+                  </div>
+                  <a href="/docs/getting-started#run-remote-access-script" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <PlayCircle size={14} /> Video: remote access script
+                  </a>
                 </div>
               </div>
 
               <div style={{ padding: 12, background: 'var(--amber-light)', border: '1px solid var(--amber-mid)', borderRadius: 8, fontSize: 12.5, color: 'var(--amber-dark)', lineHeight: 1.5 }}>
-                <strong>How to run:</strong> Open WinBox → click Terminal → paste the command above → press Enter. Wait for it to finish (about 30 seconds).
-              </div>
-
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12.5 }}>
-                <a href="/docs/getting-started#run-onboarding-script" target="_blank" rel="noopener noreferrer">Video: onboarding script</a>
-                <a href="/docs/getting-started#run-remote-access-script" target="_blank" rel="noopener noreferrer">Video: remote access script</a>
+                <strong>Required:</strong> The router will not sell internet, monitor users, or accept remote support until both scripts have been run successfully.
               </div>
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-ghost" onClick={() => setScriptModal(null)}>Close</button>
-                {scriptModal.remoteCommand && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => {
-                      navigator.clipboard.writeText(scriptModal.remoteCommand || '')
-                      setRemoteScriptCopied(true)
-                      setTimeout(() => setRemoteScriptCopied(false), 2000)
-                    }}
-                  >
-                    {remoteScriptCopied ? 'Remote copied!' : 'Copy Remote Script'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    navigator.clipboard.writeText(scriptModal.command)
-                    setScriptCopied(true)
-                    setTimeout(() => setScriptCopied(false), 2000)
-                  }}
-                >
-                  {scriptCopied ? 'Onboarding copied!' : 'Copy Onboarding Script'}
-                </button>
               </div>
             </div>
           </div>

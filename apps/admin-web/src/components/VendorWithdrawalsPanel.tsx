@@ -167,7 +167,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
     setMessage('')
     setError('')
     setModalError('')
-    setProgress(activeAction === 'withdraw' ? 'Checking payout number, wallet balance, and secret key.' : 'Saving changes.')
+    setProgress(activeAction === 'withdraw' ? 'Checking payout number, wallet balance, and withdrawal code.' : 'Saving changes.')
     try {
       await callback()
       setProgress('Refreshing live wallet and payout records.')
@@ -534,18 +534,18 @@ function WithdrawModal({
         </div>
 
         <label className="form-group">
-          <span className="form-label">Secret code</span>
+        <span className="form-label">Withdrawal code</span>
           <input
             className="form-input"
             type="password"
             value={secretKey}
             onChange={(event) => onSecretKey(event.target.value)}
-            placeholder="Enter your withdrawal secret"
+            placeholder="Enter your withdrawal code"
             disabled={busy}
             required
           />
           {!secretConfigured && (
-            <button type="button" className="link-button" style={{ marginTop: 6 }} onClick={onSetSecret}>Set secret code</button>
+            <button type="button" className="link-button" style={{ marginTop: 6 }} onClick={onSetSecret}>Set withdrawal code</button>
           )}
         </label>
 
@@ -564,7 +564,7 @@ function WithdrawModal({
         </label>
         <label className="withdraw-check">
           <input type="checkbox" checked={acceptedTerms} onChange={(event) => onAcceptedTerms(event.target.checked)} disabled={busy} />
-          <span>I accept the final disbursement terms.</span>
+          <span>I accept the final withdrawal terms.</span>
         </label>
 
         {blockedReason && <div className="inline-warning">{blockedReason}</div>}
@@ -614,7 +614,7 @@ function SetupModal({
       kicker={action === 'secret' ? 'Security' : action === 'number' ? 'Payout setup' : 'Approval required'}
       title={
         action === 'secret'
-          ? profile.profile.secretConfigured ? 'Change secret key' : 'Set secret key'
+          ? profile.profile.secretConfigured ? 'Change withdrawal code' : 'Set withdrawal code'
           : action === 'number'
             ? 'Register payout number'
             : 'Request payout number change'
@@ -625,7 +625,7 @@ function SetupModal({
           <div className="form-grid" style={{ marginTop: 22 }}>
             {profile.profile.secretConfigured && (
               <label className="form-group">
-                <span className="form-label">Current secret key</span>
+                <span className="form-label">Current withdrawal code</span>
                 <input name="currentSecretKey" type="password" placeholder="Current withdrawal secret or use password below" className="form-input" disabled={busy === 'secret'} />
               </label>
             )}
@@ -634,13 +634,13 @@ function SetupModal({
               <input name="currentPassword" type="password" placeholder="Current account password" className="form-input" disabled={busy === 'secret'} />
             </label>
             <label className="form-group form-span-2">
-              <span className="form-label">New secret key</span>
+              <span className="form-label">New withdrawal code</span>
               <input name="secretKey" type="password" minLength={8} required placeholder="At least 8 characters" className="form-input" disabled={busy === 'secret'} />
             </label>
             <div className="form-span-2">
-              <FormProcessStatus busy={busy === 'secret'} error={modalError} text={progress || 'Saving secret key and refreshing profile.'} />
+              <FormProcessStatus busy={busy === 'secret'} error={modalError} text={progress || 'Saving withdrawal code and refreshing profile.'} />
             </div>
-            <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'secret'}>{busy === 'secret' ? 'Saving secret key...' : 'Save secret key'}</button>
+            <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'secret'}>{busy === 'secret' ? 'Saving withdrawal code...' : 'Save withdrawal code'}</button>
           </div>
         </form>
       )}

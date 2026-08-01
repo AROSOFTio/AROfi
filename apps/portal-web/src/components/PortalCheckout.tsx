@@ -46,6 +46,10 @@ const paymentReturnStorageKey = 'arofi.portal.payment_return'
 // block the buyer's own device from getting online.
 const pendingCompanionCodesKey = 'arofi.portal.pending_companion_codes'
 
+function hasUsableReconnect(payment?: PortalPayment | null) {
+  return Boolean(payment?.reconnect?.username && payment.reconnect.password)
+}
+
 function stashCompanionCodes(codes: string[]) {
   if (typeof window === 'undefined' || codes.length === 0) return
   try {
@@ -563,7 +567,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [qrVoucherCode, qrVoucherRedeemAttempted, isContextLoading, isVoucherLoading, handleVoucherRedeem])
 
   useEffect(() => {
-    if (!currentPayment || !pendingStatuses.includes(currentPayment.status)) {
+    const waitingForReconnect =
+      currentPayment?.status === 'COMPLETED' &&
+      Boolean(currentPayment.activation) &&
+      !hasUsableReconnect(currentPayment)
+    if (!currentPayment || (!pendingStatuses.includes(currentPayment.status) && !waitingForReconnect)) {
       return
     }
 
@@ -833,7 +841,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const payment = await readJson<PortalPayment>(response)
     setCurrentPayment(payment)
 
-    if (payment.activation) {
+    if (payment.activation && hasUsableReconnect(payment)) {
       setErrorMessage('')
       setStatusMessage('')
       // Payment confirmed — close checkout modal and auto-connect immediately.
@@ -842,6 +850,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
       }
+    } else if (payment.activation && !hasUsableReconnect(payment)) {
+      setStatusMessage('Payment confirmed. Preparing router login now...')
     } else if (payment.status === 'FAILED') {
       setErrorMessage(sanitizeUserMessage(payment.statusMessage) || 'Payment was not completed. Please try again.')
       setStatusMessage('')
@@ -925,10 +935,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
       // Yo! Uganda sends a direct USSD push — no checkout redirect needed.
       // Just show the PIN prompt message and start polling.
-      if (payment.activation) {
+      if (payment.activation && hasUsableReconnect(payment)) {
         // Instantly confirmed (rare edge case)
         setCheckoutOpen(false)
         await handleCompletedPayment(payment)
+      } else if (payment.activation) {
+        setStatusMessage('Payment confirmed. Preparing router login now...')
+        await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       } else {
         setStatusMessage('Enter your Mobile Money PIN on your phone to approve.')
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
