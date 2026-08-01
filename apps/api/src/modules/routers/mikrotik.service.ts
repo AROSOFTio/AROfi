@@ -165,11 +165,13 @@ export class MikrotikService {
       ':local arofiOk 0; :local attempts 0; ' +
       ':while ($attempts < 3) do={ ' +
         ':set attempts ($attempts + 1); ' +
+        ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
         // 1st attempt within each round: plain HTTP (no TLS risk)
-        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={}; ` +
+        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
         // 2nd attempt within each round: HTTPS (if HTTP failed, e.g. port 80 blocked)
         ':if ($arofiOk = 0) do={ ' +
-          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :set arofiOk 1 } on-error={} ` +
+          ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
         '}; ' +
         ':if ($arofiOk = 1) do={ :set attempts 3 } else={ ' +
           ':if ($attempts < 3) do={ :put "Retrying..."; :delay 5s } ' +
@@ -179,7 +181,7 @@ export class MikrotikService {
         ':put "ERROR: AROFi server unreachable after 3 attempts."; ' +
         ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) AND HTTPS (port 443). 3) System clock correct (check /system clock). 4) Re-paste when WAN is stable." ' +
       '} else={ ' +
-        ':if ([:len [/file find name="arofi-setup.rsc"]]>0) do={ :delay 1s; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc" } ' +
+        ':local f [/file find name="arofi-setup.rsc"]; :if ([:len $f]>0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Re-paste when WAN is stable." } ' +
       '}'
     )
   }
@@ -770,6 +772,14 @@ export class MikrotikService {
     .wa-inline svg{width:16px;height:16px;fill:#fff}
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;align-items:center;justify-content:center;padding:16px}
     .modal-overlay.on{display:flex}
+    .message-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:70;align-items:center;justify-content:center;padding:16px}
+    .message-overlay.on{display:flex}
+    .message-box{background:#fff;border-radius:14px;padding:18px 18px 16px;width:100%;max-width:430px;box-shadow:0 24px 60px rgba(15,23,42,.28);border:1px solid #dbeafe;position:relative;color:#0f172a;font-size:14px;line-height:1.5}
+    .message-box.err{border-color:#fecdd3;background:#fff7f7;color:#991b1b}
+    .message-box.ok{border-color:#86efac;background:#f0fdf4;color:#166534}
+    .message-box.info{border-color:#bfdbfe;background:#eff6ff;color:#1e40af}
+    .message-close{position:absolute;top:10px;right:12px;border:1px solid rgba(15,23,42,.12);border-radius:8px;background:#fff;color:#334155;font-weight:900;line-height:1;padding:4px 9px;cursor:pointer}
+    .message-text{padding-right:32px;font-weight:700}
     .pay-box{background:#fff;border-radius:12px;padding:20px;width:100%;max-width:384px;box-shadow:0 20px 50px rgba(15,23,42,.25);position:relative}
     .pay-box .pclose{position:absolute;top:12px;right:14px;background:none;border:1px solid #e2e8f0;border-radius:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:2px 7px}
     .pay-box .pname{font-size:18px;font-weight:800;color:#020617;margin-bottom:4px;padding-right:28px}
@@ -860,6 +870,13 @@ export class MikrotikService {
       </div>
 
       <div class="st" id="st"></div>
+    </div>
+  </div>
+
+  <div class="message-overlay" id="msgOverlay" onclick="if(event.target===this)closeMsg()">
+    <div class="message-box info" id="msgBox">
+      <button type="button" class="message-close" onclick="closeMsg()">&times;</button>
+      <div class="message-text" id="msgText"></div>
     </div>
   </div>
 
@@ -1148,7 +1165,8 @@ export class MikrotikService {
     }
 
     function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
-    function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
+    function closeMsg(){document.getElementById('msgOverlay').classList.remove('on');}
+    function sst(m,t){var s=document.getElementById('st');var o=document.getElementById('msgOverlay');var b=document.getElementById('msgBox');var x=document.getElementById('msgText');if(m){if(s){s.style.display='none';s.textContent='';}b.className='message-box '+(t||'info');x.textContent=m;o.classList.add('on');}else{if(s)s.style.display='none';o.classList.remove('on');}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}
     function fn(v){var n=v.toString(),r='';for(var i=n.length-1,c=0;i>=0;i--,c++){if(c>0&&c%3===0)r=','+r;r=n[i]+r;}return r;}

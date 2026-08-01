@@ -16,9 +16,9 @@ export function absoluteApiOrigin(configuredApiUrl?: string | null, browserOrigi
 
 export function buildRemoteAccessInstallCommand(remoteToken: string | null | undefined, origin?: string) {
   const apiOrigin = absoluteApiOrigin(process.env.NEXT_PUBLIC_API_URL, origin)
-  return `${DNS_BOOTSTRAP}:do { /file remove "vpn.rsc" } on-error={}; /tool fetch url="${apiOrigin}/mikrotik/remote-access/install/${remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"`
+  return `${DNS_BOOTSTRAP}:do { /file remove [find name="vpn.rsc"] } on-error={}; /tool fetch url="${apiOrigin}/mikrotik/remote-access/install/${remoteToken || ''}" check-certificate=no dst-path="vpn.rsc" mode=https; :delay 4s; :local f [/file find name="vpn.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi remote access downloaded. Installing..."; :delay 2s; /import file-name="vpn.rsc"; :delay 1s; /file remove "vpn.rsc"; :put "AROFi remote access installed." } else={ :put "ERROR: remote access file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: remote access file was not downloaded. Re-paste when WAN is stable." }`
 }
 
 export function buildSetupFallbackCommand(registrationKey: string) {
-  return `${DNS_BOOTSTRAP}/tool fetch url="https://arofi.net/api/mikrotik/script/${registrationKey}" dst-path="arofi-setup.rsc" mode=https; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
+  return `${DNS_BOOTSTRAP}:do { /file remove [find name="arofi-setup.rsc"] } on-error={}; /tool fetch url="https://arofi.net/api/mikrotik/script/${registrationKey}" dst-path="arofi-setup.rsc" mode=https; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Re-paste when WAN is stable." }`
 }
