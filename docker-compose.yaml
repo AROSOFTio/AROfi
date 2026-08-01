@@ -38,6 +38,11 @@ x-app-env: &app-env
   ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.net}
   PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.net/portal}
   VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://arofi.net/portal}
+  # Plain HTTP bootstrap endpoint for MikroTik RouterOS setup scripts. The
+  # public domain redirects port 80 to HTTPS, which is good for browsers but
+  # unreliable for fresh routers with an unset clock. nginx exposes only
+  # /api/mikrotik/* on this port.
+  MIKROTIK_CALLBACK_HTTP_URL: ${MIKROTIK_CALLBACK_HTTP_URL:-http://95.111.234.34:18080}
   ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
   # 2s fallback sweep; realtime state is primarily pushed by the Postgres
   # LISTEN/NOTIFY bridge (RADIUS_DB_LISTEN_ENABLED) and the SSE event stream.
@@ -111,6 +116,8 @@ services:
       # and wires up the reverse proxy automatically.
       - SERVICE_FQDN_NGINX_3000
       - SERVICE_NAME=nginx
+    ports:
+      - "${MIKROTIK_BOOTSTRAP_HTTP_PORT:-18080}:3001"
     depends_on:
       api:
         condition: service_healthy
