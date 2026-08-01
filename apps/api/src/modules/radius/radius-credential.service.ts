@@ -91,50 +91,53 @@ export class RadiusCredentialService implements OnModuleInit {
       },
     })
 
-    await tx.radCheck.deleteMany({ where: { username } })
-    await tx.radReply.deleteMany({ where: { username } })
+    const boundMac = this.normalizeMac(input.boundMacAddress ?? activation.boundMacAddress)
+    const authUsernames = this.radiusAuthUsernames(username, boundMac)
+
+    await tx.radCheck.deleteMany({ where: { username: { in: authUsernames } } })
+    await tx.radReply.deleteMany({ where: { username: { in: authUsernames } } })
 
     if (credential.status === RadiusCredentialStatus.ACTIVE) {
       await tx.radCheck.createMany({
-        data: [
+        data: authUsernames.flatMap((authUsername) => [
           {
-            username,
+            username: authUsername,
             attribute: 'Cleartext-Password',
             op: ':=',
-            value: password,
+            value: this.radiusPasswordForUsername(authUsername, username, password, boundMac),
           },
           {
-            username,
+            username: authUsername,
             attribute: 'Expiration',
             op: ':=',
             value: this.formatRadiusExpiration(activation.endsAt),
           },
-        ],
+        ]),
       })
 
-      const replies: Prisma.RadReplyCreateManyInput[] = [
-        {
-          username,
-          attribute: 'Session-Timeout',
-          op: '=',
-          value: remainingSeconds.toString(),
-        },
-      ]
+      const replies: Prisma.RadReplyCreateManyInput[] = authUsernames.map((authUsername) => ({
+        username: authUsername,
+        attribute: 'Session-Timeout',
+        op: '=',
+        value: remainingSeconds.toString(),
+      }))
 
       if (activation.downloadSpeedKbps || activation.uploadSpeedKbps) {
         const down = activation.downloadSpeedKbps ?? activation.uploadSpeedKbps ?? 0
         const up = activation.uploadSpeedKbps ?? activation.downloadSpeedKbps ?? 0
-        replies.push({
-          username,
-          attribute: 'Mikrotik-Rate-Limit',
-          op: '=',
-          value: `${up}k/${down}k`,
-        })
+        for (const authUsername of authUsernames) {
+          replies.push({
+            username: authUsername,
+            attribute: 'Mikrotik-Rate-Limit',
+            op: '=',
+            value: `${up}k/${down}k`,
+          })
+        }
       }
 
       await tx.radReply.createMany({ data: replies })
       this.logger.log(
-        `Provisioned username=${username} activationId=${activation.id} expiresAt=${activation.endsAt.toISOString()}`,
+        `Provisioned username=${username} authUsernames=${authUsernames.join(',')} activationId=${activation.id} expiresAt=${activation.endsAt.toISOString()}`,
       )
     }
 
@@ -147,8 +150,10 @@ export class RadiusCredentialService implements OnModuleInit {
       return null
     }
 
-    await tx.radCheck.deleteMany({ where: { username: credential.username } })
-    await tx.radReply.deleteMany({ where: { username: credential.username } })
+    const authUsernames = this.radiusAuthUsernames(credential.username, credential.boundMacAddress)
+
+    await tx.radCheck.deleteMany({ where: { username: { in: authUsernames } } })
+    await tx.radReply.deleteMany({ where: { username: { in: authUsernames } } })
 
     return tx.radiusCredential.update({
       where: { id: credential.id },
@@ -162,6 +167,23 @@ export class RadiusCredentialService implements OnModuleInit {
 
   private buildPassword() {
     return randomBytes(12).toString('base64url')
+  }
+
+  private radiusAuthUsernames(username: string, boundMacAddress?: string | null) {
+    const names = new Set<string>([username])
+    const mac = this.normalizeMac(boundMacAddress) ?? this.normalizeMac(username)
+    if (mac && (username === mac || username === mac.replace(/:/g, ''))) {
+      names.add(mac)
+      names.add(mac.replace(/:/g, ''))
+    }
+    return Array.from(names)
+  }
+
+  private radiusPasswordForUsername(authUsername: string, primaryUsername: string, primaryPassword: string, boundMacAddress?: string | null) {
+    const mac = this.normalizeMac(boundMacAddress) ?? this.normalizeMac(primaryUsername)
+    if (!mac) return primaryPassword
+    if (authUsername === mac || authUsername === mac.replace(/:/g, '')) return authUsername
+    return primaryPassword
   }
 
   private normalizeMac(value?: string | null) {
@@ -230,8 +252,9 @@ export class RadiusCredentialService implements OnModuleInit {
           })
           if (activeConflict) return
 
-          await tx.radCheck.deleteMany({ where: { username: mac } })
-          await tx.radReply.deleteMany({ where: { username: mac } })
+          const authUsernames = this.radiusAuthUsernames(mac, mac)
+          await tx.radCheck.deleteMany({ where: { username: { in: authUsernames } } })
+          await tx.radReply.deleteMany({ where: { username: { in: authUsernames } } })
           await tx.radiusCredential.deleteMany({
             where: {
               username: mac,
@@ -273,18 +296,18 @@ export class RadiusCredentialService implements OnModuleInit {
             },
           })
           await tx.radCheck.createMany({
-            data: [
-              { username: mac, attribute: 'Cleartext-Password', op: ':=', value: mac },
-              { username: mac, attribute: 'Expiration', op: ':=', value: this.formatRadiusExpiration(activation.endsAt) },
-            ],
+            data: authUsernames.flatMap((authUsername) => [
+              { username: authUsername, attribute: 'Cleartext-Password', op: ':=', value: authUsername },
+              { username: authUsername, attribute: 'Expiration', op: ':=', value: this.formatRadiusExpiration(activation.endsAt) },
+            ]),
           })
-          await tx.radReply.create({
-            data: {
-              username: mac,
+          await tx.radReply.createMany({
+            data: authUsernames.map((authUsername) => ({
+              username: authUsername,
               attribute: 'Session-Timeout',
               op: '=',
               value: Math.max(1, Math.floor((activation.endsAt.getTime() - Date.now()) / 1000)).toString(),
-            },
+            })),
           })
         })
         repaired += 1

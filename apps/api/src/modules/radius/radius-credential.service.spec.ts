@@ -43,7 +43,7 @@ function buildTx(overrides: Record<string, unknown> = {}) {
 }
 
 describe('RadiusCredentialService', () => {
-  const service = new RadiusCredentialService()
+  const service = new RadiusCredentialService({} as never)
 
   it('provisions Session-Timeout with the remaining bundle seconds', async () => {
     const { tx } = buildTx()
@@ -97,6 +97,39 @@ describe('RadiusCredentialService', () => {
     expect(checkRows.some((row) => row.attribute === 'Expiration')).toBe(true)
   })
 
+  it('creates colon and compact MAC auth rows for Smart TV style MAC credentials', async () => {
+    const { tx } = buildTx({
+      radiusUsername: 'AA:BB:CC:DD:EE:FF',
+      radiusPassword: 'AA:BB:CC:DD:EE:FF',
+      boundMacAddress: 'AA:BB:CC:DD:EE:FF',
+    })
+
+    await service.provisionForActivation(tx as never, {
+      tenantId: 'tenant-1',
+      activationId: 'activation-1',
+    })
+
+    const checkRows = tx.radCheck.createMany.mock.calls[0][0].data as Array<{
+      username: string
+      attribute: string
+      value: string
+    }>
+    expect(checkRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ username: 'AA:BB:CC:DD:EE:FF', attribute: 'Cleartext-Password', value: 'AA:BB:CC:DD:EE:FF' }),
+        expect.objectContaining({ username: 'AABBCCDDEEFF', attribute: 'Cleartext-Password', value: 'AABBCCDDEEFF' }),
+      ]),
+    )
+
+    const replyRows = tx.radReply.createMany.mock.calls[0][0].data as Array<{ username: string; attribute: string }>
+    expect(replyRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ username: 'AA:BB:CC:DD:EE:FF', attribute: 'Session-Timeout' }),
+        expect.objectContaining({ username: 'AABBCCDDEEFF', attribute: 'Session-Timeout' }),
+      ]),
+    )
+  })
+
   it('does not write radcheck/radreply rows for an already-expired activation', async () => {
     const { tx } = buildTx({
       endsAt: new Date(Date.now() - 10 * 60 * 1000),
@@ -125,8 +158,8 @@ describe('RadiusCredentialService', () => {
 
     await service.disableForActivation(tx as never, 'activation-1', RadiusCredentialStatus.EXPIRED)
 
-    expect(tx.radCheck.deleteMany).toHaveBeenCalledWith({ where: { username: 'arofi-user' } })
-    expect(tx.radReply.deleteMany).toHaveBeenCalledWith({ where: { username: 'arofi-user' } })
+    expect(tx.radCheck.deleteMany).toHaveBeenCalledWith({ where: { username: { in: ['arofi-user'] } } })
+    expect(tx.radReply.deleteMany).toHaveBeenCalledWith({ where: { username: { in: ['arofi-user'] } } })
     expect(tx.radiusCredential.update).toHaveBeenCalledWith({
       where: { id: 'cred-1' },
       data: { status: RadiusCredentialStatus.EXPIRED },
