@@ -885,10 +885,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const payment = await readJson<PortalPayment>(response)
     setCurrentPayment(payment)
 
-    if (payment.activation && isTvPackage(payment.package)) {
+      if (payment.activation && isTvPackage(payment.package)) {
       setCheckoutOpen(false)
       setErrorMessage('')
-      setStatusMessage(`Payment confirmed. Smart TV access is active. Turn the TV WiFi off and on once.`)
+      setStatusMessage('Payment confirmed. Go to the TV WiFi settings, select this WiFi again, and internet should work automatically.')
       setSmartTvNotice({ macAddress: payment.activation.customerReference ?? tvMacAddress, packageName: payment.package.name, source: 'payment' })
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
@@ -995,7 +995,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       // Just show the PIN prompt message and start polling.
       if (selectedIsTvPackage && payment.activation) {
         setCheckoutOpen(false)
-        setStatusMessage(`Payment confirmed. Smart TV ${tvMac} is activated. Turn the TV WiFi off and on once.`)
+        setStatusMessage(`Payment confirmed. Smart TV ${tvMac} is active. Go to the TV WiFi settings and select this WiFi again.`)
         setSmartTvNotice({ macAddress: tvMac, packageName: payment.package.name, source: 'payment' })
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       } else if (payment.activation && hasUsableReconnect(payment)) {
@@ -1319,7 +1319,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               </div>
               <ol className={`mt-3 space-y-1 pl-5 text-left text-xs ${portalStyle.noticeText}`}>
                 <li>On the TV, open WiFi settings.</li>
-                <li>Forget/disconnect the WiFi, then connect to this hotspot again.</li>
+                <li>Select this WiFi network again. If already connected, disconnect/forget it first, then reconnect.</li>
                 <li>The TV should get internet automatically. No portal popup is needed on the TV.</li>
               </ol>
             </div>
@@ -1417,7 +1417,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 <>
                   <p className={`mt-6 text-center text-sm font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Smart TV connection</p>
                   <p className={`mx-auto mt-1 max-w-sm text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-500'}`}>
-                    Pay on your phone, enter the TV wireless MAC address, then reconnect the TV to WiFi.
+                    Select a TV package, enter the TV wireless MAC address, pay by phone, then select this WiFi on the TV.
                   </p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {smartTvPackages.map(renderPackageButton)}
@@ -1511,6 +1511,22 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     )}
 
                     <form onSubmit={handlePaymentSubmit} className="mt-4 space-y-3">
+                      {selectedIsTvPackage && (
+                        <label className="block text-sm font-bold text-slate-700">
+                          Smart TV Wireless MAC Address
+                          <input
+                            value={tvMacAddress}
+                            onChange={(event) => setTvMacAddress(event.target.value)}
+                            placeholder="AA:BB:CC:DD:EE:FF"
+                            required
+                            autoFocus={!selectedIsTvPackage}
+                            className={`mt-2 w-full rounded-lg border bg-white px-3 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
+                          />
+                          <span className="mt-1 block text-xs font-medium text-slate-500">
+                            On most TVs: Settings - Network - WiFi details. Use the Wireless MAC address, then enter your Mobile Money number below.
+                          </span>
+                        </label>
+                      )}
                       {/* Network auto-detected by Yo! Uganda — selector hidden */}
                       <label className="block text-sm font-bold text-slate-700">
                         Mobile Money Number
@@ -1539,22 +1555,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                           )}
                         </div>
                       </label>
-
-                      {selectedIsTvPackage && (
-                        <label className="block text-sm font-bold text-slate-700">
-                          Smart TV Wireless MAC Address
-                          <input
-                            value={tvMacAddress}
-                            onChange={(event) => setTvMacAddress(event.target.value)}
-                            placeholder="AA:BB:CC:DD:EE:FF"
-                            required
-                            className={`mt-2 w-full rounded-lg border bg-white px-3 py-3 text-base text-slate-950 outline-none focus:ring-2 ${portalStyle.input}`}
-                          />
-                          <span className="mt-1 block text-xs font-medium text-slate-500">
-                            On most TVs: Settings - Network - WiFi details. After payment, turn TV WiFi off and on.
-                          </span>
-                        </label>
-                      )}
 
                       <button
                         type="submit"
