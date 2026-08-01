@@ -1,7 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common'
-import { SmsMessageStatus, SmsProvider, SubscriptionPlanTier } from '@prisma/client'
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { PaymentStatus, Prisma, SmsCreditLedgerType, SmsMessageStatus, SmsProvider, SubscriptionPlanTier } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { mapRawStatusToPaymentStatus } from '../payments/payment-provider.interface'
+import { PaymentRouterService } from '../payments/payment-router.service'
+import { PhoneNumberService } from '../payments/phone-number.service'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
+import { CheckoutSmsCreditsDto } from './dto/checkout-sms-credits.dto'
 
 type SendSmsInput = {
   tenantId?: string | null
@@ -23,7 +27,11 @@ type AfricaTalkingRecipient = {
 export class SmsService {
   private readonly logger = new Logger(SmsService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentRouterService: PaymentRouterService,
+    private readonly phoneNumberService: PhoneNumberService,
+  ) {}
 
   async sendText(input: SendSmsInput): Promise<boolean> {
     const normalizedRecipient = this.normalizeUgandanPhone(input.to)
@@ -71,6 +79,23 @@ export class SmsService {
       return false
     }
 
+    const reservation = input.tenantId
+      ? await this.reserveCredits(input.tenantId, segments)
+      : { ok: true as const, source: null as string | null }
+
+    if (!reservation.ok) {
+      await this.logMessage({
+        ...input,
+        provider,
+        status: SmsMessageStatus.SKIPPED,
+        normalizedRecipient,
+        segments,
+        estimatedCostUgx,
+        errorMessage: reservation.reason,
+      })
+      return false
+    }
+
     const queued = await this.logMessage({
       ...input,
       provider,
@@ -78,6 +103,7 @@ export class SmsService {
       normalizedRecipient,
       segments,
       estimatedCostUgx,
+      creditSource: reservation.source,
     })
 
     try {
@@ -96,6 +122,9 @@ export class SmsService {
         },
       })
 
+      if (!delivered && input.tenantId) {
+        await this.refundCredits(input.tenantId, segments, reservation.source, queued.id, 'Provider did not accept the SMS')
+      }
       return delivered
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -106,9 +135,121 @@ export class SmsService {
           errorMessage: message,
         },
       })
+      if (input.tenantId) {
+        await this.refundCredits(input.tenantId, segments, reservation.source, queued.id, message)
+      }
       this.logger.warn(`Failed to send SMS to ${normalizedRecipient}: ${message}`)
       return false
     }
+  }
+
+  async getWalletStatus(tenantId: string) {
+    const settings = await this.ensureTenantSmsSettings(tenantId)
+    const normalized = await this.ensureCurrentCycle(settings)
+    const tier = resolveEffectiveSubscriptionTier(normalized.subscriptionPlan, normalized.subscriptionPlanExpiresAt)
+    const includedRemaining = tier === SubscriptionPlanTier.FREE ? 0 : Math.max(0, normalized.smsMonthlyIncluded - normalized.smsMonthlyUsed)
+    const pendingPurchase = await this.prisma.smsCreditPurchase.findFirst({
+      where: { tenantId, status: { in: [PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.INDETERMINATE] } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, smsQuantity: true, amountUgx: true, statusMessage: true, createdAt: true },
+    })
+
+    return {
+      enabled: tier === SubscriptionPlanTier.PRO || tier === SubscriptionPlanTier.ENTERPRISE,
+      provider: this.provider(),
+      providerConfigured: this.isConfigured(),
+      currentPlan: tier,
+      includedMonthly: normalized.smsMonthlyIncluded,
+      includedUsed: normalized.smsMonthlyUsed,
+      includedRemaining,
+      purchasedBalance: normalized.smsPurchasedBalance,
+      totalAvailable: includedRemaining + normalized.smsPurchasedBalance,
+      unitPriceUgx: normalized.smsUnitPriceUgx,
+      minimumPurchaseSms: 50,
+      minimumPurchaseUgx: 50 * normalized.smsUnitPriceUgx,
+      cycleStartedAt: normalized.smsMonthlyCycleStartedAt,
+      pendingPurchase,
+    }
+  }
+
+  async startCreditCheckout(tenantId: string, dto: CheckoutSmsCreditsDto) {
+    const wallet = await this.getWalletStatus(tenantId)
+    if (!wallet.enabled) {
+      throw new BadRequestException('SMS top-ups are available to active Pro and Enterprise tenants only')
+    }
+
+    const smsQuantity = Math.max(50, Math.floor(dto.smsQuantity))
+    const amountUgx = smsQuantity * wallet.unitPriceUgx
+    const network = this.phoneNumberService.resolveNetwork(dto.phoneNumber)
+    const normalizedPhone = this.phoneNumberService.normalizeForNetwork(dto.phoneNumber, network)
+    const externalReference = `SMS-${tenantId.slice(0, 8)}-${Date.now()}`
+    const provider = this.paymentRouterService.resolveCollection(network)
+    const gatewayResponse = await provider.collectPayment({
+      amountUgx,
+      currency: 'UGX',
+      phoneNumber: normalizedPhone,
+      externalReference,
+      narrative: `AROFi ${smsQuantity} SMS credits`,
+      network,
+    })
+    const status = mapRawStatusToPaymentStatus(gatewayResponse.transactionStatus)
+
+    const purchase = await this.prisma.smsCreditPurchase.create({
+      data: {
+        tenantId,
+        status,
+        smsQuantity,
+        unitPriceUgx: wallet.unitPriceUgx,
+        amountUgx,
+        network,
+        phoneNumber: normalizedPhone,
+        externalReference,
+        providerReference: gatewayResponse.transactionReference,
+        statusMessage: gatewayResponse.statusMessage,
+        requestPayload: { smsQuantity, amountUgx, phoneNumber: normalizedPhone, externalReference, network } as Prisma.InputJsonValue,
+        responsePayload: gatewayResponse as Prisma.InputJsonValue,
+        completedAt: status === PaymentStatus.COMPLETED ? new Date() : null,
+        failedAt: this.isFailedPayment(status) ? new Date() : null,
+      },
+    })
+
+    if (status === PaymentStatus.COMPLETED) {
+      await this.creditPurchasedSms(purchase.id)
+    }
+
+    return this.getWalletStatus(tenantId)
+  }
+
+  async refreshCreditCheckout(tenantId: string) {
+    const purchase = await this.prisma.smsCreditPurchase.findFirst({
+      where: { tenantId, status: { in: [PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.INDETERMINATE] } },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (!purchase) {
+      throw new NotFoundException('No SMS credit checkout in progress')
+    }
+
+    const referenceId = purchase.providerReference ?? purchase.externalReference
+    const gatewayResponse = await this.paymentRouterService.resolveCollection(purchase.network).getPaymentStatus(referenceId)
+    const status = mapRawStatusToPaymentStatus(gatewayResponse.transactionStatus)
+
+    await this.prisma.smsCreditPurchase.update({
+      where: { id: purchase.id },
+      data: {
+        status,
+        providerReference: gatewayResponse.transactionReference ?? purchase.providerReference,
+        statusMessage: gatewayResponse.statusMessage,
+        responsePayload: gatewayResponse as Prisma.InputJsonValue,
+        completedAt: status === PaymentStatus.COMPLETED ? new Date() : purchase.completedAt,
+        failedAt: this.isFailedPayment(status) ? new Date() : purchase.failedAt,
+      },
+    })
+
+    if (status === PaymentStatus.COMPLETED) {
+      await this.creditPurchasedSms(purchase.id)
+    }
+
+    return this.getWalletStatus(tenantId)
   }
 
   async sendBusinessSms(input: { tenantId: string; title: string; message: string; phoneNumbers: string[]; templateKey?: string }) {
@@ -196,6 +337,7 @@ export class SmsService {
     segments: number
     estimatedCostUgx: number
     errorMessage?: string | null
+    creditSource?: string | null
   }) {
     return this.prisma.smsMessage.create({
       data: {
@@ -209,8 +351,181 @@ export class SmsService {
         segments: input.segments,
         estimatedCostUgx: input.estimatedCostUgx,
         errorMessage: input.errorMessage,
+        creditSource: input.creditSource,
       },
     })
+  }
+
+  private async reserveCredits(tenantId: string, segments: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const settings = await this.ensureTenantSmsSettings(tenantId, tx)
+      const current = await this.ensureCurrentCycle(settings, tx)
+      const tier = resolveEffectiveSubscriptionTier(current.subscriptionPlan, current.subscriptionPlanExpiresAt)
+      if (tier === SubscriptionPlanTier.FREE) {
+        return { ok: false as const, reason: 'SMS notifications are available to active Pro and Enterprise tenants only' }
+      }
+
+      const includedRemaining = Math.max(0, current.smsMonthlyIncluded - current.smsMonthlyUsed)
+      if (includedRemaining >= segments) {
+        const updated = await tx.tenantSetting.update({
+          where: { tenantId },
+          data: { smsMonthlyUsed: { increment: segments } },
+          select: { smsPurchasedBalance: true },
+        })
+        await tx.smsCreditLedger.create({
+          data: {
+            tenantId,
+            type: SmsCreditLedgerType.DEBIT,
+            quantity: -segments,
+            balanceAfter: updated.smsPurchasedBalance,
+            note: 'SMS sent from monthly included allowance',
+          },
+        })
+        return { ok: true as const, source: 'monthly_included' }
+      }
+
+      if (current.smsPurchasedBalance >= segments) {
+        const updated = await tx.tenantSetting.update({
+          where: { tenantId },
+          data: { smsPurchasedBalance: { decrement: segments } },
+          select: { smsPurchasedBalance: true },
+        })
+        await tx.smsCreditLedger.create({
+          data: {
+            tenantId,
+            type: SmsCreditLedgerType.DEBIT,
+            quantity: -segments,
+            balanceAfter: updated.smsPurchasedBalance,
+            unitPriceUgx: current.smsUnitPriceUgx,
+            amountUgx: segments * current.smsUnitPriceUgx,
+            note: 'SMS sent from purchased balance',
+          },
+        })
+        return { ok: true as const, source: 'purchased' }
+      }
+
+      return { ok: false as const, reason: 'SMS balance exhausted. Buy more SMS credits to continue sending text notifications.' }
+    })
+  }
+
+  private async refundCredits(tenantId: string, segments: number, source: string | null | undefined, smsMessageId: string, reason: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const settings = await this.ensureTenantSmsSettings(tenantId, tx)
+      if (source === 'monthly_included') {
+        await tx.tenantSetting.update({
+          where: { tenantId },
+          data: { smsMonthlyUsed: Math.max(0, settings.smsMonthlyUsed - segments) },
+        })
+      } else if (source === 'purchased') {
+        await tx.tenantSetting.update({
+          where: { tenantId },
+          data: { smsPurchasedBalance: { increment: segments } },
+        })
+      } else {
+        return
+      }
+      await tx.smsCreditLedger.create({
+        data: {
+          tenantId,
+          type: SmsCreditLedgerType.REFUND,
+          quantity: segments,
+          smsMessageId,
+          note: reason.slice(0, 250),
+        },
+      })
+    })
+  }
+
+  private async creditPurchasedSms(purchaseId: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const purchase = await tx.smsCreditPurchase.findUnique({ where: { id: purchaseId } })
+      if (!purchase || purchase.status !== PaymentStatus.COMPLETED || purchase.creditedAt) {
+        return
+      }
+      const updated = await tx.tenantSetting.update({
+        where: { tenantId: purchase.tenantId },
+        data: { smsPurchasedBalance: { increment: purchase.smsQuantity } },
+        select: { smsPurchasedBalance: true },
+      })
+      await tx.smsCreditPurchase.update({
+        where: { id: purchase.id },
+        data: { creditedAt: new Date() },
+      })
+      await tx.smsCreditLedger.create({
+        data: {
+          tenantId: purchase.tenantId,
+          type: SmsCreditLedgerType.PURCHASE,
+          quantity: purchase.smsQuantity,
+          balanceAfter: updated.smsPurchasedBalance,
+          unitPriceUgx: purchase.unitPriceUgx,
+          amountUgx: purchase.amountUgx,
+          purchaseId: purchase.id,
+          note: 'SMS credits purchased',
+        },
+      })
+    })
+  }
+
+  private async ensureTenantSmsSettings(tenantId: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
+    return tx.tenantSetting.upsert({
+      where: { tenantId },
+      update: {},
+      create: { tenantId },
+      select: {
+        tenantId: true,
+        subscriptionPlan: true,
+        subscriptionPlanExpiresAt: true,
+        smsMonthlyIncluded: true,
+        smsMonthlyUsed: true,
+        smsMonthlyCycleStartedAt: true,
+        smsPurchasedBalance: true,
+        smsUnitPriceUgx: true,
+      },
+    })
+  }
+
+  private async ensureCurrentCycle(
+    settings: Awaited<ReturnType<SmsService['ensureTenantSmsSettings']>>,
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const now = new Date()
+    const cycleStart = settings.smsMonthlyCycleStartedAt
+    const expired = !cycleStart || cycleStart.getUTCFullYear() !== now.getUTCFullYear() || cycleStart.getUTCMonth() !== now.getUTCMonth()
+    if (!expired) {
+      return settings
+    }
+
+    const updated = await tx.tenantSetting.update({
+      where: { tenantId: settings.tenantId },
+      data: {
+        smsMonthlyUsed: 0,
+        smsMonthlyCycleStartedAt: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      },
+      select: {
+        tenantId: true,
+        subscriptionPlan: true,
+        subscriptionPlanExpiresAt: true,
+        smsMonthlyIncluded: true,
+        smsMonthlyUsed: true,
+        smsMonthlyCycleStartedAt: true,
+        smsPurchasedBalance: true,
+        smsUnitPriceUgx: true,
+      },
+    })
+    await tx.smsCreditLedger.create({
+      data: {
+        tenantId: settings.tenantId,
+        type: SmsCreditLedgerType.MONTHLY_INCLUDED,
+        quantity: updated.smsMonthlyIncluded,
+        balanceAfter: updated.smsPurchasedBalance,
+        note: 'Monthly Pro SMS allowance reset',
+      },
+    })
+    return updated
+  }
+
+  private isFailedPayment(status: PaymentStatus) {
+    return status === PaymentStatus.FAILED || status === PaymentStatus.CANCELLED || status === PaymentStatus.EXPIRED
   }
 
   private provider(): SmsProvider {

@@ -158,6 +158,30 @@ type SubscriptionStatus = {
   }>
 }
 
+type SmsWalletStatus = {
+  enabled: boolean
+  provider: string
+  providerConfigured: boolean
+  currentPlan: string
+  includedMonthly: number
+  includedUsed: number
+  includedRemaining: number
+  purchasedBalance: number
+  totalAvailable: number
+  unitPriceUgx: number
+  minimumPurchaseSms: number
+  minimumPurchaseUgx: number
+  cycleStartedAt?: string | null
+  pendingPurchase?: {
+    id: string
+    status: string
+    smsQuantity: number
+    amountUgx: number
+    statusMessage?: string | null
+    createdAt: string
+  } | null
+}
+
 const PLAN_CARD_META: Record<string, { price: string; desc: string; color: string; badge?: string }> = {
   FREE: { price: 'UGX 0 / Month', desc: 'Perfect for testing and small operations starting out.', color: '#64748b' },
   PRO: {
@@ -245,10 +269,18 @@ export default function SettingsManager({
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
   const pollRef = useRef<number | null>(null)
+  const smsPollRef = useRef<number | null>(null)
+  const [smsWallet, setSmsWallet] = useState<SmsWalletStatus | null>(null)
+  const [smsLoading, setSmsLoading] = useState(false)
+  const [smsError, setSmsError] = useState('')
+  const [smsBuyModalOpen, setSmsBuyModalOpen] = useState(false)
+  const [smsQuantity, setSmsQuantity] = useState('50')
+  const [smsPhoneNumber, setSmsPhoneNumber] = useState('')
 
   useEffect(() => {
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current)
+      if (smsPollRef.current) window.clearInterval(smsPollRef.current)
     }
   }, [])
 
@@ -286,6 +318,45 @@ export default function SettingsManager({
     }, 4000)
   }
 
+  function stopSmsPolling() {
+    if (smsPollRef.current) {
+      window.clearInterval(smsPollRef.current)
+      smsPollRef.current = null
+    }
+  }
+
+  function startSmsPolling() {
+    stopSmsPolling()
+    smsPollRef.current = window.setInterval(async () => {
+      try {
+        const wallet = await clientFetchApi<SmsWalletStatus>('/sms/wallet/checkout/status')
+        setSmsWallet(wallet)
+        const pending = wallet.pendingPurchase?.status
+        if (!pending || pending === 'COMPLETED') {
+          stopSmsPolling()
+          setSmsLoading(false)
+          setMessage('SMS credits added to your balance.')
+        } else if (pending === 'FAILED' || pending === 'CANCELLED' || pending === 'EXPIRED') {
+          stopSmsPolling()
+          setSmsLoading(false)
+          setSmsError(wallet.pendingPurchase?.statusMessage || 'SMS credit payment was not completed.')
+        }
+      } catch {
+        // Keep polling while the mobile money prompt is pending.
+      }
+    }, 4000)
+  }
+
+  async function loadSmsWallet() {
+    if (!isVendor) return
+    try {
+      const wallet = await clientFetchApi<SmsWalletStatus>('/sms/wallet')
+      setSmsWallet(wallet)
+    } catch (caught) {
+      setSmsError(caught instanceof Error ? caught.message : 'Unable to load SMS balance.')
+    }
+  }
+
   useEffect(() => {
     const status = subStatus?.checkout?.status
     if (!isVendor || !status) return
@@ -294,6 +365,12 @@ export default function SettingsManager({
       startPolling()
     }
   }, [isVendor, subStatus?.checkout?.status])
+
+  useEffect(() => {
+    if (activeTab === 'Subscription Plan') {
+      void loadSmsWallet()
+    }
+  }, [activeTab, isVendor])
 
   async function handleSelectPlan(planKey: string) {
     setPlanSaving(true)
@@ -359,6 +436,52 @@ export default function SettingsManager({
       setSubStatus(statusResponse)
     } catch (caught) {
       setCheckoutError(caught instanceof Error ? caught.message : 'Unable to cancel checkout.')
+    }
+  }
+
+  async function handleBuySmsCredits() {
+    setSmsError('')
+    const quantity = Number.parseInt(smsQuantity, 10)
+    if (!Number.isFinite(quantity) || quantity < (smsWallet?.minimumPurchaseSms ?? 50)) {
+      setSmsError(`Buy at least ${smsWallet?.minimumPurchaseSms ?? 50} SMS.`)
+      return
+    }
+    const phoneError = validatePhoneNumber(smsPhoneNumber, true, true)
+    if (phoneError) {
+      setSmsError(phoneError)
+      return
+    }
+
+    setSmsLoading(true)
+    try {
+      const wallet = await clientPostApi<SmsWalletStatus>('/sms/wallet/checkout', {
+        smsQuantity: quantity,
+        phoneNumber: smsPhoneNumber,
+      })
+      setSmsWallet(wallet)
+      setSmsBuyModalOpen(false)
+      startSmsPolling()
+    } catch (caught) {
+      setSmsLoading(false)
+      setSmsError(caught instanceof Error ? caught.message : 'Unable to start SMS credit payment.')
+    }
+  }
+
+  async function handleRefreshSmsCheckout() {
+    setSmsError('')
+    setSmsLoading(true)
+    try {
+      const wallet = await clientFetchApi<SmsWalletStatus>('/sms/wallet/checkout/status')
+      setSmsWallet(wallet)
+      if (!wallet.pendingPurchase || wallet.pendingPurchase.status === 'COMPLETED') {
+        setMessage('SMS credits added to your balance.')
+      } else if (wallet.pendingPurchase.status === 'FAILED' || wallet.pendingPurchase.status === 'CANCELLED' || wallet.pendingPurchase.status === 'EXPIRED') {
+        setSmsError(wallet.pendingPurchase.statusMessage || 'SMS credit payment was not completed.')
+      }
+    } catch (caught) {
+      setSmsError(caught instanceof Error ? caught.message : 'Unable to check SMS credit payment.')
+    } finally {
+      setSmsLoading(false)
     }
   }
 
@@ -892,6 +1015,63 @@ export default function SettingsManager({
             </div>
           )}
 
+          {isVendor && smsWallet && (
+            <div style={{
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 18,
+              marginBottom: 24,
+              background: 'var(--bg-card, #ffffff)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>SMS Credits</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                    Pro includes {smsWallet.includedMonthly} SMS each month. Extra SMS are sold at {formatCurrency(smsWallet.unitPriceUgx)} each.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!smsWallet.enabled || smsLoading}
+                  onClick={() => setSmsBuyModalOpen(true)}
+                >
+                  Buy SMS
+                </button>
+              </div>
+              {smsError && <div className="badge badge-danger" style={{ marginBottom: 12 }}>{smsError}</div>}
+              {!smsWallet.providerConfigured && (
+                <div className="badge badge-warning" style={{ marginBottom: 12 }}>
+                  SMS gateway is not configured yet. Credits are protected until the provider API is added.
+                </div>
+              )}
+              {!smsWallet.enabled && (
+                <div className="badge badge-info" style={{ marginBottom: 12 }}>
+                  Upgrade to Pro to use SMS notifications.
+                </div>
+              )}
+              <div className="form-grid">
+                <ReadOnly label="Available SMS" value={String(smsWallet.totalAvailable)} />
+                <ReadOnly label="Included Left" value={`${smsWallet.includedRemaining} / ${smsWallet.includedMonthly}`} />
+                <ReadOnly label="Purchased Balance" value={String(smsWallet.purchasedBalance)} />
+                <ReadOnly label="Unit Price" value={formatCurrency(smsWallet.unitPriceUgx)} />
+              </div>
+              {smsWallet.pendingPurchase && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+                  <span className={getStatusBadgeClass(smsWallet.pendingPurchase.status)}>
+                    {smsWallet.pendingPurchase.status.replace(/_/g, ' ')}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    {smsWallet.pendingPurchase.smsQuantity} SMS for {formatCurrency(smsWallet.pendingPurchase.amountUgx)}
+                  </span>
+                  <button type="button" className="btn btn-ghost" disabled={smsLoading} onClick={handleRefreshSmsCheckout}>
+                    {smsLoading ? 'Checking...' : 'Check SMS Payment'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -1081,6 +1261,54 @@ export default function SettingsManager({
               <button type="button" className="btn btn-ghost" disabled={checkoutLoading} onClick={() => setPlanPaymentModalOpen(false)}>Cancel</button>
               <button type="button" className="btn btn-primary" disabled={checkoutLoading || !planPhoneNumber} onClick={handlePayNow}>
                 {checkoutLoading ? 'Sending prompt...' : 'Send Payment Prompt'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {smsBuyModalOpen && smsWallet && (
+        <div className="modal-overlay" onClick={() => !smsLoading && setSmsBuyModalOpen(false)}>
+          <div className="modal-card" style={{ width: 'min(520px, calc(100vw - 32px))' }} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: 'grid', gap: 4, borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Buy SMS credits</h3>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                Extra SMS cost {formatCurrency(smsWallet.unitPriceUgx)} each. Minimum purchase is {smsWallet.minimumPurchaseSms} SMS.
+              </p>
+            </div>
+            {smsError && <div className="badge badge-danger" style={{ marginBottom: 12 }}>{smsError}</div>}
+            <label className="form-group">
+              <span className="form-label">SMS Quantity</span>
+              <input
+                className="form-input"
+                type="number"
+                min={smsWallet.minimumPurchaseSms}
+                step={10}
+                value={smsQuantity}
+                onChange={(event) => setSmsQuantity(event.target.value)}
+              />
+            </label>
+            <div className="metric-card" style={{ marginBottom: 14 }}>
+              <div className="metric-label">Amount to Pay</div>
+              <div className="metric-value">
+                {formatCurrency(Math.max(0, Number.parseInt(smsQuantity, 10) || 0) * smsWallet.unitPriceUgx)}
+              </div>
+            </div>
+            <label className="form-group">
+              <span className="form-label">Mobile Money Number</span>
+              <PhoneNumberField
+                value={smsPhoneNumber}
+                onChange={setSmsPhoneNumber}
+                required
+                ugandaOnly
+                mobileOnly
+                autoFocus
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
+              <button type="button" className="btn btn-ghost" disabled={smsLoading} onClick={() => setSmsBuyModalOpen(false)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={smsLoading || !smsPhoneNumber} onClick={handleBuySmsCredits}>
+                {smsLoading ? 'Sending prompt...' : 'Send Payment Prompt'}
               </button>
             </div>
           </div>

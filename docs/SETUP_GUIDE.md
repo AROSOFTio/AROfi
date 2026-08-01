@@ -82,9 +82,24 @@ To bind it to a domain (e.g., `arofi.yourdomain.com`):
 
 Once the web portal is running and you have signed in:
 1. Go to **Routers** in the dashboard and click **Register Router**.
-2. Select **Fresh full captive Wi-Fi** mode and copy the generated RouterOS command.
-3. Open **WinBox**, connect to your MikroTik, go to **New Terminal**, and paste the command.
-4. Verify the router checks in and displays as **Healthy** on your AROFi operator console.
+2. Enter the router/site details and choose the setup mode. Do not ask the user for a host IP during onboarding.
+3. After the router is saved, AROFi shows two RouterOS commands side by side.
+4. Open **WinBox**, connect to your MikroTik, go to **New Terminal**, and run the **Onboarding script** first.
+5. Run the **Remote access script** second if remote WinBox/support access is needed.
+6. Verify the router checks in, RADIUS/accounting traffic appears, and the router displays as healthy on your AROFi operator console.
+
+The onboarding script configures hotspot billing, RADIUS, captive portal files, and permanent anti-tethering rules. The remote access script installs the tunnel used by the router-level open/close/test remote access controls.
+
+---
+
+## Pro SMS Notifications
+
+AROFi supports real SMS notifications for Pro and Enterprise tenants.
+
+* Pro includes **100 SMS credits per month**.
+* Extra SMS credits are sold at **UGX 40 per SMS**. Example: **UGX 2,000 buys 50 SMS**.
+* SMS credits are deducted only after the app reserves a monthly or purchased credit. If provider delivery fails, the credit is refunded.
+* If no SMS gateway credentials are configured, SMS is skipped safely and the dashboard/email/WhatsApp notification paths remain active.
 
 ---
 

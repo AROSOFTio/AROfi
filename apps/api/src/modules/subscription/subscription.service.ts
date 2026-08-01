@@ -35,7 +35,17 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
     amountUgx: 20000,
     durationDays: 30,
     routerLimit: 'Unlimited Routers',
-    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom branding', '30-day analytics history', 'Priority support'],
+    features: [
+      'Everything in Starter',
+      'Lower mobile money fees',
+      'Zero voucher commission',
+      'Custom branding',
+      '100 SMS/month included',
+      'Buy extra SMS at UGX 40 each',
+      'Router outage compensation alerts',
+      '30-day analytics history',
+      'Priority support',
+    ],
   },
 }
 

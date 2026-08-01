@@ -85,7 +85,7 @@ const categories: DocCategory[] = [
     pages: [
       { title: 'Business Compliance', slug: 'business-compliance', keywords: 'kyc, business verification, compliance review, approved rejected' },
       { title: 'Agent PoS & Resellers', slug: 'agent-pos', keywords: 'register agent, sell voucher, point of sale, reseller commission' },
-      { title: 'Notifications', slug: 'notifications', keywords: 'notification bell, attachments, dev admin broadcast' },
+      { title: 'Notifications & Pro SMS Credits', slug: 'notifications', keywords: 'notification bell, sms credits, pro sms, compensation text, dev admin broadcast' },
       { title: 'Reports', slug: 'reports', keywords: 'export csv excel pdf, sales report, disbursement report, voucher report' }
     ]
   },

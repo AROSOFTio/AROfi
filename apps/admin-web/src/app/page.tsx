@@ -35,7 +35,7 @@ const SHOW_PRICING = true
 
 const whyPoints = [
   { stat: 'UGX 0', label: 'To get started', text: 'Register free and start billing today — no setup fee, no contract.' },
-  { stat: '<5 min', label: 'Router onboarding', text: 'Paste one RouterOS command and your hotspot is billing customers.' },
+  { stat: '<5 min', label: 'Router onboarding', text: 'Register a router, then run onboarding and remote access scripts when ready.' },
   { stat: '24/7', label: 'Automated collection', text: 'MTN MoMo & Airtel Money payments post to your wallet around the clock.' },
   { stat: '256', label: 'Built for Uganda', text: 'Local mobile money rails, local support, local currency — no workarounds.' },
 ]
@@ -46,12 +46,12 @@ const features = [
   { icon: QrCode, title: 'QR Code Scan & Connect', text: 'Guests scan a QR code to connect and pay — no typing WiFi passwords.' },
   { icon: Clock, title: '24/7 Support', text: 'Real people on chat, WhatsApp, phone and email — every day, all day.' },
   { icon: Sparkles, title: 'Instant AI Support', text: 'Ask Aria about setup, routers, payments, or account issues from the website or dashboard.' },
-  { icon: Bell, title: 'Instant Alerts', text: 'Get an email the moment a router goes offline, so you fix it before customers notice.' },
+  { icon: Bell, title: 'Email, WhatsApp & SMS Alerts', text: 'Notify operators and Pro customers about outages, compensation, and important account events.' },
   { icon: Layers, title: 'Multi-Device Bundles', text: 'Sell packages that cover several devices per customer on one payment.' },
   { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated business workspaces, and secret-key protected withdrawals.' },
   { icon: Zap, title: 'Instant Withdrawals', text: 'Cash out to your approved mobile money number the moment you need it.' },
-  { icon: Router, title: 'Add Multiple Routers', text: 'Run one hotspot or fifty — every MikroTik router lives in one dashboard.' },
-  { icon: Wifi, title: 'Remote Router Access', text: 'Reach any router from anywhere over our secure VPN tunnel — no port forwarding, no static IP.' },
+  { icon: Router, title: 'Add Router Then Run Scripts', text: 'Finish signup first, add each MikroTik in the dashboard, then run the two required setup scripts.' },
+  { icon: Wifi, title: 'Remote Router Access', text: 'Reach routers over a secure tunnel with open, close, and test controls under each router.' },
   { icon: Timer, title: 'Live Session Tracking', text: 'See who is online, for how long, and how much they have paid — in real time.' },
   { icon: Users, title: 'Independent Business Workspaces · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
 ]
@@ -67,7 +67,7 @@ const faqs = [
   },
   {
     q: 'Which routers work with AROFi?',
-    a: 'Any MikroTik RouterOS device — RB951Ui, hAP ac², CCR, CHR and more. Paste one setup command from your dashboard and the router starts authenticating and billing through AROFi.',
+    a: 'Any MikroTik RouterOS device - RB951Ui, hAP ac2, CCR, CHR and more. Add the router in your dashboard, run the onboarding script first, then run the remote access script.',
   },
   {
     q: 'Can I manage a router that isn’t on-site?',
@@ -75,7 +75,7 @@ const faqs = [
   },
   {
     q: 'What happens if my router goes offline?',
-    a: 'You get an instant email notification so you can act before customers complain. Router health is also visible live on your dashboard.',
+    a: 'You get an alert, router health is visible live, and AROFi can compensate affected active packages when the router comes back online. Pro businesses can use SMS notifications with a monthly allowance and paid top-ups.',
   },
   {
     q: 'Is my money and customer data safe?',
@@ -83,7 +83,7 @@ const faqs = [
   },
   {
     q: 'How many routers or hotspot sites can I run?',
-    a: 'Both Starter and Pro support unlimited routers and hotspot sites. Pro is for operators who want lower fees, deeper history, custom branding, and priority support.',
+    a: 'Both Starter and Pro support unlimited routers and hotspot sites. Pro is for operators who want lower fees, custom branding, SMS credits, router outage compensation notifications, deeper history, and priority support.',
   },
   {
     q: 'Do you support vouchers as well as mobile money?',
@@ -119,7 +119,7 @@ const pricingTiers = [
     period: '/month',
     commissionSummary: 'Gateway fee 3–5% · Voucher 0%',
     routerLimit: 'Unlimited routers and hotspots',
-    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom logo and colours', '30-day analytics history', 'Priority support'],
+    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom logo and colours', '100 SMS/month included', 'Buy extra SMS at UGX 40 each', 'Router outage compensation alerts', '30-day analytics history', 'Priority support'],
     featured: true,
   },
 ]

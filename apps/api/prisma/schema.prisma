@@ -421,6 +421,14 @@ enum SmsMessageStatus {
   FAILED
 }
 
+enum SmsCreditLedgerType {
+  MONTHLY_INCLUDED
+  PURCHASE
+  DEBIT
+  REFUND
+  ADJUSTMENT
+}
+
 model Tenant {
   id                  String               @id @default(uuid())
   name                String
@@ -478,6 +486,8 @@ model Tenant {
   complianceProfile   ComplianceProfile?
   notifications       Notification[]
   smsMessages         SmsMessage[]
+  smsCreditPurchases  SmsCreditPurchase[]
+  smsCreditLedger     SmsCreditLedger[]
   referredRelationships ReferralRelationship[] @relation("ReferredTenant")
 }
 
@@ -1696,6 +1706,11 @@ model TenantSetting {
   maxResetsPerActivation  Int      @default(0)
   allowUnboundCaptiveAccess Boolean @default(false)
   antiTetheringRuleEnabled Boolean  @default(false)
+  smsMonthlyIncluded   Int      @default(100)
+  smsMonthlyUsed       Int      @default(0)
+  smsMonthlyCycleStartedAt DateTime?
+  smsPurchasedBalance  Int      @default(0)
+  smsUnitPriceUgx      Int      @default(40)
   supportText             String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -2134,10 +2149,55 @@ model SmsMessage {
   providerMessageId String?
   providerResponse  Json?
   errorMessage      String?
+  creditSource      String?
   sentAt            DateTime?
   createdAt         DateTime         @default(now())
 
   @@index([tenantId, createdAt])
   @@index([status, createdAt])
   @@index([normalizedRecipient, createdAt])
+}
+
+model SmsCreditPurchase {
+  id                String        @id @default(uuid())
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status            PaymentStatus @default(INITIATED)
+  smsQuantity       Int
+  unitPriceUgx      Int
+  amountUgx         Int
+  network           PaymentNetwork
+  phoneNumber       String
+  externalReference String        @unique
+  providerReference String?
+  statusMessage     String?
+  requestPayload    Json?
+  responsePayload   Json?
+  creditedAt        DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+}
+
+model SmsCreditLedger {
+  id              String              @id @default(uuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type            SmsCreditLedgerType
+  quantity        Int
+  balanceAfter    Int?
+  unitPriceUgx    Int?
+  amountUgx       Int?
+  smsMessageId    String?
+  purchaseId      String?
+  note            String?
+  createdAt       DateTime            @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([purchaseId])
+  @@index([smsMessageId])
 }

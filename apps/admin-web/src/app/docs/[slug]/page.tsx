@@ -18,21 +18,23 @@ type DocPage = {
 export const docs: Record<string, DocPage> = {
   'getting-started': {
     title: 'Getting started',
-    intro: 'Four steps from a brand-new router to a working, paid WiFi hotspot: register the router, run one setup command, wait for it to connect, then test it on a phone.',
+    intro: 'Four steps from signup to a working, paid WiFi hotspot: create the workspace, add a router, run the onboarding and remote access scripts, then test payment on a phone.',
     sections: [
       {
         heading: '1. Set up your business first',
         body: [
-          'Sign in to your dashboard. Before registering a router, create at least one package (e.g. "1 Hour - UGX 1,000") — customers need something to buy the moment the hotspot goes live.',
+          'Sign up and finish creating the business workspace first. AROFi no longer forces script entry during signup.',
+          'Before customers use the hotspot, create at least one package (e.g. "1 Hour - UGX 1,000") - customers need something to buy the moment the hotspot goes live.',
           'Open Routers and click Register Router. Enter a name for the router and the site (e.g. the shop or estate it\'s at), and choose whether this is a brand-new hotspot or an existing one you just want connected to AROFi billing.',
         ],
       },
       {
-        heading: '2. Run the setup command',
+        heading: '2. Run the two router scripts',
         body: [
           'Connect your laptop to the MikroTik and open it in WinBox using its admin login.',
-          'Copy the setup command from the router\'s page in AROFi, open New Terminal in WinBox, paste it, and press Enter.',
-          'Wait for the success message — this usually takes under a minute. The command is unique to that router, so always copy it fresh from the router\'s own page.',
+          'After registering the router, AROFi shows the onboarding script and remote access script side by side. Run the onboarding script first, then run the remote access script.',
+          'Copy each command from the router page in AROFi, open New Terminal in WinBox, paste it, and press Enter.',
+          'Wait for the success message. Router setup commands are unique to each router, so always copy the latest command from that router page.',
         ],
       },
       {
@@ -320,7 +322,7 @@ export const docs: Record<string, DocPage> = {
         heading: 'Run the script',
         body: [
           'Open WinBox, connect to the router, go to New Terminal, paste the generated one-run command, and press Enter.',
-          'Wait for the success message, then return to AROFi — the router\'s status should update once the provisioning callback is received.',
+          'Wait for the success message after each script. Each command is unique to that router, so always copy it fresh from the router page.',
         ],
       },
       {
@@ -438,6 +440,15 @@ export const docs: Record<string, DocPage> = {
           'Every signed-in user has a notification bell in the top bar showing an unread count. Opening it lists your notifications, newest first, and you can mark one or all as read.',
           'Notifications are checked automatically about once a minute while you have the dashboard open — there\'s no separate "enable notifications" step or browser permission prompt.',
           'Email and WhatsApp copies are sent automatically when valid contact details are saved for the business.',
+        ],
+      },
+      {
+        heading: 'Pro SMS credits',
+        body: [
+          'Pro includes 100 SMS credits every month. AROFi spends the monthly allowance first, then any purchased SMS balance.',
+          'Extra SMS credits are sold at UGX 40 per SMS. For example, UGX 2,000 buys 50 SMS credits.',
+          'SMS delivery is audited: every sent, failed, skipped, and refunded SMS is logged with its recipient, provider status, and estimated cost.',
+          'If the SMS gateway is not configured yet, AROFi safely skips SMS delivery instead of charging credits or breaking dashboard notifications.',
         ],
       },
       {
