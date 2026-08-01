@@ -348,7 +348,7 @@ export class BillingService {
         ],
       },
     } satisfies Prisma.BillingTransactionWhereInput
-    const [transactions, wallets, ledgerEntries, disbursements, activeUsers, activeNetworkSessions, onlineRouters, dataUsage, todaySales, monthSales] = await Promise.all([
+    const [transactions, wallets, ledgerEntries, disbursements, routerActiveUsers, activeNetworkSessions, onlineRouters, dataUsage, todaySales, monthSales] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: transactionWhere,
         include: this.transactionInclude,
@@ -407,9 +407,6 @@ export class BillingService {
           ...(dateWhere.createdAt ? { createdAt: dateWhere.createdAt } : {}),
         },
       }),
-      // The router heartbeat carries the MikroTik HotSpot active count every
-      // 2s. Use that count for the dashboard KPI so connect/disconnect changes
-      // do not wait for RADIUS interim accounting.
       this.prisma.router.aggregate({
         where: {
           ...(tenantId ? { tenantId } : {}),
@@ -419,11 +416,16 @@ export class BillingService {
           activeSessionCount: true,
         },
       }),
-      this.prisma.networkSession.count({
+      this.prisma.networkSession.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
           status: 'ACTIVE',
           lastAccountingAt: { gte: routerActiveUserCutoff },
+        },
+        select: {
+          macAddress: true,
+          username: true,
+          radiusSessionId: true,
         },
       }),
       // router.status is a persisted column that's only written at onboarding
@@ -503,6 +505,16 @@ export class BillingService {
       .reduce((total, item) => total + item.amountUgx, 0)
     const inputBytes = Number(dataUsage._sum.inputOctets ?? 0n)
     const outputBytes = Number(dataUsage._sum.outputOctets ?? 0n)
+    const activeUserCount = new Set(
+      activeNetworkSessions.map((session) => session.macAddress ?? session.username ?? session.radiusSessionId),
+    ).size
+    const routerActiveUserCount = routerActiveUsers._sum.activeSessionCount ?? 0
+    const liveActiveUserCount =
+      routerActiveUserCount === 0
+        ? 0
+        : activeUserCount > 0
+          ? Math.min(routerActiveUserCount, activeUserCount)
+          : routerActiveUserCount
 
     return {
       summary: {
@@ -529,7 +541,7 @@ export class BillingService {
         pendingWithdrawalUgx,
         completedWithdrawalUgx,
         failedWithdrawalUgx,
-        activeUsers: Math.max(activeUsers._sum.activeSessionCount ?? 0, activeNetworkSessions),
+        activeUsers: liveActiveUserCount,
         onlineRouters,
         dataUsedMb: Math.round(((inputBytes + outputBytes) / (1024 * 1024)) * 100) / 100,
       },

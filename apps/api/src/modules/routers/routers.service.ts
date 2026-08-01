@@ -238,7 +238,12 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   // alive and report the current HotSpot active-user count directly from the
   // router itself. This is the only source that can drop to zero immediately
   // when a client leaves Wi-Fi without waiting for RADIUS interim updates.
-  async recordRouterHeartbeatByKey(key: string, sourceIp: string, reportedActiveUsersInput?: string | number | null) {
+  async recordRouterHeartbeatByKey(
+    key: string,
+    sourceIp: string,
+    reportedActiveUsersInput?: string | number | null,
+    reportedActiveMacsInput?: string | null,
+  ) {
     const router = await this.prisma.router.findUnique({
       where: { registrationKey: key },
       select: {
@@ -269,12 +274,14 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
 
     const now = new Date()
     const reportedActiveUsers = this.parseReportedActiveUsers(reportedActiveUsersInput)
+    const reportedActiveMacs = this.parseReportedActiveMacs(reportedActiveMacsInput)
+    const effectiveActiveUsers = reportedActiveMacs ? reportedActiveMacs.length : reportedActiveUsers
     const previousActiveUsers = router.activeSessionCount
     await this.prisma.router.update({
       where: { id: router.id },
       data: {
         lastSeenAt: now,
-        ...(reportedActiveUsers !== null ? { activeSessionCount: reportedActiveUsers } : {}),
+        ...(effectiveActiveUsers !== null ? { activeSessionCount: effectiveActiveUsers } : {}),
         ...(shouldAdvanceOnboarding
           ? { onboardingStatus: RouterOnboardingStatus.WAITING_FOR_RADIUS }
           : {}),
@@ -289,9 +296,20 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       await this.ensureAccessPointForRouter(router, normalizedSourceIp)
     }
 
-    if (reportedActiveUsers === 0) {
+    if (reportedActiveMacs || reportedActiveUsers === 0) {
       const staleSessions = await this.prisma.networkSession.findMany({
-        where: { routerId: router.id, status: SessionStatus.ACTIVE },
+        where: {
+          routerId: router.id,
+          status: SessionStatus.ACTIVE,
+          ...(reportedActiveMacs
+            ? {
+                OR: [
+                  { macAddress: null },
+                  { macAddress: { notIn: reportedActiveMacs } },
+                ],
+              }
+            : {}),
+        },
         select: {
           id: true,
           tenantId: true,
@@ -342,17 +360,19 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       data: {
         sourceIp: normalizedSourceIp || null,
         previousAgeSeconds,
-        activeUsers: reportedActiveUsers,
+        activeUsers: effectiveActiveUsers,
+        activeMacs: reportedActiveMacs,
         previousActiveUsers,
       },
     })
-    if (reportedActiveUsers !== null && reportedActiveUsers !== previousActiveUsers) {
+    if (effectiveActiveUsers !== null && effectiveActiveUsers !== previousActiveUsers) {
       this.realtimeEvents.publish('session.updated', {
         tenantId: router.tenantId,
         routerId: router.id,
         data: {
           source: 'router-heartbeat',
-          activeUsers: reportedActiveUsers,
+          activeUsers: effectiveActiveUsers,
+          activeMacs: reportedActiveMacs,
           previousActiveUsers,
         },
       })
@@ -365,7 +385,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       })
     }
 
-    return { ok: true, activeUsers: reportedActiveUsers ?? previousActiveUsers }
+    return { ok: true, activeUsers: effectiveActiveUsers ?? previousActiveUsers }
   }
 
   async getOverview(tenantId?: string) {
@@ -1883,6 +1903,32 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     }
 
     return Math.floor(parsed)
+  }
+
+  private parseReportedActiveMacs(input?: string | null) {
+    if (!input?.trim()) {
+      return null
+    }
+
+    const macs = input
+      .split(/[,\s;]+/)
+      .map((item) => this.normalizeMac(item))
+      .filter((item): item is string => Boolean(item))
+
+    return Array.from(new Set(macs))
+  }
+
+  private normalizeMac(value?: string | null) {
+    if (!value) {
+      return null
+    }
+
+    const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
+    if (!/^[A-F0-9]{12}$/.test(compact)) {
+      return null
+    }
+
+    return compact.match(/.{1,2}/g)?.join(':') ?? null
   }
 
   private async ensureAccessPointForRouter(

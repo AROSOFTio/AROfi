@@ -24,6 +24,11 @@ type ReconnectPayload = {
   username?: string | null
   password?: string | null
 }
+type SmartTvActivationNotice = {
+  macAddress: string
+  packageName?: string
+  source: 'voucher' | 'payment'
+}
 type HotspotParams = {
   macAddress: string
   clientIp: string
@@ -60,6 +65,10 @@ function normalizeMacInput(value: string) {
   const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
   if (!/^[A-F0-9]{12}$/.test(compact)) return ''
   return compact.match(/.{1,2}/g)?.join(':') ?? ''
+}
+
+function isMultiDevicePackage(pkg?: PortalPackage | null) {
+  return (pkg?.deviceLimit ?? 1) > 1
 }
 
 function stashCompanionCodes(codes: string[]) {
@@ -394,6 +403,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [voucherCode, setVoucherCode] = useState('')
   const [tvMacAddress, setTvMacAddress] = useState('')
   const [voucherTvMode, setVoucherTvMode] = useState(false)
+  const [smartTvNotice, setSmartTvNotice] = useState<SmartTvActivationNotice | null>(null)
   const [isContextLoading, setIsContextLoading] = useState(!cachedCtx)
   const [contextUnresolved, setContextUnresolved] = useState(false)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
@@ -418,6 +428,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   })
   const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
   const selectedIsTvPackage = isTvPackage(selectedPackage)
+  const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
+  const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
+  const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -465,17 +478,21 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     // comes back later) reconnects normally, because that happens far more than
     // a few seconds later. Using a short-lived timestamp instead of a one-shot
     // flag is what lets an active bundle be "remembered" and auto-reconnected.
+    const reconnect = context.returningDevice.reconnect
+    if (!reconnect?.username || !reconnect?.password) return
+
     let lastAt = 0
     try { lastAt = Number(sessionStorage.getItem('arofiAutoConnectAt') || '0') } catch {}
     if (lastAt && Date.now() - lastAt < 20000) {
       autoConnectAttemptedRef.current = true
-      setConnectionStatus('failed')
-      setErrorMessage('Auto-login was not accepted by the router. Turn WiFi off and on, or tap Connect Now.')
+      setConnectionStatus('reconnecting')
+      setErrorMessage('')
+      window.setTimeout(() => {
+        try { sessionStorage.setItem('arofiAutoConnectAt', String(Date.now())) } catch {}
+        autoSubmitHotspotLogin(reconnect)
+      }, 1500)
       return
     }
-
-    const reconnect = context.returningDevice.reconnect
-    if (!reconnect?.username || !reconnect?.password) return
 
     autoConnectAttemptedRef.current = true
     try { sessionStorage.setItem('arofiAutoConnectAt', String(Date.now())) } catch {}
@@ -531,6 +548,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setVoucherCode('')
       if (tvMac) {
         setStatusMessage(`Voucher ${redemption.voucher.code} activated for Smart TV ${tvMac}. Turn the TV WiFi off and on once.`)
+        setSmartTvNotice({ macAddress: tvMac, packageName: redemption.redemption.package.name, source: 'voucher' })
         await loadContext(phoneNumber || undefined, portalToken, hotspotParams)
         return
       }
@@ -871,6 +889,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setCheckoutOpen(false)
       setErrorMessage('')
       setStatusMessage(`Payment confirmed. Smart TV access is active. Turn the TV WiFi off and on once.`)
+      setSmartTvNotice({ macAddress: payment.activation.customerReference ?? tvMacAddress, packageName: payment.package.name, source: 'payment' })
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(paymentReturnStorageKey)
       }
@@ -977,6 +996,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       if (selectedIsTvPackage && payment.activation) {
         setCheckoutOpen(false)
         setStatusMessage(`Payment confirmed. Smart TV ${tvMac} is activated. Turn the TV WiFi off and on once.`)
+        setSmartTvNotice({ macAddress: tvMac, packageName: payment.package.name, source: 'payment' })
         await loadContext(payment.phoneNumber, portalToken, hotspotParams)
       } else if (payment.activation && hasUsableReconnect(payment)) {
         // Instantly confirmed (rare edge case)
@@ -1133,10 +1153,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           `Payment confirmed! Turn WiFi off and on — your device will connect automatically.`
         )
       } else {
-        setErrorMessage(
-          'Auto-connect needs the WiFi login page to be open. ' +
-          'Reconnect to the WiFi network and open this portal again.'
-        )
+        setErrorMessage('Auto-connect needs the WiFi login page. Reconnect to the WiFi network and AROFi will retry automatically.')
       }
       return
     }
@@ -1177,7 +1194,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       window.location.href = target.toString()
     } catch {
       setConnectionStatus('failed')
-      setErrorMessage('Could not open the WiFi login page. Tap Connect Now to retry.')
+      setErrorMessage('Could not open the WiFi login page. AROFi will retry when the WiFi login page opens again.')
     }
   }
 
@@ -1191,6 +1208,34 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const packages = context?.packages ?? []
   const availableNetworks = (context?.paymentNetworks?.length ? context.paymentNetworks : ['MTN']) as MobileMoneyNetwork[]
   const portalStyle = portalTemplateStyles[resolvePortalTemplate(context?.tenant.portalTemplate)]
+
+  function renderPackageButton(pkg: PortalPackage) {
+    return (
+      <button
+        key={pkg.id}
+        type="button"
+        onClick={() => {
+          setSelectedPackage(pkg)
+          setCheckoutOpen(true)
+          setCurrentPayment(null)
+          setErrorMessage('')
+          setStatusMessage('')
+          setSmartTvNotice(null)
+        }}
+        className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-4 py-3 text-left shadow-sm ${portalStyle.packageCard}`}
+      >
+        <span>
+          <span className={`block text-base font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>{pkg.name}</span>
+          <span className={`block text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-400' : 'text-slate-500'}`}>
+            {formatDuration(pkg.durationMinutes)}
+            {isMultiDevicePackage(pkg) ? ` - ${pkg.deviceLimit} devices` : ''}
+          </span>
+        </span>
+        <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{formatCurrency(pkg.amountUgx)}</span>
+        <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>BUY</span>
+      </button>
+    )
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -1266,6 +1311,19 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       <>
           {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
           {!checkoutOpen && statusMessage && !pendingStatuses.includes(currentPayment?.status ?? '') && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}>{statusMessage}</div>}
+          {smartTvNotice && (
+            <div className={`rounded-2xl border p-4 text-sm ${portalStyle.notice}`}>
+              <div className="font-extrabold">Smart TV access is ready</div>
+              <div className={`mt-1 ${portalStyle.noticeText}`}>
+                {smartTvNotice.packageName ?? 'TV package'} is active for {normalizeMacInput(smartTvNotice.macAddress) || 'the TV MAC address'}.
+              </div>
+              <ol className={`mt-3 space-y-1 pl-5 text-left text-xs ${portalStyle.noticeText}`}>
+                <li>On the TV, open WiFi settings.</li>
+                <li>Forget/disconnect the WiFi, then connect to this hotspot again.</li>
+                <li>The TV should get internet automatically. No portal popup is needed on the TV.</li>
+              </ol>
+            </div>
+          )}
           {connectionStatus === 'reconnecting' && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}><span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Connecting to internet...</span></div>}
           {context?.returningDevice?.existingActiveAccess && connectionStatus !== 'reconnecting' && (
             <div className={`rounded-2xl border p-4 text-sm ${portalStyle.notice}`}>
@@ -1352,28 +1410,29 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       : 'No packages are published for this portal yet.'}
                   </div>
                 )}
-                {packages.map((pkg) => (
-                  <button
-                    key={pkg.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPackage(pkg)
-                      setCheckoutOpen(true)
-                      setCurrentPayment(null)
-                      setErrorMessage('')
-                      setStatusMessage('')
-                    }}
-                    className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-4 py-3 text-left shadow-sm ${portalStyle.packageCard}`}
-                  >
-                    <span>
-                      <span className={`block text-base font-bold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-white' : 'text-slate-700'}`}>{pkg.name}</span>
-                      <span className={`block text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-400' : 'text-slate-500'}`}>{formatDuration(pkg.durationMinutes)}</span>
-                    </span>
-                    <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{formatCurrency(pkg.amountUgx)}</span>
-                    <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>BUY</span>
-                  </button>
-                ))}
+                {normalPackages.map(renderPackageButton)}
               </div>
+
+              {smartTvPackages.length > 0 && (
+                <>
+                  <p className={`mt-6 text-center text-sm font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Smart TV connection</p>
+                  <p className={`mx-auto mt-1 max-w-sm text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    Pay on your phone, enter the TV wireless MAC address, then reconnect the TV to WiFi.
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {smartTvPackages.map(renderPackageButton)}
+                  </div>
+                </>
+              )}
+
+              {multiDevicePackages.length > 0 && (
+                <>
+                  <p className={`mt-6 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Multi-device packages</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {multiDevicePackages.map(renderPackageButton)}
+                  </div>
+                </>
+              )}
 
               {(() => {
                 // Only show networks that are actually enabled on the platform

@@ -187,10 +187,20 @@ export class SessionsService {
             ) / sessionsToday.length,
           )
         : 0
+    const activeSessionCount = new Set(
+      activeSessions.map((session) => session.macAddress ?? session.username ?? session.radiusSessionId),
+    ).size
+    const routerActiveUserCount = routerActiveUsers._sum.activeSessionCount ?? 0
+    const liveActiveSessionCount =
+      routerActiveUserCount === 0
+        ? 0
+        : activeSessionCount > 0
+          ? Math.min(routerActiveUserCount, activeSessionCount)
+          : routerActiveUserCount
 
     return {
       summary: {
-        activeSessions: Math.max(routerActiveUsers._sum.activeSessionCount ?? 0, activeSessions.length),
+        activeSessions: liveActiveSessionCount,
         totalSessionsToday: sessionsToday.length,
         dataUsedTodayMb: totalDataTodayMb,
         averageSessionMinutes,

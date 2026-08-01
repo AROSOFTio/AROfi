@@ -569,8 +569,10 @@ export class MikrotikService {
     const source =
       `:local arofiActiveUsers 0; ` +
       `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={}; ` +
-      `:local arofiHeartbeatUrl "${heartbeatUrl}?activeUsers=$arofiActiveUsers"; ` +
-      `:local arofiHeartbeatFallback "${fallbackHeartbeatUrl}?activeUsers=$arofiActiveUsers"; ` +
+      `:local arofiActiveMacs ""; ` +
+      `:do { :foreach a in=[/ip hotspot active find] do={ :local m [/ip hotspot active get $a mac-address]; :if ($m != "") do={ :if ($arofiActiveMacs = "") do={ :set arofiActiveMacs $m } else={ :set arofiActiveMacs ($arofiActiveMacs . "," . $m) } } } } on-error={}; ` +
+      `:local arofiHeartbeatUrl "${heartbeatUrl}?activeUsers=$arofiActiveUsers&activeMacs=$arofiActiveMacs"; ` +
+      `:local arofiHeartbeatFallback "${fallbackHeartbeatUrl}?activeUsers=$arofiActiveUsers&activeMacs=$arofiActiveMacs"; ` +
       `:do { /tool fetch url=$arofiHeartbeatUrl check-certificate=no keep-result=no } ` +
       `on-error={ :do { /tool fetch url=$arofiHeartbeatFallback keep-result=no } on-error={} }`
     return [

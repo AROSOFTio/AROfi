@@ -7615,33 +7615,33 @@ button:not(.reset):not(.mobile-nav-backdrop):not(.mobile-menu-button):not(.mobil
 /* Premium dark mode authority. Keep dark mode clean and grey-led like a
    server control panel; accents should guide actions, not tint every surface. */
 html[data-theme="dark"] {
-  --bg-app: #1f2024;
-  --bg-card: #26282d;
-  --bg-sidebar: #222429;
-  --bg-hover: #2e3137;
-  --bg-soft: #2a2c31;
-  --bg-panel: #24262b;
-  --border: #3b3f47;
-  --border-soft: #30343b;
-  --text-1: #f3f4f6;
-  --text-2: #d7dbe2;
-  --text-3: #a8b0bd;
-  --text-primary: #f3f4f6;
-  --text-secondary: #d7dbe2;
-  --text-muted: #a8b0bd;
-  --aa-page-bg: #1f2024;
-  --aa-surface: #26282d;
-  --aa-card-bg: #26282d;
-  --aa-input-bg: #222429;
-  --aa-border: #3b3f47;
-  --aa-border-soft: #30343b;
-  --aa-text: #d7dbe2;
-  --aa-text-strong: #f3f4f6;
-  --aa-text-muted: #a8b0bd;
-  --aa-text-subtle: #c8ced8;
-  --aa-placeholder: #8f98a7;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.22);
-  --shadow-md: 0 10px 24px rgba(0,0,0,0.24);
+  --bg-app: #30333a;
+  --bg-card: #3a3e46;
+  --bg-sidebar: #343842;
+  --bg-hover: #454a54;
+  --bg-soft: #414650;
+  --bg-panel: #383c44;
+  --border: #585f6b;
+  --border-soft: #4b515d;
+  --text-1: #f7f8fa;
+  --text-2: #e4e7ec;
+  --text-3: #c1c8d2;
+  --text-primary: #f7f8fa;
+  --text-secondary: #e4e7ec;
+  --text-muted: #c1c8d2;
+  --aa-page-bg: #30333a;
+  --aa-surface: #3a3e46;
+  --aa-card-bg: #3a3e46;
+  --aa-input-bg: #343842;
+  --aa-border: #585f6b;
+  --aa-border-soft: #4b515d;
+  --aa-text: #e4e7ec;
+  --aa-text-strong: #f7f8fa;
+  --aa-text-muted: #c1c8d2;
+  --aa-text-subtle: #d7dce4;
+  --aa-placeholder: #aeb6c2;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.18);
+  --shadow-md: 0 10px 24px rgba(0,0,0,0.2);
 }
 
 html[data-theme="dark"] body,
@@ -7699,9 +7699,9 @@ html[data-theme="dark"] .sidebar-group-toggle.active {
 html[data-theme="dark"] .wallet-showcase-card {
   background:
     linear-gradient(135deg,
-      color-mix(in srgb, var(--arofi-theme-accent) 42%, #2a2c31 58%) 0%,
-      color-mix(in srgb, var(--arofi-theme-accent-hover) 32%, #24262b 68%) 62%,
-      color-mix(in srgb, var(--arofi-theme-accent) 28%, #30343b 72%) 100%) !important;
+      color-mix(in srgb, var(--arofi-theme-accent) 34%, #4a5360 66%) 0%,
+      color-mix(in srgb, var(--arofi-theme-accent-hover) 28%, #3f4651 72%) 62%,
+      color-mix(in srgb, var(--arofi-theme-accent) 24%, #56606d 76%) 100%) !important;
   border-color: color-mix(in srgb, var(--arofi-theme-accent) 42%, var(--border) 58%) !important;
   box-shadow: 0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14) !important;
 }
