@@ -10,7 +10,7 @@ import { useRealtimeRefresh, type RealtimeEventType, REALTIME_EVENT_TYPES } from
 // flash, client state preserved) within well under 2 seconds. The interval
 // refresh remains only as a fallback for when the stream is unavailable.
 export function DashboardAutoRefresh({
-  intervalMs = 5000,
+  intervalMs = 15000,
   eventTypes = REALTIME_EVENT_TYPES,
 }: {
   intervalMs?: number
@@ -21,7 +21,11 @@ export function DashboardAutoRefresh({
   useRealtimeRefresh(() => router.refresh(), eventTypes, 500)
 
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), intervalMs)
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        router.refresh()
+      }
+    }, intervalMs)
     return () => clearInterval(id)
   }, [router, intervalMs])
 

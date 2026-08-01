@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { refreshAccessToken } from '@/lib/client-api'
 
 // The dashboard layout's server-side session check (fetchApi('/auth/me'))
@@ -21,36 +21,48 @@ import { refreshAccessToken } from '@/lib/client-api'
 // sessionStorage guard prevents an infinite reload loop if the session is
 // truly dead for some other reason.
 const MAX_RECOVERY_ATTEMPTS = 2
-const ATTEMPT_KEY = 'arofi.session_recovery_attempts'
+export const SESSION_RECOVERY_ATTEMPT_KEY = 'arofi.session_recovery_attempts'
+const RECOVERY_TIMEOUT_MS = 4000
 
 export default function SessionRecoveryGate() {
-  const router = useRouter()
   const pathname = usePathname()
   const [state, setState] = useState<'recovering' | 'failed'>('recovering')
 
   useEffect(() => {
     let cancelled = false
 
-    const attempts = Number.parseInt(sessionStorage.getItem(ATTEMPT_KEY) ?? '0', 10)
+    const attempts = Number.parseInt(sessionStorage.getItem(SESSION_RECOVERY_ATTEMPT_KEY) ?? '0', 10)
     if (attempts >= MAX_RECOVERY_ATTEMPTS) {
-      sessionStorage.removeItem(ATTEMPT_KEY)
+      sessionStorage.removeItem(SESSION_RECOVERY_ATTEMPT_KEY)
       setState('failed')
       return
     }
-    sessionStorage.setItem(ATTEMPT_KEY, String(attempts + 1))
+    sessionStorage.setItem(SESSION_RECOVERY_ATTEMPT_KEY, String(attempts + 1))
+
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) {
+        setState('failed')
+      }
+    }, RECOVERY_TIMEOUT_MS)
 
     refreshAccessToken().then((ok) => {
       if (cancelled) return
-      if (ok) {
-        sessionStorage.removeItem(ATTEMPT_KEY)
-        router.refresh()
-      } else {
+      window.clearTimeout(timeout)
+      if (!ok) {
         setState('failed')
+        return
       }
+
+      // Force a new document request after the API sets the fresh HttpOnly
+      // cookie. router.refresh() can reuse the current app tree long enough
+      // to show this recovery fallback again on slow devices.
+      const target = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      window.location.replace(target)
     })
 
     return () => {
       cancelled = true
+      window.clearTimeout(timeout)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

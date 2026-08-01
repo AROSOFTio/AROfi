@@ -9,6 +9,7 @@ import AdminSessionControl from './AdminSessionControl'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import Sidebar from './Sidebar'
+import { SESSION_RECOVERY_ATTEMPT_KEY } from './SessionRecoveryGate'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
 import { isVendorWorkspace } from '@/lib/workspace'
 
@@ -33,6 +34,10 @@ export default function DashboardShell({ children, initials, session, workspaceT
     setMenuOpen(false)
     setProfileDropdownOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    sessionStorage.removeItem(SESSION_RECOVERY_ATTEMPT_KEY)
+  }, [])
 
   useEffect(() => {
     document.body.classList.toggle('mobile-nav-locked', menuOpen)
