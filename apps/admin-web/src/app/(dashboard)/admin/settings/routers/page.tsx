@@ -50,7 +50,7 @@ export default function SettingsRoutersPage() {
   // silently clipped by .table-wrap's overflow-x (overflow-x: auto on one
   // axis makes the other axis "auto" too per the CSS spec, so any dropdown
   // overflowing the table's box just vanished instead of showing).
-  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top?: number; bottom?: number; right: number } | null>(null)
   const [configModalOpen, setConfigModalOpen] = useState<any | null>(null)
   const [renameModalOpen, setRenameModalOpen] = useState<any | null>(null)
   const [passwordModalOpen, setPasswordModalOpen] = useState<any | null>(null)
@@ -564,7 +564,16 @@ export default function SettingsRoutersPage() {
                               return
                             }
                             const rect = event.currentTarget.getBoundingClientRect()
-                            setMenuPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+                            const estimatedMenuHeight = 460
+                            const spaceBelow = window.innerHeight - rect.bottom
+                            const spaceAbove = rect.top
+                            const openUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow
+                            setMenuPosition({
+                              right: Math.max(12, window.innerWidth - rect.right),
+                              ...(openUp
+                                ? { bottom: Math.max(12, window.innerHeight - rect.top + 4) }
+                                : { top: Math.min(rect.bottom + 4, window.innerHeight - 12) }),
+                            })
                             setActiveMenuId(router.id)
                           }}
                         >
@@ -582,12 +591,16 @@ export default function SettingsRoutersPage() {
                             <div style={{
                               position: 'fixed',
                               right: menuPosition.right,
-                              top: menuPosition.top,
+                              ...(menuPosition.bottom !== undefined
+                                ? { bottom: menuPosition.bottom }
+                                : { top: menuPosition.top }),
                               background: 'var(--bg-card)',
                               border: '1px solid var(--border)',
                               borderRadius: 10,
                               boxShadow: 'var(--shadow-lg)',
                               width: 200,
+                              maxHeight: 'min(520px, calc(100vh - 24px))',
+                              overflowY: 'auto',
                               zIndex: 1001,
                               display: 'flex',
                               flexDirection: 'column',
