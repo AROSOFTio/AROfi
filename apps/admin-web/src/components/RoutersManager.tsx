@@ -678,7 +678,7 @@ export default function RoutersManager() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)', fontWeight: 700 }}>
                 <input
                   type="checkbox"
-                  checked={compensationOverview?.settings.autoCompensateRouterOutages !== false}
+                  checked={compensationOverview?.settings.autoCompensateRouterOutages === true}
                   onChange={(event) => void handleToggleAutoCompensation(event.target.checked)}
                 />
                 Auto compensate

@@ -1210,7 +1210,7 @@ export class AuthController {
   // Step 1 — password check + OTP email. Also mounted at the legacy /login
   // path so an out-of-date client fails loudly into the OTP flow instead of
   // silently receiving a session without OTP.
-  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Post(['login', 'login/start'])
   async loginStart(
     @Body() dto: LoginStartDto,
@@ -1227,7 +1227,7 @@ export class AuthController {
   }
 
   // Step 2 — OTP check, issues the session as HttpOnly cookies.
-  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Post('login/verify')
   async loginVerify(
     @Body() dto: LoginVerifyDto,

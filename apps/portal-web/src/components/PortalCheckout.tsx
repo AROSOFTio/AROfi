@@ -480,13 +480,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Loop guard that does NOT block legitimate reconnects. Only skip if we
-    // auto-connected just moments ago and landed back here STILL not online —
-    // that means the router bounced us straight back (a redirect loop). A real
-    // returning device whose bundle is still active (WiFi dropped, customer
-    // comes back later) reconnects normally, because that happens far more than
-    // a few seconds later. Using a short-lived timestamp instead of a one-shot
-    // flag is what lets an active bundle be "remembered" and auto-reconnected.
     const reconnect = context.returningDevice.reconnect
     if (!reconnect?.username || !reconnect?.password) return
 
@@ -496,10 +489,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       autoConnectAttemptedRef.current = true
       setConnectionStatus('reconnecting')
       setErrorMessage('')
-      window.setTimeout(() => {
-        try { sessionStorage.setItem('arofiAutoConnectAt', String(Date.now())) } catch {}
-        autoSubmitHotspotLogin(reconnect)
-      }, 1500)
+      autoSubmitHotspotLogin(reconnect)
       return
     }
 
@@ -1167,16 +1157,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       readStoredLoginUrl()
 
     if (!loginUrl || !reconnect?.username || !reconnect?.password) {
-      setConnectionStatus('failed')
-      if (reconnect?.username && reconnect?.password) {
-        // Have credentials but no login URL — guide user to reconnect WiFi
-        // so MikroTik can auto-authenticate via the active RADIUS session
-        setErrorMessage(
-          `Payment confirmed! Turn WiFi off and on — your device will connect automatically.`
-        )
-      } else {
-        setErrorMessage('Auto-connect needs the WiFi login page. Reconnect to the WiFi network and AROFi will retry automatically.')
-      }
+      setConnectionStatus('idle')
+      setErrorMessage('')
       return
     }
 
@@ -1215,8 +1197,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       target.searchParams.set('popup', 'false')
       window.location.href = target.toString()
     } catch {
-      setConnectionStatus('failed')
-      setErrorMessage('Could not open the WiFi login page. AROFi will retry when the WiFi login page opens again.')
+      setConnectionStatus('idle')
+      setErrorMessage('')
     }
   }
 
@@ -1347,19 +1329,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             </div>
           )}
           {connectionStatus === 'reconnecting' && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}><span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Connecting to internet...</span></div>}
-          {context?.returningDevice?.existingActiveAccess && connectionStatus !== 'reconnecting' && (
-            <div className={`rounded-2xl border p-4 text-sm ${portalStyle.notice}`}>
-              <div className="font-semibold">Welcome back — your package is still active.</div>
-              <div className={`mt-1 ${portalStyle.noticeText}`}>
-                {context.returningDevice.activation?.package.name ?? 'Active package'} · expires {formatDate(context.returningDevice.activation?.endsAt)}.
-              </div>
-              <button type="button" onClick={connectNow} className={`mt-3 inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold ${portalStyle.button}`}>
-                <Wifi className="h-4 w-4" />
-                Connect Now
-              </button>
-            </div>
-          )}
-
           {initialView === 'home' && (
             <section className={`mx-auto w-full max-w-[540px] ${portalStyle.shell}`}>
               <span className="sr-only">AROFi simple portal build 2026-05-16-2328</span>

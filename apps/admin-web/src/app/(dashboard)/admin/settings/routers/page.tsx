@@ -1142,7 +1142,7 @@ export default function SettingsRoutersPage() {
               <div style={{ display: 'grid', gap: 3 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Outage Compensation - {compensationModal.router.name}</h3>
                 <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: 0 }}>
-                  Auto compensation is the default. When this router comes back online, overlapping customer packages are extended by the offline time.
+                  Automatic compensation is off by default. Turn it on only when this business wants AROFi to extend overlapping customer packages after router outages.
                 </p>
               </div>
               <button type="button" className="btn btn-ghost" style={{ padding: 4, flexShrink: 0 }} onClick={() => setCompensationModal(null)}>x</button>
@@ -1153,7 +1153,7 @@ export default function SettingsRoutersPage() {
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
                   <input
                     type="checkbox"
-                    checked={compensationModal.overview.settings.autoCompensateRouterOutages !== false}
+                    checked={compensationModal.overview.settings.autoCompensateRouterOutages === true}
                     onChange={(event) => void handleToggleCompensation(event.target.checked)}
                   />
                   Auto compensate users

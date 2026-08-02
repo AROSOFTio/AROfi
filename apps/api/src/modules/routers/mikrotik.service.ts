@@ -1043,12 +1043,6 @@ export class MikrotikService {
         document.getElementById('multiSection').style.display=mc>0?'block':'none';
         document.getElementById('loading').style.display='none';
         document.getElementById('content').style.display='block';
-        if(autoReady){
-          // We reached here with active access still showing = the one auto-login
-          // attempt was rejected by the router and it bounced back. Tell the
-          // customer the truth instead of silently looping.
-          sst('You already have active access, but the router did not accept the automatic login. Turn WiFi off and on to retry, or contact support.','err');
-        }
       });
     }
 
@@ -1164,7 +1158,7 @@ export class MikrotikService {
       });
     }
 
-    function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function closeMsg(){document.getElementById('msgOverlay').classList.remove('on');}
     function sst(m,t){var s=document.getElementById('st');var o=document.getElementById('msgOverlay');var b=document.getElementById('msgBox');var x=document.getElementById('msgText');if(m){if(s){s.style.display='none';s.textContent='';}b.className='message-box '+(t||'info');x.textContent=m;o.classList.add('on');}else{if(s)s.style.display='none';o.classList.remove('on');}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}

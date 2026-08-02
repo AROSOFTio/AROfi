@@ -2746,7 +2746,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     })
     const prefs = this.asPreferences(settings?.routerOnboardingPreferences)
     return {
-      autoCompensateRouterOutages: prefs.autoCompensateRouterOutages !== false,
+      autoCompensateRouterOutages: prefs.autoCompensateRouterOutages === true,
     }
   }
 

@@ -18,7 +18,11 @@ function resolveNextPath() {
 async function readErrorMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => null)
   const message = body?.message
+  const error = body?.error
   if (Array.isArray(message)) return message.join(', ')
+  if (message === 'ThrottlerException' || error === 'Too Many Requests' || response.status === 429) {
+    return 'Please wait a moment, then try again.'
+  }
   return typeof message === 'string' && message ? message : fallback
 }
 

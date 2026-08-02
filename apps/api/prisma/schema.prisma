@@ -900,7 +900,7 @@ model RouterOutage {
   restoredAt              DateTime?
   durationSeconds         Int?
   status                  RouterOutageStatus @default(OPEN)
-  autoCompensate          Boolean            @default(true)
+  autoCompensate          Boolean            @default(false)
   compensationProcessedAt DateTime?
   affectedActivations     Int                @default(0)
   totalSecondsCredited    Int                @default(0)
