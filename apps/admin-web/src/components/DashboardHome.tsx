@@ -39,7 +39,7 @@ export default async function DashboardHome({ searchParams }: { searchParams?: D
 }
 
 async function PlatformDashboard() {
-  const [tenants, routers, payoutProfile, billing, withdrawals, complianceQueue, emailQueue] = await Promise.all([
+  const [tenants, routers, payoutProfile, billing, withdrawals, complianceQueue, emailQueue, sessions] = await Promise.all([
     fetchApi<TenantOverviewResponse>('/tenants'),
     fetchApi<RouterOverviewResponse>('/routers/overview'),
     fetchApi<any>('/wallets/payouts/profile/me'),
@@ -47,6 +47,7 @@ async function PlatformDashboard() {
     fetchApi<PlatformWithdrawalsResponse>('/wallets/withdrawals/all'),
     fetchApi<Array<{ id: string }>>('/compliance/requests?status=PENDING_REVIEW').catch(() => null),
     fetchApi<Array<{ id: string }>>('/auth/email-change-requests?status=PENDING').catch(() => null),
+    fetchApi<SessionOverviewResponse>('/sessions/overview').catch(() => null),
   ])
 
   const tenantItems = tenants?.items ?? []
@@ -67,6 +68,10 @@ async function PlatformDashboard() {
   const platformFeesUgx = billing?.summary.platformFeesUgx ?? 0
   const todayGrossUgx = billing?.summary.todayGrossSalesUgx ?? 0
   const monthGrossUgx = billing?.summary.monthGrossSalesUgx ?? 0
+  const recentTransactions = billing?.recentTransactions ?? []
+  const voucherSales = recentTransactions.filter((transaction) => transaction.channel === 'VOUCHER' || transaction.voucher).length
+  const mobileMoneySales = recentTransactions.filter((transaction) => transaction.channel === 'MOBILE_MONEY').length
+  const activeSessions = sessions?.activeSessions ?? []
 
   const recentBusinesses = [...tenantItems]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -78,6 +83,216 @@ async function PlatformDashboard() {
     bucket.push(router)
     routersByTenant.set(key, bucket)
   }
+
+  const onlineRatio = totalRouters > 0 ? Math.round((liveRouters / totalRouters) * 100) : 0
+  const reviewItems = [
+    { href: '/admin/compliance-reviews', label: 'Compliance', value: pendingCompliance, icon: <ShieldCheck size={18} /> },
+    { href: '/disbursements', label: 'Payouts', value: pendingPayouts, icon: <Wallet size={18} /> },
+    { href: '/admin/email-approvals', label: 'Email changes', value: pendingEmailChanges, icon: <Users size={18} /> },
+  ]
+  const problemRouters = routerItems.filter((router) => router.liveState !== 'LIVE').slice(0, 6)
+  const topBusinesses = [...tenantItems]
+    .sort((a, b) => (b.wallet?.balanceUgx ?? 0) - (a.wallet?.balanceUgx ?? 0))
+    .slice(0, 8)
+
+  return (
+    <>
+      <div className="page-header platform-dashboard-header">
+        <div>
+          <h1 className="page-title">Developer Admin</h1>
+          <p className="page-subtitle">Clean platform control for money, reviews, businesses, and router health.</p>
+        </div>
+        <div className="platform-dashboard-actions">
+          <a href="/businesses" className="btn btn-primary">Businesses</a>
+          <a href="/admin/settings/routers" className="btn btn-ghost">Routers</a>
+        </div>
+      </div>
+
+      <div className="platform-overview-grid">
+        <PlatformMetric title="Revenue today" value={formatCurrency(todayGrossUgx)} note={`Month ${formatCurrency(monthGrossUgx)}`} icon={<Banknote size={18} />} />
+        <PlatformMetric title="Platform fees" value={formatCurrency(platformFeesUgx)} note={`Wallet ${formatCurrency(availableUgx)}`} icon={<Wallet size={18} />} />
+        <PlatformMetric title="Network live" value={`${onlineRatio}%`} note={`${liveRouters}/${totalRouters} routers online`} icon={<Router size={18} />} />
+        <PlatformMetric title="Users online" value={`${totalActiveSessions}`} note="Active hotspot sessions" icon={<Activity size={18} />} />
+      </div>
+
+      <div className="platform-command-grid">
+        <section className="card platform-review-card">
+          <div className="card-header">
+            <span className="card-title">Review Queue</span>
+            <span className={`badge ${pendingTotal > 0 ? 'badge-warning' : 'badge-success'}`}>
+              {pendingTotal > 0 ? `${pendingTotal} pending` : 'Clear'}
+            </span>
+          </div>
+          <div className="platform-review-list">
+            {reviewItems.map((item) => (
+              <a href={item.href} className="platform-review-item" key={item.href}>
+                {item.icon}
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="card platform-wallet-summary">
+          <div>
+            <div className="platform-panel-eyebrow">Platform Wallet</div>
+            <strong>{formatCurrency(availableUgx)}</strong>
+            <span>Available commission balance</span>
+          </div>
+          <div className="platform-wallet-links">
+            <a href="/earnings">Withdraw <ArrowUpRight size={14} /></a>
+            <a href="/disbursements">Payout approvals</a>
+          </div>
+        </section>
+
+        <section className="card platform-router-health">
+          <div className="card-header">
+            <span className="card-title">Router Health</span>
+            <a href="/admin/router" className="btn btn-ghost btn-sm">Open</a>
+          </div>
+          <div className="platform-health-row">
+            <span>Live</span><strong>{liveRouters}</strong>
+            <span>Total</span><strong>{totalRouters}</strong>
+            <span>Users</span><strong>{totalActiveSessions}</strong>
+          </div>
+          <div className="platform-router-list">
+            {problemRouters.length === 0 ? (
+              <p>All routers are live.</p>
+            ) : (
+              problemRouters.map((router) => (
+                <a href="/admin/settings/routers" key={router.id} className="platform-router-item">
+                  <span>
+                    <strong>{router.name}</strong>
+                    <small>{router.tenant?.name ?? 'No business'} - {router.locationText ?? router.siteLabel ?? 'No location'}</small>
+                  </span>
+                  <em>{router.liveState ?? 'pending'}</em>
+                </a>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+
+      <div className="platform-main-grid">
+        <section className="card platform-business-card">
+          <div className="card-header">
+            <span className="card-title">Business Performance</span>
+            <a href="/businesses" className="btn btn-ghost btn-sm">Manage</a>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Business</th>
+                  <th>Routers</th>
+                  <th>Wallet</th>
+                  <th>Status</th>
+                  <th>Joined</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topBusinesses.length === 0 && <EmptyRow colSpan={5} text="No businesses have been onboarded yet." />}
+                {topBusinesses.map((tenant) => {
+                  const tenantRouters = routersByTenant.get(tenant.id) ?? []
+                  const liveCount = tenantRouters.filter((router) => router.liveState === 'LIVE').length
+                  return (
+                    <tr key={tenant.id}>
+                      <td>
+                        <div style={{ fontWeight: 700 }}>{tenant.name}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{tenant.supportPhone ?? tenant.domain ?? 'No contact set'}</div>
+                      </td>
+                      <td>{liveCount}/{tenantRouters.length}</td>
+                      <td>{formatCurrency(tenant.wallet?.balanceUgx ?? 0)}</td>
+                      <td>
+                        <span className={getStatusBadgeClass(tenant.status?.accountActive === false ? 'failed' : 'success')}>
+                          {tenant.status?.accountActive === false ? 'suspended' : 'active'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 12 }}>{formatDate(tenant.createdAt)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="card platform-recent-card">
+          <div className="card-header">
+            <span className="card-title">Newest Businesses</span>
+            <a href="/businesses" className="btn btn-ghost btn-sm">All</a>
+          </div>
+          <div className="platform-recent-businesses">
+            {recentBusinesses.length === 0 ? (
+              <p>No recent signups.</p>
+            ) : recentBusinesses.map((tenant) => (
+              <a href="/businesses" key={tenant.id}>
+                <span>
+                  <strong>{tenant.name}</strong>
+                  <small>{tenant.supportEmail ?? tenant.domain ?? 'No email'}</small>
+                </span>
+                <em>{formatDate(tenant.createdAt)}</em>
+              </a>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="platform-main-grid">
+        <section className="card platform-sales-card">
+          <div className="card-header">
+            <span className="card-title">Live Sales Feed</span>
+            <a href="/sales-by-business" className="btn btn-ghost btn-sm">All sales</a>
+          </div>
+          <div className="platform-sales-summary">
+            <span><strong>{recentTransactions.length}</strong> recent</span>
+            <span><strong>{voucherSales}</strong> voucher</span>
+            <span><strong>{mobileMoneySales}</strong> mobile money</span>
+          </div>
+          <div className="platform-sales-list">
+            {recentTransactions.length === 0 ? (
+              <p>No recent sales yet.</p>
+            ) : recentTransactions.slice(0, 8).map((transaction) => (
+              <a href="/transactions" key={transaction.id} className="platform-sale-row">
+                <span>
+                  <strong>{transaction.customerReference ?? transaction.voucher?.code ?? 'Customer'}</strong>
+                  <small>{transaction.package?.name ?? 'Package'} - {transaction.channel?.replace('_', ' ') ?? 'sale'} - {relativeTime(transaction.createdAt)}</small>
+                </span>
+                <em>{transaction.grossAmountUgx > 0 ? formatCurrency(transaction.grossAmountUgx) : 'Redeemed'}</em>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="card platform-active-card">
+          <div className="card-header">
+            <span className="card-title">Active Users & Logs</span>
+            <a href="/sessions" className="btn btn-ghost btn-sm">Sessions</a>
+          </div>
+          <div className="platform-log-links">
+            <a href="/sessions">Live users</a>
+            <a href="/transactions">Payment logs</a>
+            <a href="/vouchers">Voucher batches</a>
+            <a href="/admin/router">Router logs</a>
+          </div>
+          <div className="platform-active-list">
+            {activeSessions.length === 0 ? (
+              <p>No users online right now.</p>
+            ) : activeSessions.slice(0, 6).map((session) => (
+              <a href="/sessions" key={session.id} className="platform-active-row">
+                <span>
+                  <strong>{session.username ?? session.macAddress ?? 'User'}</strong>
+                  <small>{session.router?.name ?? 'Router'} - {formatMegabytes(session.dataUsedMb ?? 0)}</small>
+                </span>
+                <em>{session.ipAddress ?? 'online'}</em>
+              </a>
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
+  )
 
   return (
     <>
@@ -880,6 +1095,19 @@ function Stat({ label, value, color, note }: { label: string; value: string; col
       <div className={`stat-value ${color}`}>{value}</div>
       <div className="stat-change">{note}</div>
     </div>
+  )
+}
+
+function PlatformMetric({ title, value, note, icon }: { title: string; value: string; note: string; icon: ReactNode }) {
+  return (
+    <section className="platform-metric-card">
+      <div className="platform-metric-icon">{icon}</div>
+      <div>
+        <span>{title}</span>
+        <strong>{value}</strong>
+        <small>{note}</small>
+      </div>
+    </section>
   )
 }
 
