@@ -579,7 +579,7 @@ export class MikrotikService {
       `on-error={ :do { /tool fetch url=$arofiHeartbeatFallback keep-result=no } on-error={} }`
     return [
       `/system script remove [find name="arofi-heartbeat"]`,
-      `/system script add name="arofi-heartbeat" source="${this.escape(source)}"`,
+      `/system script add name="arofi-heartbeat" source="${this.escapeScriptSource(source)}"`,
       `/system scheduler remove [find name="arofi-heartbeat"]`,
       `/system scheduler add name="arofi-heartbeat" interval=${intervalSeconds}s on-event="arofi-heartbeat" comment="AROFi heartbeat"`,
     ]
@@ -1251,6 +1251,10 @@ export class MikrotikService {
 
   private escape(value: string) {
     return value.replace(/"/g, '\\"')
+  }
+
+  private escapeScriptSource(value: string) {
+    return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$')
   }
 
   private normalizeMac(value?: string | null) {
