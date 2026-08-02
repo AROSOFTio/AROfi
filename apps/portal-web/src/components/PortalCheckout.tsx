@@ -616,9 +616,21 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
   useEffect(() => {
     if (!qrVoucherCode || qrVoucherRedeemAttempted || isContextLoading || isVoucherLoading) return
+    const hasHotspotContext = Boolean(
+      hotspotParams.macAddress ||
+      hotspotParams.clientIp ||
+      hotspotParams.loginUrl ||
+      hotspotParams.routerId ||
+      hotspotParams.routerKey ||
+      hotspotParams.hotspotServerName,
+    )
+    if (!hasHotspotContext) {
+      setStatusMessage('Voucher code filled from QR. Connect to the WiFi, then tap Connect to activate this device.')
+      return
+    }
     setQrVoucherRedeemAttempted(true)
     void handleVoucherRedeem(qrVoucherCode)
-  }, [qrVoucherCode, qrVoucherRedeemAttempted, isContextLoading, isVoucherLoading, handleVoucherRedeem])
+  }, [qrVoucherCode, qrVoucherRedeemAttempted, isContextLoading, isVoucherLoading, hotspotParams, handleVoucherRedeem])
 
   useEffect(() => {
     const waitingForReconnect =

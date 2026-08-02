@@ -20,6 +20,7 @@ import {
   Sparkles,
   Ticket,
   Timer,
+  Tv,
   Users,
   Wifi,
   Zap,
@@ -42,11 +43,12 @@ const whyPoints = [
 
 const features = [
   { icon: BadgeDollarSign, title: 'MTN MoMo & Airtel Money', text: 'Customers pay straight from their phone. Payments post to your wallet automatically.' },
-  { icon: Ticket, title: 'Beautiful Voucher Templates', text: 'Branded, print-ready voucher batches for field agents and walk-in customers.' },
+  { icon: Ticket, title: 'Vouchers & QR Codes', text: 'Sell printed vouchers, scan QR vouchers, and track every code from sale to redemption.' },
+  { icon: Tv, title: 'Smart TV Access', text: 'Sell TV packages by wireless MAC address so a Smart TV can connect even when it cannot open a portal.' },
   { icon: QrCode, title: 'QR Code Scan & Connect', text: 'Guests scan a QR code to connect and pay — no typing WiFi passwords.' },
   { icon: Clock, title: '24/7 Support', text: 'Real people on chat, WhatsApp, phone and email — every day, all day.' },
   { icon: Sparkles, title: 'Instant AI Support', text: 'Ask Aria about setup, routers, payments, or account issues from the website or dashboard.' },
-  { icon: Bell, title: 'Email, WhatsApp & SMS Alerts', text: 'Notify operators and Pro customers about outages, compensation, and important account events.' },
+  { icon: Bell, title: 'SMS Alerts', text: 'Notify operators and customers about key events such as outages, compensation, payments, and account updates.' },
   { icon: Layers, title: 'Multi-Device Bundles', text: 'Sell packages that cover several devices per customer on one payment.' },
   { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated business workspaces, and secret-key protected withdrawals.' },
   { icon: Zap, title: 'Instant Withdrawals', text: 'Cash out to your approved mobile money number the moment you need it.' },
@@ -75,7 +77,7 @@ const faqs = [
   },
   {
     q: 'What happens if my router goes offline?',
-    a: 'You get an alert, router health is visible live, and AROFi can compensate affected active packages when the router comes back online. Pro businesses can use SMS notifications with a monthly allowance and paid top-ups.',
+    a: 'You get an alert, router health is visible live, and AROFi can compensate affected active packages when the router comes back online. Pro businesses can use SMS alerts for important outage and compensation notifications.',
   },
   {
     q: 'Is my money and customer data safe?',
@@ -83,7 +85,7 @@ const faqs = [
   },
   {
     q: 'How many routers or hotspot sites can I run?',
-    a: 'Both Starter and Pro support unlimited routers and hotspot sites. Pro is for operators who want lower fees, custom branding, SMS credits, router outage compensation notifications, deeper history, and priority support.',
+    a: 'Both Starter and Pro support unlimited routers and hotspot sites. Pro is for operators who want lower fees, custom branding, SMS alerts, Smart TV workflows, router outage compensation notifications, deeper history, and priority support.',
   },
   {
     q: 'Do you support vouchers as well as mobile money?',
@@ -119,7 +121,7 @@ const pricingTiers = [
     period: '/month',
     commissionSummary: 'Gateway fee 3–5% · Voucher 0%',
     routerLimit: 'Unlimited routers and hotspots',
-    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom logo and colours', '100 SMS/month included', 'Buy extra SMS at UGX 40 each', 'Router outage compensation alerts', '30-day analytics history', 'Priority support'],
+    features: ['Everything in Starter', 'Lower mobile money fees', 'Zero voucher commission', 'Custom logo and colours', 'SMS alerts', 'Smart TV package workflows', 'Router outage compensation alerts', '30-day analytics history', 'Priority support'],
     featured: true,
   },
 ]
@@ -135,6 +137,39 @@ const demoFeed = [
   { who: 'New session', plan: 'Mutungo Hill', amount: 'live' },
   { who: 'Airtel payment', plan: '24 HR', amount: 'UGX 4,000' },
   { who: 'Router online', plan: 'RB951Ui', amount: 'healthy' },
+]
+
+const realScreenshots = [
+  {
+    title: 'Live dashboard',
+    text: 'Sales, wallet, withdrawals, router health, and live usage in one place.',
+    src: '/screenshots/dashboard.png',
+  },
+  {
+    title: 'Router scripts',
+    text: 'Onboarding and remote access commands shown side by side after adding a router.',
+    src: '/screenshots/router-scripts.png',
+  },
+  {
+    title: 'Smart TV checkout',
+    text: 'TV package flow with MAC address, Mobile Money payment, and clear reconnect instructions.',
+    src: '/screenshots/smart-tv-portal.png',
+  },
+  {
+    title: 'Voucher printing',
+    text: 'Branded voucher batches for walk-in customers, agents, and QR scan redemption.',
+    src: '/screenshots/vouchers.png',
+  },
+  {
+    title: 'Remote access',
+    text: 'Open, close, copy address, test ports, and manage WinBox access from the router menu.',
+    src: '/screenshots/remote-access.png',
+  },
+  {
+    title: 'Mobile Money payment',
+    text: 'Customer selects a plan, enters phone number, confirms PIN, and gets connected instantly.',
+    src: '/screenshots/mobile-money.png',
+  },
 ]
 
 type PublicStats = { salesTodayUgx: number; activeSessions: number; liveRouters: number; routers: number }
