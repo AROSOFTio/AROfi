@@ -54,7 +54,7 @@ export class RadiusSignalSyncService {
   // bridge already handled everything in realtime.
   async syncRecent() {
     const windowMinutes = this.hasRunInitialCatchup
-      ? Number.parseInt(process.env.RADIUS_SQL_SYNC_WINDOW_MINUTES ?? '15', 10)
+      ? Number.parseInt(process.env.RADIUS_SQL_SYNC_WINDOW_MINUTES ?? '2', 10)
       : 24 * 60
     this.hasRunInitialCatchup = true
     const recentSince = new Date(Date.now() - windowMinutes * 60 * 1000)
@@ -137,7 +137,7 @@ export class RadiusSignalSyncService {
 
     const sessionStatus = isStopped
       ? SessionStatus.CLOSED
-      : activationStillActive || isLive
+      : activationStillActive && isLive
         ? SessionStatus.ACTIVE
         : SessionStatus.STALE
     const startedAt = row.acctstarttime ?? now

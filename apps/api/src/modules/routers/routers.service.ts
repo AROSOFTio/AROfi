@@ -1703,7 +1703,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     const activeSessions =
       live.liveState === 'OFFLINE'
         ? 0
-        : Math.max(router.sessions.length, router.activeSessionCount)
+        : router.activeSessionCount !== undefined && router.activeSessionCount !== null
+          ? router.activeSessionCount
+          : router.sessions.length
     const effectiveStatus =
       live.liveState === 'LIVE'
         ? RouterStatus.HEALTHY

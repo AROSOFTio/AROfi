@@ -424,8 +424,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [companionVoucherCodes, setCompanionVoucherCodes] = useState<string[]>([])
   const [copiedVoucherCode, setCopiedVoucherCode] = useState('')
   const autoConnectSignatureRef = useRef<string | null>(null)
+  const isReturningDeviceReconnectPayload = Boolean(
+    context?.returningDevice?.existingActiveAccess &&
+    context?.returningDevice?.reconnect?.username &&
+    context?.returningDevice?.reconnect?.password,
+  )
   const [qrVoucherCode, setQrVoucherCode] = useState('')
   const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
+  const [showMorePackages, setShowMorePackages] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
     macAddress: '',
     clientIp: '',
@@ -464,10 +470,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }, [])
 
   // Auto-connect when a returning device has fresh reconnect credentials.
-  // We do not block later payment/voucher flows with a one-shot ref because the
-  // reconnect payload can arrive after the initial page load.
+  // Only do this for a confirmed returning device; do not auto-connect based on
+  // stored login URL or hotspot params alone.
   useEffect(() => {
-    if (!context?.returningDevice?.existingActiveAccess) return
+    if (!isReturningDeviceReconnectPayload) return
 
     const params = new URLSearchParams(window.location.search)
     // Already online: the router redirected back here with ?connected=1 after a
@@ -479,8 +485,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    const reconnect = context.returningDevice.reconnect
-    if (!reconnect?.username || !reconnect?.password) return
+    const reconnect = context?.returningDevice?.reconnect
+    if (!reconnect) return
 
     const signature = `${reconnect.loginUrl ?? ''}|${reconnect.username}|${reconnect.password}`
     if (autoConnectSignatureRef.current === signature) return
@@ -500,7 +506,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     setConnectionStatus('reconnecting')
     autoSubmitHotspotLogin(reconnect)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context?.returningDevice?.existingActiveAccess, context?.returningDevice?.reconnect?.loginUrl, context?.returningDevice?.reconnect?.username, context?.returningDevice?.reconnect?.password])
+  }, [isReturningDeviceReconnectPayload, context?.returningDevice?.reconnect?.loginUrl, context?.returningDevice?.reconnect?.username, context?.returningDevice?.reconnect?.password])
 
   const handleVoucherRedeem = useCallback(async (overrideCode?: string) => {
     setErrorMessage('')
@@ -1408,12 +1414,57 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 </div>
               )}
 
+              {activeActivation && (
+                <div className={`mt-5 rounded-xl border p-4 text-center ${portalStyle.notice}`}>
+                  <div className="flex items-center justify-center gap-2 text-emerald-600 font-extrabold text-base">
+                    <Check className="h-5 w-5 stroke-[3]" />
+                    Internet Connected & Active
+                  </div>
+                  <p className="mt-1 text-sm font-bold text-slate-800">
+                    {activeActivation.package.name} Plan Active
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Valid until {formatDate(activeActivation.endsAt)}
+                  </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    {hasOneTapReconnect && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConnectionStatus('reconnecting')
+                          setErrorMessage('')
+                          autoSubmitHotspotLogin(oneTapReconnectPayload)
+                        }}
+                        className={`rounded-lg px-4 py-2 text-xs font-bold ${portalStyle.button}`}
+                      >
+                        Connect This Device Now
+                      </button>
+                    )}
+                    <Link
+                      href="/session"
+                      className={`rounded-lg border px-4 py-2 text-xs font-bold ${portalStyle.link}`}
+                    >
+                      View Session Details
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowMorePackages(!showMorePackages)}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    >
+                      {showMorePackages ? 'Hide Packages' : 'Buy for Another Device'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <Link href="/login" className={`mx-auto mt-4 flex w-fit items-center gap-2 rounded-md border px-4 py-2 text-xs font-medium ${portalStyle.link}`}>
                 <LogIn className="h-3 w-3" />
                 Already bought? Find My Voucher
               </Link>
 
-              <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
+              {(!activeActivation || showMorePackages) && (
+                <>
+                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {isContextLoading && packages.length === 0 && (
@@ -1466,6 +1517,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                   </div>
                 )
               })()}
+              </>
+              )}
 
               {(() => {
                 const phone = context?.tenant.supportPhone ?? context?.tenant.platformSupportPhone

@@ -1,6 +1,6 @@
 export const ACCOUNTING_LIVE_WINDOW_SECONDS = Math.max(
   1,
-  Number.parseInt(process.env.ACCOUNTING_LIVE_WINDOW_SECONDS ?? '300', 10) || 300,
+  Number.parseInt(process.env.ACCOUNTING_LIVE_WINDOW_SECONDS ?? '60', 10) || 60,
 )
 
 export function accountingLiveCutoff(now = new Date()) {

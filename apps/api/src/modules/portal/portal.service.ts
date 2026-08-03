@@ -153,7 +153,7 @@ export class PortalService {
       resolvedTenantId,
     )
     const accessToken = this.extractBearerToken(authorization)
-    const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot)
+    const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot, phoneNumber)
 
     if (!accessToken) {
       return {
@@ -643,12 +643,34 @@ export class PortalService {
   private async detectReturningDevice(
     tenantId: string,
     hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string },
+    phoneNumber?: string,
   ) {
-    const activation = await this.findActiveAccessByMacAndRouter(hotspot?.macAddress, hotspot?.routerId, tenantId)
+    let activation = await this.findActiveAccessByMacAndRouter(hotspot?.macAddress, hotspot?.routerId, tenantId)
+
+    if (!activation && phoneNumber) {
+      const phoneVariants = this.buildPhoneVariants(phoneNumber)
+      activation = await this.prisma.packageActivation.findFirst({
+        where: {
+          tenantId,
+          status: PackageActivationStatus.ACTIVE,
+          endsAt: { gt: new Date() },
+          OR: [
+            { accessPhoneNumber: { in: phoneVariants } },
+            { customerReference: { in: phoneVariants } },
+          ],
+        },
+        include: {
+          ...this.activationInclude,
+          radiusCredential: true,
+        },
+        orderBy: { endsAt: 'desc' },
+      })
+    }
+
     if (!activation) {
       return {
         existingActiveAccess: false,
-        reason: hotspot?.macAddress ? 'No active access is bound to this device.' : 'MAC address was not provided by the hotspot.',
+        reason: hotspot?.macAddress || phoneNumber ? 'No active access is bound to this device or phone.' : 'MAC address was not provided by the hotspot.',
       }
     }
 
@@ -852,11 +874,8 @@ export class PortalService {
     }
 
     const now = new Date()
-    if (activation.status === PackageActivationStatus.ACTIVE && activation.endsAt > now) {
-      return
-    }
 
-    const staleBefore = new Date(now.getTime() - 3 * 60 * 1000)
+    const staleBefore = new Date(now.getTime() - 90 * 1000)
     const result = await this.prisma.networkSession.updateMany({
       where: {
         activationId,

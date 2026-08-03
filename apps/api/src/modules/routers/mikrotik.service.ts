@@ -916,13 +916,31 @@ export class MikrotikService {
     window.onload=function(){
       var search=window.location.search;
       var v='';
-      
+
+      // After a successful hotspot login MikroTik redirects back here with
+      // ?connected=1. Show an instant "Connected!" screen so the customer
+      // never sees the package list again after paying.
+      var _up=new URLSearchParams(search);
+      if(_up.get('connected')==='1'){
+        document.getElementById('loading').style.display='none';
+        document.getElementById('content').innerHTML=
+          '<div style="text-align:center;padding:28px 8px">'+
+          '<div style="font-size:52px;margin-bottom:10px">\u2705</div>'+
+          '<div style="font-size:20px;font-weight:700;color:#16a34a;margin-bottom:6px">Internet Connected!</div>'+
+          '<div style="font-size:14px;color:#475569;margin-bottom:18px">Your device is online. You can close this window.</div>'+
+          '<a href="http://connectivitycheck.gstatic.com/generate_204" '+
+          'style="display:inline-block;background:#2563eb;color:#fff;font-weight:700;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:14px">'+
+          'Open Browser</a></div>';
+        document.getElementById('content').style.display='block';
+        return;
+      }
+
       // Do not auto-submit MikroTik credentials into the hotspot login page here.
       // That path bypasses the AROFi payment/voucher portal and makes the user
       // appear connected without ever seeing the payment flow. We only use the
       // captive portal page for package selection, voucher redemption, and
       // payment initiation.
-      
+
       // Auto-login for voucher. The code can arrive two ways:
       //   1. Directly:  /login?voucher=HT2KUQ
       //   2. Buried in the MikroTik captive-portal redirect: when a customer on
@@ -1130,7 +1148,7 @@ export class MikrotikService {
 
     function poll(id,tok){
       var n=0,iv=setInterval(function(){
-        if(++n>120){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
+        if(++n>200){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
         apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
           if(err) return;
           if(p.activation){
@@ -1140,10 +1158,11 @@ export class MikrotikService {
               closePay();
               var tvm=normMac(document.getElementById('tvmac').value);
               sst('Payment approved. Smart TV '+tvm+' is active. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');
-            }else if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}}
+            }else if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}
+          }
           else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
         });
-      },1500);
+      },600);
     }
 
     function rec(){
