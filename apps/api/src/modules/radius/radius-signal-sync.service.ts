@@ -122,13 +122,6 @@ export class RadiusSignalSyncService {
     const sessionTimeSeconds = row.acctsessiontime ?? 0
     const isStopped = row.acctstoptime != null
     const isLive = isLiveAccountingRow(row, now)
-    const sessionStatus = isStopped
-      ? SessionStatus.CLOSED
-      : activationStillActive || isLive
-        ? SessionStatus.ACTIVE
-        : SessionStatus.STALE
-    const startedAt = row.acctstarttime ?? now
-    const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
 
     const activation = username
       ? await this.prisma.packageActivation.findFirst({
@@ -141,6 +134,14 @@ export class RadiusSignalSyncService {
     const activationStillActive = Boolean(
       activation?.status === PackageActivationStatus.ACTIVE && activation.endsAt > now,
     )
+
+    const sessionStatus = isStopped
+      ? SessionStatus.CLOSED
+      : activationStillActive || isLive
+        ? SessionStatus.ACTIVE
+        : SessionStatus.STALE
+    const startedAt = row.acctstarttime ?? now
+    const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
 
     // Change detection keeps the polling sweep from republishing the same
     // state every cycle: only genuinely new information reaches the
