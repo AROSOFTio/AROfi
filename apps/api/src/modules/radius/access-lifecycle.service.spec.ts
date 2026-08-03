@@ -294,6 +294,27 @@ describe('AccessLifecycleService stale session cleanup', () => {
     expect(prisma.router.update).not.toHaveBeenCalled()
     expect(realtimeEvents.publish).not.toHaveBeenCalled()
   })
+
+  it('keeps active sessions alive during a short accounting gap', async () => {
+    const { service, prisma, realtimeEvents } = buildHarness()
+    const shortGapSession = {
+      id: 'session-short-gap',
+      tenantId: 'tenant-1',
+      routerId: 'router-1',
+      radiusSessionId: 'radius-session-short-gap',
+      username: 'arofi-user',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      lastAccountingAt: new Date(Date.now() - 10 * 60 * 1000),
+    }
+    prisma.networkSession.findMany.mockResolvedValue([shortGapSession])
+    prisma.networkSession.count.mockResolvedValue(0)
+
+    await (service as never as { cleanStaleSessions: () => Promise<void> }).cleanStaleSessions()
+
+    expect(prisma.networkSession.updateMany).not.toHaveBeenCalled()
+    expect(prisma.router.update).not.toHaveBeenCalled()
+    expect(realtimeEvents.publish).not.toHaveBeenCalled()
+  })
 })
 describe('AccessLifecycleService signal sync delegation', () => {
   it('delegates the polling fallback to RadiusSignalSyncService.syncRecent', async () => {

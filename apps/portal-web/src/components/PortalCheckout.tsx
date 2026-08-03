@@ -423,7 +423,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
   const [companionVoucherCodes, setCompanionVoucherCodes] = useState<string[]>([])
   const [copiedVoucherCode, setCopiedVoucherCode] = useState('')
-  const autoConnectAttemptedRef = useRef(false)
+  const autoConnectSignatureRef = useRef<string | null>(null)
   const [qrVoucherCode, setQrVoucherCode] = useState('')
   const [qrVoucherRedeemAttempted, setQrVoucherRedeemAttempted] = useState(false)
   const [hotspotParams, setHotspotParams] = useState<HotspotParams>({
@@ -463,19 +463,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     void bootstrap()
   }, [])
 
-  // Auto-connect when context loads with a returning device that has active
-  // access and reconnect credentials — fires once, no user action required.
+  // Auto-connect when a returning device has fresh reconnect credentials.
+  // We do not block later payment/voucher flows with a one-shot ref because the
+  // reconnect payload can arrive after the initial page load.
   useEffect(() => {
     if (!context?.returningDevice?.existingActiveAccess) return
-    if (autoConnectAttemptedRef.current) return
 
     const params = new URLSearchParams(window.location.search)
     // Already online: the router redirected back here with ?connected=1 after a
-    // successful login. Do NOT auto-connect again — that would bounce to the
-    // router and back forever. Clear the loop timestamp so a genuine future
-    // reconnect works.
+    // successful login. Clear the loop timestamp so a genuine future reconnect
+    // can still work.
     if (params.get('connected') === '1') {
-      autoConnectAttemptedRef.current = true
+      autoConnectSignatureRef.current = null
       try { sessionStorage.removeItem('arofiAutoConnectAt') } catch {}
       return
     }
@@ -483,22 +482,25 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     const reconnect = context.returningDevice.reconnect
     if (!reconnect?.username || !reconnect?.password) return
 
+    const signature = `${reconnect.loginUrl ?? ''}|${reconnect.username}|${reconnect.password}`
+    if (autoConnectSignatureRef.current === signature) return
+
     let lastAt = 0
     try { lastAt = Number(sessionStorage.getItem('arofiAutoConnectAt') || '0') } catch {}
     if (lastAt && Date.now() - lastAt < 20000) {
-      autoConnectAttemptedRef.current = true
+      autoConnectSignatureRef.current = signature
       setConnectionStatus('reconnecting')
       setErrorMessage('')
       autoSubmitHotspotLogin(reconnect)
       return
     }
 
-    autoConnectAttemptedRef.current = true
+    autoConnectSignatureRef.current = signature
     try { sessionStorage.setItem('arofiAutoConnectAt', String(Date.now())) } catch {}
     setConnectionStatus('reconnecting')
     autoSubmitHotspotLogin(reconnect)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context?.returningDevice])
+  }, [context?.returningDevice?.existingActiveAccess, context?.returningDevice?.reconnect?.loginUrl, context?.returningDevice?.reconnect?.username, context?.returningDevice?.reconnect?.password])
 
   const handleVoucherRedeem = useCallback(async (overrideCode?: string) => {
     setErrorMessage('')
@@ -569,10 +571,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
           stashCompanionCodes(companionCodes)
           setConnectionStatus('reconnecting')
           setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
-          window.setTimeout(
-            () => autoSubmitHotspotLogin({ ...redemption.reconnect, loginUrl: effectiveLoginUrl }),
-            100,
-          )
+          const reconnectPayload = { ...redemption.reconnect, loginUrl: effectiveLoginUrl }
+          if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => autoSubmitHotspotLogin(reconnectPayload))
+          } else {
+            autoSubmitHotspotLogin(reconnectPayload)
+          }
           return
         }
       }
@@ -1195,7 +1199,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       connectedDst.searchParams.set('connected', '1')
       target.searchParams.set('dst', connectedDst.toString())
       target.searchParams.set('popup', 'false')
-      window.location.href = target.toString()
+      window.location.assign(target.toString())
     } catch {
       setConnectionStatus('idle')
       setErrorMessage('')
@@ -1212,6 +1216,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const packages = context?.packages ?? []
   const availableNetworks = (context?.paymentNetworks?.length ? context.paymentNetworks : ['MTN']) as MobileMoneyNetwork[]
   const portalStyle = portalTemplateStyles[resolvePortalTemplate(context?.tenant.portalTemplate)]
+  const oneTapReconnectPayload = (currentPayment?.reconnect ?? context?.returningDevice?.reconnect) as ReconnectPayload | null | undefined
+  const hasOneTapReconnect = Boolean(
+    oneTapReconnectPayload?.username &&
+    oneTapReconnectPayload?.password &&
+    (oneTapReconnectPayload?.loginUrl || hotspotParams.loginUrl || readStoredLoginUrl()),
+  )
 
   function renderPackageButton(pkg: PortalPackage) {
     return (
@@ -1315,6 +1325,24 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       <>
           {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
           {!checkoutOpen && statusMessage && !pendingStatuses.includes(currentPayment?.status ?? '') && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}>{statusMessage}</div>}
+          {!checkoutOpen && hasOneTapReconnect && connectionStatus !== 'reconnecting' && (
+            <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-semibold">One tap to continue your connection</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConnectionStatus('reconnecting')
+                    setErrorMessage('')
+                    autoSubmitHotspotLogin(oneTapReconnectPayload)
+                  }}
+                  className={`rounded-lg px-3 py-2 text-sm font-bold ${portalStyle.button}`}
+                >
+                  Connect now
+                </button>
+              </div>
+            </div>
+          )}
           {smartTvNotice && (
             <div className={`rounded-2xl border p-4 text-sm ${portalStyle.notice}`}>
               <div className="font-extrabold">Smart TV access is ready</div>

@@ -633,10 +633,12 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
 
   private async cleanStaleSessions() {
     // MikroTik sends RADIUS interim-update every 60s (set in hotspot profile).
-    // A session with no accounting signal for 5 minutes is definitively dead.
-    // 30 minutes was too long — ghost ACTIVE sessions caused the captive portal
-    // to report existingActiveAccess=true and skip the package selection screen.
-    const staleBefore = new Date(Date.now() - 5 * 60 * 1000)
+    // A session with no accounting signal for 5 minutes used to be treated as
+    // dead too aggressively. In practice, a short gap can happen during
+    // network blips, router reboots or temporary accounting delivery hiccups.
+    // We now require a much longer silence window before we mark the session
+    // stale, so active subscriptions do not get dropped unnecessarily.
+    const staleBefore = new Date(Date.now() - 15 * 60 * 1000)
     const staleWhere = {
       status: SessionStatus.ACTIVE,
       OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
@@ -652,6 +654,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
         username: true,
         macAddress: true,
         lastAccountingAt: true,
+        activationId: true,
       },
     })
 
@@ -659,19 +662,37 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       return
     }
 
+    const activationIds = [...new Set(affected.map((session) => session.activationId).filter((id): id is string => Boolean(id)))]
+    const activations = activationIds.length > 0
+      ? await this.prisma.packageActivation.findMany({
+          where: { id: { in: activationIds } },
+          select: { id: true, status: true, endsAt: true },
+        })
+      : []
+    const activationById = new Map(activations.map((activation) => [activation.id, activation]))
+
+    const staleSessions = affected.filter((session) => {
+      const activation = session.activationId ? activationById.get(session.activationId) : null
+      return !(activation?.status === PackageActivationStatus.ACTIVE && activation.endsAt > new Date())
+    })
+
+    if (staleSessions.length === 0) {
+      return
+    }
+
     const endedAt = new Date()
     await this.prisma.networkSession.updateMany({
-      where: { id: { in: affected.map((session) => session.id) } },
+      where: { id: { in: staleSessions.map((session) => session.id) } },
       data: {
         status: SessionStatus.STALE,
         endedAt,
       },
     })
 
-    const routerIds = new Set(affected.map((session) => session.routerId).filter((routerId): routerId is string => Boolean(routerId)))
+    const routerIds = new Set(staleSessions.map((session) => session.routerId).filter((routerId): routerId is string => Boolean(routerId)))
     for (const routerId of routerIds) {
       const count = await this.prisma.networkSession.count({
-        where: { routerId, status: SessionStatus.ACTIVE, lastAccountingAt: { gte: staleBefore } },
+        where: { routerId, status: SessionStatus.ACTIVE },
       })
       await this.prisma.router.update({
         where: { id: routerId },
@@ -679,7 +700,7 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       })
     }
 
-    for (const session of affected) {
+    for (const session of staleSessions) {
       this.realtimeEvents.publish('session.stopped', {
         tenantId: session.tenantId,
         routerId: session.routerId ?? null,

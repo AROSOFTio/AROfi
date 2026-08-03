@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import {
+  PackageActivationStatus,
   RadiusEventType,
   RouterOnboardingStatus,
   RouterStatus,
@@ -121,7 +122,11 @@ export class RadiusSignalSyncService {
     const sessionTimeSeconds = row.acctsessiontime ?? 0
     const isStopped = row.acctstoptime != null
     const isLive = isLiveAccountingRow(row, now)
-    const sessionStatus = isStopped ? SessionStatus.CLOSED : isLive ? SessionStatus.ACTIVE : SessionStatus.STALE
+    const sessionStatus = isStopped
+      ? SessionStatus.CLOSED
+      : activationStillActive || isLive
+        ? SessionStatus.ACTIVE
+        : SessionStatus.STALE
     const startedAt = row.acctstarttime ?? now
     const lastAccountingAt = row.acctupdatetime ?? row.acctstarttime ?? now
 
@@ -129,9 +134,13 @@ export class RadiusSignalSyncService {
       ? await this.prisma.packageActivation.findFirst({
           where: { radiusUsername: { equals: username, mode: 'insensitive' } },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, voucherRedemptionId: true },
+          select: { id: true, voucherRedemptionId: true, status: true, endsAt: true },
         })
       : null
+
+    const activationStillActive = Boolean(
+      activation?.status === PackageActivationStatus.ACTIVE && activation.endsAt > now,
+    )
 
     // Change detection keeps the polling sweep from republishing the same
     // state every cycle: only genuinely new information reaches the

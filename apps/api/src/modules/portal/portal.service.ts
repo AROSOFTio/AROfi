@@ -839,10 +839,24 @@ export class PortalService {
   }
 
   private async clearStaleSessionIfNeeded(activationId: string) {
-    // MikroTik sends interim-update every 60s. No signal in 3 minutes = dead session.
-    // 15 minutes was too long — stale ACTIVE sessions blocked reconnect detection
-    // and caused the portal to show "existingActiveAccess=true" incorrectly.
-    const staleBefore = new Date(Date.now() - 3 * 60 * 1000)
+    // Paid access is allowed to remain active until the package itself expires.
+    // We should not flip an active paid session to STALE just because the router
+    // missed a few accounting updates during a blip.
+    const activation = await this.prisma.packageActivation.findUnique({
+      where: { id: activationId },
+      select: { id: true, tenantId: true, routerId: true, boundMacAddress: true, firstSeenIp: true, status: true, endsAt: true },
+    })
+
+    if (!activation) {
+      return
+    }
+
+    const now = new Date()
+    if (activation.status === PackageActivationStatus.ACTIVE && activation.endsAt > now) {
+      return
+    }
+
+    const staleBefore = new Date(now.getTime() - 3 * 60 * 1000)
     const result = await this.prisma.networkSession.updateMany({
       where: {
         activationId,
@@ -851,23 +865,20 @@ export class PortalService {
       },
       data: {
         status: SessionStatus.STALE,
-        endedAt: new Date(),
+        endedAt: now,
       },
     })
 
     if (result.count > 0) {
-      const activation = await this.prisma.packageActivation.findUnique({ where: { id: activationId } })
-      if (activation) {
-        await this.markReconnectionAttempt({
-          tenantId: activation.tenantId,
-          activationId,
-          routerId: activation.routerId,
-          macAddress: activation.boundMacAddress,
-          ipAddress: activation.firstSeenIp,
-          status: ReconnectionStatus.STALE_SESSION_CLEARED,
-          message: `${result.count} stale session(s) cleared before reconnect`,
-        })
-      }
+      await this.markReconnectionAttempt({
+        tenantId: activation.tenantId,
+        activationId,
+        routerId: activation.routerId,
+        macAddress: activation.boundMacAddress,
+        ipAddress: activation.firstSeenIp,
+        status: ReconnectionStatus.STALE_SESSION_CLEARED,
+        message: `${result.count} stale session(s) cleared before reconnect`,
+      })
     }
   }
 
