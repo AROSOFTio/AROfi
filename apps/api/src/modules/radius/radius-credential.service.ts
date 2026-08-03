@@ -115,12 +115,26 @@ export class RadiusCredentialService implements OnModuleInit {
         ]),
       })
 
-      const replies: Prisma.RadReplyCreateManyInput[] = authUsernames.map((authUsername) => ({
-        username: authUsername,
-        attribute: 'Session-Timeout',
-        op: '=',
-        value: remainingSeconds.toString(),
-      }))
+      const replies: Prisma.RadReplyCreateManyInput[] = authUsernames.flatMap((authUsername) => [
+        {
+          username: authUsername,
+          attribute: 'Session-Timeout',
+          op: '=',
+          value: remainingSeconds.toString(),
+        },
+        {
+          username: authUsername,
+          attribute: 'Idle-Timeout',
+          op: '=',
+          value: '3600',
+        },
+        {
+          username: authUsername,
+          attribute: 'Acct-Interim-Interval',
+          op: '=',
+          value: '60',
+        },
+      ])
 
       if (activation.downloadSpeedKbps || activation.uploadSpeedKbps) {
         const down = activation.downloadSpeedKbps ?? activation.uploadSpeedKbps ?? 0

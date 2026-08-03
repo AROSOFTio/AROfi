@@ -51,7 +51,12 @@ export class RadiusAuthorizationPolicyService {
       return { accepted: false, reason: 'MAC address is required for one-device enforcement', activation }
     }
 
-    if (!boundMac) {
+    const hasStartedSession = await tx.radAcct.findFirst({
+      where: { username: input.username },
+      select: { radacctid: true },
+    })
+
+    if (!boundMac || !hasStartedSession) {
       await tx.packageActivation.update({
         where: { id: activation.id },
         data: {
@@ -73,11 +78,13 @@ export class RadiusAuthorizationPolicyService {
       return { accepted: false, reason: 'Credential is already bound to another device', activation }
     }
 
+    const staleBefore = new Date(now.getTime() - 90 * 1000)
     const concurrentSession = await tx.networkSession.findFirst({
       where: {
         username: input.username,
         status: SessionStatus.ACTIVE,
         macAddress: { not: observedMac },
+        lastAccountingAt: { gte: staleBefore },
       },
       select: {
         id: true,
