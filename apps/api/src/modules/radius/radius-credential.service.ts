@@ -124,12 +124,6 @@ export class RadiusCredentialService implements OnModuleInit {
         },
         {
           username: authUsername,
-          attribute: 'Idle-Timeout',
-          op: '=',
-          value: '3600',
-        },
-        {
-          username: authUsername,
           attribute: 'Acct-Interim-Interval',
           op: '=',
           value: '60',
