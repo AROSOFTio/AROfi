@@ -58,7 +58,7 @@ export class UpdatePackageDto {
   // When provided, supersedes the current default price (old price is ended).
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(100000000)
   priceUgx?: number
 }

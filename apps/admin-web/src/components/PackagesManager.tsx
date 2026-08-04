@@ -123,7 +123,7 @@ export default function PackagesManager() {
       deviceLimit: '1',
       downloadSpeedKbps: '8192',
       uploadSpeedKbps: '2048',
-      initialPriceUgx: '3000',
+      initialPriceUgx: '0',
       isFeatured: true,
     }))
     setCreateOpen(true)
@@ -142,6 +142,10 @@ export default function PackagesManager() {
       description: 'Optional trial access package. Business owner can rename it and choose minutes, hours, or days.',
       durationMinutes: '60',
       isTrialEnabled: true,
+      dataLimitMb: '',
+      deviceLimit: '1',
+      downloadSpeedKbps: '',
+      uploadSpeedKbps: '',
       initialPriceUgx: '0',
       isFeatured: false,
     }))
@@ -260,7 +264,7 @@ export default function PackagesManager() {
           deviceLimit: parseOptionalInt(formState.deviceLimit),
           downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
           uploadSpeedKbps: parseOptionalInt(formState.uploadSpeedKbps),
-          priceUgx: Number.parseInt(formState.initialPriceUgx, 10),
+          priceUgx: formState.isTrialEnabled ? 0 : Number.parseInt(formState.initialPriceUgx, 10),
           isFeatured: formState.isFeatured,
         })
       } else {
@@ -275,7 +279,7 @@ export default function PackagesManager() {
           deviceLimit: parseOptionalInt(formState.deviceLimit),
           downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
           uploadSpeedKbps: parseOptionalInt(formState.uploadSpeedKbps),
-          initialPriceUgx: Number.parseInt(formState.initialPriceUgx, 10),
+          initialPriceUgx: formState.isTrialEnabled ? 0 : Number.parseInt(formState.initialPriceUgx, 10),
           isFeatured: formState.isFeatured,
           status: 'ACTIVE',
         })
@@ -339,10 +343,12 @@ export default function PackagesManager() {
                 <label className="form-label">Package Name</label>
                 <input className="form-input" value={formState.name} onChange={(event) => setFormState((previous) => ({ ...previous, name: event.target.value }))} placeholder="Starter 2 Hours" required />
               </div>
-              <div className="form-group">
-                <label className="form-label">Code</label>
-                <input className="form-input" value={formState.code} onChange={(event) => setFormState((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))} placeholder="STARTER-2H" required disabled={Boolean(editingId)} />
-              </div>
+              {!formState.isTrialEnabled && (
+                <div className="form-group">
+                  <label className="form-label">Code</label>
+                  <input className="form-input" value={formState.code} onChange={(event) => setFormState((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))} placeholder="STARTER-2H" required disabled={Boolean(editingId)} />
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Duration</label>
                 <DurationInput
@@ -364,44 +370,48 @@ export default function PackagesManager() {
                   Activate this package as a free trial
                 </label>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                  The package remains fully renameable. The duration selector controls minutes, hours, or days.
+                  The package remains fully renameable. Trial packages default to unlimited speed and data.
                 </p>
               </div>
-              <div className="form-group">
-                <label className="form-label">Initial Price (UGX)</label>
-                <input className="form-input" type="number" min={1} value={formState.initialPriceUgx} onChange={(event) => setFormState((previous) => ({ ...previous, initialPriceUgx: event.target.value }))} required />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Data Limit MB (optional)</label>
-                <input className="form-input" type="number" min={1} value={formState.dataLimitMb} onChange={(event) => setFormState((previous) => ({ ...previous, dataLimitMb: event.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Max devices per session</label>
-                <select
-                  className="form-input"
-                  value={formState.deviceLimit}
-                  onChange={(event) => setFormState((previous) => ({ ...previous, deviceLimit: event.target.value }))}
-                >
-                  <option value="1">1 device — no sharing (default)</option>
-                  <option value="2">2 devices — couple / family</option>
-                  <option value="3">3 devices</option>
-                  <option value="4">4 devices</option>
-                  <option value="5">5 devices — max allowed</option>
-                </select>
-                {Number(formState.deviceLimit) > 1 && (
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                    Only the device that pays or redeems connects automatically. The other {Number(formState.deviceLimit) - 1} device{Number(formState.deviceLimit) > 2 ? 's' : ''} get a short-lived bonus voucher code to share — each works on one device only.
-                  </p>
-                )}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Download Kbps (optional)</label>
-                <input className="form-input" type="number" min={1} value={formState.downloadSpeedKbps} onChange={(event) => setFormState((previous) => ({ ...previous, downloadSpeedKbps: event.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Upload Kbps (optional)</label>
-                <input className="form-input" type="number" min={1} value={formState.uploadSpeedKbps} onChange={(event) => setFormState((previous) => ({ ...previous, uploadSpeedKbps: event.target.value }))} />
-              </div>
+              {!formState.isTrialEnabled && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Initial Price (UGX)</label>
+                    <input className="form-input" type="number" min={1} value={formState.initialPriceUgx} onChange={(event) => setFormState((previous) => ({ ...previous, initialPriceUgx: event.target.value }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Data Limit MB (optional)</label>
+                    <input className="form-input" type="number" min={1} value={formState.dataLimitMb} onChange={(event) => setFormState((previous) => ({ ...previous, dataLimitMb: event.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Max devices per session</label>
+                    <select
+                      className="form-input"
+                      value={formState.deviceLimit}
+                      onChange={(event) => setFormState((previous) => ({ ...previous, deviceLimit: event.target.value }))}
+                    >
+                      <option value="1">1 device — no sharing (default)</option>
+                      <option value="2">2 devices — couple / family</option>
+                      <option value="3">3 devices</option>
+                      <option value="4">4 devices</option>
+                      <option value="5">5 devices — max allowed</option>
+                    </select>
+                    {Number(formState.deviceLimit) > 1 && (
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Only the device that pays or redeems connects automatically. The other {Number(formState.deviceLimit) - 1} device{Number(formState.deviceLimit) > 2 ? 's' : ''} get a short-lived bonus voucher code to share — each works on one device only.
+                      </p>
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Download Kbps (optional)</label>
+                    <input className="form-input" type="number" min={1} value={formState.downloadSpeedKbps} onChange={(event) => setFormState((previous) => ({ ...previous, downloadSpeedKbps: event.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Upload Kbps (optional)</label>
+                    <input className="form-input" type="number" min={1} value={formState.uploadSpeedKbps} onChange={(event) => setFormState((previous) => ({ ...previous, uploadSpeedKbps: event.target.value }))} />
+                  </div>
+                </>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Description</label>

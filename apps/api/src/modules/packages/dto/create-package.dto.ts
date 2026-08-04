@@ -59,7 +59,7 @@ export class CreatePackageDto {
   status?: PackageStatus
 
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(100000000)
   initialPriceUgx: number
 }
