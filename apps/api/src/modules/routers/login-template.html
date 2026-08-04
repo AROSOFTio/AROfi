@@ -59,7 +59,7 @@
     
     <div id="loading" class="spin-wrap"><div class="spinner"></div><p>Loading packages...</p></div>
     
-    <div id="content" style="display:none">
+    <div id="content" style="display:block">
       <div class="tabs">
         <div class="tab on" id="t-momo" onclick="sw('momo')">Buy Package</div>
         <div class="tab" id="t-voucher" onclick="sw('voucher')">Voucher</div>
@@ -137,6 +137,8 @@
         setTimeout(login, 200);
       }
       
+      document.getElementById('loading').style.display='none';
+      document.getElementById('content').style.display='block';
       load();
     };
 
@@ -274,7 +276,7 @@
     }
 
     function dnet(v){}
-    function conn(rc){if(!rc||!rc.username){sst('Access is active. Turn WiFi off and on to connect automatically.','info');return;}var dst='https://arofi.net/portal?connected=1';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function conn(rc){if(!rc||!rc.username){return;}var dst='https://arofi.net/portal?connected=1';window.location.href=lo+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
     function sst(m,t){var s=document.getElementById('st');if(m){s.className='st '+t;s.textContent=m;}else{s.style.display='none';}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
     function fmb(m){return m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';}

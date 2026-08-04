@@ -641,17 +641,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Poll at 800ms for near-instant auto-connect the moment the customer
+    // Poll at 400ms for near-instant auto-connect the moment the customer
     // approves the Yo! Uganda Mobile Money PIN on their phone.
     void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 800)
+    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 400)
 
     // Triple-check when user switches back from their banking app.
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 300)
-      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 800)
+      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 150)
+      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 400)
     }
     document.addEventListener('visibilitychange', onVisible)
 
