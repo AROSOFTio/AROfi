@@ -21,6 +21,11 @@ export class UpdatePackageDto {
   durationMinutes?: number
 
   @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  isTrialEnabled?: boolean
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   dataLimitMb?: number

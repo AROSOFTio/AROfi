@@ -1028,6 +1028,7 @@ model Package {
   code                String
   description         String?
   durationMinutes     Int
+  isTrialEnabled      Boolean              @default(false)
   dataLimitMb         Int?
   deviceLimit         Int?
   downloadSpeedKbps   Int?

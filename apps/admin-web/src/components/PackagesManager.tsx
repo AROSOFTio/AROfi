@@ -13,6 +13,7 @@ type PackageFormState = {
   code: string
   description: string
   durationMinutes: string
+  isTrialEnabled: boolean
   dataLimitMb: string
   deviceLimit: string
   downloadSpeedKbps: string
@@ -33,6 +34,7 @@ const initialFormState: PackageFormState = {
   code: '',
   description: '',
   durationMinutes: '60',
+  isTrialEnabled: false,
   dataLimitMb: '',
   deviceLimit: '1',
   downloadSpeedKbps: '',
@@ -85,6 +87,7 @@ export default function PackagesManager() {
       code: item.code,
       description: item.description ?? '',
       durationMinutes: String(item.durationMinutes),
+      isTrialEnabled: item.isTrialEnabled,
       dataLimitMb: item.dataLimitMb != null ? String(item.dataLimitMb) : '',
       deviceLimit: item.deviceLimit != null ? String(item.deviceLimit) : '',
       downloadSpeedKbps: item.downloadSpeedKbps != null ? String(item.downloadSpeedKbps) : '',
@@ -115,12 +118,32 @@ export default function PackagesManager() {
       code: 'TV-DAILY',
       description: 'Smart TV streaming access. Connect the TV once, then keep it bound to that TV device.',
       durationMinutes: String(24 * 60),
+      isTrialEnabled: true,
       dataLimitMb: '',
       deviceLimit: '1',
       downloadSpeedKbps: '8192',
       uploadSpeedKbps: '2048',
       initialPriceUgx: '3000',
       isFeatured: true,
+    }))
+    setCreateOpen(true)
+  }
+
+  function startCreateTrialPackage() {
+    setPackageView('internet')
+    setEditingId(null)
+    setFormError(null)
+    setProcessText('')
+    setFormState((previous) => ({
+      ...initialFormState,
+      tenantId: previous.tenantId,
+      name: 'Free Trial',
+      code: 'FREE-TRIAL',
+      description: 'Optional trial access package. Business owner can rename it and choose minutes, hours, or days.',
+      durationMinutes: '60',
+      isTrialEnabled: true,
+      initialPriceUgx: '0',
+      isFeatured: false,
     }))
     setCreateOpen(true)
   }
@@ -232,6 +255,7 @@ export default function PackagesManager() {
           name: formState.name.trim(),
           description: formState.description.trim() || undefined,
           durationMinutes: Number.parseInt(formState.durationMinutes, 10),
+          isTrialEnabled: formState.isTrialEnabled,
           dataLimitMb: parseOptionalInt(formState.dataLimitMb),
           deviceLimit: parseOptionalInt(formState.deviceLimit),
           downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
@@ -246,6 +270,7 @@ export default function PackagesManager() {
           code: formState.code.trim().toUpperCase(),
           description: formState.description.trim() || undefined,
           durationMinutes: Number.parseInt(formState.durationMinutes, 10),
+          isTrialEnabled: formState.isTrialEnabled,
           dataLimitMb: parseOptionalInt(formState.dataLimitMb),
           deviceLimit: parseOptionalInt(formState.deviceLimit),
           downloadSpeedKbps: parseOptionalInt(formState.downloadSpeedKbps),
@@ -262,6 +287,7 @@ export default function PackagesManager() {
       setFormState({
         ...initialFormState,
         tenantId: formState.tenantId,
+        isTrialEnabled: false,
       })
       await loadData()
       setCreateOpen(false)
@@ -328,6 +354,20 @@ export default function PackagesManager() {
                 />
               </div>
               <div className="form-group">
+                <label className="form-label">Free Trial</label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)' }}>
+                  <input
+                    type="checkbox"
+                    checked={formState.isTrialEnabled}
+                    onChange={(event) => setFormState((previous) => ({ ...previous, isTrialEnabled: event.target.checked }))}
+                  />
+                  Activate this package as a free trial
+                </label>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  The package remains fully renameable. The duration selector controls minutes, hours, or days.
+                </p>
+              </div>
+              <div className="form-group">
                 <label className="form-label">Initial Price (UGX)</label>
                 <input className="form-input" type="number" min={1} value={formState.initialPriceUgx} onChange={(event) => setFormState((previous) => ({ ...previous, initialPriceUgx: event.target.value }))} required />
               </div>
@@ -367,11 +407,11 @@ export default function PackagesManager() {
               <label className="form-label">Description</label>
               <input className="form-input" value={formState.description} onChange={(event) => setFormState((previous) => ({ ...previous, description: event.target.value }))} placeholder="Fast daily hotspot access for commuters." />
             </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
-              <label style={{ fontSize: 13, color: 'var(--text-2)', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={formState.isFeatured} onChange={(event) => setFormState((previous) => ({ ...previous, isFeatured: event.target.checked }))} />
-                Mark as featured
-              </label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-2)', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                  <input type="checkbox" checked={formState.isFeatured} onChange={(event) => setFormState((previous) => ({ ...previous, isFeatured: event.target.checked }))} />
+                  Mark as featured
+                </label>
               <button type="submit" className="btn btn-primary" disabled={submitting}>
                 {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Create Package'}
               </button>
@@ -467,6 +507,9 @@ export default function PackagesManager() {
           <input className="form-input" placeholder="Filter packages..." style={{ width: 244 }} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={startCreateTrialPackage}>
+            + Free Trial
+          </button>
           <button type="button" className="btn btn-ghost" onClick={startCreateTvPackage}>
             + TV Package
           </button>
@@ -522,6 +565,11 @@ export default function PackagesManager() {
                   <td><input type="checkbox" aria-label={`Select ${item.name}`} /></td>
                   <td>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{item.name}</div>
+                    {item.isTrialEnabled && (
+                      <div style={{ marginTop: 4, fontSize: 12, color: 'var(--brand-fg)', fontWeight: 600 }}>
+                        Free trial enabled
+                      </div>
+                    )}
                   </td>
                   <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(item.activePriceUgx)}</td>
                   <td>{formatDuration(item.durationMinutes).replace('hr', 'H').replace('day', 'D')}</td>

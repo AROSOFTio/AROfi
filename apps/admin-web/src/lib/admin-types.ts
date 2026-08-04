@@ -234,6 +234,7 @@ export type PackageCatalogResponse = {
     code: string
     description?: string | null
     durationMinutes: number
+    isTrialEnabled: boolean
     dataLimitMb?: number | null
     deviceLimit?: number | null
     downloadSpeedKbps?: number | null
