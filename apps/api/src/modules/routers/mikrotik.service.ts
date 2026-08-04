@@ -1014,17 +1014,32 @@ export class MikrotikService {
           return;
         }
         var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;
-        // Loop guard that still REMEMBERS an active bundle. Only skip the auto-
-        // login if we tried it within the last ~20s and are back here still not
-        // online (the router bounced us = a redirect loop). A returning device
-        // whose bundle is active reconnects normally because that happens much
-        // later than a few seconds. A one-shot flag would have blocked every
-        // legitimate reconnect for the whole browser session — the bug where an
-        // active bundle "wasn't remembered".
+        // Loop guard: if we auto-submitted credentials within the last 8s and
+        // landed back here, the router bounced us (already logged in, or brief
+        // race). 8s is enough to detect a true redirect loop but short enough
+        // that a genuine WiFi reconnect (turn off / on) always triggers auto-login.
         var _lastAuto=0;try{_lastAuto=parseInt(sessionStorage.getItem('arofiAutoAt')||'0',10);}catch(e){}
-        if(autoReady&&(!_lastAuto||(Date.now()-_lastAuto)>=20000)){
+        var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<8000;
+        if(autoReady&&!loopGuard){
           try{sessionStorage.setItem('arofiAutoAt',String(Date.now()));}catch(e){}
           conn(d.returningDevice.reconnect);return;
+        }
+        // If the loop guard fired but the device HAS active access, show the
+        // "Connected" screen instead of the package list. The router already
+        // has an active session for this device — showing packages would
+        // confuse the customer into thinking they need to pay again.
+        if(autoReady&&loopGuard){
+          document.getElementById('loading').style.display='none';
+          document.getElementById('content').innerHTML=
+            '<div style="text-align:center;padding:28px 8px">'+
+            '<div style="font-size:52px;margin-bottom:10px">\u2705</div>'+
+            '<div style="font-size:20px;font-weight:700;color:#16a34a;margin-bottom:6px">Internet Connected!</div>'+
+            '<div style="font-size:14px;color:#475569;margin-bottom:18px">Your device is online. You can close this window.</div>'+
+            '<a href="http://connectivitycheck.gstatic.com/generate_204" '+
+            'style="display:inline-block;background:#2563eb;color:#fff;font-weight:700;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:14px">'+
+            'Open Browser</a></div>';
+          document.getElementById('content').style.display='block';
+          return;
         }
 
         pkgs=d.packages||[];

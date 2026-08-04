@@ -632,13 +632,12 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async cleanStaleSessions() {
-    // MikroTik sends RADIUS interim-update every 60s (set in hotspot profile).
-    // A session with no accounting signal for 5 minutes used to be treated as
-    // dead too aggressively. In practice, a short gap can happen during
-    // network blips, router reboots or temporary accounting delivery hiccups.
-    // We now require a much longer silence window before we mark the session
-    // stale, so active subscriptions do not get dropped unnecessarily.
-    const staleBefore = new Date(Date.now() - 15 * 60 * 1000)
+    // MikroTik sends RADIUS interim-update every 60s (Acct-Interim-Interval).
+    // If we haven't received ANY accounting for 3 minutes (3× the interval),
+    // the device is gone — mark the session STALE so the dashboard reflects
+    // reality. The PackageActivation stays ACTIVE so the customer can still
+    // reconnect; this only affects the live session indicator.
+    const staleBefore = new Date(Date.now() - 3 * 60 * 1000)
     const staleWhere = {
       status: SessionStatus.ACTIVE,
       OR: [{ lastAccountingAt: null }, { lastAccountingAt: { lt: staleBefore } }],
@@ -662,19 +661,11 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
       return
     }
 
-    const activationIds = [...new Set(affected.map((session) => session.activationId).filter((id): id is string => Boolean(id)))]
-    const activations = activationIds.length > 0
-      ? await this.prisma.packageActivation.findMany({
-          where: { id: { in: activationIds } },
-          select: { id: true, status: true, endsAt: true },
-        })
-      : []
-    const activationById = new Map(activations.map((activation) => [activation.id, activation]))
-
-    const staleSessions = affected.filter((session) => {
-      const activation = session.activationId ? activationById.get(session.activationId) : null
-      return !(activation?.status === PackageActivationStatus.ACTIVE && activation.endsAt > new Date())
-    })
+    // Mark ALL sessions without recent accounting as stale, regardless of
+    // activation status. Previously sessions with active (non-expired)
+    // activations were exempt, which caused the dashboard to show
+    // disconnected users as "Active" for hours until the package expired.
+    const staleSessions = affected
 
     if (staleSessions.length === 0) {
       return
