@@ -153,7 +153,7 @@ export class PortalService {
       resolvedTenantId,
     )
     const accessToken = this.extractBearerToken(authorization)
-    const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot, phoneNumber)
+    const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot)
 
     if (!accessToken) {
       return {
@@ -247,7 +247,6 @@ export class PortalService {
         clientIp: dto.clientIp,
         routerId: resolvedHotspot.routerId,
         hotspotServerName: resolvedHotspot.hotspotServerName,
-        targetDevice: dto.targetDevice,
         userAgent,
       })
     } catch (error) {
@@ -643,34 +642,12 @@ export class PortalService {
   private async detectReturningDevice(
     tenantId: string,
     hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string },
-    phoneNumber?: string,
   ) {
-    let activation = await this.findActiveAccessByMacAndRouter(hotspot?.macAddress, hotspot?.routerId, tenantId)
-
-    if (!activation && phoneNumber) {
-      const phoneVariants = this.buildPhoneVariants(phoneNumber)
-      activation = await this.prisma.packageActivation.findFirst({
-        where: {
-          tenantId,
-          status: PackageActivationStatus.ACTIVE,
-          endsAt: { gt: new Date() },
-          OR: [
-            { accessPhoneNumber: { in: phoneVariants } },
-            { customerReference: { in: phoneVariants } },
-          ],
-        },
-        include: {
-          ...this.activationInclude,
-          radiusCredential: true,
-        },
-        orderBy: { endsAt: 'desc' },
-      })
-    }
-
+    const activation = await this.findActiveAccessByMacAndRouter(hotspot?.macAddress, hotspot?.routerId, tenantId)
     if (!activation) {
       return {
         existingActiveAccess: false,
-        reason: hotspot?.macAddress || phoneNumber ? 'No active access is bound to this device or phone.' : 'MAC address was not provided by the hotspot.',
+        reason: hotspot?.macAddress ? 'No active access is bound to this device.' : 'MAC address was not provided by the hotspot.',
       }
     }
 
@@ -861,21 +838,10 @@ export class PortalService {
   }
 
   private async clearStaleSessionIfNeeded(activationId: string) {
-    // Paid access is allowed to remain active until the package itself expires.
-    // We should not flip an active paid session to STALE just because the router
-    // missed a few accounting updates during a blip.
-    const activation = await this.prisma.packageActivation.findUnique({
-      where: { id: activationId },
-      select: { id: true, tenantId: true, routerId: true, boundMacAddress: true, firstSeenIp: true, status: true, endsAt: true },
-    })
-
-    if (!activation) {
-      return
-    }
-
-    const now = new Date()
-
-    const staleBefore = new Date(now.getTime() - 90 * 1000)
+    // MikroTik sends interim-update every 60s. No signal in 3 minutes = dead session.
+    // 15 minutes was too long — stale ACTIVE sessions blocked reconnect detection
+    // and caused the portal to show "existingActiveAccess=true" incorrectly.
+    const staleBefore = new Date(Date.now() - 3 * 60 * 1000)
     const result = await this.prisma.networkSession.updateMany({
       where: {
         activationId,
@@ -884,20 +850,23 @@ export class PortalService {
       },
       data: {
         status: SessionStatus.STALE,
-        endedAt: now,
+        endedAt: new Date(),
       },
     })
 
     if (result.count > 0) {
-      await this.markReconnectionAttempt({
-        tenantId: activation.tenantId,
-        activationId,
-        routerId: activation.routerId,
-        macAddress: activation.boundMacAddress,
-        ipAddress: activation.firstSeenIp,
-        status: ReconnectionStatus.STALE_SESSION_CLEARED,
-        message: `${result.count} stale session(s) cleared before reconnect`,
-      })
+      const activation = await this.prisma.packageActivation.findUnique({ where: { id: activationId } })
+      if (activation) {
+        await this.markReconnectionAttempt({
+          tenantId: activation.tenantId,
+          activationId,
+          routerId: activation.routerId,
+          macAddress: activation.boundMacAddress,
+          ipAddress: activation.firstSeenIp,
+          status: ReconnectionStatus.STALE_SESSION_CLEARED,
+          message: `${result.count} stale session(s) cleared before reconnect`,
+        })
+      }
     }
   }
 

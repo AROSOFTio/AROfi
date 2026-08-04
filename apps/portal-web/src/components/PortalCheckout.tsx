@@ -1331,24 +1331,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       <>
           {!checkoutOpen && errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
           {!checkoutOpen && statusMessage && !pendingStatuses.includes(currentPayment?.status ?? '') && <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}>{statusMessage}</div>}
-          {!checkoutOpen && hasOneTapReconnect && connectionStatus !== 'reconnecting' && (
-            <div className={`rounded-2xl border px-4 py-3 text-sm ${portalStyle.notice}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-semibold">One tap to continue your connection</div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConnectionStatus('reconnecting')
-                    setErrorMessage('')
-                    autoSubmitHotspotLogin(oneTapReconnectPayload)
-                  }}
-                  className={`rounded-lg px-3 py-2 text-sm font-bold ${portalStyle.button}`}
-                >
-                  Connect now
-                </button>
-              </div>
-            </div>
-          )}
           {smartTvNotice && (
             <div className={`rounded-2xl border p-4 text-sm ${portalStyle.notice}`}>
               <div className="font-extrabold">Smart TV access is ready</div>
