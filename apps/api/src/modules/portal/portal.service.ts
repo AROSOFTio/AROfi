@@ -897,6 +897,14 @@ export class PortalService {
       throw new BadRequestException('Unable to identify the business for this trial package')
     }
 
+    const normalizedMac = this.normalizeMac(dto.macAddress)
+    const normalizedIp = dto.clientIp?.trim() || undefined
+    if (!normalizedMac && !normalizedIp) {
+      throw new BadRequestException(
+        'A device MAC address or client IP is required to start the free trial',
+      )
+    }
+
     const pkg = await this.prisma.package.findFirst({
       where: {
         id: dto.packageId,
@@ -920,6 +928,37 @@ export class PortalService {
       throw new BadRequestException('This package is not a free trial')
     }
 
+    const trialReuseWhere: Prisma.PackageActivationWhereInput = {
+      tenantId,
+      packageId: pkg.id,
+      metadata: {
+        path: ['trial'],
+        equals: true,
+      } as Prisma.JsonFilter,
+      OR: [
+        ...(normalizedMac ? [{ boundMacAddress: normalizedMac }] : []),
+        ...(normalizedIp ? [{ firstSeenIp: normalizedIp }] : []),
+      ],
+    }
+
+    const previousTrial = await this.prisma.packageActivation.findFirst({
+      where: trialReuseWhere,
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        endsAt: true,
+        boundMacAddress: true,
+        firstSeenIp: true,
+      },
+    })
+
+    if (previousTrial) {
+      throw new BadRequestException(
+        'This device already used the free trial. Use a paid package or a different device.',
+      )
+    }
+
     const activation = await this.prisma.$transaction(async (tx) => {
       const created = await this.packageActivationService.activateInTransaction(tx, {
         tenantId,
@@ -931,10 +970,10 @@ export class PortalService {
         deviceLimit: pkg.deviceLimit,
         downloadSpeedKbps: pkg.downloadSpeedKbps,
         uploadSpeedKbps: pkg.uploadSpeedKbps,
-        radiusUsername: resolvedHotspot.macAddress || undefined,
-        radiusPassword: resolvedHotspot.macAddress || undefined,
-        boundMacAddress: resolvedHotspot.macAddress || undefined,
-        firstSeenIp: resolvedHotspot.ipAddress || undefined,
+        radiusUsername: normalizedMac || normalizedIp || undefined,
+        radiusPassword: normalizedMac || normalizedIp || undefined,
+        boundMacAddress: normalizedMac || undefined,
+        firstSeenIp: normalizedIp || undefined,
         routerId: 'routerId' in resolvedHotspot ? resolvedHotspot.routerId : undefined,
         hotspotServerName:
           'hotspotServerName' in resolvedHotspot ? resolvedHotspot.hotspotServerName : undefined,
@@ -943,8 +982,8 @@ export class PortalService {
           trial: true,
           loginUrl: dto.loginUrl ?? null,
           routerKey: dto.routerKey ?? null,
-          clientIp: dto.clientIp ?? null,
-          macAddress: dto.macAddress ?? null,
+          clientIp: normalizedIp ?? null,
+          macAddress: normalizedMac ?? null,
         }),
       })
 
