@@ -1196,11 +1196,10 @@ export class MikrotikService {
   <meta charset="utf-8">
 </head>
 <body>
-  <script>
-    // Silent one-shot redirect. A connectivity probe makes Android/iOS captive
-    // browsers close instead of leaving the router's /status page visible.
-    window.location.replace("http://connectivitycheck.gstatic.com/generate_204");
-  </script>
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:40px 16px;color:#0f172a">
+    <div style="font-size:22px;font-weight:800;margin-bottom:8px">Connected</div>
+    <div style="font-size:14px;color:#475569">You can close this page now and return to the WiFi network.</div>
+  </div>
 </body>
 </html>
 `
