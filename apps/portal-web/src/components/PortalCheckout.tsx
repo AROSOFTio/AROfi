@@ -1230,6 +1230,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   )
 
   function renderPackageButton(pkg: PortalPackage) {
+    const isTrialPackage = pkg.amountUgx <= 0 || /trial/i.test(pkg.name)
     return (
       <button
         key={pkg.id}
@@ -1251,8 +1252,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             {isMultiDevicePackage(pkg) ? ` - ${pkg.deviceLimit} devices` : ''}
           </span>
         </span>
-        <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{formatCurrency(pkg.amountUgx)}</span>
-        <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>BUY</span>
+        <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{isTrialPackage ? 'Free' : formatCurrency(pkg.amountUgx)}</span>
+        <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>{isTrialPackage ? 'TRY' : 'BUY'}</span>
       </button>
     )
   }
