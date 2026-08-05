@@ -919,7 +919,8 @@ export class MikrotikService {
 
       var _up=new URLSearchParams(search);
       if(_up.get('connected')==='1'){
-        window.location.replace('http://connectivitycheck.gstatic.com/generate_204');
+        document.getElementById('loading').style.display='none';
+        document.getElementById('content').style.display='block';
         return;
       }
 
@@ -1013,7 +1014,8 @@ export class MikrotikService {
           conn(d.returningDevice.reconnect);return;
         }
         if(autoReady&&loopGuard){
-          window.location.replace('http://connectivitycheck.gstatic.com/generate_204');
+          document.getElementById('loading').style.display='none';
+          document.getElementById('content').style.display='block';
           return;
         }
 
