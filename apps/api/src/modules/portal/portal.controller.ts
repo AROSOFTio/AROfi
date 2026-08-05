@@ -47,6 +47,24 @@ export class PortalController {
     return this.portalService.redeemVoucher(dto, userAgent)
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  @Post('start-trial')
+  startTrial(
+    @Body()
+    dto: {
+      packageId: string
+      macAddress?: string
+      clientIp?: string
+      routerId?: string
+      routerKey?: string
+      hotspotServerName?: string
+      loginUrl?: string
+      sessionReference?: string
+    },
+  ) {
+    return this.portalService.startTrial(dto)
+  }
+
   @Throttle({ default: { ttl: 60_000, limit: 15 } })
   @Post('reconnect')
   reconnect(

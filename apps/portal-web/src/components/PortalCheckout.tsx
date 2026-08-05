@@ -9,6 +9,7 @@ import type {
   PortalContextResponse,
   PortalCustomerSession,
   PortalLoginResponse,
+  PortalActivation,
   PortalPackage,
   PortalPayment,
   PortalRedeemVoucherResponse,
@@ -23,6 +24,10 @@ type ReconnectPayload = {
   loginUrl?: string | null
   username?: string | null
   password?: string | null
+}
+type TrialActivationResponse = {
+  activation?: PortalActivation | null
+  reconnect?: ReconnectPayload | null
 }
 type SmartTvActivationNotice = {
   macAddress: string
@@ -1236,6 +1241,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         key={pkg.id}
         type="button"
         onClick={() => {
+          if (isTrialPackage) {
+            void handleTrialStart(pkg)
+            return
+          }
           setSelectedPackage(pkg)
           setCheckoutOpen(true)
           setCurrentPayment(null)
@@ -1256,6 +1265,51 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
         <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>{isTrialPackage ? 'TRY' : 'BUY'}</span>
       </button>
     )
+  }
+
+  async function handleTrialStart(pkg: PortalPackage) {
+    setErrorMessage('')
+    setStatusMessage('')
+    setSelectedPackage(pkg)
+    setCheckoutOpen(false)
+    setCurrentPayment(null)
+    setPhoneNumber('')
+    setCustomerReference('')
+    setIsPaymentLoading(true)
+
+    try {
+      const response = await fetch('/api/portal/start-trial', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          packageId: pkg.id,
+          ...hotspotParams,
+        }),
+      })
+
+      const body = (await response.json().catch(() => ({}))) as TrialActivationResponse & { message?: string }
+      if (!response.ok) {
+        throw new Error(body.message || 'Unable to start the free trial.')
+      }
+
+      const reconnect = body.reconnect
+      if (reconnect?.loginUrl && reconnect.username && reconnect.password) {
+        setStatusMessage(`Trial started for ${pkg.name}. Connecting now...`)
+        setConnectionStatus('reconnecting')
+        await loadContext(undefined, portalToken, hotspotParams)
+        await autoSubmitHotspotLogin(reconnect)
+        return
+      }
+
+      setStatusMessage(`Trial started for ${pkg.name}.`)
+      await loadContext(undefined, portalToken, hotspotParams)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to start the free trial.')
+    } finally {
+      setIsPaymentLoading(false)
+    }
   }
 
   return (

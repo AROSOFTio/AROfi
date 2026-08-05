@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
+  PackageActivationSource,
   PackageActivationStatus,
   PaymentStatus,
   Prisma,
@@ -17,6 +18,7 @@ import {
 } from '@prisma/client'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { PackageActivationService } from '../payments/package-activation.service'
 import { RealtimeEventsService } from '../events/realtime-events.service'
 import { PaymentsService } from '../payments/payments.service'
 import { VouchersService } from '../vouchers/vouchers.service'
@@ -126,6 +128,7 @@ export class PortalService {
     private readonly configService: ConfigService,
     private readonly paymentsService: PaymentsService,
     private readonly vouchersService: VouchersService,
+    private readonly packageActivationService: PackageActivationService,
     private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
@@ -867,6 +870,112 @@ export class PortalService {
           message: `${result.count} stale session(s) cleared before reconnect`,
         })
       }
+    }
+  }
+
+  async startTrial(dto: {
+    packageId: string
+    macAddress?: string
+    clientIp?: string
+    routerId?: string
+    routerKey?: string
+    hotspotServerName?: string
+    loginUrl?: string
+    sessionReference?: string
+  }) {
+    const resolvedHotspot = await this.resolveHotspotContext({
+      macAddress: dto.macAddress,
+      ipAddress: dto.clientIp,
+      routerId: dto.routerId,
+      routerKey: dto.routerKey,
+      hotspotServerName: dto.hotspotServerName,
+      loginUrl: dto.loginUrl,
+    })
+
+    const tenantId = 'tenantId' in resolvedHotspot ? resolvedHotspot.tenantId : undefined
+    if (!tenantId) {
+      throw new BadRequestException('Unable to identify the business for this trial package')
+    }
+
+    const pkg = await this.prisma.package.findFirst({
+      where: {
+        id: dto.packageId,
+        tenantId,
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        durationMinutes: true,
+        dataLimitMb: true,
+        deviceLimit: true,
+        downloadSpeedKbps: true,
+        uploadSpeedKbps: true,
+        isTrialEnabled: true,
+      },
+    })
+
+    if (!pkg || !pkg.isTrialEnabled) {
+      throw new BadRequestException('This package is not a free trial')
+    }
+
+    const activation = await this.prisma.$transaction(async (tx) => {
+      const created = await this.packageActivationService.activateInTransaction(tx, {
+        tenantId,
+        packageId: pkg.id,
+        source: PackageActivationSource.VOUCHER,
+        customerReference: 'TRIAL',
+        durationMinutes: pkg.durationMinutes,
+        dataLimitMb: pkg.dataLimitMb,
+        deviceLimit: pkg.deviceLimit,
+        downloadSpeedKbps: pkg.downloadSpeedKbps,
+        uploadSpeedKbps: pkg.uploadSpeedKbps,
+        radiusUsername: resolvedHotspot.macAddress || undefined,
+        radiusPassword: resolvedHotspot.macAddress || undefined,
+        boundMacAddress: resolvedHotspot.macAddress || undefined,
+        firstSeenIp: resolvedHotspot.ipAddress || undefined,
+        routerId: 'routerId' in resolvedHotspot ? resolvedHotspot.routerId : undefined,
+        hotspotServerName:
+          'hotspotServerName' in resolvedHotspot ? resolvedHotspot.hotspotServerName : undefined,
+        sessionReference: dto.sessionReference,
+        metadata: this.toJsonValue({
+          trial: true,
+          loginUrl: dto.loginUrl ?? null,
+          routerKey: dto.routerKey ?? null,
+          clientIp: dto.clientIp ?? null,
+          macAddress: dto.macAddress ?? null,
+        }),
+      })
+
+      return tx.packageActivation.findUnique({
+        where: { id: created.id },
+        include: {
+          package: { select: { id: true, name: true, code: true } },
+          radiusCredential: { select: { username: true, password: true } },
+        },
+      })
+    })
+
+    const loginUrl = dto.loginUrl ?? null
+    const username = activation?.radiusCredential?.username ?? activation?.radiusUsername ?? null
+    const password = activation?.radiusCredential?.password ?? activation?.radiusPassword ?? null
+
+    return {
+      activation,
+      reconnect:
+        loginUrl && username && password
+          ? {
+              method: 'mikrotik-hotspot-post',
+              loginUrl,
+              username,
+              password,
+              routerId: 'routerId' in resolvedHotspot ? resolvedHotspot.routerId : null,
+              hotspotServerName:
+                'hotspotServerName' in resolvedHotspot ? resolvedHotspot.hotspotServerName : null,
+              expiresAt: activation?.endsAt?.toISOString() ?? null,
+            }
+          : null,
     }
   }
 
