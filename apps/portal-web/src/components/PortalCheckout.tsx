@@ -448,6 +448,10 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   })
   const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
   const selectedIsTvPackage = isTvPackage(selectedPackage)
+  const selectedIsTrialPackage = Boolean(
+    selectedPackage &&
+    (selectedPackage.isTrialEnabled || selectedPackage.amountUgx <= 0 || /trial/i.test(selectedPackage.name)),
+  )
   const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
   const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
   const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))
@@ -1314,6 +1318,18 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
+  useEffect(() => {
+    if (!checkoutOpen || !selectedPackage || !selectedIsTrialPackage) {
+      return
+    }
+
+    void handleTrialStart(selectedPackage)
+    // The trial path must never sit in the pay modal. If a cached state or
+    // stale navigation opens checkout for a trial package, immediately reroute
+    // it back onto the one-tap trial activation flow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutOpen, selectedPackage?.id, selectedIsTrialPackage])
+
   return (
     <div className="flex flex-1 flex-col gap-6">
       {initialView !== 'home' && (
@@ -1587,7 +1603,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 )
               })()}
 
-              {checkoutOpen && selectedPackage && (
+              {checkoutOpen && selectedPackage && !selectedIsTrialPackage && (
                 <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 px-4">
                   <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
                     <div className="flex items-start justify-between gap-3">
