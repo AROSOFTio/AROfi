@@ -1235,7 +1235,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   )
 
   function renderPackageButton(pkg: PortalPackage) {
-    const isTrialPackage = pkg.amountUgx <= 0 || /trial/i.test(pkg.name)
+    const isTrialPackage = Boolean(pkg.isTrialEnabled) || pkg.amountUgx <= 0 || /trial/i.test(pkg.name)
     return (
       <button
         key={pkg.id}
@@ -1298,12 +1298,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       if (reconnect?.loginUrl && reconnect.username && reconnect.password) {
         setStatusMessage(`Trial started for ${pkg.name}. Connecting now...`)
         setConnectionStatus('reconnecting')
+        setCheckoutOpen(false)
         await loadContext(undefined, portalToken, hotspotParams)
         await autoSubmitHotspotLogin(reconnect)
         return
       }
 
       setStatusMessage(`Trial started for ${pkg.name}.`)
+      setCheckoutOpen(false)
       await loadContext(undefined, portalToken, hotspotParams)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to start the free trial.')
