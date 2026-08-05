@@ -917,21 +917,9 @@ export class MikrotikService {
       var search=window.location.search;
       var v='';
 
-      // After a successful hotspot login MikroTik redirects back here with
-      // ?connected=1. Show an instant "Connected!" screen so the customer
-      // never sees the package list again after paying.
       var _up=new URLSearchParams(search);
       if(_up.get('connected')==='1'){
-        document.getElementById('loading').style.display='none';
-        document.getElementById('content').innerHTML=
-          '<div style="text-align:center;padding:28px 8px">'+
-          '<div style="font-size:52px;margin-bottom:10px">\u2705</div>'+
-          '<div style="font-size:20px;font-weight:700;color:#16a34a;margin-bottom:6px">Internet Connected!</div>'+
-          '<div style="font-size:14px;color:#475569;margin-bottom:18px">Your device is online. You can close this window.</div>'+
-          '<a href="http://connectivitycheck.gstatic.com/generate_204" '+
-          'style="display:inline-block;background:#2563eb;color:#fff;font-weight:700;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:14px">'+
-          'Open Browser</a></div>';
-        document.getElementById('content').style.display='block';
+        window.location.replace('http://connectivitycheck.gstatic.com/generate_204');
         return;
       }
 
@@ -1024,21 +1012,8 @@ export class MikrotikService {
           try{sessionStorage.setItem('arofiAutoAt',String(Date.now()));}catch(e){}
           conn(d.returningDevice.reconnect);return;
         }
-        // If the loop guard fired but the device HAS active access, show the
-        // "Connected" screen instead of the package list. The router already
-        // has an active session for this device — showing packages would
-        // confuse the customer into thinking they need to pay again.
         if(autoReady&&loopGuard){
-          document.getElementById('loading').style.display='none';
-          document.getElementById('content').innerHTML=
-            '<div style="text-align:center;padding:28px 8px">'+
-            '<div style="font-size:52px;margin-bottom:10px">\u2705</div>'+
-            '<div style="font-size:20px;font-weight:700;color:#16a34a;margin-bottom:6px">Internet Connected!</div>'+
-            '<div style="font-size:14px;color:#475569;margin-bottom:18px">Your device is online. You can close this window.</div>'+
-            '<a href="http://connectivitycheck.gstatic.com/generate_204" '+
-            'style="display:inline-block;background:#2563eb;color:#fff;font-weight:700;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:14px">'+
-            'Open Browser</a></div>';
-          document.getElementById('content').style.display='block';
+          window.location.replace('http://connectivitycheck.gstatic.com/generate_204');
           return;
         }
 
