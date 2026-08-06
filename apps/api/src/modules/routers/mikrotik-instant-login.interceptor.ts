@@ -1,5 +1,4 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common'
-import { Observable } from 'rxjs'
 import { map } from 'rxjs/operators'
 
 export function appendInstantAloginInstaller(script: string) {
@@ -53,32 +52,37 @@ export function appendInstantAloginInstaller(script: string) {
 
 @Injectable()
 export class MikrotikInstantLoginInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+  intercept(context: ExecutionContext, next: CallHandler) {
     const request = context.switchToHttp().getRequest()
     const requestUrl = String(request?.originalUrl ?? request?.url ?? '')
 
-    return next.handle().pipe(
-      map((body) => {
-        if (
-          typeof body === 'string' &&
-          /\/mikrotik\/script\/[^/?]+/.test(requestUrl)
-        ) {
-          return appendInstantAloginInstaller(body)
-        }
+    // npm workspaces can install a second physical RxJS copy inside apps/api.
+    // Nest's CallHandler is typed against the root copy, while this operator may
+    // resolve against the workspace copy. The operator is runtime-compatible;
+    // erase only that duplicate-package type identity so the API build remains
+    // stable without weakening the response transformation itself.
+    const transformResponse = map((body: any) => {
+      if (
+        typeof body === 'string' &&
+        /\/mikrotik\/script\/[^/?]+/.test(requestUrl)
+      ) {
+        return appendInstantAloginInstaller(body)
+      }
 
-        if (
-          body &&
-          typeof body === 'object' &&
-          typeof body.provisioningScript === 'string'
-        ) {
-          return {
-            ...body,
-            provisioningScript: appendInstantAloginInstaller(body.provisioningScript),
-          }
+      if (
+        body &&
+        typeof body === 'object' &&
+        typeof body.provisioningScript === 'string'
+      ) {
+        return {
+          ...body,
+          provisioningScript: appendInstantAloginInstaller(body.provisioningScript),
         }
+      }
 
-        return body
-      }),
-    )
+      return body
+    }) as any
+
+    return next.handle().pipe(transformResponse)
   }
 }
