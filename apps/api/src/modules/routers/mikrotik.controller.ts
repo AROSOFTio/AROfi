@@ -22,7 +22,16 @@ export class MikrotikController {
     if (!html) {
       throw new NotFoundException('Router login.html not found');
     }
-    return html;
+
+    // The 2 August reconnect flow started auto-submitting saved credentials as
+    // soon as the captive page loaded. On Samsung devices this can bypass the
+    // package list and leave Android evaluating a half-completed login as a
+    // network without internet. Always render bundles first; explicit voucher,
+    // trial, recovery, and successful payment actions still call conn().
+    return html.replace(
+      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
+      'var autoReady=false;',
+    );
   }
 
   @Get('status-html/:key')
@@ -77,8 +86,7 @@ export class MikrotikController {
     @Query('nasIp') selfReportedNasIp?: string,
   ) {
     const httpSourceIp = this.resolveSourceIp(request);
-    // Prefer the router's self-reported WAN IP — more accurate behind CGNAT
-    const sourceIp = selfReportedNasIp?.trim() || httpSourceIp;
+    const sourceIp = this.resolveProvisioningNasIp(selfReportedNasIp, httpSourceIp);
     const result = await this.routersService.markRouterProvisionedByKey(key, sourceIp);
     if (!result) {
       throw new NotFoundException('Router registration key not found');
@@ -99,6 +107,45 @@ export class MikrotikController {
       throw new NotFoundException('Router registration key not found');
     }
     return result;
+  }
+
+  private resolveProvisioningNasIp(selfReportedNasIp?: string, httpSourceIp?: string) {
+    const reportedIp = this.normalizeIpv4(selfReportedNasIp);
+    const observedIp = this.normalizeIpv4(httpSourceIp);
+
+    // FreeRADIUS must register the address it actually sees. A router behind
+    // CGNAT often reports a private WAN address even though auth packets arrive
+    // from the public address observed by this API callback.
+    if (reportedIp && !this.isPrivateOrReservedIpv4(reportedIp)) {
+      return reportedIp;
+    }
+
+    return observedIp || reportedIp || '';
+  }
+
+  private normalizeIpv4(value?: string) {
+    const normalized = value?.trim().replace(/^::ffff:/, '') ?? '';
+    return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
+      normalized.split('.').every((part) => Number(part) >= 0 && Number(part) <= 255)
+      ? normalized
+      : '';
+  }
+
+  private isPrivateOrReservedIpv4(ip: string) {
+    const [a, b] = ip.split('.').map(Number);
+
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 0) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
   }
 
   private resolveSourceIp(request: any) {
