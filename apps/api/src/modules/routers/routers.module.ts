@@ -4,6 +4,7 @@ import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { SmsModule } from '../sms/sms.module'
 import { MikrotikService } from './mikrotik.service'
+import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
 import { MikrotikController } from './mikrotik.controller'
 import { RoutersController } from './routers.controller'
@@ -13,7 +14,13 @@ import { RemoteProxyService } from './remote-proxy.service'
 @Module({
   imports: [AuthModule, MailModule, RadiusModule, SmsModule],
   controllers: [RoutersController, MikrotikController],
-  providers: [RouterCredentialsService, MikrotikService, RoutersService, RemoteProxyService],
+  providers: [
+    RouterCredentialsService,
+    MikrotikService,
+    RoutersService,
+    RemoteProxyService,
+    RouterCaptiveFlowInitializer,
+  ],
   exports: [RouterCredentialsService, MikrotikService, RoutersService, RemoteProxyService],
 })
 export class RoutersModule {}
