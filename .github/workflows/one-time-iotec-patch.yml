@@ -1,0 +1,488 @@
+name: One-time ioTec and clean UI patch
+
+on:
+  push:
+    branches:
+      - feat/clean-admin-flow-iotec
+    paths:
+      - .github/workflows/one-time-iotec-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/clean-admin-flow-iotec
+          fetch-depth: 0
+
+      - name: Apply guarded source patches
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}: {old[:100]!r}')
+              file.write_text(text.replace(old, new, 1))
+
+          def insert_before_once(path: str, marker: str, value: str):
+              replace_once(path, marker, value + marker)
+
+          # Prisma enum, Pro plan default, and production data migration.
+          replace_once(
+              'apps/api/prisma/schema.prisma',
+              '''enum PaymentProvider {
+            MTN_MOMO_DIRECT
+            AIRTEL_MONEY_DIRECT
+            AGGREGATOR
+          }''',
+              '''enum PaymentProvider {
+            MTN_MOMO_DIRECT
+            AIRTEL_MONEY_DIRECT
+            AGGREGATOR
+            IOTEC_PAY
+          }''',
+          )
+          replace_once(
+              'apps/api/prisma/schema.prisma',
+              '  proMobileMoneyFeeBps       Int      @default(300)',
+              '  proMobileMoneyFeeBps       Int      @default(400)',
+          )
+
+          migration = Path('apps/api/prisma/migrations/20260807020000_add_iotec_pay_and_pro_fee')
+          migration.mkdir(parents=True, exist_ok=True)
+          (migration / 'migration.sql').write_text('''ALTER TYPE "PaymentProvider" ADD VALUE IF NOT EXISTS 'IOTEC_PAY';
+
+          ALTER TABLE "PlatformSetting"
+            ALTER COLUMN "proMobileMoneyFeeBps" SET DEFAULT 400;
+
+          UPDATE "PlatformSetting"
+          SET "proMobileMoneyFeeBps" = 400
+          WHERE "id" = 'global'
+            AND "proMobileMoneyFeeBps" = 300;
+          ''')
+
+          payment_service = 'apps/api/src/modules/payments/payments.service.ts'
+          replace_once(
+              payment_service,
+              '    const readiness = this.paymentRouterService.getProviderReadiness()',
+              '    const readiness = this.paymentRouterService.getProviderReadiness(platformSettings)',
+          )
+          replace_once(
+              payment_service,
+              '''    const network = dto.network
+              const provider = this.paymentRouterService.providerFor(network, 'COLLECTION')
+              const method = PaymentMethod.MOBILE_MONEY''',
+              '''    const network = dto.network
+              const platformSettings = await this.prisma.platformSetting.upsert({
+                where: { id: 'global' },
+                update: {},
+                create: { id: 'global' },
+              })
+              const configuredProvider =
+                network === PaymentNetwork.MTN
+                  ? platformSettings.mtnCollectionProvider
+                  : platformSettings.airtelCollectionProvider
+              const collectionProvider = this.paymentRouterService.resolveCollection(network, configuredProvider)
+              const provider = collectionProvider.provider
+              const method = PaymentMethod.MOBILE_MONEY''',
+          )
+          replace_once(
+              payment_service,
+              '''    try {
+                const collectionProvider = this.paymentRouterService.resolveCollection(network)
+                const gatewayResponse = await collectionProvider.collectPayment({''',
+              '''    try {
+                const gatewayResponse = await collectionProvider.collectPayment({''',
+          )
+          replace_once(
+              payment_service,
+              '''    const gatewayResponse = await this.paymentRouterService
+                .resolveCollection(payment.network)
+                .getPaymentStatus(referenceId)''',
+              '''    const gatewayResponse = await this.paymentRouterService
+                .resolveCollection(payment.network, payment.provider)
+                .getPaymentStatus(referenceId)''',
+          )
+          replace_once(
+              payment_service,
+              '''  private resolveWebhookSecretEnvVar(provider: PaymentProvider, direction: 'collection' | 'disbursement') {
+              if (provider === PaymentProvider.MTN_MOMO_DIRECT) {''',
+              '''  private resolveWebhookSecretEnvVar(provider: PaymentProvider, direction: 'collection' | 'disbursement') {
+              if (provider === PaymentProvider.IOTEC_PAY) {
+                return 'IOTEC_WEBHOOK_SECRET'
+              }
+              if (provider === PaymentProvider.MTN_MOMO_DIRECT) {''',
+          )
+          replace_once(
+              payment_service,
+              '''        provider,
+                    network,
+                    eventType: PaymentEventType.WEBHOOK_RECEIVED,''',
+              '''        provider,
+                    network: payment?.network ?? network,
+                    eventType: PaymentEventType.WEBHOOK_RECEIVED,''',
+          )
+          replace_once(
+              payment_service,
+              '''    if (payment.provider !== provider || payment.network !== network) {''',
+              '''    if (
+                payment.provider !== provider ||
+                (network !== PaymentNetwork.UNKNOWN && payment.network !== network)
+              ) {''',
+          )
+          replace_once(
+              payment_service,
+              '''    if (providerStatus === 'FAILED') {
+                return PaymentStatus.FAILED
+              }
+
+              if (providerStatus === 'CANCELLED') {''',
+              '''    if (['FAILED', 'ROLLEDBACK', 'REJECTED', 'DECLINED'].includes(providerStatus)) {
+                return PaymentStatus.FAILED
+              }
+
+              if (providerStatus === 'CANCELLED') {''',
+          )
+          replace_once(
+              payment_service,
+              '''    if (providerStatus === 'PENDING') {
+                return PaymentStatus.PENDING
+              }''',
+              '''    if (['PENDING', 'SENTTOVENDOR', 'AWAITINGAPPROVAL', 'SCHEDULED', 'INITIATED', 'PROCESSING'].includes(providerStatus)) {
+                return PaymentStatus.PENDING
+              }''',
+          )
+          replace_once(
+              payment_service,
+              '''        'providerReference',
+                    'order_tracking_id',''',
+              '''        'providerReference',
+                    'id',
+                    'vendorTransactionId',
+                    'order_tracking_id',''',
+          )
+          replace_once(
+              payment_service,
+              '''          'ExternalReference',
+                      'externalReference',
+                      'external_ref',''',
+              '''          'ExternalReference',
+                      'externalReference',
+                      'externalId',
+                      'external_ref',''',
+          )
+          replace_once(
+              payment_service,
+              '''          'providerReference',
+                      'order_tracking_id',''',
+              '''          'providerReference',
+                      'id',
+                      'vendorTransactionId',
+                      'order_tracking_id',''',
+          )
+
+          payment_controller = 'apps/api/src/modules/payments/payments.controller.ts'
+          insert_before_once(
+              payment_controller,
+              '''  @Post('webhooks/yo-uganda')''',
+              '''  @Post('webhooks/iotec/collection')
+              handleIotecCollectionWebhook(
+                @Body() payload: Record<string, unknown>,
+                @Headers() headers: Record<string, string | string[] | undefined>,
+                @Query('secret') secret?: string,
+              ) {
+                return this.paymentsService.handleProviderWebhook(
+                  PaymentProvider.IOTEC_PAY,
+                  PaymentNetwork.UNKNOWN,
+                  { ...payload, secret },
+                  headers,
+                  'collection',
+                )
+              }
+
+          ''',
+          )
+
+          wallets_service = 'apps/api/src/modules/wallets/wallets.service.ts'
+          replace_once(
+              wallets_service,
+              '''  PaymentNetwork,
+              Prisma,''',
+              '''  PaymentNetwork,
+              PaymentProvider,
+              Prisma,''',
+          )
+          replace_once(
+              wallets_service,
+              '''import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common' ''',
+              '''import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common' ''',
+          )
+          replace_once(
+              wallets_service,
+              "import { randomUUID } from 'crypto'",
+              "import { randomUUID, timingSafeEqual } from 'crypto'",
+          )
+          replace_once(
+              wallets_service,
+              '''    const provider = this.paymentRouterService.resolveDisbursement(payoutNumber.network)
+              const reference =''',
+              '''    const configuredProvider =
+                payoutNumber.network === PaymentNetwork.MTN
+                  ? platformSettings.mtnDisbursementProvider
+                  : platformSettings.airtelDisbursementProvider
+              const provider = this.paymentRouterService.resolveDisbursement(
+                payoutNumber.network,
+                configuredProvider,
+              )
+              const reference =''',
+          )
+          replace_once(
+              wallets_service,
+              '''    const provider = this.paymentRouterService.resolveDisbursement(disbursement.network)
+
+              try {''',
+              '''    const provider = this.paymentRouterService.resolveDisbursement(
+                disbursement.network,
+                disbursement.provider,
+              )
+
+              try {''',
+          )
+          replace_once(
+              wallets_service,
+              '''  async initiateTopup(tenantId: string, dto: TopUpWalletDto) {
+              const wallet = await this.findTenantWallet(tenantId)
+              if (!wallet) {''',
+              '''  async initiateTopup(tenantId: string, dto: TopUpWalletDto) {
+              const [wallet, platformSettings] = await Promise.all([
+                this.findTenantWallet(tenantId),
+                this.getPlatformSettings(),
+              ])
+              if (!wallet) {''',
+          )
+          replace_once(
+              wallets_service,
+              '''    const network = this.phoneNumberService.resolveNetwork(dto.phoneNumber)
+              const provider = this.paymentRouterService.resolveCollection(network)
+
+              try {''',
+              '''    const network = this.phoneNumberService.resolveNetwork(dto.phoneNumber)
+              const configuredProvider =
+                network === PaymentNetwork.MTN
+                  ? platformSettings.mtnCollectionProvider
+                  : platformSettings.airtelCollectionProvider
+              const provider = this.paymentRouterService.resolveCollection(network, configuredProvider)
+
+              try {''',
+          )
+          replace_once(
+              wallets_service,
+              '''          metadata: {
+                        providerReference: response.transactionReference || undefined,
+                      },''',
+              '''          metadata: {
+                        provider: provider.provider,
+                        providerReference: response.transactionReference || undefined,
+                      },''',
+          )
+          replace_once(
+              wallets_service,
+              '''    const network = this.phoneNumberService.resolveNetwork(txRecord.customerReference || '')
+              const provider = this.paymentRouterService.resolveCollection(network)
+              const metadata = (txRecord.metadata || {}) as Record<string, any>
+              const providerReference = metadata.providerReference || txRecord.externalReference''',
+              '''    const network = this.phoneNumberService.resolveNetwork(txRecord.customerReference || '')
+              const metadata = (txRecord.metadata || {}) as Record<string, any>
+              const configuredProvider = Object.values(PaymentProvider).includes(metadata.provider)
+                ? metadata.provider as PaymentProvider
+                : undefined
+              const provider = this.paymentRouterService.resolveCollection(network, configuredProvider)
+              const providerReference = metadata.providerReference || txRecord.externalReference''',
+          )
+
+          insert_before_once(
+              wallets_service,
+              '''  private async writeAudit(input: {''',
+              '''  async handleIotecDisbursementWebhook(
+                payload: Record<string, unknown>,
+                headers: Record<string, string | string[] | undefined>,
+                querySecret?: string,
+              ) {
+                this.assertIotecWebhookSecret(payload, headers, querySecret)
+
+                const externalReference = String(payload.externalId ?? payload.externalReference ?? '').trim()
+                const providerReference = String(payload.id ?? payload.vendorTransactionId ?? payload.providerReference ?? '').trim()
+                const status = String(payload.status ?? payload.transactionStatus ?? 'Pending').trim().toUpperCase()
+
+                const disbursement = await this.prisma.disbursement.findFirst({
+                  where: {
+                    provider: PaymentProvider.IOTEC_PAY,
+                    OR: [
+                      ...(externalReference ? [{ reference: externalReference }] : []),
+                      ...(providerReference ? [{ providerReference }] : []),
+                    ],
+                  },
+                  include: { billingTransaction: true, wallet: true },
+                })
+
+                if (!disbursement) {
+                  return { received: true, matched: false, processed: false }
+                }
+
+                if (['SUCCESS', 'SUCCESSFUL', 'COMPLETED', 'SUCCEEDED'].includes(status)) {
+                  if (disbursement.status !== DisbursementStatus.COMPLETED) {
+                    await this.prisma.$transaction(async (tx) => {
+                      if (disbursement.billingTransactionId) {
+                        await tx.billingTransaction.update({
+                          where: { id: disbursement.billingTransactionId },
+                          data: { status: BillingTransactionStatus.COMPLETED },
+                        })
+                      }
+                      await tx.disbursement.update({
+                        where: { id: disbursement.id },
+                        data: {
+                          status: DisbursementStatus.COMPLETED,
+                          providerReference: providerReference || disbursement.providerReference,
+                          completedAt: new Date(),
+                          notes: 'Withdrawal confirmed by ioTec Pay.',
+                          metadata: this.toJsonValue({
+                            ...this.objectMetadata(disbursement.metadata),
+                            iotecCallback: payload,
+                          }),
+                        },
+                      })
+                    })
+                    void this.notifyWithdrawalEmail({
+                      tenantId: disbursement.tenantId,
+                      status: 'COMPLETED',
+                      amountUgx: disbursement.amountUgx,
+                      reference: disbursement.reference,
+                    })
+                  }
+                  return { received: true, matched: true, processed: true, status: 'COMPLETED' }
+                }
+
+                if (['FAILED', 'ROLLEDBACK', 'CANCELLED', 'REJECTED', 'DECLINED'].includes(status)) {
+                  if (!disbursement.walletId || !disbursement.billingTransactionId) {
+                    throw new BadRequestException('ioTec withdrawal reserve is incomplete')
+                  }
+                  await this.releaseFailedWithdrawalReserve({
+                    tenantId: disbursement.tenantId,
+                    walletId: disbursement.walletId,
+                    billingTransactionId: disbursement.billingTransactionId,
+                    disbursementId: disbursement.id,
+                    amountUgx: disbursement.amountUgx,
+                    totalDebitUgx: disbursement.billingTransaction?.grossAmountUgx ?? disbursement.amountUgx,
+                    reference: disbursement.reference,
+                    errorMessage: String(payload.statusMessage ?? payload.message ?? `ioTec Pay reported ${status}`),
+                  })
+                  return { received: true, matched: true, processed: true, status: 'FAILED' }
+                }
+
+                await this.prisma.disbursement.update({
+                  where: { id: disbursement.id },
+                  data: {
+                    status: DisbursementStatus.PROCESSING,
+                    providerReference: providerReference || disbursement.providerReference,
+                    notes: `ioTec Pay status: ${status}`,
+                    metadata: this.toJsonValue({
+                      ...this.objectMetadata(disbursement.metadata),
+                      iotecCallback: payload,
+                    }),
+                  },
+                })
+
+                return { received: true, matched: true, processed: true, status: 'PROCESSING' }
+              }
+
+              private assertIotecWebhookSecret(
+                payload: Record<string, unknown>,
+                headers: Record<string, string | string[] | undefined>,
+                querySecret?: string,
+              ) {
+                const configured = process.env.IOTEC_WEBHOOK_SECRET?.trim()
+                if (!configured) {
+                  if (process.env.NODE_ENV === 'production') {
+                    throw new ForbiddenException('ioTec webhook authorization is not configured')
+                  }
+                  this.logger.warn('IOTEC_WEBHOOK_SECRET is not configured; accepting callback outside production')
+                  return
+                }
+
+                const rawHeader = headers['x-webhook-secret'] ?? headers['X-Webhook-Secret']
+                const incoming = String(
+                  payload.secret ?? querySecret ?? (Array.isArray(rawHeader) ? rawHeader[0] : rawHeader) ?? '',
+                )
+                const incomingBuffer = Buffer.from(incoming)
+                const configuredBuffer = Buffer.from(configured)
+                if (
+                  incomingBuffer.length !== configuredBuffer.length ||
+                  !timingSafeEqual(incomingBuffer, configuredBuffer)
+                ) {
+                  throw new ForbiddenException('Invalid ioTec webhook authorization secret')
+                }
+              }
+
+          ''',
+          )
+
+          settings = 'apps/admin-web/src/components/SettingsManager.tsx'
+          replace_once(
+              settings,
+              "const providerOptions = ['MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT', 'AGGREGATOR']",
+              "const providerOptions = ['IOTEC_PAY', 'AGGREGATOR', 'MTN_MOMO_DIRECT', 'AIRTEL_MONEY_DIRECT']",
+          )
+          replace_once(
+              settings,
+              '''  custom: 'Custom hex code',
+          }''',
+              '''  custom: 'Custom hex code',
+            IOTEC_PAY: 'ioTec Pay',
+            AGGREGATOR: 'Yo! Uganda / configured aggregator',
+            MTN_MOMO_DIRECT: 'MTN MoMo direct',
+            AIRTEL_MONEY_DIRECT: 'Airtel Money direct',
+          }''',
+          )
+          replace_once(
+              settings,
+              '''    platform?.mobileMoneyFeePercent ??
+              7''',
+              '''    platform?.mobileMoneyFeePercent ??
+              8''',
+          )
+
+          env_block = '''
+          # ioTec Pay (use rotated credentials; never commit live secrets)
+          IOTEC_CLIENT_ID=replace_with_iotec_client_id
+          IOTEC_CLIENT_SECRET=replace_with_rotated_iotec_client_secret
+          IOTEC_WALLET_ID=replace_with_iotec_live_or_test_wallet_id
+          IOTEC_IDENTITY_BASE_URL=https://id.iotec.io
+          IOTEC_PAY_BASE_URL=https://pay.iotec.io
+          IOTEC_WEBHOOK_SECRET=replace_with_long_random_webhook_secret
+          '''
+          for env_path in ['.env.example', '.env.vps.example']:
+              file = Path(env_path)
+              text = file.read_text()
+              if 'IOTEC_CLIENT_ID=' not in text:
+                  file.write_text(text.rstrip() + '\n' + env_block.lstrip())
+
+          print('Guarded patch completed successfully.')
+          PY
+
+      - name: Commit patched implementation
+        shell: bash
+        run: |
+          git config user.name "AROSOFT Innovations Ltd"
+          git config user.email "arosoftio@gmail.com"
+          git add -A
+          git commit -m "feat: clean voucher flows and add selectable ioTec Pay"
+          git push origin HEAD:feat/clean-admin-flow-iotec
