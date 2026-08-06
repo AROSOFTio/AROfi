@@ -6,14 +6,16 @@ import {
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
+type AgentIdentity = {
+  id: string
+  code: string
+  name: string
+  phoneNumber: string
+}
+
 type AgentVoucherMetric = {
   agentId: string
-  agent: {
-    id: string
-    code: string
-    name: string
-    phoneNumber: string
-  }
+  agent: AgentIdentity
   totalAssigned: number
   generated: number
   printed: number
@@ -36,7 +38,16 @@ export class AgentVoucherMetricsService {
 
   async getOverview(tenantId?: string) {
     const now = new Date()
-    const [batches, sales] = await Promise.all([
+    const [agents, batches, sales] = await Promise.all([
+      this.prisma.agent.findMany({
+        where: tenantId ? { tenantId } : undefined,
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          phoneNumber: true,
+        },
+      }),
       this.prisma.voucherBatch.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
@@ -80,7 +91,7 @@ export class AgentVoucherMetricsService {
 
     const metrics = new Map<string, AgentVoucherMetric>()
 
-    const ensureMetric = (agent: NonNullable<(typeof batches)[number]['agent']>) => {
+    const ensureMetric = (agent: AgentIdentity) => {
       const existing = metrics.get(agent.id)
       if (existing) return existing
 
@@ -104,6 +115,12 @@ export class AgentVoucherMetricsService {
       }
       metrics.set(agent.id, created)
       return created
+    }
+
+    // Seed every agent first so sales attributed at point-of-sale are reported
+    // even when the voucher came from a general, unassigned batch.
+    for (const agent of agents) {
+      ensureMetric(agent)
     }
 
     for (const batch of batches) {
@@ -165,7 +182,8 @@ export class AgentVoucherMetricsService {
 
     return {
       summary: {
-        agentsWithStock: items.length,
+        totalAgentsTracked: items.length,
+        agentsWithStock: items.filter((item) => item.totalAssigned > 0).length,
         totalAssigned: items.reduce((total, item) => total + item.totalAssigned, 0),
         unsold: items.reduce((total, item) => total + item.unsold, 0),
         soldAwaitingUse: items.reduce((total, item) => total + item.soldAwaitingUse, 0),
