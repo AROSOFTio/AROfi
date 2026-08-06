@@ -112,6 +112,20 @@ export class MikrotikController {
       'var autoReady=false;',
     );
 
+    // Preserve the API's real voucher message. The original parser returned
+    // "Parse err" for a text/HTML proxy response and "Network err" after both
+    // HTTPS and HTTP attempts, hiding useful errors such as an already-used or
+    // expired voucher.
+    prepared = prepared.replace(
+      `    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(e)ajax(m,APIFB+p,d,cb);else cb(null,r);});}`,
+      `    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(!e){cb(null,r);return;}ajax(m,APIFB+p,d,function(fe,fr){if(!fe){cb(null,fr);return;}cb(new Error((fe&&fe.message)||(e&&e.message)||'Unable to reach the AROFi voucher service.'));});});}`,
+    );
+
+    prepared = prepared.replace(
+      `    function ajax(method, url, data, cb){\n      var x=new XMLHttpRequest();\n      x.open(method, url, true);\n      if(data) x.setRequestHeader('Content-Type','application/json');\n      x.onload=function(){\n        try{\n          var j=JSON.parse(x.responseText);\n          if(x.status>=200&&x.status<300) cb(null,j);\n          else cb(new Error(j.message||'HTTP '+x.status));\n        }catch(e){cb(new Error('Parse err'));}\n      };\n      x.onerror=function(){cb(new Error('Network err'));};\n      x.send(data?JSON.stringify(data):null);\n    }`,
+      `    function ajax(method, url, data, cb){\n      var x=new XMLHttpRequest();\n      x.open(method, url, true);\n      if(data) x.setRequestHeader('Content-Type','application/json');\n      x.onload=function(){\n        var raw=x.responseText||'',j=null;\n        try{j=raw?JSON.parse(raw):{};}catch(e){}\n        if(x.status>=200&&x.status<300){cb(null,j||{});return;}\n        var msg=j&&j.message;\n        if(Object.prototype.toString.call(msg)==='[object Array]')msg=msg.join('. ');\n        if(!msg&&j&&j.error)msg=j.error;\n        if(!msg&&raw&&raw.charAt(0)!=='<')msg=raw.substring(0,240);\n        if(!msg&&x.status===429)msg='Too many voucher attempts. Wait one minute and try again.';\n        if(!msg)msg='Voucher request failed (HTTP '+x.status+').';\n        cb(new Error(String(msg)));\n      };\n      x.onerror=function(){cb(new Error('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.'));};\n      x.ontimeout=function(){cb(new Error('The voucher service took too long to respond. Try again.'));};\n      x.timeout=12000;\n      x.send(data?JSON.stringify(data):null);\n    }`,
+    );
+
     prepared = prepared.replace(
       'var pkgs=[],selId=null,selTv=false;',
       'var pkgs=[],selId=null,selTv=false,trialStarting=false;',
