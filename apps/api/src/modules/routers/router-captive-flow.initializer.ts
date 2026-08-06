@@ -3,11 +3,11 @@ import { ModuleRef } from '@nestjs/core'
 import { MikrotikController } from './mikrotik.controller'
 import { MikrotikService } from './mikrotik.service'
 
-type MutableMikrotikService = MikrotikService & {
+type MutableMikrotikService = {
   buildProvisioningScript: (...args: any[]) => string
 }
 
-type MutableMikrotikController = MikrotikController & {
+type MutableMikrotikController = {
   prepareLoginHtml: (html: string) => string
 }
 
@@ -35,7 +35,7 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
   }
 
   private patchProvisioningScript() {
-    const service = this.mikrotikService as MutableMikrotikService
+    const service = this.mikrotikService as unknown as MutableMikrotikService
     const original = service.buildProvisioningScript.bind(service)
 
     service.buildProvisioningScript = (...args: any[]) => {
@@ -44,12 +44,12 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
       return script.replace(
         /login-by=([^\s]+)(?:\s+mac-auth-mode=mac-as-username-and-password)?/g,
         (full, rawModes: string) => {
-          const modes = rawModes
-            .split(',')
+          const originalModes = rawModes.split(',')
+          const modes = originalModes
             .map((mode) => mode.trim())
             .filter((mode) => mode && mode !== 'mac')
 
-          if (modes.length === rawModes.split(',').length) {
+          if (modes.length === originalModes.length) {
             return full
           }
 
@@ -61,7 +61,7 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
   }
 
   private patchRouterPortalHtml() {
-    const controller = this.moduleRef.get(MikrotikController, { strict: false }) as MutableMikrotikController | undefined
+    const controller = this.moduleRef.get(MikrotikController, { strict: false }) as unknown as MutableMikrotikController | undefined
     if (!controller || typeof controller.prepareLoginHtml !== 'function') {
       return
     }
@@ -70,21 +70,20 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
     controller.prepareLoginHtml = (html: string) => {
       let prepared = original(html)
 
-      // The GET navigation used by the mini portal could be re-intercepted by
-      // the hotspot and reopen login.html. A direct POST is the native RouterOS
-      // login flow and authenticates immediately after the API returns credentials.
+      // A direct POST is the native RouterOS login flow. It avoids the GET
+      // navigation being captured as another unauthenticated portal request.
       const oldConnect = "function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}"
       const instantConnect = "function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',CONNECTED);add('popup','true');document.body.appendChild(f);f.submit();}"
       prepared = prepared.split(oldConnect).join(instantConnect)
 
-      // Trial remains visible but occupies only one compact, breathing button.
-      // The API removes trial packages entirely after this MAC/IP has used one,
-      // so the existing renderer automatically hides this section thereafter.
+      // Trial occupies only one small breathing button. The context API removes
+      // trial packages after this MAC/IP has used one, which hides the section.
       const compactTrialCss = `
 <style id="arofi-instant-captive-fix">
   #trialSection{margin:2px auto 12px!important;padding:0!important;text-align:center!important;background:transparent!important;border:0!important;min-height:0!important}
   #trialSection .section-label,#trialSection .section-sub{display:none!important}
   #trialList{display:flex!important;justify-content:center!important;align-items:center!important;gap:0!important;margin:0!important;padding:0!important}
+  #trialList:empty,#trialSection:has(#trialList:empty){display:none!important}
   #trialList .pkg{display:inline-flex!important;width:auto!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important}
   #trialList .pkg>span:first-child,#trialList .pk-price{display:none!important}
   #trialList .pk-buy{position:static!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:70px!important;height:32px!important;padding:0 18px!important;border-radius:999px!important;border:1px solid rgba(37,99,235,.45)!important;background:#2563eb!important;color:#fff!important;font-size:12px!important;font-weight:800!important;letter-spacing:.04em!important;box-shadow:0 6px 18px rgba(37,99,235,.22)!important;animation:arofiTrialBreath 1.8s ease-in-out infinite!important}
