@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
 import { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
@@ -8,10 +8,9 @@ import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
-import { RecordVoucherSaleDto } from './dto/record-voucher-sale.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
-import { SellVoucherDto } from './dto/sell-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
+import { VoucherRedemptionSaleService } from './voucher-redemption-sale.service'
 import { VouchersService } from './vouchers.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -19,6 +18,7 @@ import { VouchersService } from './vouchers.service'
 export class VouchersController {
   constructor(
     private readonly vouchersService: VouchersService,
+    private readonly voucherRedemptionSales: VoucherRedemptionSaleService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -99,27 +99,32 @@ export class VouchersController {
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post(':voucherId/sale')
-  recordSale(
-    @CurrentUser() user: AuthenticatedAdminUser,
-    @Param('voucherId') voucherId: string,
-    @Body() dto: RecordVoucherSaleDto,
-  ) {
-    const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.vouchersService.recordSale(voucherId, dto, tenantId)
+  recordSale() {
+    throw new BadRequestException(
+      'Voucher sales are recorded automatically only when the customer redeems the voucher.',
+    )
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post('sell')
-  sellVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: SellVoucherDto) {
-    const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.vouchersService.sellNextAvailable(dto, tenantId)
+  sellVoucher() {
+    throw new BadRequestException(
+      'Voucher sales are recorded automatically only when the customer redeems the voucher.',
+    )
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post('redeem')
-  redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
+  async redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
     const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.vouchersService.redeemVoucher(dto, tenantId)
+    const result = await this.vouchersService.redeemVoucher(dto, tenantId)
+
+    // This is deliberately called for both first redemption and legitimate
+    // reconnect responses. It is idempotent and repairs any redemption whose
+    // sale attribution was interrupted after internet access was activated.
+    await this.voucherRedemptionSales.recordRedeemedVoucherAsSale(result.voucher.id)
+
+    return result
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
