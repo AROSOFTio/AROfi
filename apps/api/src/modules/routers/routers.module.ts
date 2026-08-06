@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common'
+import { APP_INTERCEPTOR } from '@nestjs/core'
 import { AuthModule } from '../auth/auth.module'
 import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { SmsModule } from '../sms/sms.module'
+import { MikrotikAloginController } from './mikrotik-alogin.controller'
+import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
@@ -13,13 +16,17 @@ import { RemoteProxyService } from './remote-proxy.service'
 
 @Module({
   imports: [AuthModule, MailModule, RadiusModule, SmsModule],
-  controllers: [RoutersController, MikrotikController],
+  controllers: [RoutersController, MikrotikController, MikrotikAloginController],
   providers: [
     RouterCredentialsService,
     MikrotikService,
     RoutersService,
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MikrotikInstantLoginInterceptor,
+    },
   ],
   exports: [RouterCredentialsService, MikrotikService, RoutersService, RemoteProxyService],
 })
