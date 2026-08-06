@@ -39,7 +39,6 @@ export class PaymentRouterService {
     const provider = configuredProvider ?? this.providerFor(network, 'COLLECTION')
 
     if (provider === PaymentProvider.IOTEC_PAY) return this.iotecPay
-    if (provider === PaymentProvider.YO_UGANDA) return this.yoCollection
     if (provider === PaymentProvider.MTN_MOMO_DIRECT) {
       if (network !== PaymentNetwork.MTN) {
         throw new BadRequestException('MTN direct collection can only process MTN numbers')
@@ -66,9 +65,7 @@ export class PaymentRouterService {
     const provider = configuredProvider ?? this.providerFor(network, 'DISBURSEMENT')
 
     if (provider === PaymentProvider.IOTEC_PAY) return this.iotecPay
-    if (provider === PaymentProvider.YO_UGANDA || provider === PaymentProvider.AGGREGATOR) {
-      return this.yoDisbursement
-    }
+    if (provider === PaymentProvider.AGGREGATOR) return this.yoDisbursement
     if (provider === PaymentProvider.MTN_MOMO_DIRECT) {
       if (network !== PaymentNetwork.MTN) {
         throw new BadRequestException('MTN direct disbursement can only pay MTN numbers')
@@ -87,16 +84,16 @@ export class PaymentRouterService {
 
   providerFor(network: PaymentNetwork, direction: 'COLLECTION' | 'DISBURSEMENT') {
     const key = `${network}_${direction}_PROVIDER`
-    const configured = (this.configService.get<string>(key) ?? 'YO_UGANDA').toUpperCase()
+    const configured = (this.configService.get<string>(key) ?? 'AGGREGATOR').toUpperCase()
 
     if (configured === 'IOTEC_PAY') return PaymentProvider.IOTEC_PAY
-    if (configured === 'YO_UGANDA') return PaymentProvider.YO_UGANDA
+    if (configured === 'YO_UGANDA') return PaymentProvider.AGGREGATOR
     if (configured === 'MTN_MOMO_DIRECT') return PaymentProvider.MTN_MOMO_DIRECT
     if (configured === 'AIRTEL_MONEY_DIRECT') return PaymentProvider.AIRTEL_MONEY_DIRECT
     if (configured === 'AGGREGATOR') return PaymentProvider.AGGREGATOR
 
     throw new BadRequestException(
-      `${key} must be IOTEC_PAY, YO_UGANDA, MTN_MOMO_DIRECT, AIRTEL_MONEY_DIRECT, or AGGREGATOR`,
+      `${key} must be IOTEC_PAY, AGGREGATOR, MTN_MOMO_DIRECT, or AIRTEL_MONEY_DIRECT`,
     )
   }
 
@@ -118,19 +115,19 @@ export class PaymentRouterService {
         MTN: {
           provider: mtnCollectionProvider,
           directConfigured: this.isConfigured(PaymentProvider.MTN_MOMO_DIRECT, 'COLLECTION'),
-          aggregatorConfigured: this.isConfigured(PaymentProvider.YO_UGANDA, 'COLLECTION'),
+          aggregatorConfigured: this.isConfigured(PaymentProvider.AGGREGATOR, 'COLLECTION'),
           iotecConfigured: this.isConfigured(PaymentProvider.IOTEC_PAY, 'COLLECTION'),
           ready: mtnCollectionReady,
         },
         AIRTEL: {
           provider: airtelCollectionProvider,
           directConfigured: this.isConfigured(PaymentProvider.AIRTEL_MONEY_DIRECT, 'COLLECTION'),
-          aggregatorConfigured: this.isConfigured(PaymentProvider.YO_UGANDA, 'COLLECTION'),
+          aggregatorConfigured: this.isConfigured(PaymentProvider.AGGREGATOR, 'COLLECTION'),
           iotecConfigured: this.isConfigured(PaymentProvider.IOTEC_PAY, 'COLLECTION'),
           directStatus: this.isConfigured(PaymentProvider.AIRTEL_MONEY_DIRECT, 'COLLECTION')
             ? 'Configured'
             : 'Inactive',
-          aggregatorStatus: this.isConfigured(PaymentProvider.YO_UGANDA, 'COLLECTION')
+          aggregatorStatus: this.isConfigured(PaymentProvider.AGGREGATOR, 'COLLECTION')
             ? 'Configured'
             : 'Inactive',
           ready: airtelCollectionReady,
@@ -157,9 +154,6 @@ export class PaymentRouterService {
   private isConfigured(provider: PaymentProvider, direction: 'COLLECTION' | 'DISBURSEMENT') {
     if (provider === PaymentProvider.IOTEC_PAY) {
       return this.hasAll(['IOTEC_CLIENT_ID', 'IOTEC_CLIENT_SECRET', 'IOTEC_WALLET_ID'])
-    }
-    if (provider === PaymentProvider.YO_UGANDA) {
-      return this.hasAll(['YO_UGANDA_USERNAME', 'YO_UGANDA_PASSWORD'])
     }
     if (provider === PaymentProvider.AGGREGATOR) {
       const selected = this.configService.get<string>('AGGREGATOR_PROVIDER')?.toUpperCase()
