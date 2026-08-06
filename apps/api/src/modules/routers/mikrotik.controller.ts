@@ -77,8 +77,7 @@ export class MikrotikController {
     @Query('nasIp') selfReportedNasIp?: string,
   ) {
     const httpSourceIp = this.resolveSourceIp(request);
-    // Prefer the router's self-reported WAN IP — more accurate behind CGNAT
-    const sourceIp = selfReportedNasIp?.trim() || httpSourceIp;
+    const sourceIp = this.resolveProvisioningNasIp(selfReportedNasIp, httpSourceIp);
     const result = await this.routersService.markRouterProvisionedByKey(key, sourceIp);
     if (!result) {
       throw new NotFoundException('Router registration key not found');
@@ -99,6 +98,46 @@ export class MikrotikController {
       throw new NotFoundException('Router registration key not found');
     }
     return result;
+  }
+
+  private resolveProvisioningNasIp(selfReportedNasIp?: string, httpSourceIp?: string) {
+    const reportedIp = this.normalizeIpv4(selfReportedNasIp);
+    const observedIp = this.normalizeIpv4(httpSourceIp);
+
+    // The address FreeRADIUS sees must match the NAS client address. Routers
+    // behind CGNAT commonly self-report an RFC1918 WAN address, while their
+    // RADIUS packets reach AROFi from the public address observed by the API.
+    // Prefer a self-reported address only when it is publicly routable.
+    if (reportedIp && !this.isPrivateOrReservedIpv4(reportedIp)) {
+      return reportedIp;
+    }
+
+    return observedIp || reportedIp || '';
+  }
+
+  private normalizeIpv4(value?: string) {
+    const normalized = value?.trim().replace(/^::ffff:/, '') ?? '';
+    return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) &&
+      normalized.split('.').every((part) => Number(part) >= 0 && Number(part) <= 255)
+      ? normalized
+      : '';
+  }
+
+  private isPrivateOrReservedIpv4(ip: string) {
+    const [a, b] = ip.split('.').map(Number);
+
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 0) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
   }
 
   private resolveSourceIp(request: any) {
