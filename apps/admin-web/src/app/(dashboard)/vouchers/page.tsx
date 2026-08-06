@@ -1,7 +1,13 @@
+import AgentVoucherIssuancePanel from '@/components/AgentVoucherIssuancePanel'
 import VouchersManager from '@/components/VouchersManager'
 
 export const dynamic = 'force-dynamic'
 
 export default function VouchersPage() {
-  return <VouchersManager />
+  return (
+    <>
+      <AgentVoucherIssuancePanel />
+      <VouchersManager />
+    </>
+  )
 }
