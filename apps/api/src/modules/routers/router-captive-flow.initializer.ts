@@ -5,6 +5,7 @@ import { MikrotikService } from './mikrotik.service'
 
 type MutableMikrotikService = {
   buildProvisioningScript: (...args: any[]) => string
+  buildStatusHtml: (...args: any[]) => string
 }
 
 type MutableMikrotikController = {
@@ -17,10 +18,6 @@ type MutableMikrotikController = {
  * as soon as a phone joins WiFi. A normal phone is not a pre-provisioned Smart
  * TV, so that request must time out or be rejected before Android receives the
  * captive redirect. The result is the delayed "Action required" loop.
- *
- * Smart TV access remains supported because the TV credential is still its MAC
- * address; it can be submitted explicitly when the TV reconnects. Normal phones
- * must go straight to cookie/http-pap without a blocking MAC-auth attempt.
  */
 @Injectable()
 export class RouterCaptiveFlowInitializer implements OnModuleInit {
@@ -31,6 +28,7 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
 
   onModuleInit() {
     this.patchProvisioningScript()
+    this.patchStatusHtml()
     this.patchRouterPortalHtml()
   }
 
@@ -60,6 +58,27 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
     }
   }
 
+  private patchStatusHtml() {
+    const service = this.mikrotikService as unknown as MutableMikrotikService
+    const original = service.buildStatusHtml.bind(service)
+
+    service.buildStatusHtml = (...args: any[]) => {
+      const html = original(...args)
+      const closeCaptivePortal = `
+  <meta http-equiv="refresh" content="0;url=http://connectivitycheck.gstatic.com/generate_204">
+  <script>
+    (function(){
+      var target='http://connectivitycheck.gstatic.com/generate_204';
+      try{window.location.replace(target);}catch(e){window.location.href=target;}
+    })();
+  </script>`
+
+      return html.includes('connectivitycheck.gstatic.com/generate_204')
+        ? html
+        : html.replace('</head>', `${closeCaptivePortal}\n</head>`)
+    }
+  }
+
   private patchRouterPortalHtml() {
     const controller = this.moduleRef.get(MikrotikController, { strict: false }) as unknown as MutableMikrotikController | undefined
     if (!controller || typeof controller.prepareLoginHtml !== 'function') {
@@ -70,10 +89,18 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
     controller.prepareLoginHtml = (html: string) => {
       let prepared = original(html)
 
+      // An already-active package must auto-submit immediately. The previous
+      // controller patch forced this to false, making customers tap the portal
+      // repeatedly after payment or trial activation.
+      prepared = prepared.replace(
+        'var autoReady=false;',
+        'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
+      )
+
       // A direct POST is the native RouterOS login flow. It avoids the GET
       // navigation being captured as another unauthenticated portal request.
       const oldConnect = "function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}"
-      const instantConnect = "function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',CONNECTED);add('popup','true');document.body.appendChild(f);f.submit();}"
+      const instantConnect = "function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst','http://connectivitycheck.gstatic.com/generate_204');add('popup','false');document.body.appendChild(f);f.submit();}"
       prepared = prepared.split(oldConnect).join(instantConnect)
 
       // Trial occupies only one small breathing button. The context API removes
