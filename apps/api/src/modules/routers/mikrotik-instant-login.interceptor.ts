@@ -1,53 +1,88 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common'
 import { map } from 'rxjs/operators'
 
+const SESSION_PERSISTENCE_MARKER = '# AROFi: keep paid sessions online until RADIUS bundle expiry'
+const ALOGIN_INSTALLER_MARKER = '# AROFi: replace MikroTik stock alogin.html with an immediate redirect'
+
 export function appendInstantAloginInstaller(script: string) {
-  if (!script || script.includes('hotspot/alogin.html')) {
+  if (!script) {
     return script
   }
 
   const statusUrls =
     script.match(/https?:\/\/[^"\s]+\/mikrotik\/status-html\/[^"\s]+/g) ?? []
-  const secureStatusUrl =
-    statusUrls.find((url) => url.startsWith('https://')) ?? statusUrls[0]
+  const looksLikeProvisioningScript =
+    statusUrls.length > 0 ||
+    script.includes('/ip hotspot') ||
+    script.includes('AROFi MikroTik onboarding script')
 
-  if (!secureStatusUrl) {
+  if (!looksLikeProvisioningScript) {
     return script
   }
 
-  const fallbackStatusUrl =
-    statusUrls.find((url) => url.startsWith('http://')) ??
-    secureStatusUrl.replace(/^https:/, 'http:')
-  const aloginUrl = secureStatusUrl.replace('/status-html/', '/alogin-html/')
-  const fallbackAloginUrl = fallbackStatusUrl.replace('/status-html/', '/alogin-html/')
+  const additions: string[] = []
 
-  return [
-    script.trimEnd(),
-    '',
-    '# AROFi: replace MikroTik stock alogin.html with an immediate redirect',
-    ':do { /file remove [find name="hotspot/alogin.html"] } on-error={}',
-    ':local arofiAloginOk 0',
-    ':do {',
-    `  /tool fetch url="${aloginUrl}" check-certificate=no mode=https dst-path="hotspot/alogin.html"`,
-    '  :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
-    '    :set arofiAloginOk 1',
-    '    :put "AROFi HotSpot alogin.html installed - post-login redirect is instant."',
-    '  } else={',
-    '    :error "alogin.html not found after fetch"',
-    '  }',
-    '} on-error={',
-    '  :do {',
-    `    /tool fetch url="${fallbackAloginUrl}" mode=http dst-path="hotspot/alogin.html"`,
-    '    :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
-    '      :set arofiAloginOk 1',
-    '      :put "AROFi HotSpot alogin.html installed by HTTP fallback."',
-    '    }',
-    '  } on-error={',
-    '    :put "WARNING: alogin.html install failed - MikroTik may keep showing its delayed post-login page."',
-    '  }',
-    '}',
-    '',
-  ].join('\n')
+  if (!script.includes(SESSION_PERSISTENCE_MARKER)) {
+    additions.push(
+      SESSION_PERSISTENCE_MARKER,
+      '# Idle, screen-lock and temporary ARP silence must never end paid access.',
+      '# RADIUS Session-Timeout, quota exhaustion, explicit revocation or package expiry remain authoritative.',
+      ':foreach arofiUserProfile in=[/ip hotspot user profile find] do={',
+      '  :do {',
+      '    /ip hotspot user profile set $arofiUserProfile idle-timeout=none keepalive-timeout=none session-timeout=0s shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d',
+      '  } on-error={',
+      '    :put "WARNING: Could not update one HotSpot user profile for persistent access."',
+      '  }',
+      '}',
+      ':put "AROFi HotSpot persistence installed - active bundles stay online until their real expiry."',
+      '',
+    )
+  }
+
+  if (!script.includes(ALOGIN_INSTALLER_MARKER)) {
+    const secureStatusUrl =
+      statusUrls.find((url) => url.startsWith('https://')) ?? statusUrls[0]
+
+    if (secureStatusUrl) {
+      const fallbackStatusUrl =
+        statusUrls.find((url) => url.startsWith('http://')) ??
+        secureStatusUrl.replace(/^https:/, 'http:')
+      const aloginUrl = secureStatusUrl.replace('/status-html/', '/alogin-html/')
+      const fallbackAloginUrl = fallbackStatusUrl.replace('/status-html/', '/alogin-html/')
+
+      additions.push(
+        ALOGIN_INSTALLER_MARKER,
+        ':do { /file remove [find name="hotspot/alogin.html"] } on-error={}',
+        ':local arofiAloginOk 0',
+        ':do {',
+        `  /tool fetch url="${aloginUrl}" check-certificate=no mode=https dst-path="hotspot/alogin.html"`,
+        '  :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
+        '    :set arofiAloginOk 1',
+        '    :put "AROFi HotSpot alogin.html installed - post-login redirect is instant."',
+        '  } else={',
+        '    :error "alogin.html not found after fetch"',
+        '  }',
+        '} on-error={',
+        '  :do {',
+        `    /tool fetch url="${fallbackAloginUrl}" mode=http dst-path="hotspot/alogin.html"`,
+        '    :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
+        '      :set arofiAloginOk 1',
+        '      :put "AROFi HotSpot alogin.html installed by HTTP fallback."',
+        '    }',
+        '  } on-error={',
+        '    :put "WARNING: alogin.html install failed - MikroTik may keep showing its delayed post-login page."',
+        '  }',
+        '}',
+        '',
+      )
+    }
+  }
+
+  if (additions.length === 0) {
+    return script
+  }
+
+  return [script.trimEnd(), '', ...additions].join('\n')
 }
 
 @Injectable()
