@@ -97,10 +97,13 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
         'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
       )
 
-      // A direct POST is the native RouterOS login flow. It avoids the GET
-      // navigation being captured as another unauthenticated portal request.
+      // Submit credentials to RouterOS in a hidden frame, close both overlays
+      // immediately, and navigate the top window after RouterOS has had a short
+      // moment to create the HotSpot session. A normal top-level form submit can
+      // remain stuck on the original captive page even though authentication
+      // already succeeded, leaving "Payment Approved! Connecting..." forever.
       const oldConnect = "function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}"
-      const instantConnect = "function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst','http://connectivitycheck.gstatic.com/generate_204');add('popup','false');document.body.appendChild(f);f.submit();}"
+      const instantConnect = "function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var requested='';try{requested=(new URLSearchParams(window.location.search)).get('dst')||'';}catch(e){}var dst=(requested&&/^https?:\\/\\//i.test(requested))?requested:(CONNECTED||'http://www.msftconnecttest.com/redirect');try{closePay();}catch(e){}var overlay=document.getElementById('msgOverlay');if(overlay)overlay.classList.remove('on');var frame=document.getElementById('arofiLoginFrame');if(!frame){frame=document.createElement('iframe');frame.id='arofiLoginFrame';frame.name='arofiLoginFrame';frame.style.display='none';document.body.appendChild(frame);}var f=document.createElement('form');f.method='post';f.action=target;f.target=frame.name;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',dst);add('popup','false');document.body.appendChild(f);f.submit();window.setTimeout(function(){try{window.location.replace(dst);}catch(e){window.location.href=dst;}},900);}"
       prepared = prepared.split(oldConnect).join(instantConnect)
 
       // Trial occupies only one small breathing button. The context API removes
