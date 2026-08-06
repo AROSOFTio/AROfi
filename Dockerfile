@@ -24,6 +24,11 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy source code
 COPY . .
 
+# Apply the guarded ioTec/payment-routing and clean-admin source patch before
+# Prisma generation and compilation. The script is deterministic and fails the
+# build if an expected source location has drifted.
+RUN python3 scripts/apply_iotec_source_patches.py
+
 # Generate Prisma Client
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
