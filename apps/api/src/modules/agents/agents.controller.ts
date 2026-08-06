@@ -6,7 +6,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
-import { AgentVoucherMetricsService } from './agent-voucher-metrics.service'
+import { AgentVoucherMetricFilters, AgentVoucherMetricsService } from './agent-voucher-metrics.service'
 import { AgentsService } from './agents.service'
 import { AgentFloatAdjustmentDto } from './dto/agent-float-adjustment.dto'
 import { CreateAgentDto } from './dto/create-agent.dto'
@@ -31,9 +31,62 @@ export class AgentsController {
 
   @RequirePermissions(PERMISSIONS.agentsRead)
   @Get('voucher-metrics')
-  getVoucherMetrics(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+  getVoucherMetrics(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Query('tenantId') tenantId?: string,
+    @Query('agentId') agentId?: string,
+    @Query('territory') territory?: string,
+    @Query('packageId') packageId?: string,
+    @Query('batchId') batchId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('ownerType') ownerType?: string,
+  ) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.agentVoucherMetrics.getOverview(scopedTenantId)
+    return this.agentVoucherMetrics.getOverview(
+      scopedTenantId,
+      this.buildVoucherMetricFilters({
+        agentId,
+        territory,
+        packageId,
+        batchId,
+        from,
+        to,
+        ownerType,
+      }),
+    )
+  }
+
+  @RequirePermissions(PERMISSIONS.agentsRead)
+  @Get('voucher-metrics/export.csv')
+  async exportVoucherMetricsCsv(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Res() response: Response,
+    @Query('tenantId') tenantId?: string,
+    @Query('agentId') agentId?: string,
+    @Query('territory') territory?: string,
+    @Query('packageId') packageId?: string,
+    @Query('batchId') batchId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('ownerType') ownerType?: string,
+  ) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    const file = await this.agentVoucherMetrics.exportCsv(
+      scopedTenantId,
+      this.buildVoucherMetricFilters({
+        agentId,
+        territory,
+        packageId,
+        batchId,
+        from,
+        to,
+        ownerType,
+      }),
+    )
+    response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`)
+    response.send(file.buffer)
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
@@ -175,5 +228,32 @@ export class AgentsController {
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.agentsService.createDisbursement(agentId, dto, tenantId)
+  }
+
+  private buildVoucherMetricFilters(input: {
+    agentId?: string
+    territory?: string
+    packageId?: string
+    batchId?: string
+    from?: string
+    to?: string
+    ownerType?: string
+  }): AgentVoucherMetricFilters {
+    const ownerType =
+      input.ownerType === 'AGENT' ||
+      input.ownerType === 'MAIN' ||
+      input.ownerType === 'ALL'
+        ? input.ownerType
+        : undefined
+
+    return {
+      agentId: input.agentId || undefined,
+      territory: input.territory || undefined,
+      packageId: input.packageId || undefined,
+      batchId: input.batchId || undefined,
+      from: input.from || undefined,
+      to: input.to || undefined,
+      ownerType,
+    }
   }
 }
