@@ -6,15 +6,9 @@ type VoucherQrUrlBuilder = {
 }
 
 /**
- * Keeps printed voucher QR codes on a public HTTPS URL.
- *
- * Older vouchers used a router-local `*.wifi/login` address. A phone camera can
- * open that address before Android has committed to the hotspot network, which
- * produces a browser/network error instead of reaching the captive portal.
- * The public URL is safe in both cases:
- * - on the hotspot, MikroTik intercepts it and passes the voucher through `dst`;
- * - off the hotspot, the customer portal opens with the voucher pre-filled and
- *   tells the customer to join the venue WiFi before redeeming it.
+ * Keeps printed voucher QR codes on a stable public HTTPS URL, then hands the
+ * voucher to the router-local login page so MikroTik can supply MAC address,
+ * login URL, router identity, and the rest of the captive-portal context.
  *
  * VouchersService owns the PDF renderer and its URL helper is currently private.
  * This initializer applies the routing policy to the service instance without
@@ -27,7 +21,7 @@ export class VoucherQrRoutingInitializer implements OnModuleInit {
   onModuleInit() {
     const service = this.vouchersService as unknown as VoucherQrUrlBuilder
 
-    service.buildVoucherPortalUrl = (voucherCode: string) => {
+    service.buildVoucherPortalUrl = (voucherCode: string, hotspotDomain?: string) => {
       const configuredBase =
         process.env.VOUCHER_QR_BASE_URL ??
         process.env.PORTAL_PUBLIC_HOST ??
@@ -38,10 +32,17 @@ export class VoucherQrRoutingInitializer implements OnModuleInit {
         : `https://${configuredBase}`
       const normalized = withProtocol.replace(/\/$/, '')
       const portalBase = normalized.endsWith('/portal') ? normalized : `${normalized}/portal`
-      const url = new URL(portalBase)
+      const url = new URL(`${portalBase}/qr`)
+      const localHost = (hotspotDomain ?? '')
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .toLowerCase()
 
       url.searchParams.set('voucher', voucherCode.trim().toUpperCase())
       url.searchParams.set('intent', 'connect')
+      if (/^[a-z0-9.-]+\.wifi$/i.test(localHost)) {
+        url.searchParams.set('host', localHost)
+      }
       return url.toString()
     }
   }
