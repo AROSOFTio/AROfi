@@ -29,10 +29,12 @@ RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
 # Build apps sequentially so heap is fully released between each build.
 # NODE_OPTIONS is exported so child workers (webpack, SWC) inherit the cap.
-# Suppress interactive telemetry prompts in CI.
+# Keep each build under a hard memory ceiling: Coolify previously lost its
+# helper process with exit 255 during Next.js static generation when the build
+# and Docker daemon briefly exhausted the VPS. One CPU + a smaller semi-space
+# prevents those short multi-worker memory spikes without changing output.
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV NEXT_TELEMETRY_DISABLED=1
-
 ENV GENERATE_SOURCEMAP=false
 
 # Build portal-web first (smaller app). The .next/cache BuildKit cache mount
@@ -40,18 +42,22 @@ ENV GENERATE_SOURCEMAP=false
 # recompiled — this is the single biggest repeat-build speedup. It's a cache
 # mount (not an image layer), so the rm -rf of .next/cache below still applies.
 RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=1024' && \
+    export NODE_OPTIONS='--max-old-space-size=768 --max-semi-space-size=16' && \
     export NEXT_CPU_LIMIT=1 && \
+    export CI=1 && \
     npm run build --workspace=arofi-portal
 
 # Build admin-web second (largest app — own dedicated step for memory isolation)
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=1024' && \
+    export NODE_OPTIONS='--max-old-space-size=768 --max-semi-space-size=16' && \
     export NEXT_CPU_LIMIT=1 && \
+    export CI=1 && \
     npm run build --workspace=arofi-admin
 
-# Build API last
-RUN export NODE_OPTIONS='--max-old-space-size=2048' && \
+# Build API last. Nest/TypeScript needs more heap than either single-worker
+# Next build, but it remains capped below the previous 2 GB setting.
+RUN export NODE_OPTIONS='--max-old-space-size=1536 --max-semi-space-size=16' && \
+    export CI=1 && \
     npm run build --workspace=arofi-api
 
 # Prune development dependencies to make production node_modules as small as
