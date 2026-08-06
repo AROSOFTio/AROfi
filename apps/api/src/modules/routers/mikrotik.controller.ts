@@ -12,7 +12,7 @@ export class MikrotikController {
     if (!script) {
       throw new NotFoundException('Router provisioning script not found');
     }
-    return script;
+    return this.enforceBundleFirstPortal(script);
   }
 
   @Get('login-html/:key')
@@ -98,6 +98,21 @@ export class MikrotikController {
       throw new NotFoundException('Router registration key not found');
     }
     return result;
+  }
+
+  private enforceBundleFirstPortal(script: string) {
+    const profileNeedle = 'login-by=mac,cookie,http-pap';
+    const profileReplacement = 'login-by=http-pap';
+
+    return script
+      .replace(profileNeedle, profileReplacement)
+      .replace(/add-mac-cookie=yes/g, 'add-mac-cookie=no')
+      .replace(
+        '# Remove HotSpot bypass bindings so every device must authenticate through AROFi',
+        '# Clear legacy auto-login state so a first WiFi tap always opens the AROFi bundles page\n' +
+          ':do { /ip hotspot cookie remove [find] } on-error={}\n' +
+          '# Remove HotSpot bypass bindings so every device must authenticate through AROFi',
+      );
   }
 
   private resolveProvisioningNasIp(selfReportedNasIp?: string, httpSourceIp?: string) {
