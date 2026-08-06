@@ -34,6 +34,9 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Apply guarded ioTec source patches
+        run: python3 scripts/apply_iotec_source_patches.py
+
       - name: Generate Prisma Client
         run: npx prisma generate --schema=apps/api/prisma/schema.prisma
 
