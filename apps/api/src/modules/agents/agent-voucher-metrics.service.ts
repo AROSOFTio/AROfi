@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import {
   BillingTransactionStatus,
   BillingTransactionType,
+  Prisma,
   VoucherStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
@@ -11,11 +12,10 @@ type AgentIdentity = {
   code: string
   name: string
   phoneNumber: string
+  territory: string | null
 }
 
-type AgentVoucherMetric = {
-  agentId: string
-  agent: AgentIdentity
+type VoucherMetric = {
   totalAssigned: number
   generated: number
   printed: number
@@ -32,27 +32,98 @@ type AgentVoucherMetric = {
   recordedNetUgx: number
 }
 
+type AgentVoucherMetric = VoucherMetric & {
+  agentId: string
+  agent: AgentIdentity
+}
+
+export type AgentVoucherMetricFilters = {
+  agentId?: string
+  territory?: string
+  packageId?: string
+  batchId?: string
+  from?: string
+  to?: string
+  ownerType?: 'AGENT' | 'MAIN' | 'ALL'
+}
+
 @Injectable()
 export class AgentVoucherMetricsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOverview(tenantId?: string) {
+  async getOverview(tenantId?: string, filters: AgentVoucherMetricFilters = {}) {
     const now = new Date()
+    const ownerType = filters.ownerType ?? 'AGENT'
+    const includeAgents = ownerType === 'AGENT' || ownerType === 'ALL'
+    const includeMain = ownerType === 'MAIN' || ownerType === 'ALL'
+    const salesDate = this.buildDateFilter(filters.from, filters.to)
+
+    const agentWhere: Prisma.AgentWhereInput = {
+      ...(tenantId ? { tenantId } : {}),
+      ...(filters.agentId ? { id: filters.agentId } : {}),
+      ...(filters.territory
+        ? { territory: { contains: filters.territory, mode: 'insensitive' } }
+        : {}),
+    }
+
+    const batchWhere: Prisma.VoucherBatchWhereInput = {
+      ...(tenantId ? { tenantId } : {}),
+      ...(filters.packageId ? { packageId: filters.packageId } : {}),
+      ...(filters.batchId ? { id: filters.batchId } : {}),
+      ...(ownerType === 'AGENT'
+        ? { agentId: filters.agentId ? filters.agentId : { not: null } }
+        : ownerType === 'MAIN'
+          ? { agentId: null }
+          : filters.agentId
+            ? { agentId: filters.agentId }
+            : {}),
+      ...(filters.territory
+        ? {
+            agent: {
+              is: { territory: { contains: filters.territory, mode: 'insensitive' } },
+            },
+          }
+        : {}),
+    }
+
+    const saleWhere: Prisma.BillingTransactionWhereInput = {
+      ...(tenantId ? { tenantId } : {}),
+      type: {
+        in: [
+          BillingTransactionType.VOUCHER_SALE,
+          BillingTransactionType.VOUCHER_REDEMPTION,
+        ],
+      },
+      status: BillingTransactionStatus.COMPLETED,
+      grossAmountUgx: { gt: 0 },
+      ...(salesDate ? { createdAt: salesDate } : {}),
+      ...(filters.packageId ? { packageId: filters.packageId } : {}),
+      ...(filters.batchId ? { voucher: { is: { batchId: filters.batchId } } } : {}),
+      ...(filters.agentId
+        ? {
+            OR: [
+              { agentId: filters.agentId },
+              { voucher: { is: { batch: { is: { agentId: filters.agentId } } } } },
+            ],
+          }
+        : {}),
+    }
+
     const [agents, batches, sales] = await Promise.all([
-      this.prisma.agent.findMany({
-        where: tenantId ? { tenantId } : undefined,
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          phoneNumber: true,
-        },
-      }),
+      includeAgents
+        ? this.prisma.agent.findMany({
+            where: agentWhere,
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              phoneNumber: true,
+              territory: true,
+            },
+          })
+        : Promise.resolve([]),
       this.prisma.voucherBatch.findMany({
-        where: {
-          ...(tenantId ? { tenantId } : {}),
-          agentId: { not: null },
-        },
+        where: batchWhere,
         select: {
           agentId: true,
           agent: {
@@ -61,6 +132,7 @@ export class AgentVoucherMetricsService {
               code: true,
               name: true,
               phoneNumber: true,
+              territory: true,
             },
           },
           vouchers: {
@@ -72,24 +144,34 @@ export class AgentVoucherMetricsService {
           },
         },
       }),
-      this.prisma.billingTransaction.groupBy({
-        by: ['agentId'],
-        where: {
-          ...(tenantId ? { tenantId } : {}),
-          agentId: { not: null },
-          type: BillingTransactionType.VOUCHER_SALE,
-          status: BillingTransactionStatus.COMPLETED,
-        },
-        _count: { _all: true },
-        _sum: {
+      this.prisma.billingTransaction.findMany({
+        where: saleWhere,
+        select: {
+          id: true,
+          agentId: true,
           grossAmountUgx: true,
           feeAmountUgx: true,
           netAmountUgx: true,
+          voucher: {
+            select: {
+              batch: {
+                select: {
+                  agentId: true,
+                  agent: {
+                    select: {
+                      territory: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       }),
     ])
 
     const metrics = new Map<string, AgentVoucherMetric>()
+    const main = this.emptyMetric()
 
     const ensureMetric = (agent: AgentIdentity) => {
       const existing = metrics.get(agent.id)
@@ -98,80 +180,44 @@ export class AgentVoucherMetricsService {
       const created: AgentVoucherMetric = {
         agentId: agent.id,
         agent,
-        totalAssigned: 0,
-        generated: 0,
-        printed: 0,
-        unsold: 0,
-        soldAwaitingUse: 0,
-        redeemed: 0,
-        expired: 0,
-        voided: 0,
-        assignedValueUgx: 0,
-        unsoldValueUgx: 0,
-        recordedSales: 0,
-        recordedSalesUgx: 0,
-        recordedFeesUgx: 0,
-        recordedNetUgx: 0,
+        ...this.emptyMetric(),
       }
       metrics.set(agent.id, created)
       return created
     }
 
-    // Seed every agent first so sales attributed at point-of-sale are reported
-    // even when the voucher came from a general, unassigned batch.
     for (const agent of agents) {
       ensureMetric(agent)
     }
 
     for (const batch of batches) {
-      if (!batch.agent || !batch.agentId) continue
-      const metric = ensureMetric(batch.agent)
+      const target = batch.agent && batch.agentId
+        ? ensureMetric(batch.agent)
+        : includeMain
+          ? main
+          : null
+      if (!target) continue
 
       for (const voucher of batch.vouchers) {
-        metric.totalAssigned += 1
-        metric.assignedValueUgx += voucher.faceValueUgx
-
-        const expiredByDate =
-          voucher.expiresAt !== null &&
-          voucher.expiresAt <= now &&
-          voucher.status !== VoucherStatus.REDEEMED &&
-          voucher.status !== VoucherStatus.VOID &&
-          voucher.status !== VoucherStatus.VOIDED
-
-        if (voucher.status === VoucherStatus.EXPIRED || expiredByDate) {
-          metric.expired += 1
-          continue
-        }
-
-        if (voucher.status === VoucherStatus.GENERATED) {
-          metric.generated += 1
-          metric.unsold += 1
-          metric.unsoldValueUgx += voucher.faceValueUgx
-        } else if (voucher.status === VoucherStatus.PRINTED) {
-          metric.printed += 1
-          metric.unsold += 1
-          metric.unsoldValueUgx += voucher.faceValueUgx
-        } else if (voucher.status === VoucherStatus.SOLD) {
-          metric.soldAwaitingUse += 1
-        } else if (voucher.status === VoucherStatus.REDEEMED) {
-          metric.redeemed += 1
-        } else if (
-          voucher.status === VoucherStatus.VOID ||
-          voucher.status === VoucherStatus.VOIDED
-        ) {
-          metric.voided += 1
-        }
+        this.accumulateVoucher(target, voucher, now)
       }
     }
 
     for (const sale of sales) {
-      if (!sale.agentId) continue
-      const metric = metrics.get(sale.agentId)
-      if (!metric) continue
-      metric.recordedSales = sale._count._all
-      metric.recordedSalesUgx = sale._sum.grossAmountUgx ?? 0
-      metric.recordedFeesUgx = sale._sum.feeAmountUgx ?? 0
-      metric.recordedNetUgx = sale._sum.netAmountUgx ?? 0
+      const assignedAgentId = sale.voucher?.batch.agentId ?? sale.agentId
+      const territory = sale.voucher?.batch.agent?.territory ?? null
+
+      if (filters.territory && !territory?.toLowerCase().includes(filters.territory.toLowerCase())) {
+        continue
+      }
+
+      if (assignedAgentId) {
+        const metric = metrics.get(assignedAgentId)
+        if (!metric || !includeAgents) continue
+        this.accumulateSale(metric, sale)
+      } else if (includeMain) {
+        this.accumulateSale(main, sale)
+      }
     }
 
     const items = Array.from(metrics.values()).sort(
@@ -180,21 +226,209 @@ export class AgentVoucherMetricsService {
         right.totalAssigned - left.totalAssigned,
     )
 
+    const allMetrics: VoucherMetric[] = [
+      ...items,
+      ...(includeMain ? [main] : []),
+    ]
+
     return {
+      filters: {
+        ...filters,
+        ownerType,
+      },
       summary: {
         totalAgentsTracked: items.length,
         agentsWithStock: items.filter((item) => item.totalAssigned > 0).length,
-        totalAssigned: items.reduce((total, item) => total + item.totalAssigned, 0),
-        unsold: items.reduce((total, item) => total + item.unsold, 0),
-        soldAwaitingUse: items.reduce((total, item) => total + item.soldAwaitingUse, 0),
-        redeemed: items.reduce((total, item) => total + item.redeemed, 0),
-        expired: items.reduce((total, item) => total + item.expired, 0),
-        voided: items.reduce((total, item) => total + item.voided, 0),
-        unsoldValueUgx: items.reduce((total, item) => total + item.unsoldValueUgx, 0),
-        recordedSales: items.reduce((total, item) => total + item.recordedSales, 0),
-        recordedSalesUgx: items.reduce((total, item) => total + item.recordedSalesUgx, 0),
+        totalAssigned: allMetrics.reduce((total, item) => total + item.totalAssigned, 0),
+        unsold: allMetrics.reduce((total, item) => total + item.unsold, 0),
+        soldAwaitingUse: allMetrics.reduce((total, item) => total + item.soldAwaitingUse, 0),
+        redeemed: allMetrics.reduce((total, item) => total + item.redeemed, 0),
+        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
+        voided: allMetrics.reduce((total, item) => total + item.voided, 0),
+        unsoldValueUgx: allMetrics.reduce((total, item) => total + item.unsoldValueUgx, 0),
+        recordedSales: allMetrics.reduce((total, item) => total + item.recordedSales, 0),
+        recordedSalesUgx: allMetrics.reduce((total, item) => total + item.recordedSalesUgx, 0),
+        recordedFeesUgx: allMetrics.reduce((total, item) => total + item.recordedFeesUgx, 0),
+        recordedNetUgx: allMetrics.reduce((total, item) => total + item.recordedNetUgx, 0),
+        mainAssigned: main.totalAssigned,
+        mainSales: main.recordedSales,
+        mainSalesUgx: main.recordedSalesUgx,
+        agentSalesUgx: items.reduce((total, item) => total + item.recordedSalesUgx, 0),
       },
+      main: includeMain
+        ? {
+            ownerType: 'MAIN' as const,
+            code: 'MAIN',
+            name: 'Main / Owner Sales',
+            territory: 'Owner Direct',
+            ...main,
+          }
+        : null,
       items,
     }
+  }
+
+  async exportCsv(tenantId?: string, filters: AgentVoucherMetricFilters = {}) {
+    const report = await this.getOverview(tenantId, { ...filters, ownerType: filters.ownerType ?? 'ALL' })
+    const rows: Array<Array<string | number>> = [
+      [
+        'ownerType',
+        'agentCode',
+        'agentName',
+        'territory',
+        'assigned',
+        'unsold',
+        'redeemed',
+        'expired',
+        'voided',
+        'assignedValueUgx',
+        'unsoldValueUgx',
+        'salesCount',
+        'grossSalesUgx',
+        'feesUgx',
+        'netUgx',
+      ],
+    ]
+
+    if (report.main) {
+      rows.push([
+        'MAIN',
+        report.main.code,
+        report.main.name,
+        report.main.territory,
+        report.main.totalAssigned,
+        report.main.unsold,
+        report.main.redeemed,
+        report.main.expired,
+        report.main.voided,
+        report.main.assignedValueUgx,
+        report.main.unsoldValueUgx,
+        report.main.recordedSales,
+        report.main.recordedSalesUgx,
+        report.main.recordedFeesUgx,
+        report.main.recordedNetUgx,
+      ])
+    }
+
+    for (const item of report.items) {
+      rows.push([
+        'AGENT',
+        item.agent.code,
+        item.agent.name,
+        item.agent.territory ?? '',
+        item.totalAssigned,
+        item.unsold,
+        item.redeemed,
+        item.expired,
+        item.voided,
+        item.assignedValueUgx,
+        item.unsoldValueUgx,
+        item.recordedSales,
+        item.recordedSalesUgx,
+        item.recordedFeesUgx,
+        item.recordedNetUgx,
+      ])
+    }
+
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+
+    return {
+      filename: `agent-voucher-accountability-${Date.now()}.csv`,
+      contentType: 'text/csv',
+      buffer: Buffer.from(csv, 'utf8'),
+    }
+  }
+
+  private emptyMetric(): VoucherMetric {
+    return {
+      totalAssigned: 0,
+      generated: 0,
+      printed: 0,
+      unsold: 0,
+      soldAwaitingUse: 0,
+      redeemed: 0,
+      expired: 0,
+      voided: 0,
+      assignedValueUgx: 0,
+      unsoldValueUgx: 0,
+      recordedSales: 0,
+      recordedSalesUgx: 0,
+      recordedFeesUgx: 0,
+      recordedNetUgx: 0,
+    }
+  }
+
+  private accumulateVoucher(
+    metric: VoucherMetric,
+    voucher: { status: VoucherStatus; expiresAt: Date | null; faceValueUgx: number },
+    now: Date,
+  ) {
+    metric.totalAssigned += 1
+    metric.assignedValueUgx += voucher.faceValueUgx
+
+    const expiredByDate =
+      voucher.expiresAt !== null &&
+      voucher.expiresAt <= now &&
+      voucher.status !== VoucherStatus.REDEEMED &&
+      voucher.status !== VoucherStatus.VOID &&
+      voucher.status !== VoucherStatus.VOIDED
+
+    if (voucher.status === VoucherStatus.EXPIRED || expiredByDate) {
+      metric.expired += 1
+      return
+    }
+
+    if (voucher.status === VoucherStatus.GENERATED) {
+      metric.generated += 1
+      metric.unsold += 1
+      metric.unsoldValueUgx += voucher.faceValueUgx
+    } else if (voucher.status === VoucherStatus.PRINTED) {
+      metric.printed += 1
+      metric.unsold += 1
+      metric.unsoldValueUgx += voucher.faceValueUgx
+    } else if (voucher.status === VoucherStatus.SOLD) {
+      // Kept only for historical batches. New vouchers move directly from
+      // generated/printed to redeemed because redemption is the sale event.
+      metric.soldAwaitingUse += 1
+    } else if (voucher.status === VoucherStatus.REDEEMED) {
+      metric.redeemed += 1
+    } else if (
+      voucher.status === VoucherStatus.VOID ||
+      voucher.status === VoucherStatus.VOIDED
+    ) {
+      metric.voided += 1
+    }
+  }
+
+  private accumulateSale(
+    metric: VoucherMetric,
+    sale: {
+      grossAmountUgx: number
+      feeAmountUgx: number
+      netAmountUgx: number
+    },
+  ) {
+    metric.recordedSales += 1
+    metric.recordedSalesUgx += sale.grossAmountUgx
+    metric.recordedFeesUgx += sale.feeAmountUgx
+    metric.recordedNetUgx += sale.netAmountUgx
+  }
+
+  private buildDateFilter(from?: string, to?: string): Prisma.DateTimeFilter | undefined {
+    const filter: Prisma.DateTimeFilter = {}
+    const parsedFrom = from ? new Date(from) : null
+    const parsedTo = to ? new Date(to) : null
+
+    if (parsedFrom && Number.isFinite(parsedFrom.getTime())) {
+      filter.gte = parsedFrom
+    }
+    if (parsedTo && Number.isFinite(parsedTo.getTime())) {
+      parsedTo.setHours(23, 59, 59, 999)
+      filter.lte = parsedTo
+    }
+
+    return Object.keys(filter).length > 0 ? filter : undefined
   }
 }
