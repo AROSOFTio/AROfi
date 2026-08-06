@@ -23,15 +23,7 @@ export class MikrotikController {
       throw new NotFoundException('Router login.html not found');
     }
 
-    // The 2 August reconnect flow started auto-submitting saved credentials as
-    // soon as the captive page loaded. On Samsung devices this can bypass the
-    // package list and leave Android evaluating a half-completed login as a
-    // network without internet. Always render bundles first; explicit voucher,
-    // trial, recovery, and successful payment actions still call conn().
-    return html.replace(
-      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
-      'var autoReady=false;',
-    );
+    return this.prepareLoginHtml(html);
   }
 
   @Get('status-html/:key')
@@ -107,6 +99,47 @@ export class MikrotikController {
       throw new NotFoundException('Router registration key not found');
     }
     return result;
+  }
+
+  private prepareLoginHtml(html: string) {
+    let prepared = html;
+
+    // Never auto-submit returning-device credentials on initial captive-page
+    // load. New visitors must see bundles first, while explicit voucher,
+    // recovery, trial, and successful-payment actions can still call conn().
+    prepared = prepared.replace(
+      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
+      'var autoReady=false;',
+    );
+
+    prepared = prepared.replace(
+      'var pkgs=[],selId=null,selTv=false;',
+      'var pkgs=[],selId=null,selTv=false,trialStarting=false;',
+    );
+
+    // Keep the free trial completely outside paid, Smart TV, and multi-device
+    // package lists in the router-hosted login.html.
+    prepared = prepared.replace(
+      `      <p class="section-label">Select a package and pay with Mobile Money</p>\n      <div class="pkgs" id="plist"></div>`,
+      `      <div id="trialSection" class="tv-section">\n        <p class="section-label">Try WiFi Free</p>\n        <p class="section-sub">Start your one-time free trial on this device.</p>\n        <div class="pkgs" id="trialList"></div>\n      </div>\n\n      <p class="section-label">Select a package and pay with Mobile Money</p>\n      <div class="pkgs" id="plist"></div>`,
+    );
+
+    prepared = prepared.replace(
+      `    function normMac(v){`,
+      `    function isTrialPkg(p){\n      return !!(p&&(p.isTrialEnabled===true||Number(p.amountUgx||0)<=0||/trial/i.test((p.name||'')+' '+(p.code||''))));\n    }\n\n    function normMac(v){`,
+    );
+
+    prepared = prepared.replace(
+      `        var el=document.getElementById('plist');el.innerHTML='';\n        var tvl=document.getElementById('tvList');tvl.innerHTML='';\n        var ml=document.getElementById('multiList');ml.innerHTML='';\n        var mc=0,tc=0;\n        pkgs.forEach(function(p){\n          var limit=parseInt(p.deviceLimit||1,10)||1;\n          var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;\n          var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');\n          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">UGX '+fn(p.amountUgx)+'</span><span class="pk-buy">BUY</span>';\n          c.onclick=function(){selPkg(p.id);};\n          if(isTvPkg(p)){tvl.appendChild(c);tc++;}\n          else if(limit>1){ml.appendChild(c);mc++;}\n          else{el.appendChild(c);}\n        });\n        document.getElementById('tvSection').style.display=tc>0?'block':'none';\n        document.getElementById('multiSection').style.display=mc>0?'block':'none';`,
+      `        var el=document.getElementById('plist');el.innerHTML='';\n        var trl=document.getElementById('trialList');trl.innerHTML='';\n        var tvl=document.getElementById('tvList');tvl.innerHTML='';\n        var ml=document.getElementById('multiList');ml.innerHTML='';\n        var mc=0,tc=0,trc=0;\n        pkgs.forEach(function(p){\n          var limit=parseInt(p.deviceLimit||1,10)||1;\n          var trial=isTrialPkg(p);\n          var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;\n          var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');\n          var price=trial?'FREE':'UGX '+fn(p.amountUgx);\n          var action=trial?'TRY':'BUY';\n          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">'+price+'</span><span class="pk-buy">'+action+'</span>';\n          c.onclick=function(){if(trial){startTrial(p.id);return;}selPkg(p.id);};\n          if(trial){trl.appendChild(c);trc++;}\n          else if(isTvPkg(p)){tvl.appendChild(c);tc++;}\n          else if(limit>1){ml.appendChild(c);mc++;}\n          else{el.appendChild(c);}\n        });\n        document.getElementById('trialSection').style.display=trc>0?'block':'none';\n        document.getElementById('tvSection').style.display=tc>0?'block':'none';\n        document.getElementById('multiSection').style.display=mc>0?'block':'none';`,
+    );
+
+    prepared = prepared.replace(
+      `    function selPkg(id){`,
+      `    function startTrial(id){\n      if(trialStarting)return;\n      var pkg=null;\n      for(var i=0;i<pkgs.length;i++){if(pkgs[i].id===id){pkg=pkgs[i];break;}}\n      if(!pkg)return;\n      trialStarting=true;\n      sst('Starting your free trial...','info');\n      apiCall('POST','/api/portal/start-trial',{packageId:id,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo},function(err,res){\n        if(err){trialStarting=false;sst(err.message||'Unable to start the free trial.','err');return;}\n        if(res&&res.reconnect&&res.reconnect.username){sst('Trial started! Connecting...','ok');conn(res.reconnect);return;}\n        trialStarting=false;\n        sst('Trial started. Reconnect to this WiFi if internet does not begin automatically.','ok');\n      });\n    }\n\n    function selPkg(id){`,
+    );
+
+    return prepared;
   }
 
   private resolveProvisioningNasIp(selfReportedNasIp?: string, httpSourceIp?: string) {
