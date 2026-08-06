@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { AgentVoucherMetricsService } from './agent-voucher-metrics.service'
 import { AgentsService } from './agents.service'
 import { AgentFloatAdjustmentDto } from './dto/agent-float-adjustment.dto'
 import { CreateAgentDto } from './dto/create-agent.dto'
@@ -17,6 +18,7 @@ import { CreateSettlementDto } from './dto/create-settlement.dto'
 export class AgentsController {
   constructor(
     private readonly agentsService: AgentsService,
+    private readonly agentVoucherMetrics: AgentVoucherMetricsService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -25,6 +27,13 @@ export class AgentsController {
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.agentsService.getOverview(scopedTenantId)
+  }
+
+  @RequirePermissions(PERMISSIONS.agentsRead)
+  @Get('voucher-metrics')
+  getVoucherMetrics(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
+    return this.agentVoucherMetrics.getOverview(scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
@@ -168,4 +177,3 @@ export class AgentsController {
     return this.agentsService.createDisbursement(agentId, dto, tenantId)
   }
 }
-
