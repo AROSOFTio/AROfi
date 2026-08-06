@@ -29,10 +29,9 @@ RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
 # Build apps sequentially so heap is fully released between each build.
 # NODE_OPTIONS is exported so child workers (webpack, SWC) inherit the cap.
-# Keep each build under a hard memory ceiling: Coolify previously lost its
-# helper process with exit 255 during Next.js static generation when the build
-# and Docker daemon briefly exhausted the VPS. One CPU + a smaller semi-space
-# prevents those short multi-worker memory spikes without changing output.
+# A previous Coolify run exited 255 during Next.js static generation without a
+# compiler error. One CPU plus bounded heap/semi-space reduces build pressure
+# and the chance that the deployment helper is terminated mid-build.
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV GENERATE_SOURCEMAP=false
