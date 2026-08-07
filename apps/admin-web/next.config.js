@@ -1,17 +1,14 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
+  output: 'standalone',
+  outputFileTracingRoot: path.join(__dirname, '../..'),
   // Keep browser and server source maps disabled in production. Generating them
   // significantly increases peak memory during webpack compilation on the VPS.
   productionBrowserSourceMaps: false,
-  // Force a single build worker. Next's default (cpu-count - 1) spawns
-  // multiple webpack/SWC worker processes that each carry their own memory
-  // budget independent of NODE_OPTIONS, which overruns small (2-4GB) hosts.
-  // Next.js 16 moved outputFileTracingExcludes out of experimental.
-  outputFileTracingExcludes: {
-    '*': ['**/node_modules/**'],
-  },
   experimental: {
     cpus: 1,
     memoryBasedWorkersCount: true,
@@ -53,9 +50,6 @@ const nextConfig = {
             ].join('; '),
           },
           {
-            // SAMEORIGIN (matching the nginx layer) instead of DENY: the blog
-            // admin's responsive preview iframes the live article page from
-            // the same origin. Cross-origin framing stays blocked.
             key: 'X-Frame-Options',
             value: 'SAMEORIGIN',
           },
@@ -74,7 +68,6 @@ const nextConfig = {
         ],
       },
       {
-        // Ensure crawlers always receive a fresh robots.txt and sitemap
         source: '/(robots\\.txt|sitemap\\.xml)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' },
