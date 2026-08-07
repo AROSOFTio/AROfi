@@ -10,6 +10,7 @@ type PackageItem = {
   id: string
   name: string
   code: string
+  activePriceUgx?: number
   tenant: { id: string; name: string }
   prices?: Array<{ amountUgx: number; isDefault?: boolean }>
 }
@@ -27,8 +28,15 @@ type AgentsOverview = { agents: Agent[] }
 type TenantOverview = { items: Tenant[] }
 type PackageOverview = { items: PackageItem[] }
 type StockOwnerType = 'MAIN' | 'AGENT'
+type VoucherCodeFormat = 'UPPERCASE_TEXT' | 'LOWERCASE_TEXT' | 'MIXED' | 'NUMBERS'
 
-const steps = ['Stock owner', 'Voucher details', 'Expiry & notes', 'Review'] as const
+const steps = ['Owner', 'Details', 'Expiry', 'Review'] as const
+const codeFormats: Array<{ value: VoucherCodeFormat; label: string; example: string }> = [
+  { value: 'UPPERCASE_TEXT', label: 'Uppercase', example: 'ABCDXY' },
+  { value: 'LOWERCASE_TEXT', label: 'Lowercase', example: 'abcdxy' },
+  { value: 'MIXED', label: 'Mixed', example: 'Ab7xQ2' },
+  { value: 'NUMBERS', label: 'Numbers', example: '482915' },
+]
 
 export default function AgentVoucherIssuancePanel() {
   const [open, setOpen] = useState(false)
@@ -41,7 +49,8 @@ export default function AgentVoucherIssuancePanel() {
   const [packageId, setPackageId] = useState('')
   const [agentId, setAgentId] = useState('')
   const [quantity, setQuantity] = useState('100')
-  const [faceValueUgx, setFaceValueUgx] = useState('')
+  const [codeFormat, setCodeFormat] = useState<VoucherCodeFormat>('UPPERCASE_TEXT')
+  const [codeLength, setCodeLength] = useState('8')
   const [expiresAt, setExpiresAt] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
@@ -87,15 +96,17 @@ export default function AgentVoucherIssuancePanel() {
   const selectedTenant = tenants.find((tenant) => tenant.id === tenantId)
   const selectedAgent = availableAgents.find((agent) => agent.id === agentId)
   const selectedPackage = availablePackages.find((item) => item.id === packageId)
-  const packagePrice = selectedPackage?.prices?.find((price) => price.isDefault)?.amountUgx
+  const packagePrice = selectedPackage?.activePriceUgx
+    ?? selectedPackage?.prices?.find((price) => price.isDefault)?.amountUgx
     ?? selectedPackage?.prices?.[0]?.amountUgx
     ?? 0
-  const resolvedFaceValue = Number.parseInt(faceValueUgx || '', 10) || packagePrice
   const resolvedQuantity = Number.parseInt(quantity, 10) || 0
-  const stockValue = resolvedFaceValue * resolvedQuantity
+  const resolvedCodeLength = Number.parseInt(codeLength, 10) || 8
+  const stockValue = packagePrice * resolvedQuantity
   const expectedCommission = selectedAgent
     ? Math.round((stockValue * selectedAgent.commissionRateBps) / 10000)
     : 0
+  const selectedFormat = codeFormats.find((format) => format.value === codeFormat)
 
   function resetFlow() {
     setStep(0)
@@ -103,7 +114,8 @@ export default function AgentVoucherIssuancePanel() {
     setPackageId('')
     setAgentId('')
     setQuantity('100')
-    setFaceValueUgx('')
+    setCodeFormat('UPPERCASE_TEXT')
+    setCodeLength('8')
     setExpiresAt('')
     setNotes('')
     setError(null)
@@ -119,12 +131,13 @@ export default function AgentVoucherIssuancePanel() {
     setError(null)
     if (step === 0) {
       if (!tenantId) return 'Select a business.'
-      if (stockOwnerType === 'AGENT' && !agentId) return 'Select the accountable agent.'
+      if (stockOwnerType === 'AGENT' && !agentId) return 'Select an agent.'
     }
     if (step === 1) {
-      if (!packageId) return 'Select the internet package.'
+      if (!packageId) return 'Select a package.'
+      if (packagePrice < 1) return 'The selected package has no active price.'
       if (resolvedQuantity < 1 || resolvedQuantity > 10000) return 'Enter between 1 and 10,000 vouchers.'
-      if (resolvedFaceValue < 1) return 'Enter a valid voucher face value.'
+      if (resolvedCodeLength < 6 || resolvedCodeLength > 24) return 'Code length must be between 6 and 24.'
     }
     return null
   }
@@ -145,8 +158,8 @@ export default function AgentVoucherIssuancePanel() {
       setError(failure)
       return
     }
-    if (!tenantId || !packageId || (stockOwnerType === 'AGENT' && !agentId)) {
-      setError('Review the required selections before generating vouchers.')
+    if (!tenantId || !packageId || packagePrice < 1 || (stockOwnerType === 'AGENT' && !agentId)) {
+      setError('Complete the required fields.')
       return
     }
 
@@ -158,7 +171,9 @@ export default function AgentVoucherIssuancePanel() {
         packageId,
         agentId: stockOwnerType === 'AGENT' ? agentId : undefined,
         quantity: resolvedQuantity,
-        faceValueUgx: resolvedFaceValue,
+        faceValueUgx: packagePrice,
+        codeFormat,
+        codeLength: resolvedCodeLength,
         expiresAt: expiresAt || undefined,
         notes: [
           stockOwnerType === 'AGENT'
@@ -170,14 +185,14 @@ export default function AgentVoucherIssuancePanel() {
 
       setSuccess(
         stockOwnerType === 'AGENT'
-          ? `${resolvedQuantity} vouchers were assigned to ${selectedAgent?.name ?? 'the selected agent'}.`
-          : `${resolvedQuantity} vouchers were generated as owner stock.`,
+          ? `${resolvedQuantity} vouchers assigned to ${selectedAgent?.name ?? 'agent'}.`
+          : `${resolvedQuantity} owner vouchers created.`,
       )
       setOpen(false)
       resetFlow()
       window.setTimeout(() => window.location.reload(), 700)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to generate voucher stock')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to generate vouchers')
     } finally {
       setSubmitting(false)
     }
@@ -186,45 +201,56 @@ export default function AgentVoucherIssuancePanel() {
   return (
     <section className="card voucher-issue-launcher">
       <style>{`
-        .voucher-issue-launcher{padding:24px;display:flex;justify-content:space-between;align-items:center;gap:22px}
-        .voucher-issue-launcher h2{font-size:20px;margin:0 0 6px;color:var(--text-primary)}
-        .voucher-issue-launcher p{margin:0;max-width:670px;color:var(--text-2);font-size:13px;line-height:1.55}
-        .voucher-wizard-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:22px}
-        .voucher-wizard-step{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--surface-2);font-size:11px;color:var(--text-2);font-weight:800}
-        .voucher-wizard-step.active{border-color:var(--brand);background:#eff6ff;color:#1d4ed8}
-        .voucher-owner-options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-        .voucher-owner-option{border:1px solid var(--border);border-radius:14px;padding:17px;text-align:left;background:var(--surface);cursor:pointer}
-        .voucher-owner-option.active{border-color:var(--brand);box-shadow:0 0 0 2px rgba(37,99,235,.1)}
-        .voucher-owner-option strong{display:block;font-size:15px;margin-bottom:5px;color:var(--text-primary)}
-        .voucher-owner-option span{font-size:12px;line-height:1.45;color:var(--text-2)}
-        .voucher-wizard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+        .voucher-issue-launcher{padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px}
+        .voucher-issue-launcher h2{font-size:16px;line-height:1.3;font-weight:650;margin:0;color:var(--text-primary)}
+        .voucher-success{margin-top:5px;color:var(--success-fg);font-size:12.5px;font-weight:600}
+        .voucher-wizard-progress{display:flex;align-items:center;gap:6px;margin-bottom:18px;overflow-x:auto;padding-bottom:2px}
+        .voucher-wizard-step{display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--text-muted);font-size:12px;font-weight:600}
+        .voucher-wizard-step:not(:last-child)::after{content:"";width:24px;height:1px;background:var(--border);margin-left:2px}
+        .voucher-step-number{display:grid;place-items:center;width:22px;height:22px;border:1px solid var(--border);border-radius:50%;background:var(--bg-card);font-size:11px}
+        .voucher-wizard-step.active{color:var(--brand)}
+        .voucher-wizard-step.active .voucher-step-number{border-color:var(--brand);background:var(--brand);color:#fff}
+        .voucher-wizard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
         .voucher-wizard-full{grid-column:1/-1}
-        .voucher-review{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-        .voucher-review div{padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)}
-        .voucher-review span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px}
-        .voucher-review strong{font-size:14px;color:var(--text-primary);overflow-wrap:anywhere}
-        .voucher-wizard-actions{display:flex;justify-content:space-between;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
-        @media(max-width:700px){.voucher-issue-launcher{display:block}.voucher-issue-launcher .btn{width:100%;margin-top:16px}.voucher-owner-options,.voucher-wizard-grid,.voucher-review{grid-template-columns:1fr}.voucher-wizard-full{grid-column:auto}.voucher-wizard-progress{grid-template-columns:1fr 1fr}.voucher-wizard-actions{display:grid;grid-template-columns:1fr 1fr}.voucher-wizard-actions .btn{width:100%}}
+        .voucher-owner-options{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .voucher-owner-option{height:42px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-2);font:600 13px var(--ui-font);cursor:pointer}
+        .voucher-owner-option:hover{background:var(--bg-hover)}
+        .voucher-owner-option.active{border-color:var(--brand);background:var(--green-light);color:var(--brand)}
+        .voucher-price-field{min-height:40px;display:flex;align-items:center;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg-hover);font-weight:650;color:var(--text-primary)}
+        .voucher-format-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+        .voucher-format{min-height:54px;padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);cursor:pointer;text-align:left}
+        .voucher-format.active{border-color:var(--brand);background:var(--green-light)}
+        .voucher-format strong{display:block;font-size:12.5px;font-weight:600;color:var(--text-primary)}
+        .voucher-format span{display:block;margin-top:2px;font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text-muted)}
+        .voucher-review{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+        .voucher-review-row{display:grid;grid-template-columns:150px 1fr;gap:14px;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
+        .voucher-review-row:last-child{border-bottom:0}
+        .voucher-review-row span{font-size:12.5px;color:var(--text-muted)}
+        .voucher-review-row strong{font-size:13.5px;font-weight:600;color:var(--text-primary);overflow-wrap:anywhere}
+        .voucher-wizard-actions{display:flex;justify-content:space-between;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+        .voucher-error{margin:12px 0 0;color:var(--danger-fg);font-size:12.5px;font-weight:600}
+        @media(max-width:700px){.voucher-issue-launcher{padding:14px;align-items:center}.voucher-wizard-grid{grid-template-columns:1fr}.voucher-wizard-full{grid-column:auto}.voucher-format-grid{grid-template-columns:1fr 1fr}.voucher-review-row{grid-template-columns:110px 1fr}.voucher-wizard-actions .btn{flex:1}}
+        @media(max-width:420px){.voucher-issue-launcher{align-items:flex-start;flex-direction:column}.voucher-issue-launcher .btn{width:100%}.voucher-wizard-step span:last-child{display:none}.voucher-review-row{grid-template-columns:1fr;gap:2px}}
       `}</style>
 
       <div>
-        <h2>Issue a voucher batch</h2>
-        <p>A four-step guided flow asks only what is needed. Nothing is counted as revenue until a customer successfully redeems a voucher.</p>
-        {success && <p style={{ color: 'var(--success-fg)', fontWeight: 700, marginTop: 10 }}>{success}</p>}
+        <h2>Issue voucher batch</h2>
+        {success && <div className="voucher-success">{success}</div>}
       </div>
-      <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>Start guided issue</button>
+      <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>Issue vouchers</button>
 
-      <Modal open={open} title="Issue voucher batch" onClose={closeFlow} width={780}>
-        <div className="voucher-wizard-progress">
+      <Modal open={open} title="Issue voucher batch" onClose={closeFlow} width={720}>
+        <div className="voucher-wizard-progress" aria-label={`Step ${step + 1} of ${steps.length}`}>
           {steps.map((label, index) => (
             <div key={label} className={`voucher-wizard-step ${index === step ? 'active' : ''}`}>
-              {index + 1}. {label}
+              <span className="voucher-step-number">{index + 1}</span>
+              <span>{label}</span>
             </div>
           ))}
         </div>
 
         <form onSubmit={submit}>
-          {loading && <p>Loading businesses, packages, and agents…</p>}
+          {loading && <p>Loading…</p>}
 
           {!loading && step === 0 && (
             <div className="voucher-wizard-grid">
@@ -244,29 +270,24 @@ export default function AgentVoucherIssuancePanel() {
                   {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
                 </select>
               </div>
-              <div className="voucher-wizard-full">
-                <label className="form-label">Who owns this stock?</label>
+
+              <div className="form-group voucher-wizard-full">
+                <label className="form-label">Stock owner</label>
                 <div className="voucher-owner-options">
-                  <button type="button" className={`voucher-owner-option ${stockOwnerType === 'MAIN' ? 'active' : ''}`} onClick={() => { setStockOwnerType('MAIN'); setAgentId('') }}>
-                    <strong>Main / Owner</strong>
-                    <span>The business keeps and sells this stock directly.</span>
-                  </button>
-                  <button type="button" className={`voucher-owner-option ${stockOwnerType === 'AGENT' ? 'active' : ''}`} onClick={() => setStockOwnerType('AGENT')}>
-                    <strong>Assign to Agent</strong>
-                    <span>One agent becomes accountable for this batch.</span>
-                  </button>
+                  <button type="button" className={`voucher-owner-option ${stockOwnerType === 'MAIN' ? 'active' : ''}`} onClick={() => { setStockOwnerType('MAIN'); setAgentId('') }}>Main / Owner</button>
+                  <button type="button" className={`voucher-owner-option ${stockOwnerType === 'AGENT' ? 'active' : ''}`} onClick={() => setStockOwnerType('AGENT')}>Assign to agent</button>
                 </div>
               </div>
+
               {stockOwnerType === 'AGENT' && (
                 <div className="form-group voucher-wizard-full">
-                  <label className="form-label">Accountable agent</label>
+                  <label className="form-label">Agent</label>
                   <select className="form-input" value={agentId} onChange={(event) => setAgentId(event.target.value)} required>
                     <option value="">Select agent</option>
                     {availableAgents.map((agent) => (
                       <option key={agent.id} value={agent.id}>{agent.code} — {agent.name}{agent.territory ? ` (${agent.territory})` : ''}</option>
                     ))}
                   </select>
-                  {availableAgents.length === 0 && <small>No active agents exist for this business.</small>}
                 </div>
               )}
             </div>
@@ -275,20 +296,43 @@ export default function AgentVoucherIssuancePanel() {
           {!loading && step === 1 && (
             <div className="voucher-wizard-grid">
               <div className="form-group voucher-wizard-full">
-                <label className="form-label">Internet package</label>
-                <select className="form-input" value={packageId} onChange={(event) => { setPackageId(event.target.value); setFaceValueUgx('') }} required>
+                <label className="form-label">Package</label>
+                <select className="form-input" value={packageId} onChange={(event) => setPackageId(event.target.value)} required>
                   <option value="">Select package</option>
-                  {availablePackages.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
+                  {availablePackages.map((item) => {
+                    const price = item.activePriceUgx ?? item.prices?.find((entry) => entry.isDefault)?.amountUgx ?? item.prices?.[0]?.amountUgx ?? 0
+                    return <option key={item.id} value={item.id}>{item.name} · {formatCurrency(price)}</option>
+                  })}
                 </select>
               </div>
+
               <div className="form-group">
                 <label className="form-label">Number of vouchers</label>
                 <input className="form-input" type="number" min={1} max={10000} value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
               </div>
+
               <div className="form-group">
-                <label className="form-label">Face value (UGX)</label>
-                <input className="form-input" type="number" min={1} value={faceValueUgx} onChange={(event) => setFaceValueUgx(event.target.value)} placeholder={packagePrice ? String(packagePrice) : 'Enter amount'} />
-                <small>{packagePrice ? `Package price: ${formatCurrency(packagePrice)}` : 'No default package price found.'}</small>
+                <label className="form-label">Package price</label>
+                <div className="voucher-price-field">{packageId ? formatCurrency(packagePrice) : 'Select package'}</div>
+              </div>
+
+              <div className="form-group voucher-wizard-full">
+                <label className="form-label">Code format</label>
+                <div className="voucher-format-grid">
+                  {codeFormats.map((format) => (
+                    <button type="button" key={format.value} className={`voucher-format ${codeFormat === format.value ? 'active' : ''}`} onClick={() => setCodeFormat(format.value)}>
+                      <strong>{format.label}</strong>
+                      <span>{format.example}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Code length</label>
+                <select className="form-input" value={codeLength} onChange={(event) => setCodeLength(event.target.value)}>
+                  {[6, 8, 10, 12, 16, 20, 24].map((length) => <option key={length} value={length}>{length} characters</option>)}
+                </select>
               </div>
             </div>
           )}
@@ -296,35 +340,30 @@ export default function AgentVoucherIssuancePanel() {
           {!loading && step === 2 && (
             <div className="voucher-wizard-grid">
               <div className="form-group">
-                <label className="form-label">Voucher expiry (optional)</label>
+                <label className="form-label">Expiry date</label>
                 <input className="form-input" type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
               </div>
               <div className="form-group voucher-wizard-full">
-                <label className="form-label">Internal issue note (optional)</label>
-                <textarea className="form-input" rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Location, shift, receipt reference, or reason for issue…" />
+                <label className="form-label">Note</label>
+                <textarea className="form-input" rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
               </div>
             </div>
           )}
 
           {!loading && step === 3 && (
-            <div>
-              <div className="voucher-review">
-                <div><span>Business</span><strong>{selectedTenant?.name ?? 'Not selected'}</strong></div>
-                <div><span>Stock owner</span><strong>{stockOwnerType === 'AGENT' ? selectedAgent?.name ?? 'Agent not selected' : 'Main / Owner'}</strong></div>
-                <div><span>Package</span><strong>{selectedPackage?.name ?? 'Not selected'}</strong></div>
-                <div><span>Quantity</span><strong>{resolvedQuantity.toLocaleString()} vouchers</strong></div>
-                <div><span>Face value</span><strong>{formatCurrency(resolvedFaceValue)}</strong></div>
-                <div><span>Total stock value</span><strong>{formatCurrency(stockValue)}</strong></div>
-                <div><span>Expected agent commission</span><strong>{formatCurrency(expectedCommission)}</strong></div>
-                <div><span>Expiry</span><strong>{expiresAt || 'No batch expiry'}</strong></div>
-              </div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '13px 0 0' }}>
-                Issuing or printing does not create a sale. Revenue and commission are posted only after redemption.
-              </p>
+            <div className="voucher-review">
+              <div className="voucher-review-row"><span>Business</span><strong>{selectedTenant?.name ?? '—'}</strong></div>
+              <div className="voucher-review-row"><span>Owner</span><strong>{stockOwnerType === 'AGENT' ? selectedAgent?.name ?? '—' : 'Main / Owner'}</strong></div>
+              <div className="voucher-review-row"><span>Package</span><strong>{selectedPackage?.name ?? '—'} · {formatCurrency(packagePrice)}</strong></div>
+              <div className="voucher-review-row"><span>Vouchers</span><strong>{resolvedQuantity.toLocaleString()}</strong></div>
+              <div className="voucher-review-row"><span>Code</span><strong>{selectedFormat?.label} · {resolvedCodeLength} characters</strong></div>
+              <div className="voucher-review-row"><span>Stock value</span><strong>{formatCurrency(stockValue)}</strong></div>
+              {selectedAgent && <div className="voucher-review-row"><span>Commission</span><strong>{formatCurrency(expectedCommission)}</strong></div>}
+              <div className="voucher-review-row"><span>Expiry</span><strong>{expiresAt || 'No expiry'}</strong></div>
             </div>
           )}
 
-          {error && <p style={{ color: 'var(--danger-fg)', margin: '14px 0 0', fontWeight: 700 }}>{error}</p>}
+          {error && <p className="voucher-error">{error}</p>}
 
           <div className="voucher-wizard-actions">
             <button type="button" className="btn btn-ghost" onClick={() => step === 0 ? closeFlow() : setStep((current) => current - 1)} disabled={submitting}>
@@ -334,7 +373,7 @@ export default function AgentVoucherIssuancePanel() {
               <button type="button" className="btn btn-primary" onClick={nextStep} disabled={loading}>Continue</button>
             ) : (
               <button type="submit" className="btn btn-primary" disabled={submitting || loading}>
-                {submitting ? 'Generating…' : stockOwnerType === 'AGENT' ? 'Generate & assign' : 'Generate owner stock'}
+                {submitting ? 'Creating…' : stockOwnerType === 'AGENT' ? 'Create & assign' : 'Create vouchers'}
               </button>
             )}
           </div>
