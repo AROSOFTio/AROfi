@@ -1,148 +1,121 @@
 # syntax=docker/dockerfile:1
-# Build stage
 FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 RUN apk add --no-cache python3 make g++ openssl libc6-compat
 
-# Copy root configurations and lockfiles
 COPY package*.json ./
 COPY turbo.json ./
-
-# Copy all package.json files for dependency bootstrapping
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/admin-web/package.json ./apps/admin-web/package.json
 COPY apps/portal-web/package.json ./apps/portal-web/package.json
 COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
 
-# Install dependencies in development mode to ensure compilers are available.
-# --no-audit/--no-fund skip registry round-trips that add ~15s; --prefer-offline
-# reuses the mounted npm cache so warm builds barely touch the network.
 RUN --mount=type=cache,target=/root/.npm \
     NODE_ENV=development npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
-# Copy source code
 COPY . .
 
-# Apply the guarded source patches before Prisma generation and compilation.
-# The second phase replaces the legacy per-network selectors with one Platform
-# Admin gateway; the third phase gives each callback an explicit provider ID.
-# Pesapal remains in the backend for later use but is hidden from Admin selection.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
     && python3 scripts/hide_pesapal_gateway.py
 
-# Generate Prisma Client
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
-# Build apps sequentially so each Node process exits and releases its heap before
-# the next build starts. The largest Admin build runs first while BuildKit has
-# the smallest active layer set. Strict heap/thread caps prevent the deployment
-# host from killing docker compose with exit code 255 under memory pressure.
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV GENERATE_SOURCEMAP=false
 ENV UV_THREADPOOL_SIZE=1
 
-# Build admin-web first. next.config.js enables Next's official webpack memory
-# optimizations and a single webpack build worker. The 640 MB V8 cap leaves RAM
-# available for Docker, BuildKit, Coolify, and the running production services.
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
     npm run build --workspace=arofi-admin
 
-# Build the smaller portal after Admin has completely exited.
 RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=512 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
     npm run build --workspace=arofi-portal
 
-# Nest/TypeScript is also bounded to avoid a second host-level OOM after both
-# Next.js applications have compiled.
 RUN export NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' && \
     export CI=1 && \
     npm run build --workspace=arofi-api
 
-# Prune development dependencies to make production node_modules as small as
-# possible. --no-audit/--no-fund drop the registry audit that made this step
-# take ~90s; the prune itself is local and fast.
-RUN npm prune --omit=dev --legacy-peer-deps --no-audit --no-fund
+# Assemble minimal Next.js standalone bundles. Each bundle contains only the
+# server files and production dependencies traced by Next.js, rather than the
+# monorepo's complete node_modules tree. Static assets and public files must be
+# copied beside the generated server.js manually.
+RUN set -eux; \
+    mkdir -p /runtime/admin /runtime/portal; \
+    cp -a apps/admin-web/.next/standalone/. /runtime/admin/; \
+    admin_server="$(find /runtime/admin -type f -path '*/apps/admin-web/server.js' -print -quit)"; \
+    if [ -z "$admin_server" ] && [ -f /runtime/admin/server.js ]; then admin_server=/runtime/admin/server.js; fi; \
+    test -f "$admin_server"; \
+    admin_dir="$(dirname "$admin_server")"; \
+    mkdir -p "$admin_dir/.next"; \
+    cp -a apps/admin-web/.next/static "$admin_dir/.next/static"; \
+    cp -a apps/admin-web/public "$admin_dir/public"; \
+    cp -a apps/portal-web/.next/standalone/. /runtime/portal/; \
+    portal_server="$(find /runtime/portal -type f -path '*/apps/portal-web/server.js' -print -quit)"; \
+    if [ -z "$portal_server" ] && [ -f /runtime/portal/server.js ]; then portal_server=/runtime/portal/server.js; fi; \
+    test -f "$portal_server"; \
+    portal_dir="$(dirname "$portal_server")"; \
+    mkdir -p "$portal_dir/.next"; \
+    cp -a apps/portal-web/.next/static "$portal_dir/.next/static"; \
+    cp -a apps/portal-web/public "$portal_dir/public"; \
+    du -sh /runtime/admin /runtime/portal apps/api/dist node_modules/.prisma
 
-# Remove build caches, source files, and dev tooling — only keep runtime artifacts.
-# This shrinks what the builder exposes so the selective COPY below is fast.
-RUN rm -rf \
-    apps/admin-web/.next/cache \
-    apps/portal-web/.next/cache \
-    apps/admin-web/src \
-    apps/portal-web/src \
-    apps/api/src \
-    packages \
-    .turbo .git .github docs
-
-# Runtime stage — copy only what is needed to RUN the app, not build it.
-# Previously we did "COPY --from=builder /usr/src/app ./" which copied the entire
-# 3-5 GB builder workspace (source files + dev node_modules residue) to the
-# runtime layer, exhausting disk space on the VPS. Selective COPY copies only
-# the production artifacts and avoids the OOM/disk-full crash.
+# Runtime image intentionally does not copy the root monorepo node_modules.
+# The previous image completed every build but Coolify died while exporting its
+# oversized final layer. Install only API production dependencies and copy the
+# two minimal Next standalone bundles.
 FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
 RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
-# Hoisted production node_modules (shared by all three apps)
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-COPY --from=builder /usr/src/app/package.json ./package.json
+COPY apps/api/package.json ./apps/api/package.json
+RUN --mount=type=cache,target=/root/.npm \
+    cd apps/api && \
+    npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline && \
+    npm cache clean --force
 
-# NestJS API
 COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
-COPY --from=builder /usr/src/app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /usr/src/app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /usr/src/app/node_modules/.prisma ./apps/api/node_modules/.prisma
 
-# Admin web (Next.js)
-COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/admin-web/.next ./apps/admin-web/.next
-COPY --from=builder /usr/src/app/apps/admin-web/public ./apps/admin-web/public
-COPY --from=builder /usr/src/app/apps/admin-web/package.json ./apps/admin-web/package.json
-COPY --from=builder /usr/src/app/apps/admin-web/next.config.js ./apps/admin-web/next.config.js
+COPY --from=builder --chown=arofi:nodejs /runtime/admin ./standalone/admin
+COPY --from=builder --chown=arofi:nodejs /runtime/portal ./standalone/portal
 
-# Portal web (Next.js)
-COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/portal-web/.next ./apps/portal-web/.next
-COPY --from=builder /usr/src/app/apps/portal-web/public ./apps/portal-web/public
-COPY --from=builder /usr/src/app/apps/portal-web/package.json ./apps/portal-web/package.json
-COPY --from=builder /usr/src/app/apps/portal-web/next.config.js ./apps/portal-web/next.config.js
-
-# nginx config and startup scripts
 COPY --from=builder /usr/src/app/config ./config
 COPY --from=builder /usr/src/app/scripts ./scripts
 
 RUN cp config/nginx.coolify.conf /etc/nginx/nginx.conf \
     && mkdir -p /run/nginx \
-    && chmod +x scripts/start-all.sh
+    && chmod +x scripts/start-all.sh \
+    && rm -rf /root/.npm /tmp/*
 
 EXPOSE 3000
-# Remote WinBox proxy ports — one port per registered router (31000–31099).
-# In Coolify: add "31000-31099:31000-31099" in the service port-mappings UI
-# so that WinBox clients can reach arofi.net:310XX directly.
 EXPOSE 31000-31099
-# Default service to run. "all" = nginx + api + admin-web + portal-web in one
-# container (single domain). Set SERVICE_NAME=api|admin|portal to run just one.
 ENV SERVICE_NAME=all
-# Non-secret local default. Production still must provide DATABASE_URL.
 ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/arofi_dev?schema=public}
 
-# Start appropriate service based on SERVICE_NAME environment variable
 CMD if [ "$SERVICE_NAME" = "all" ]; then \
       sh scripts/start-all.sh; \
     elif [ "$SERVICE_NAME" = "api" ]; then \
       cd apps/api && \
-      if [ -n "$DATABASE_URL" ]; then npx prisma migrate deploy || true; fi && \
+      if [ -n "$DATABASE_URL" ]; then ./node_modules/.bin/prisma migrate deploy || true; fi && \
       (if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi); \
     elif [ "$SERVICE_NAME" = "admin" ]; then \
-      cd apps/admin-web && npm run start; \
+      server="$(find /usr/src/app/standalone/admin -type f -path '*/apps/admin-web/server.js' -print -quit)"; \
+      if [ -z "$server" ] && [ -f /usr/src/app/standalone/admin/server.js ]; then server=/usr/src/app/standalone/admin/server.js; fi; \
+      test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
     elif [ "$SERVICE_NAME" = "portal" ]; then \
-      cd apps/portal-web && npm run start; \
+      server="$(find /usr/src/app/standalone/portal -type f -path '*/apps/portal-web/server.js' -print -quit)"; \
+      if [ -z "$server" ] && [ -f /usr/src/app/standalone/portal/server.js ]; then server=/usr/src/app/standalone/portal/server.js; fi; \
+      test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
     elif [ "$SERVICE_NAME" = "nginx" ]; then \
       cp config/nginx.split.conf /etc/nginx/nginx.conf && \
       exec nginx -g 'daemon off;'; \
