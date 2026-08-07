@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
-# Keep MikroTik onboarding alive when a MAC-WinBox session is interrupted and
-# make every API-issued reconnect payload independent of tenant-local DNS.
-#
-# Fresh captive setup intentionally moves LAN/Wi-Fi interfaces onto the AROFi
-# hotspot bridge. A MAC-WinBox session using one of those interfaces can drop at
-# that exact point. Run the downloaded .rsc import as a RouterOS background job
-# so configuration continues after the operator's Layer-2 session ends.
+# Keep MikroTik onboarding alive when a MAC-WinBox session is interrupted while
+# preserving the tenant-local hotspot login URL returned by the API.
 
 from pathlib import Path
 
@@ -15,7 +10,7 @@ PORTAL_SERVICE = ROOT / "apps/api/src/modules/portal/portal.service.ts"
 ADMIN = ROOT / "apps/admin-web/src/components/RoutersManager.tsx"
 
 SENTINEL = "AROFi installation continues in background"
-RECONNECT_SENTINEL = "const safeLoginUrl = /\\.wifi(?=[:/]|$)/i.test(requestedLoginUrl)"
+RECONNECT_SENTINEL = "const reconnectLoginUrl = requestedLoginUrl"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -74,20 +69,18 @@ def patch_portal_service(text: str) -> str:
 """
     new = """    const requestedLoginUrl =
       loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login'
-    const safeLoginUrl = /\\.wifi(?=[:/]|$)/i.test(requestedLoginUrl)
-      ? 'http://10.55.0.1/login'
-      : requestedLoginUrl
+    const reconnectLoginUrl = requestedLoginUrl
 
     return {
-      loginUrl: safeLoginUrl,
+      loginUrl: reconnectLoginUrl,
       username,
       password,
       method: 'mikrotik-hotspot-post',
     }
 """
-    updated = replace_once(text, old, new, "numeric voucher reconnect gateway")
-    if RECONNECT_SENTINEL not in updated or "loginUrl: safeLoginUrl" not in updated:
-        raise RuntimeError("Portal reconnect payload did not receive the numeric gateway guard")
+    updated = replace_once(text, old, new, "local DNS voucher reconnect URL")
+    if RECONNECT_SENTINEL not in updated or "loginUrl: reconnectLoginUrl" not in updated:
+        raise RuntimeError("Portal reconnect payload did not preserve its hotspot login URL")
     return updated
 
 
@@ -121,7 +114,7 @@ def main() -> None:
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
-    print("MikroTik background installer, numeric reconnect gateway, and MAC-WinBox warning applied.")
+    print("MikroTik background installer and local hotspot reconnect URL applied.")
 
 
 if __name__ == "__main__":
