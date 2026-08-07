@@ -31,7 +31,8 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_compensation_ui.py \
     && python3 scripts/fix_support_ticket_workspace.py \
     && python3 scripts/apply_router_wan_port_support.py \
-    && python3 scripts/sanitize_mikrotik_command_output.py
+    && python3 scripts/sanitize_mikrotik_command_output.py \
+    && python3 scripts/apply_mikrotik_background_install.py
 
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
