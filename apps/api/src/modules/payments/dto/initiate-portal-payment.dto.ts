@@ -1,10 +1,20 @@
-import { PaymentNetwork } from '@prisma/client'
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator'
+import { PaymentMethod, PaymentNetwork } from '@prisma/client'
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator'
 
 export class InitiatePortalPaymentDto {
   @IsUUID()
   packageId: string
 
+  // A phone number remains required for internet activation, customer matching,
+  // and reconnecting the device even when the customer pays by card.
   @IsString()
   @IsNotEmpty()
   @MaxLength(32)
@@ -13,6 +23,20 @@ export class InitiatePortalPaymentDto {
   @IsEnum(PaymentNetwork)
   @IsNotEmpty()
   network: PaymentNetwork
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(190)
+  emailAddress?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  payerName?: string
 
   @IsOptional()
   @IsString()
