@@ -1,16 +1,14 @@
 import type { MetadataRoute } from 'next'
 import { fetchPublicApi } from '@/lib/api'
-import { docs } from './docs/[slug]/page'
 
 const SITE_URL = 'https://arofi.net'
 
-// Static public pages — update `lastmod` when page content changes significantly
 const staticPages: MetadataRoute.Sitemap = [
   {
     url: SITE_URL,
     changeFrequency: 'weekly',
-    priority: 1.0,
-    lastModified: new Date('2026-07-21'),
+    priority: 1,
+    lastModified: new Date('2026-08-07'),
   },
   {
     url: `${SITE_URL}/blog`,
@@ -21,8 +19,8 @@ const staticPages: MetadataRoute.Sitemap = [
   {
     url: `${SITE_URL}/docs`,
     changeFrequency: 'weekly',
-    priority: 0.8,
-    lastModified: new Date('2026-07-01'),
+    priority: 0.9,
+    lastModified: new Date('2026-08-07'),
   },
   {
     url: `${SITE_URL}/referral-program`,
@@ -45,21 +43,14 @@ const staticPages: MetadataRoute.Sitemap = [
 ]
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Docs pages — generated from the static docs config
-  const docEntries: MetadataRoute.Sitemap = Object.keys(docs).map((slug) => ({
-    url: `${SITE_URL}/docs/${slug}`,
-    changeFrequency: 'monthly' as const,
-    priority: 0.6,
-    lastModified: new Date('2026-07-01'),
-  }))
-
-  // Blog posts — fetched from the API (gracefully handles failure)
   let postEntries: MetadataRoute.Sitemap = []
+
   try {
     const posts = await fetchPublicApi<Array<{ slug: string; updatedAt: string }>>(
       '/blog/slugs',
       300,
     )
+
     postEntries = (posts ?? []).map((post) => ({
       url: `${SITE_URL}/${post.slug}`,
       lastModified: new Date(post.updatedAt),
@@ -67,8 +58,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.75,
     }))
   } catch {
-    // API unavailable during build — skip dynamic posts, static pages still included
+    // Keep the static sitemap available when the API is unavailable during build.
   }
 
-  return [...staticPages, ...docEntries, ...postEntries]
+  return [...staticPages, ...postEntries]
 }
