@@ -3,11 +3,11 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   BookOpen,
   CheckCircle2,
-  CircleAlert,
   Home,
   Info,
   Menu,
@@ -16,7 +16,9 @@ import {
 } from 'lucide-react'
 import { arofiBook, type BookBlock } from '@/content/arofi-book'
 
-const SWIPE_THRESHOLD = 64
+const SWIPE_THRESHOLD = 68
+
+type IndexedPage = { item: (typeof arofiBook)[number]; index: number }
 
 export default function DocumentationBook() {
   const [pageIndex, setPageIndex] = useState(0)
@@ -30,10 +32,12 @@ export default function DocumentationBook() {
 
   const page = arofiBook[pageIndex]
   const progress = ((pageIndex + 1) / arofiBook.length) * 100
+  const pageNumber = String(pageIndex + 1).padStart(2, '0')
+  const totalPages = String(arofiBook.length).padStart(2, '0')
 
-  const filteredPages = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
+  const filteredPages = useMemo<IndexedPage[]>(() => {
     const indexed = arofiBook.map((item, index) => ({ item, index }))
+    const normalized = query.trim().toLowerCase()
     if (!normalized) return indexed
 
     return indexed.filter(({ item }) => {
@@ -59,7 +63,7 @@ export default function DocumentationBook() {
     animationTimer.current = window.setTimeout(() => {
       setDirection(null)
       animationTimer.current = null
-    }, 440)
+    }, 460)
   }, [pageIndex])
 
   const previousPage = useCallback(() => openPage(pageIndex - 1, 'previous'), [openPage, pageIndex])
@@ -67,12 +71,12 @@ export default function DocumentationBook() {
 
   useEffect(() => {
     const slug = window.location.hash.replace('#', '')
-    const index = arofiBook.findIndex((item) => item.slug === slug)
-    if (index >= 0) setPageIndex(index)
+    const initialIndex = arofiBook.findIndex((item) => item.slug === slug)
+    if (initialIndex >= 0) setPageIndex(initialIndex)
   }, [])
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    function handleKeyDown(event: KeyboardEvent) {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
       if (event.key === 'ArrowLeft') previousPage()
       if (event.key === 'ArrowRight') nextPage()
@@ -89,26 +93,26 @@ export default function DocumentationBook() {
     }
   }, [])
 
-  function startDrag(clientX: number) {
+  function beginDrag(clientX: number) {
     dragStart.current = clientX
     setDragging(true)
     setDragX(0)
   }
 
-  function moveDrag(clientX: number) {
+  function updateDrag(clientX: number) {
     if (dragStart.current === null) return
-    const nextX = clientX - dragStart.current
-    setDragX(Math.max(-150, Math.min(150, nextX)))
+    const delta = clientX - dragStart.current
+    setDragX(Math.max(-170, Math.min(170, delta)))
   }
 
   function finishDrag() {
     if (dragStart.current === null) return
-    const finalX = dragX
+    const completedX = dragX
     dragStart.current = null
     setDragging(false)
 
-    if (finalX <= -SWIPE_THRESHOLD) nextPage()
-    else if (finalX >= SWIPE_THRESHOLD) previousPage()
+    if (completedX <= -SWIPE_THRESHOLD) nextPage()
+    else if (completedX >= SWIPE_THRESHOLD) previousPage()
     else setDragX(0)
   }
 
@@ -121,7 +125,7 @@ export default function DocumentationBook() {
           <img src="/logo.png" alt="AROFi" />
           <span>
             AROFi Handbook
-            <small>Product and operations documentation</small>
+            <small>Visual product and operations guide</small>
           </span>
         </Link>
 
@@ -143,45 +147,62 @@ export default function DocumentationBook() {
         <section className="book-stage">
           <div className="book-progress">
             <span>{page.chapter}</span>
-            <span className="book-progress-track"><span style={{ width: `${progress}%` }} /></span>
-            <span>{pageIndex + 1} / {arofiBook.length}</span>
+            <span className="book-progress-track" aria-hidden="true"><span style={{ width: `${progress}%` }} /></span>
+            <span>Page {pageNumber} / {totalPages}</span>
           </div>
 
-          <article
-            className={`book-page ${dragging ? 'dragging' : ''} ${direction === 'next' ? 'turn-next' : direction === 'previous' ? 'turn-previous' : ''}`}
-            style={{ transform: `translateX(${dragX}px) rotateY(${dragX * -0.025}deg)` }}
-            onPointerDown={(event) => {
-              if (event.pointerType === 'mouse' && event.button !== 0) return
-              event.currentTarget.setPointerCapture(event.pointerId)
-              startDrag(event.clientX)
-            }}
-            onPointerMove={(event) => moveDrag(event.clientX)}
-            onPointerUp={finishDrag}
-            onPointerCancel={finishDrag}
-          >
-            <div className="page-kicker">
-              <span>{page.chapter}</span>
-              <span className="page-audience">{page.audience}</span>
-            </div>
-            <h1>{page.title}</h1>
-            <p className="page-summary">{page.summary}</p>
-            <div className="book-blocks">
-              {page.blocks.map((block, index) => (
-                <RenderBlock block={block} key={`${page.slug}-${index}`} />
-              ))}
-            </div>
-          </article>
+          <div className="book-desk">
+            <article
+              className={`book-page ${dragging ? 'dragging' : ''} ${direction === 'next' ? 'turn-next' : direction === 'previous' ? 'turn-previous' : ''}`}
+              style={dragging || dragX !== 0 ? { transform: `translateX(${dragX}px) rotateY(${dragX * -0.025}deg)` } : undefined}
+              onPointerDown={(event) => {
+                if (event.pointerType === 'mouse' && event.button !== 0) return
+                if ((event.target as HTMLElement).closest('a,button,input,textarea,select')) return
+                event.currentTarget.setPointerCapture(event.pointerId)
+                beginDrag(event.clientX)
+              }}
+              onPointerMove={(event) => updateDrag(event.clientX)}
+              onPointerUp={finishDrag}
+              onPointerCancel={finishDrag}
+            >
+              <div className="page-fold" aria-hidden="true" />
+              <div className="page-header">
+                <div className="page-kicker">
+                  <span>{page.chapter}</span>
+                  <span className="page-audience">{page.audience}</span>
+                </div>
+                <h1>{page.title}</h1>
+                <p className="page-summary">{page.summary}</p>
+              </div>
+
+              <div className="book-blocks">
+                {page.blocks.map((block, index) => (
+                  <RenderBlock block={block} key={`${page.slug}-${index}`} />
+                ))}
+              </div>
+
+              <footer className="paper-footer">
+                <span>AROFi · AROSOFT Innovations Ltd</span>
+                <strong>{pageNumber}</strong>
+                <span>{page.title}</span>
+              </footer>
+            </article>
+          </div>
 
           <nav className="book-navigation" aria-label="Page navigation">
             <button type="button" className="book-nav-button" onClick={previousPage} disabled={pageIndex === 0}>
               <ArrowLeft size={16} />
-              <span><small>Previous</small><strong>{arofiBook[pageIndex - 1]?.title ?? 'Beginning'}</strong></span>
+              <span><small>Previous page</small><strong>{arofiBook[pageIndex - 1]?.title ?? 'Beginning'}</strong></span>
             </button>
 
-            <span className="book-page-number">Drag left for next · right for previous</span>
+            <div className="book-page-control">
+              <strong>{pageNumber}</strong>
+              <span>of {totalPages}</span>
+              <small>Drag left for next · right for previous</small>
+            </div>
 
             <button type="button" className="book-nav-button next" onClick={nextPage} disabled={pageIndex === arofiBook.length - 1}>
-              <span><small>Next</small><strong>{arofiBook[pageIndex + 1]?.title ?? 'End'}</strong></span>
+              <span><small>Next page</small><strong>{arofiBook[pageIndex + 1]?.title ?? 'End'}</strong></span>
               <ArrowRight size={16} />
             </button>
           </nav>
@@ -191,7 +212,7 @@ export default function DocumentationBook() {
       <div className={`contents-overlay ${contentsOpen ? 'open' : ''}`} onClick={() => setContentsOpen(false)}>
         <aside className="contents-drawer" onClick={(event) => event.stopPropagation()}>
           <div className="contents-drawer-title">
-            <strong>Contents</strong>
+            <strong>Book contents</strong>
             <button type="button" onClick={() => setContentsOpen(false)} aria-label="Close contents"><X size={19} /></button>
           </div>
           <ContentsHeader query={query} setQuery={setQuery} />
@@ -203,6 +224,7 @@ export default function DocumentationBook() {
 }
 
 function blockToSearchText(block: BookBlock) {
+  if (block.type === 'image') return `${block.alt} ${block.caption}`
   if ('text' in block) return block.text
   if ('items' in block) return block.items.join(' ')
   if (block.type === 'table') return [...block.headers, ...block.rows.flat()].join(' ')
@@ -214,33 +236,25 @@ function ContentsHeader({ query, setQuery }: { query: string; setQuery: (value: 
     <div className="contents-head">
       <div className="contents-title">
         <span><BookOpen size={14} /> Contents</span>
-        <small>{arofiBook.length} chapters</small>
+        <small>{arofiBook.length} pages</small>
       </div>
       <div className="contents-search">
         <Search size={14} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search handbook" aria-label="Search handbook" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search the book" aria-label="Search the handbook" />
         {query ? <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button> : null}
       </div>
     </div>
   )
 }
 
-function ContentsList({
-  pages,
-  pageIndex,
-  openPage,
-}: {
-  pages: Array<{ item: (typeof arofiBook)[number]; index: number }>
-  pageIndex: number
-  openPage: (index: number) => void
-}) {
+function ContentsList({ pages, pageIndex, openPage }: { pages: IndexedPage[]; pageIndex: number; openPage: (index: number) => void }) {
   return (
     <div className="contents-list">
-      {pages.length === 0 ? <div className="contents-empty">No chapter matches this search.</div> : null}
+      {pages.length === 0 ? <div className="contents-empty">No page matches this search.</div> : null}
       {pages.map(({ item, index }) => (
         <button type="button" className={`contents-item ${index === pageIndex ? 'active' : ''}`} key={item.slug} onClick={() => openPage(index)}>
           <span className="contents-number">{String(index + 1).padStart(2, '0')}</span>
-          <span className="contents-copy"><strong>{item.title}</strong><small>{item.audience}</small></span>
+          <span className="contents-copy"><strong>{item.title}</strong><small>{item.chapter} · {item.audience}</small></span>
         </button>
       ))}
     </div>
@@ -253,6 +267,15 @@ function RenderBlock({ block }: { block: BookBlock }) {
   if (block.type === 'h3') return <h3>{block.text}</h3>
   if (block.type === 'ul') return <ul>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>
   if (block.type === 'ol') return <ol>{block.items.map((item) => <li key={item}>{item}</li>)}</ol>
+
+  if (block.type === 'image') {
+    return (
+      <figure className="book-figure">
+        <img src={block.src} alt={block.alt} loading="lazy" />
+        <figcaption>{block.caption}</figcaption>
+      </figure>
+    )
+  }
 
   if (block.type === 'table') {
     return (
@@ -269,39 +292,43 @@ function RenderBlock({ block }: { block: BookBlock }) {
     return <div className="book-code">{block.title ? <div className="book-code-title">{block.title}</div> : null}<pre>{block.lines.join('\n')}</pre></div>
   }
 
-  const Icon = block.tone === 'success' ? CheckCircle2 : block.tone === 'warning' ? CircleAlert : Info
+  const Icon = block.tone === 'success' ? CheckCircle2 : block.tone === 'warning' ? AlertCircle : Info
   return <aside className={`book-callout ${block.tone}`}><Icon size={18} /><div><strong>{block.title}</strong><p>{block.text}</p></div></aside>
 }
 
 function BookStyles() {
   return (
     <style>{`
-      :root{--book-ink:#172033;--book-muted:#657187;--book-line:#d8deea;--book-paper:#fffdf8;--book-blue:#2463eb;--book-bg:#eef2f7}
+      :root{--book-ink:#172033;--book-muted:#667085;--book-line:#d7deea;--book-paper:#fffdf8;--book-blue:#2463eb;--book-bg:#edf2f7}
       *{box-sizing:border-box}
-      .docs-book-shell{min-height:100vh;background:radial-gradient(circle at 15% 0%,#fff 0,transparent 35%),linear-gradient(135deg,#edf1f7,#f8fafc 48%,#e9eef6);color:var(--book-ink);font-family:"Segoe UI",SegoeUI,Roboto,"Helvetica Neue",Arial,sans-serif;padding-bottom:34px}
-      .book-topbar{height:64px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 24px;border-bottom:1px solid rgba(148,163,184,.35);background:rgba(255,255,255,.84);backdrop-filter:blur(18px);position:sticky;top:0;z-index:40}
+      .docs-book-shell{min-height:100vh;background:radial-gradient(circle at 18% 0%,#fff 0,transparent 34%),linear-gradient(135deg,#e8edf5,#f7f9fc 48%,#e7edf6);color:var(--book-ink);font-family:"Segoe UI",SegoeUI,Roboto,"Helvetica Neue",Arial,sans-serif;padding-bottom:38px}
+      .book-topbar{height:64px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 24px;border-bottom:1px solid rgba(148,163,184,.35);background:rgba(255,255,255,.88);backdrop-filter:blur(18px);position:sticky;top:0;z-index:40}
       .book-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--book-ink);font-size:15px;font-weight:750}.book-brand img{width:31px;height:31px;object-fit:contain}.book-brand small{font-size:11px;color:var(--book-muted);font-weight:600;display:block;margin-top:1px}
-      .book-top-actions{display:flex;align-items:center;gap:8px}.book-top-actions a,.book-top-actions button{display:inline-flex;align-items:center;gap:6px;height:36px;border:1px solid var(--book-line);background:#fff;color:#334155;border-radius:9px;padding:0 12px;font:600 12.5px/1 "Segoe UI",sans-serif;text-decoration:none;cursor:pointer}.mobile-contents-button{display:none!important}
-      .book-layout{width:min(1440px,calc(100% - 36px));margin:24px auto 0;display:grid;grid-template-columns:282px minmax(0,1fr);gap:22px;align-items:start}
-      .book-contents{position:sticky;top:88px;max-height:calc(100vh - 112px);display:flex;flex-direction:column;border:1px solid rgba(148,163,184,.36);border-radius:15px;background:rgba(255,255,255,.86);box-shadow:0 18px 45px rgba(15,23,42,.06);overflow:hidden}
+      .book-top-actions{display:flex;align-items:center;gap:8px}.book-top-actions a,.book-top-actions button{display:inline-flex;align-items:center;gap:6px;height:36px;border:1px solid var(--book-line);background:#fff;color:#344054;border-radius:9px;padding:0 12px;font:600 12.5px/1 "Segoe UI",sans-serif;text-decoration:none;cursor:pointer}.mobile-contents-button{display:none!important}
+      .book-layout{width:min(1460px,calc(100% - 36px));margin:24px auto 0;display:grid;grid-template-columns:286px minmax(0,1fr);gap:24px;align-items:start}
+      .book-contents{position:sticky;top:88px;max-height:calc(100vh - 112px);display:flex;flex-direction:column;border:1px solid rgba(148,163,184,.38);border-radius:16px;background:rgba(255,255,255,.9);box-shadow:0 18px 45px rgba(15,23,42,.07);overflow:hidden}
       .contents-head{padding:16px;border-bottom:1px solid var(--book-line)}.contents-title{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:750;margin-bottom:11px}.contents-title span{display:flex;align-items:center;gap:7px}.contents-title small{font-size:10.5px;color:var(--book-muted);font-weight:600}
       .contents-search{position:relative}.contents-search>svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8290a6}.contents-search input{width:100%;height:37px;border:1px solid var(--book-line);border-radius:9px;background:#f8fafc;padding:0 31px 0 34px;font:13px "Segoe UI",sans-serif;outline:none;color:var(--book-ink)}.contents-search input:focus{border-color:#8db1ff;box-shadow:0 0 0 3px rgba(36,99,235,.1)}.contents-search button{position:absolute;right:7px;top:7px;width:23px;height:23px;border:0;background:transparent;color:#7a879a;cursor:pointer;padding:3px}
-      .contents-list{overflow:auto;padding:8px}.contents-item{width:100%;display:grid;grid-template-columns:32px minmax(0,1fr);gap:9px;align-items:start;border:0;background:transparent;border-radius:9px;padding:9px;text-align:left;color:#344054;cursor:pointer;font-family:inherit}.contents-item:hover{background:#f3f6fa}.contents-item.active{background:#edf4ff;color:#174ebd}.contents-number{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:#edf1f6;color:#66758a;font-size:10.5px;font-weight:750}.contents-item.active .contents-number{background:#d9e8ff;color:#1753ca}.contents-copy strong{display:block;font-size:12.7px;line-height:1.3;font-weight:680}.contents-copy small{display:block;font-size:10.5px;color:#8490a2;margin-top:3px;line-height:1.3}.contents-empty{padding:28px 16px;text-align:center;color:var(--book-muted);font-size:12px}
-      .book-stage{min-width:0;perspective:1800px}.book-progress{display:flex;align-items:center;gap:12px;margin:0 2px 10px;color:#69778b;font-size:11.5px}.book-progress-track{height:3px;flex:1;background:#dce3ed;border-radius:999px;overflow:hidden}.book-progress-track span{display:block;height:100%;background:linear-gradient(90deg,#2463eb,#4c8dff);transition:width .35s ease}
-      .book-page{position:relative;min-height:760px;background:var(--book-paper);border:1px solid rgba(148,163,184,.42);border-radius:4px 15px 15px 4px;box-shadow:0 28px 70px rgba(15,23,42,.13),inset 18px 0 35px rgba(37,46,63,.035);padding:56px clamp(34px,6vw,92px) 46px;overflow:hidden;touch-action:pan-y;transition:transform .2s ease,box-shadow .2s ease}.book-page.dragging{transition:none;cursor:grabbing}.book-page.turn-next{animation:pageNext .44s ease}.book-page.turn-previous{animation:pagePrevious .44s ease}
-      @keyframes pageNext{0%{opacity:.45;transform:translateX(30px) rotateY(6deg)}100%{opacity:1;transform:translateX(0) rotateY(0)}}@keyframes pagePrevious{0%{opacity:.45;transform:translateX(-30px) rotateY(-6deg)}100%{opacity:1;transform:translateX(0) rotateY(0)}}
-      .book-page::before{content:"";position:absolute;top:-1px;right:-1px;width:58px;height:58px;background:linear-gradient(225deg,var(--book-bg) 0 49%,#d8dee9 50%,#f7f4ec 52% 70%,rgba(255,255,255,0) 71%);filter:drop-shadow(-3px 4px 3px rgba(15,23,42,.13));border-top-right-radius:15px;pointer-events:none}.book-page::after{content:"";position:absolute;left:13px;top:22px;bottom:22px;width:1px;background:linear-gradient(transparent,#e5e0d7 9%,#e5e0d7 91%,transparent);pointer-events:none}
-      .page-kicker{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:13px;color:#65748a;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.09em}.page-audience{border:1px solid #d9e0ea;background:#f8fafc;border-radius:999px;padding:4px 8px;text-transform:none;letter-spacing:0;color:#637087;font-weight:600}
-      .book-page h1{font-size:clamp(31px,4.2vw,50px);line-height:1.08;letter-spacing:-.035em;margin:0;color:#111827;font-weight:760;max-width:830px}.page-summary{font-size:16px;line-height:1.65;color:#5c687a;margin:17px 0 33px;max-width:800px;padding-bottom:26px;border-bottom:1px solid #e4e0d9}
-      .book-blocks{max-width:860px}.book-blocks h2{font-size:23px;line-height:1.25;letter-spacing:-.018em;margin:34px 0 12px;color:#172033;font-weight:720}.book-blocks h3{font-size:17px;margin:25px 0 9px;font-weight:700}.book-blocks p{font-size:15px;line-height:1.78;color:#3d4859;margin:0 0 15px}.book-blocks ul,.book-blocks ol{margin:8px 0 20px;padding-left:24px;color:#3d4859}.book-blocks li{font-size:14.7px;line-height:1.68;margin:7px 0;padding-left:3px}.book-blocks li::marker{color:#2764df;font-weight:750}
-      .book-table-wrap{overflow:auto;margin:18px 0 25px;border:1px solid #dfe3ea;border-radius:10px}.book-table{width:100%;border-collapse:collapse;min-width:540px;background:#fff}.book-table th{background:#f4f7fb;color:#344054;font-size:11px;text-transform:uppercase;letter-spacing:.055em;text-align:left;padding:11px 13px;border-bottom:1px solid #dfe3ea}.book-table td{font-size:13px;color:#465266;padding:11px 13px;border-bottom:1px solid #e8ebf0;vertical-align:top;line-height:1.5}.book-table tr:last-child td{border-bottom:0}
-      .book-callout{display:grid;grid-template-columns:25px minmax(0,1fr);gap:10px;border:1px solid #cbdcfb;background:#f4f8ff;border-radius:11px;padding:14px 15px;margin:21px 0}.book-callout.success{border-color:#bfe8d0;background:#f1fbf5}.book-callout.warning{border-color:#f2d198;background:#fff9ec}.book-callout svg{margin-top:1px;color:#2764df}.book-callout.success svg{color:#17834b}.book-callout.warning svg{color:#b46a09}.book-callout strong{display:block;font-size:13px;margin-bottom:3px}.book-callout p{font-size:13.2px;line-height:1.55;margin:0;color:#536075}
-      .book-code{margin:18px 0 24px;border-radius:11px;overflow:hidden;background:#152034;color:#dce8ff;border:1px solid #263651}.book-code-title{padding:9px 13px;background:#1d2a42;border-bottom:1px solid #30415f;color:#aebed7;font-size:11px;font-weight:650}.book-code pre{margin:0;padding:15px;overflow:auto;font:12.5px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace}
-      .book-navigation{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin-top:14px}.book-nav-button{display:flex;align-items:center;gap:10px;min-height:52px;border:1px solid rgba(148,163,184,.45);background:rgba(255,255,255,.82);border-radius:11px;padding:8px 12px;color:#344054;font-family:inherit;cursor:pointer;text-align:left}.book-nav-button.next{justify-self:end;text-align:right}.book-nav-button:disabled{opacity:.4;cursor:not-allowed}.book-nav-button small{display:block;font-size:10px;color:#7b8798;margin-bottom:2px}.book-nav-button strong{display:block;font-size:12.5px;font-weight:680}.book-page-number{font-size:11.5px;color:#6f7c8f;white-space:nowrap}
-      .contents-overlay{display:none}
-      @media(max-width:900px){.book-layout{grid-template-columns:1fr;width:min(100% - 24px,980px);margin-top:14px}.book-contents{display:none}.mobile-contents-button{display:inline-flex!important}.book-page{min-height:720px;padding:44px clamp(25px,7vw,58px) 38px}.contents-overlay{display:block;position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(3px);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}.contents-overlay.open{opacity:1;pointer-events:auto}.contents-drawer{position:absolute;left:0;top:0;bottom:0;width:min(86vw,340px);background:#fff;transform:translateX(-100%);transition:transform .25s ease;display:flex;flex-direction:column}.contents-overlay.open .contents-drawer{transform:translateX(0)}.contents-drawer-title{height:61px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--book-line)}.contents-drawer-title button{border:0;background:transparent;padding:7px;color:#475569}.contents-drawer .contents-list{flex:1}}
-      @media(max-width:600px){.book-topbar{height:58px;padding:0 12px}.book-brand small{display:none}.book-top-actions a{padding:0 9px}.book-top-actions a:first-of-type{display:none}.book-layout{width:100%;margin-top:0}.book-progress{padding:9px 13px;margin:0;background:#eef2f7}.book-page{border-radius:0;min-height:calc(100vh - 125px);border-left:0;border-right:0;padding:34px 23px 31px;box-shadow:none}.book-page::after{display:none}.book-page h1{font-size:31px}.page-summary{font-size:14.5px;margin-bottom:25px;padding-bottom:20px}.book-blocks h2{font-size:20px;margin-top:28px}.book-blocks p,.book-blocks li{font-size:14px}.book-navigation{padding:0 12px;margin:12px 0}.book-nav-button{max-width:42%;min-height:48px}.book-nav-button strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:125px}.book-nav-button small{display:none}.book-page-number{font-size:10.5px}.page-audience{display:none}}
-      @media(prefers-reduced-motion:reduce){.book-page,.contents-drawer,.contents-overlay{animation:none!important;transition:none!important}.book-page{transform:none!important}}
+      .contents-list{overflow:auto;padding:8px}.contents-item{width:100%;display:grid;grid-template-columns:34px minmax(0,1fr);gap:9px;align-items:start;border:0;background:transparent;border-radius:10px;padding:9px;text-align:left;color:#344054;cursor:pointer;font-family:inherit}.contents-item:hover{background:#f2f5f9}.contents-item.active{background:#eaf2ff;color:#174ebd}.contents-number{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:#edf1f6;color:#66758a;font-size:10.5px;font-weight:800}.contents-item.active .contents-number{background:#d7e7ff;color:#1753ca}.contents-copy strong{display:block;font-size:12.6px;line-height:1.32;font-weight:680}.contents-copy small{display:block;margin-top:3px;color:#8290a3;font-size:9.8px;font-weight:600}.contents-empty{padding:28px 12px;text-align:center;color:var(--book-muted);font-size:12px}
+      .book-stage{min-width:0}.book-progress{display:grid;grid-template-columns:auto minmax(100px,1fr) auto;gap:14px;align-items:center;margin:0 4px 12px;color:#5e6b7f;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.book-progress-track{height:4px;border-radius:999px;background:#d6deea;overflow:hidden}.book-progress-track span{display:block;height:100%;background:linear-gradient(90deg,#2463eb,#60a5fa);border-radius:inherit;transition:width .28s ease}
+      .book-desk{padding:12px 18px 22px;border-radius:24px;background:linear-gradient(145deg,rgba(255,255,255,.36),rgba(105,119,141,.08));perspective:1800px}
+      .book-page{position:relative;min-height:760px;border:1px solid #d8d5cc;border-radius:5px 16px 16px 5px;background:linear-gradient(90deg,#f6f1e8 0,#fffdf8 2.4%,#fffdf8 97%,#f2eee5 100%);box-shadow:0 24px 55px rgba(15,23,42,.16),inset 18px 0 22px rgba(88,75,53,.035);padding:52px 72px 82px;transform-origin:left center;transition:transform .2s ease,box-shadow .2s ease;overflow:hidden;touch-action:pan-y;cursor:grab}.book-page.dragging{transition:none;cursor:grabbing;box-shadow:0 30px 70px rgba(15,23,42,.23)}
+      .book-page::before{content:"";position:absolute;left:22px;top:0;bottom:0;width:1px;background:rgba(161,143,111,.18);box-shadow:5px 0 12px rgba(74,61,41,.07)}.book-page::after{content:"";position:absolute;right:0;top:0;bottom:0;width:8px;background:repeating-linear-gradient(90deg,#e6e0d5 0 1px,#fffdf8 1px 2px);opacity:.7}
+      .page-fold{position:absolute;right:0;top:0;width:70px;height:70px;background:linear-gradient(225deg,#e8edf5 0 48%,#d0d7e3 49% 51%,#f6f1e8 52% 100%);clip-path:polygon(0 0,100% 100%,100% 0);filter:drop-shadow(-5px 7px 5px rgba(15,23,42,.12));pointer-events:none}
+      .turn-next{animation:turnNext .46s cubic-bezier(.2,.75,.2,1)}.turn-previous{animation:turnPrevious .46s cubic-bezier(.2,.75,.2,1)}@keyframes turnNext{0%{transform:rotateY(-7deg) translateX(18px);opacity:.7}100%{transform:none;opacity:1}}@keyframes turnPrevious{0%{transform:rotateY(7deg) translateX(-18px);opacity:.7}100%{transform:none;opacity:1}}
+      .page-header{padding-right:34px;border-bottom:1px solid #ddd8cf;padding-bottom:24px;margin-bottom:28px}.page-kicker{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#2463eb;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.13em}.page-audience{color:#6f7b8e;letter-spacing:.05em}.book-page h1{font-size:clamp(32px,4vw,52px);line-height:1.07;letter-spacing:-.038em;margin:17px 0 12px;color:#172033;font-weight:760;max-width:920px}.page-summary{font-size:18px!important;line-height:1.55!important;color:#607087!important;margin:0!important;max-width:900px}
+      .book-blocks{max-width:1000px;margin:0 auto}.book-blocks>p{font-size:16px;line-height:1.75;color:#344054;margin:0 0 18px}.book-blocks h2{font-size:25px;line-height:1.25;margin:34px 0 13px;color:#172033;letter-spacing:-.018em}.book-blocks h3{font-size:19px;margin:25px 0 10px;color:#22304a}.book-blocks ul,.book-blocks ol{margin:0 0 22px;padding-left:25px;color:#344054}.book-blocks li{font-size:15.5px;line-height:1.68;padding-left:5px;margin:7px 0}.book-blocks li::marker{color:#2463eb;font-weight:750}
+      .book-figure{margin:0 0 30px;border:1px solid #d8dfeb;border-radius:16px;background:#fff;overflow:hidden;box-shadow:0 12px 28px rgba(15,23,42,.08)}.book-figure img{display:block;width:100%;height:auto;aspect-ratio:1400/760;object-fit:cover;background:#eef3f9}.book-figure figcaption{padding:12px 16px;border-top:1px solid #e3e8f0;color:#667085;font-size:12.5px;line-height:1.5;background:#fbfcfe}
+      .book-callout{display:grid;grid-template-columns:22px minmax(0,1fr);gap:11px;margin:24px 0;padding:16px 18px;border:1px solid #cfe0ff;border-radius:12px;background:#f2f7ff;color:#24508f}.book-callout.success{border-color:#bce8cc;background:#f0fbf4;color:#087443}.book-callout.warning{border-color:#f4d7a3;background:#fff9ed;color:#9a5a08}.book-callout svg{margin-top:2px}.book-callout strong{display:block;font-size:14px;margin-bottom:4px}.book-callout p{margin:0;font-size:13.5px;line-height:1.58;color:inherit}
+      .book-table-wrap{overflow:auto;margin:20px 0 28px;border:1px solid #d8dfeb;border-radius:12px;background:#fff}.book-table{width:100%;border-collapse:collapse;min-width:560px}.book-table th,.book-table td{padding:12px 14px;border-bottom:1px solid #e5e9f0;text-align:left;vertical-align:top;font-size:13px;line-height:1.45}.book-table th{background:#f3f6fa;color:#344054;font-weight:750}.book-table td{color:#475467}.book-table tr:last-child td{border-bottom:0}
+      .book-code{margin:20px 0 26px;border-radius:12px;background:#111827;color:#e5eefb;overflow:hidden;box-shadow:0 12px 25px rgba(15,23,42,.12)}.book-code-title{padding:10px 14px;background:#1f2937;color:#a8c6ff;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.08em}.book-code pre{margin:0;padding:17px;overflow:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+      .paper-footer{position:absolute;left:72px;right:72px;bottom:27px;padding-top:13px;border-top:1px solid #ddd8cf;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;color:#8b877f;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em}.paper-footer strong{display:grid;place-items:center;width:36px;height:36px;border:1px solid #cfc8bb;border-radius:50%;font-size:13px;color:#4d5665;background:#fffdf8}.paper-footer span:last-child{text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .book-navigation{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:14px;margin-top:14px}.book-nav-button{min-width:0;display:flex;align-items:center;gap:11px;border:1px solid rgba(148,163,184,.48);border-radius:12px;background:rgba(255,255,255,.86);padding:11px 13px;color:#344054;cursor:pointer;text-align:left;font-family:inherit}.book-nav-button.next{justify-content:flex-end;text-align:right}.book-nav-button:disabled{opacity:.42;cursor:not-allowed}.book-nav-button span{min-width:0}.book-nav-button small{display:block;color:#8290a3;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}.book-nav-button strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.book-page-control{text-align:center;min-width:150px}.book-page-control strong{font-size:24px;color:#172033}.book-page-control span{font-size:12px;color:#667085;margin-left:5px}.book-page-control small{display:block;margin-top:3px;font-size:9.5px;color:#8290a3}
+      .contents-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.48);z-index:70}.contents-overlay.open{display:block}.contents-drawer{width:min(360px,90vw);height:100%;background:#fff;margin-left:auto;display:flex;flex-direction:column;box-shadow:-20px 0 50px rgba(15,23,42,.2)}.contents-drawer-title{height:58px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--book-line)}.contents-drawer-title button{border:0;background:transparent;padding:7px;color:#667085;cursor:pointer}
+      @media(max-width:1040px){.book-layout{grid-template-columns:1fr}.book-contents{display:none}.mobile-contents-button{display:inline-flex!important}.book-page{padding:46px 52px 78px}.paper-footer{left:52px;right:52px}}
+      @media(max-width:720px){.book-topbar{padding:0 14px}.book-top-actions>a:first-of-type{display:none}.book-brand small{display:none}.book-layout{width:calc(100% - 18px);margin-top:12px}.book-progress{grid-template-columns:auto 1fr;font-size:9.5px}.book-progress>span:last-child{display:none}.book-desk{padding:5px 2px 12px;border-radius:14px}.book-page{min-height:650px;padding:34px 23px 75px;border-radius:4px 11px 11px 4px}.book-page::before{left:8px}.page-fold{width:48px;height:48px}.page-header{padding-right:18px;margin-bottom:22px}.book-page h1{font-size:31px}.page-summary{font-size:15.5px!important}.book-blocks>p{font-size:14.5px}.book-blocks h2{font-size:21px;margin-top:28px}.book-blocks li{font-size:14px}.book-figure{margin-left:-6px;margin-right:-6px;border-radius:11px}.paper-footer{left:23px;right:23px;bottom:20px}.paper-footer span{display:none}.paper-footer{grid-template-columns:1fr;justify-items:center}.book-navigation{grid-template-columns:1fr 78px 1fr;gap:7px}.book-nav-button{padding:9px}.book-nav-button strong{display:none}.book-nav-button small{margin:0}.book-page-control{min-width:0}.book-page-control small{display:none}}
+      @media(max-width:460px){.book-top-actions a{display:none}.book-top-actions button{height:34px;padding:0 9px}.book-brand{font-size:13px}.page-kicker{font-size:9.5px}.book-page h1{font-size:27px}.book-table th,.book-table td{padding:10px;font-size:12px}}
+      @media(prefers-reduced-motion:reduce){.book-page,.book-progress-track span{transition:none}.turn-next,.turn-previous{animation:none}}
     `}</style>
   )
 }
