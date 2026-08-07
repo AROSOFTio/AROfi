@@ -125,7 +125,7 @@ def patch_mikrotik_service(text: str) -> str:
         (
             '      `  :foreach r in=[/ip firewall filter find comment="AROFi WAN mgmt block"] do={ /ip firewall filter move $r destination=0 }`,',
             '''      `  :local arofiWanMgmtAnchor [/ip firewall filter find chain=input dynamic=no]`,
-      `  :if ([:len $arfiWanMgmtAnchor] > 0) do={ :set arofiWanMgmtAnchor [:pick $arofiWanMgmtAnchor 0]; :foreach r in=[/ip firewall filter find comment="AROFi WAN mgmt block"] do={ :do { /ip firewall filter move $r destination=$arofiWanMgmtAnchor } on-error={} } }`,''',
+      `  :if ([:len $arofiWanMgmtAnchor] > 0) do={ :set arofiWanMgmtAnchor [:pick $arofiWanMgmtAnchor 0]; :foreach r in=[/ip firewall filter find comment="AROFi WAN mgmt block"] do={ :do { /ip firewall filter move $r destination=$arofiWanMgmtAnchor } on-error={} } }`,''',
             "WAN management firewall ordering",
         ),
         (
