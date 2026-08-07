@@ -165,10 +165,12 @@ def patch_mikrotik_service(text: str) -> str:
         if sentinel not in text:
             raise RuntimeError(f"MikroTik provisioning safety sentinel missing: {sentinel}")
 
+    # Match the executable RouterOS command, not explanatory TypeScript comments
+    # that may mention the text "destination=0" while describing the old behavior.
     forbidden = [
         "dst-address=0.0.0.0/0 active=yes",
         "# 3d-2. Put wired LAN ports on the captive hotspot bridge too",
-        "destination=0",
+        "/ip firewall filter move $r destination=0",
     ]
     for unsafe in forbidden:
         if unsafe in text:
