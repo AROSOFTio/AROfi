@@ -1,6 +1,6 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { PaymentProvider } from '@prisma/client'
+import { PaymentMethod, PaymentProvider } from '@prisma/client'
 import {
   CollectPaymentInput,
   PaymentCollectionProvider,
@@ -82,13 +82,23 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
   }
 
   async collectPayment(input: CollectPaymentInput): Promise<PaymentProviderResult> {
+    const method = input.method ?? PaymentMethod.MOBILE_MONEY
+    const isCard = method === PaymentMethod.CARD
+
+    if (isCard && !input.emailAddress?.trim()) {
+      throw new BadRequestException('Customer email is required for ioTec card payment')
+    }
+    if (isCard && input.amountUgx < 500) {
+      throw new BadRequestException('ioTec card payments must be at least UGX 500')
+    }
+
     const request = {
       category: 'MobileMoney',
-      currency: input.currency || 'UGX',
+      currency: 'UGX',
       walletId: this.required('IOTEC_WALLET_ID'),
       externalId: input.externalReference,
-      payer: this.normalizePhone(input.phoneNumber),
-      payerName: input.customerReference || undefined,
+      payer: isCard ? input.emailAddress!.trim().toLowerCase() : this.normalizePhone(input.phoneNumber),
+      payerName: input.payerName || input.customerReference || undefined,
       payerNote: input.narrative,
       amount: input.amountUgx,
       payeeNote: input.narrative,
@@ -98,10 +108,12 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
     }
 
     return this.requestTransaction(
-      '/api/collections/collect',
+      isCard ? '/api/collections/collect/card' : '/api/collections/collect',
       request,
       input.externalReference,
-      'Payment request sent. Enter your Mobile Money PIN to approve.',
+      isCard
+        ? 'Card checkout created. Continue to the secure Visa/Mastercard page.'
+        : 'Payment request sent. Enter your Mobile Money PIN to approve.',
     )
   }
 
@@ -110,9 +122,13 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
   }
 
   async sendMoney(input: SendMoneyInput): Promise<PaymentProviderResult> {
+    if (input.amountUgx < 500) {
+      throw new BadRequestException('ioTec disbursements must be at least UGX 500')
+    }
+
     const request = {
       category: 'MobileMoney',
-      currency: input.currency || 'UGX',
+      currency: 'UGX',
       walletId: this.required('IOTEC_WALLET_ID'),
       externalId: input.externalReference,
       payee: this.normalizePhone(input.phoneNumber),
@@ -131,7 +147,7 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
   }
 
   async getDisbursementStatus(referenceId: string): Promise<PaymentProviderResult> {
-    return this.getTransaction(`/api/disbursements/status/${encodeURIComponent(referenceId)}`, referenceId)
+    return this.getTransaction(`/api/disbursements/external-id/${encodeURIComponent(referenceId)}`, referenceId)
   }
 
   async handleWebhook(payload: Record<string, unknown>): Promise<ProviderWebhookResult> {
@@ -168,8 +184,10 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
 
       if (!response.ok) {
         throw new ServiceUnavailableException(
-          transaction.statusMessage || transaction.message || transaction.code ||
-          `ioTec Pay request failed with HTTP ${response.status}`,
+          transaction.statusMessage ||
+            transaction.message ||
+            transaction.code ||
+            `ioTec Pay request failed with HTTP ${response.status}`,
         )
       }
 
@@ -185,7 +203,7 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
         `ioTec Pay request failed for ${externalReference}`,
         error instanceof Error ? error.stack : undefined,
       )
-      throw error instanceof ServiceUnavailableException
+      throw error instanceof BadRequestException || error instanceof ServiceUnavailableException
         ? error
         : new ServiceUnavailableException(
             error instanceof Error ? error.message : 'Unable to contact ioTec Pay',
@@ -203,8 +221,10 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
       const transaction = this.parseJson<IotecTransaction>(rawResponse)
       if (!response.ok) {
         throw new ServiceUnavailableException(
-          transaction.statusMessage || transaction.message || transaction.code ||
-          `ioTec Pay status request failed with HTTP ${response.status}`,
+          transaction.statusMessage ||
+            transaction.message ||
+            transaction.code ||
+            `ioTec Pay status request failed with HTTP ${response.status}`,
         )
       }
       return this.mapResult(transaction, referenceId, rawResponse)
@@ -231,18 +251,27 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
       status: transactionStatus === 'FAILED' ? 'FAILED' : 'OK',
       statusCode: transactionStatus === 'COMPLETED' ? 0 : transactionStatus === 'FAILED' ? -1 : 1,
       transactionStatus,
-      transactionReference: this.stringValue(transaction.id || transaction.vendorTransactionId) || undefined,
+      transactionReference:
+        this.stringValue(transaction.id || transaction.vendorTransactionId) || undefined,
       merchantReference: this.stringValue(transaction.externalId) || undefined,
       mnoTransactionReferenceId: this.stringValue(transaction.vendorTransactionId) || undefined,
-      statusMessage: this.stringValue(transaction.statusMessage || transaction.message || transaction.status) || undefined,
-      errorMessageCode: transactionStatus === 'FAILED' ? this.stringValue(transaction.statusCode || transaction.code) || undefined : undefined,
-      errorMessage: transactionStatus === 'FAILED' ? this.stringValue(transaction.statusMessage || transaction.message) || undefined : undefined,
+      statusMessage:
+        this.stringValue(transaction.statusMessage || transaction.message || transaction.status) || undefined,
+      errorMessageCode:
+        transactionStatus === 'FAILED'
+          ? this.stringValue(transaction.statusCode || transaction.code) || undefined
+          : undefined,
+      errorMessage:
+        transactionStatus === 'FAILED'
+          ? this.stringValue(transaction.statusMessage || transaction.message) || undefined
+          : undefined,
       amount: transaction.amount == null ? undefined : String(transaction.amount),
       currencyCode: this.stringValue(transaction.currency) || undefined,
       transactionInitiationDate: this.stringValue(transaction.createdAt) || undefined,
       transactionCompletionDate: this.stringValue(transaction.processedAt) || undefined,
       payerName: this.stringValue(transaction.payerName || transaction.payeeName) || undefined,
-      checkoutUrl: this.stringValue(transaction.cardRedirectUrl || transaction.redirectUrl) || undefined,
+      checkoutUrl:
+        this.stringValue(transaction.cardRedirectUrl || transaction.redirectUrl) || undefined,
       rawRequest,
       rawResponse,
     }
@@ -251,11 +280,14 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
   private mapStatus(status?: string) {
     switch ((status ?? '').trim().toUpperCase()) {
       case 'SUCCESS':
+      case 'SUCCESSFUL':
+      case 'COMPLETED':
         return 'COMPLETED'
       case 'FAILED':
       case 'ROLLEDBACK':
       case 'CANCELLED':
       case 'REJECTED':
+      case 'DECLINED':
         return 'FAILED'
       default:
         return 'PENDING'
@@ -267,11 +299,17 @@ export class IotecPayService implements PaymentCollectionProvider, PaymentDisbur
   }
 
   private identityBaseUrl() {
-    return (this.configService.get<string>('IOTEC_IDENTITY_BASE_URL') || 'https://id.iotec.io').replace(/\/$/, '')
+    return (this.configService.get<string>('IOTEC_IDENTITY_BASE_URL') || 'https://id.iotec.io').replace(
+      /\/$/,
+      '',
+    )
   }
 
   private payBaseUrl() {
-    return (this.configService.get<string>('IOTEC_PAY_BASE_URL') || 'https://pay.iotec.io').replace(/\/$/, '')
+    return (this.configService.get<string>('IOTEC_PAY_BASE_URL') || 'https://pay.iotec.io').replace(
+      /\/$/,
+      '',
+    )
   }
 
   private required(key: string) {
