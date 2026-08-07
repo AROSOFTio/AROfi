@@ -26,10 +26,12 @@ COPY . .
 
 # Apply the guarded source patches before Prisma generation and compilation.
 # The second phase replaces the legacy per-network selectors with one Platform
-# Admin gateway; the final phase gives each callback an explicit provider ID.
+# Admin gateway; the third phase gives each callback an explicit provider ID.
+# Pesapal remains in the backend for later use but is hidden from Admin selection.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
-    && python3 scripts/apply_gateway_webhook_patches.py
+    && python3 scripts/apply_gateway_webhook_patches.py \
+    && python3 scripts/hide_pesapal_gateway.py
 
 # Generate Prisma Client
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
