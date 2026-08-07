@@ -30,6 +30,15 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Apply guarded production source patches
+        run: |
+          python3 scripts/apply_iotec_source_patches.py
+          python3 scripts/apply_unified_gateway_patches.py
+          python3 scripts/apply_gateway_webhook_patches.py
+          python3 scripts/hide_pesapal_gateway.py
+          python3 scripts/apply_voucher_preview_patches.py
+          python3 scripts/apply_voucher_dashboard_patches.py
+
       - name: Generate Prisma Client
         run: npx prisma generate --schema=apps/api/prisma/schema.prisma
 
@@ -47,8 +56,6 @@ jobs:
 
   deploy:
     name: Deploy to Production
-    # Tests are a real gate, not a formality: this job will not run, and
-    # production will not be touched, unless build-verify (build + test) passes.
     needs: [build-verify]
     runs-on: ubuntu-latest
 
