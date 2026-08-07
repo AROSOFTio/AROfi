@@ -41,6 +41,8 @@ type Report = {
   items: AgentMetric[]
 }
 type Filters = { ownerType: 'ALL' | 'AGENT' | 'MAIN'; agentId: string; territory: string; packageId: string; from: string; to: string }
+type ReportRow = { key: string; owner: 'Main' | 'Agent'; code: string; name: string; territory: string; metric: Metric }
+
 const initialFilters: Filters = { ownerType: 'ALL', agentId: '', territory: '', packageId: '', from: '', to: '' }
 
 export default function AgentVoucherAccountabilityReport() {
@@ -65,7 +67,7 @@ export default function AgentVoucherAccountabilityReport() {
       setPackages(packageData.items ?? [])
       await loadReport(initialFilters)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load report')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load voucher report')
     } finally {
       setLoading(false)
     }
@@ -89,13 +91,25 @@ export default function AgentVoucherAccountabilityReport() {
     }
   }
 
+  async function clearFilters() {
+    try {
+      setLoading(true)
+      setFilters(initialFilters)
+      await loadReport(initialFilters)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to reset filters')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const territories = useMemo(
     () => Array.from(new Set(agents.map((agent) => agent.territory).filter((value): value is string => Boolean(value)))).sort(),
     [agents],
   )
 
-  const rows = useMemo(() => {
-    const output: Array<{ key: string; owner: string; code: string; name: string; territory: string; metric: Metric }> = []
+  const rows = useMemo<ReportRow[]>(() => {
+    const output: ReportRow[] = []
     if (report?.main) output.push({ key: 'MAIN', owner: 'Main', code: report.main.code, name: report.main.name, territory: report.main.territory, metric: report.main })
     for (const item of report?.items ?? []) output.push({ key: item.agentId, owner: 'Agent', code: item.agent.code, name: item.agent.name, territory: item.agent.territory ?? 'Unassigned', metric: item })
     return output
@@ -105,38 +119,61 @@ export default function AgentVoucherAccountabilityReport() {
   const summary = report?.summary
 
   return (
-    <section className="card voucher-report-launcher">
+    <section className="card voucher-report-panel">
       <style>{`
-        .voucher-report-launcher{padding:16px 18px}
-        .voucher-report-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
-        .voucher-report-head h2{font-size:16px;line-height:1.3;font-weight:650;margin:0;color:var(--text-primary)}
-        .voucher-report-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}
-        .voucher-report-summary div{padding:10px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card)}
-        .voucher-report-summary span{display:block;font-size:11px;color:var(--text-muted);margin-bottom:2px}
+        .voucher-report-panel{padding:16px 18px}
+        .voucher-report-head{display:flex;justify-content:space-between;align-items:center;gap:14px}
+        .voucher-report-head h2{font-size:16px;font-weight:650;margin:0;color:var(--text-primary)}
+        .voucher-report-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}
+        .voucher-report-kpi{position:relative;padding:13px 14px;border:1px solid var(--border);border-radius:9px;background:var(--bg-card);overflow:hidden}
+        .voucher-report-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--brand)}
+        .voucher-report-kpi span{display:block;font-size:11.5px;color:var(--text-muted);margin-bottom:4px}
+        .voucher-report-kpi strong{font-size:17px;line-height:1.2;font-weight:650;color:var(--text-primary)}
+        .voucher-report-error{margin:10px 0 0;color:var(--danger-fg);font-size:12.5px;font-weight:600}
+        .voucher-report-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+        .voucher-report-filters{display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:10px;flex:1}
+        .voucher-report-actions{display:flex;gap:7px;flex-wrap:wrap;flex:0 0 auto}
+        .voucher-report-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:13px}
+        .voucher-report-summary div{padding:11px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-hover)}
+        .voucher-report-summary span{display:block;font-size:10.5px;color:var(--text-muted);margin-bottom:3px}
         .voucher-report-summary strong{font-size:14px;font-weight:650;color:var(--text-primary)}
-        .voucher-report-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
-        .voucher-report-table{max-height:48vh;overflow:auto;border:1px solid var(--border);border-radius:9px}
-        .voucher-report-table table{min-width:1080px;margin:0}
-        .voucher-report-table th,.voucher-report-table td{padding:9px 10px;font-size:12.5px}
-        @media(max-width:780px){.voucher-report-summary{grid-template-columns:1fr 1fr}.voucher-report-filters{grid-template-columns:1fr}.voucher-report-head{align-items:center}}
-        @media(max-width:480px){.voucher-report-launcher{padding:14px}.voucher-report-summary{grid-template-columns:1fr}.voucher-report-head .btn{white-space:nowrap}}
+        .voucher-report-table-shell{max-height:48vh;overflow:auto;border:1px solid var(--border);border-radius:9px;background:var(--bg-card)}
+        .voucher-report-table{width:100%;min-width:1060px;border-collapse:collapse}
+        .voucher-report-table th{position:sticky;top:0;z-index:1;padding:10px 11px;background:var(--bg-hover);border-bottom:1px solid var(--border);font-size:11px;font-weight:650;color:var(--text-muted);text-align:left}
+        .voucher-report-table td{padding:11px;border-bottom:1px solid var(--border-soft);font-size:12.5px;color:var(--text-2);vertical-align:middle}
+        .voucher-report-table tr:last-child td{border-bottom:0}
+        .voucher-report-owner{display:flex;align-items:center;gap:8px}
+        .voucher-report-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--green-light);color:var(--brand);font-size:11px;font-weight:700;flex:0 0 auto}
+        .voucher-report-owner strong{display:block;font-size:13px;color:var(--text-primary)}
+        .voucher-report-owner small{display:block;color:var(--text-muted);font-size:10.5px;margin-top:1px}
+        .voucher-report-number{font-weight:650;color:var(--text-primary)}
+        .voucher-report-subvalue{display:block;margin-top:2px;font-size:10.5px;color:var(--text-muted)}
+        .voucher-report-mobile{display:none}
+        .voucher-report-mobile-card{border:1px solid var(--border);border-radius:9px;background:var(--bg-card);padding:13px}
+        .voucher-report-mobile-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:11px}
+        .voucher-report-mobile-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+        .voucher-report-mobile-grid span{display:block;font-size:10.5px;color:var(--text-muted)}
+        .voucher-report-mobile-grid strong{display:block;margin-top:2px;font-size:13px;color:var(--text-primary)}
+        @media(max-width:1040px){.voucher-report-toolbar{display:block}.voucher-report-actions{margin-top:10px}.voucher-report-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media(max-width:760px){.voucher-report-panel{padding:14px}.voucher-report-head{align-items:center}.voucher-report-kpis,.voucher-report-summary{grid-template-columns:1fr 1fr}.voucher-report-filters{grid-template-columns:1fr}.voucher-report-actions{display:grid;grid-template-columns:1fr 1fr}.voucher-report-actions .btn{width:100%}.voucher-report-table-shell{display:none}.voucher-report-mobile{display:grid;gap:9px;max-height:48vh;overflow:auto}.voucher-report-kpi strong{font-size:15px}}
+        @media(max-width:430px){.voucher-report-head{align-items:flex-start;flex-direction:column}.voucher-report-head .btn{width:100%}.voucher-report-kpis,.voucher-report-summary,.voucher-report-actions{grid-template-columns:1fr}.voucher-report-mobile-grid{grid-template-columns:1fr 1fr}}
       `}</style>
 
       <div className="voucher-report-head">
-        <h2>Voucher sales</h2>
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>Open report</button>
+        <h2>Voucher sales report</h2>
+        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>View report</button>
       </div>
 
-      <div className="voucher-report-summary">
-        <div><span>Sales</span><strong>{summary?.recordedSales ?? 0}</strong></div>
-        <div><span>Gross</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
-        <div><span>Unsold</span><strong>{summary?.unsold ?? 0}</strong></div>
-        <div><span>Unsold value</span><strong>{formatCurrency(summary?.unsoldValueUgx ?? 0)}</strong></div>
+      <div className="voucher-report-kpis">
+        <div className="voucher-report-kpi"><span>Confirmed sales</span><strong>{summary?.recordedSales ?? 0}</strong></div>
+        <div className="voucher-report-kpi"><span>Gross sales</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
+        <div className="voucher-report-kpi"><span>Unsold stock</span><strong>{summary?.unsold ?? 0}</strong></div>
+        <div className="voucher-report-kpi"><span>Stock value</span><strong>{formatCurrency(summary?.unsoldValueUgx ?? 0)}</strong></div>
       </div>
-      {error && <p style={{ color: 'var(--danger-fg)', margin: '10px 0 0', fontSize: 12.5 }}>{error}</p>}
+      {error && <div className="voucher-report-error">{error}</div>}
 
-      <Modal open={open} title="Voucher sales" onClose={() => setOpen(false)} width={1120}>
-        <form onSubmit={submit}>
+      <Modal open={open} title="Voucher sales report" onClose={() => setOpen(false)} width={1220}>
+        <form onSubmit={submit} className="voucher-report-toolbar">
           <div className="voucher-report-filters">
             <div className="form-group">
               <label className="form-label">Owner</label>
@@ -159,51 +196,74 @@ export default function AgentVoucherAccountabilityReport() {
             <div className="form-group">
               <label className="form-label">Package</label>
               <select className="form-input" value={filters.packageId} onChange={(event) => setFilters((current) => ({ ...current, packageId: event.target.value }))}>
-                <option value="">All packages</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
+                <option value="">All packages</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </div>
             <div className="form-group"><label className="form-label">From</label><input className="form-input" type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></div>
             <div className="form-group"><label className="form-label">To</label><input className="form-input" type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div className="voucher-report-actions">
             <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Apply'}</button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setFilters(initialFilters); void loadReport(initialFilters) }}>Reset</button>
+            <button type="button" className="btn btn-ghost" onClick={() => void clearFilters()}>Reset</button>
             <a className="btn btn-ghost" href={exportUrl}>Export CSV</a>
           </div>
         </form>
 
-        <div className="voucher-report-summary" style={{ marginBottom: 14 }}>
-          <div><span>Gross</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
+        <div className="voucher-report-summary">
+          <div><span>Gross sales</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
           <div><span>Agent sales</span><strong>{formatCurrency(summary?.agentSalesUgx ?? 0)}</strong></div>
           <div><span>Main sales</span><strong>{formatCurrency(summary?.mainSalesUgx ?? 0)}</strong></div>
-          <div><span>Fees</span><strong>{formatCurrency(summary?.recordedFeesUgx ?? 0)}</strong></div>
+          <div><span>Platform fees</span><strong>{formatCurrency(summary?.recordedFeesUgx ?? 0)}</strong></div>
         </div>
 
-        <div className="voucher-report-table">
-          <table>
-            <thead><tr><th>Owner</th><th>Code / name</th><th>Location</th><th>Assigned</th><th>Unsold</th><th>Redeemed</th><th>Gross</th><th>Fees</th><th>Net</th><th>Status</th></tr></thead>
+        <div className="voucher-report-table-shell">
+          <table className="voucher-report-table">
+            <thead><tr><th>Stock owner</th><th>Location</th><th>Issued</th><th>Unsold</th><th>Redeemed</th><th>Gross</th><th>Fees</th><th>Net</th><th>Status</th></tr></thead>
             <tbody>
-              {!loading && rows.length === 0 && <tr><td colSpan={10}>No results.</td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={9}>No records match these filters.</td></tr>}
               {rows.map((row) => (
                 <tr key={row.key}>
-                  <td><span className={row.owner === 'Agent' ? 'badge badge-success' : 'badge badge-ghost'}>{row.owner}</span></td>
-                  <td><strong>{row.name}</strong><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.code}</div></td>
+                  <td><div className="voucher-report-owner"><div className="voucher-report-avatar">{initials(row.name)}</div><div><strong>{row.name}</strong><small>{row.owner} · {row.code}</small></div></div></td>
                   <td>{row.territory}</td>
-                  <td><strong>{row.metric.totalAssigned}</strong><div style={{ fontSize: 11 }}>{formatCurrency(row.metric.assignedValueUgx)}</div></td>
-                  <td><strong>{row.metric.unsold}</strong><div style={{ fontSize: 11 }}>{formatCurrency(row.metric.unsoldValueUgx)}</div></td>
-                  <td><strong>{row.metric.redeemed}</strong><div style={{ fontSize: 11 }}>{row.metric.recordedSales} sales</div></td>
+                  <td><span className="voucher-report-number">{row.metric.totalAssigned}</span><span className="voucher-report-subvalue">{formatCurrency(row.metric.assignedValueUgx)}</span></td>
+                  <td><span className="voucher-report-number">{row.metric.unsold}</span><span className="voucher-report-subvalue">{formatCurrency(row.metric.unsoldValueUgx)}</span></td>
+                  <td><span className="voucher-report-number">{row.metric.redeemed}</span><span className="voucher-report-subvalue">{row.metric.recordedSales} sales</span></td>
                   <td>{formatCurrency(row.metric.recordedSalesUgx)}</td>
                   <td>{formatCurrency(row.metric.recordedFeesUgx)}</td>
-                  <td>{formatCurrency(row.metric.recordedNetUgx)}</td>
+                  <td><strong>{formatCurrency(row.metric.recordedNetUgx)}</strong></td>
                   <td>{row.metric.expired > 0 || row.metric.voided > 0 ? <span className="badge badge-warning">{row.metric.expired} expired · {row.metric.voided} voided</span> : <span className="badge badge-success">Clear</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        <div className="voucher-report-mobile">
+          {!loading && rows.length === 0 && <div className="voucher-report-mobile-card">No records match these filters.</div>}
+          {rows.map((row) => (
+            <article className="voucher-report-mobile-card" key={row.key}>
+              <div className="voucher-report-mobile-head">
+                <div className="voucher-report-owner"><div className="voucher-report-avatar">{initials(row.name)}</div><div><strong>{row.name}</strong><small>{row.owner} · {row.code}</small></div></div>
+                {row.metric.expired > 0 || row.metric.voided > 0 ? <span className="badge badge-warning">Review</span> : <span className="badge badge-success">Clear</span>}
+              </div>
+              <div className="voucher-report-mobile-grid">
+                <div><span>Location</span><strong>{row.territory}</strong></div>
+                <div><span>Issued</span><strong>{row.metric.totalAssigned}</strong></div>
+                <div><span>Unsold</span><strong>{row.metric.unsold}</strong></div>
+                <div><span>Redeemed</span><strong>{row.metric.redeemed}</strong></div>
+                <div><span>Gross</span><strong>{formatCurrency(row.metric.recordedSalesUgx)}</strong></div>
+                <div><span>Net</span><strong>{formatCurrency(row.metric.recordedNetUgx)}</strong></div>
+              </div>
+            </article>
+          ))}
+        </div>
       </Modal>
     </section>
   )
+}
+
+function initials(value: string) {
+  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || 'VO'
 }
 
 function buildQuery(filters: Filters) {
