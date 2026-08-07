@@ -28,16 +28,16 @@ if "function normalizeRouterOsCommand(value: string)" not in text:
 }
 
 """
-    helper = marker + """function normalizeRouterOsCommand(value: string) {
+    helper = marker + r"""function normalizeRouterOsCommand(value: string) {
   return value
     // Rich-text editors sometimes turn a literal URL into [url](url). RouterOS
     // needs only the URL inside the quotes.
-    .replace(/\[(https?:\\/\\/[^\]]+)\]\((https?:\\/\\/[^)]+)\)/gi, '$2')
-    // Remove accidental escaping added by chat/rich-text copies, e.g. \\:if.
-    .replace(/\\\\:/g, ':')
+    .replace(/\[(https?:\/\/[^\]]+)\]\((https?:\/\/[^)]+)\)/gi, '$2')
+    // Remove accidental escaping added by chat/rich-text copies, e.g. \:if.
+    .replace(/\\:/g, ':')
     // Invisible formatting characters can make an otherwise correct command fail.
-    .replace(/[\\u200B-\\u200D\\uFEFF]/g, '')
-    .replace(/\\u00A0/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
     .trim()
 }
 
@@ -64,7 +64,7 @@ if "return normalizeRouterOsCommand(command)" not in text:
 
 required = [
     "function normalizeRouterOsCommand(value: string)",
-    ".replace(/\\\\:/g, ':')",
+    r".replace(/\\:/g, ':')",
     "return normalizeRouterOsCommand(command)",
 ]
 for sentinel in required:
