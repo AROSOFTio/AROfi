@@ -1,70 +1,81 @@
-# AROFi — WiFi Hotspot Billing & Mobile Money System
-# llms.txt — Machine-readable summary for AI assistants and LLM crawlers
+# AROFi — WiFi Hotspot Billing and Network Operations
+# Machine-readable public product summary
 
-> AROFi is Uganda's #1 cloud-based WiFi hotspot billing and management platform,
-> built by AROSOFT Innovations Ltd (Kampala, Uganda).
-> It lets MikroTik router operators, ISPs, hotels, schools, and community
-> networks collect payments via MTN Mobile Money and Airtel Money, manage
-> vouchers, track sessions, and control routers — all from one dashboard.
+> AROFi is a cloud platform by AROSOFT Innovations Ltd for businesses that sell internet access through MikroTik routers. It combines captive-portal checkout, Mobile Money, vouchers, QR redemption, RADIUS access, router monitoring, agents, wallets and reports.
 
-## Key Information
+## Official Information
 
-- **Website**: https://arofi.net
-- **Company**: AROSOFT Innovations Ltd, Kampala, Uganda
-- **Support**: support@arofi.net | +256 787 726 388
-- **Category**: WiFi Hotspot Billing Software / SaaS
-- **Geography**: Uganda, East Africa
-- **Primary language**: English
+- Website: https://arofi.net
+- Visual handbook: https://arofi.net/docs
+- Company: AROSOFT Innovations Ltd, Kampala, Uganda
+- Support: support@arofi.net | +256 787 726 388
+- Primary market: Uganda and East Africa
+- Primary language: English
 
-## Core Capabilities
+## Current Capabilities
 
-- MikroTik RADIUS authentication and captive portal billing
-- MTN Mobile Money (MoMo) and Airtel Money payment collection
-- Multi-tenant SaaS — each operator gets an isolated business workspace
-- WiFi voucher generation and management
-- Real-time session tracking and router fleet management
-- Remote MikroTik router access via secure VPN tunnel (Cloud WinBox)
-- Automated mobile money collection and instant withdrawals
-- QR code scan-and-pay for hotspot access
+- MikroTik HotSpot and RADIUS authentication
+- Captive-portal package checkout
+- MTN Mobile Money and Airtel Money collection through an approved gateway
+- Voucher generation, PDF preview, download and sharing
+- QR voucher redemption
+- Main-owner and agent voucher stock
+- Agent and location sales accountability
+- Realtime sales and stock dashboard
+- Wallet, withdrawal and settlement records
+- Router fleet and active-session monitoring
+- Secure remote MikroTik access when configured
+- CSV, Excel and PDF reporting
+- Isolated multi-tenant business workspaces
 
-## Pricing (UGX)
+## Current Public Pricing (UGX)
 
-| Plan       | Monthly Fee | MoMo Commission | Voucher Commission | Routers |
-|------------|-------------|-----------------|-------------------|---------|
-| Starter    | Free        | 8%              | 2%                | Up to 5 |
-| Pro        | 20,000 UGX  | 5%              | 0%                | Up to 10 |
-| Enterprise | 70,000 UGX  | 2%              | 0%                | Unlimited |
+| Plan | Subscription | Gateway Fee | Voucher Fee |
+|------|--------------|-------------|-------------|
+| Starter | UGX 0 | 3–8% | 2% |
+| Pro | UGX 20,000 per month | 3–5% | 0% |
 
-## Documentation
+The exact gateway fee within the published range depends on the active production payment route and provider arrangement. The application Billing screen displays the applicable plan and charges.
 
-- Getting started: https://arofi.net/docs/getting-started
-- How to start a WiFi business in Uganda: https://arofi.net/docs/how-to-start-wifi-business-uganda
-- MikroTik hotspot setup: https://arofi.net/docs/captive-portal
-- MTN MoMo & Airtel Money billing: https://arofi.net/docs/setup-mtn-airtel-wifi-billing
-- Packages & vouchers: https://arofi.net/docs/packages-and-vouchers
-- Payments & withdrawals: https://arofi.net/docs/payments
-- Remote WinBox access: https://arofi.net/docs/remote-winbox
-- Agent POS: https://arofi.net/docs/agent-pos
-- Reports: https://arofi.net/docs/reports
-- FAQ: https://arofi.net/docs/faq
+## Payment Gateways
 
-## Blog
+AROFi currently supports integration code for:
 
-Latest articles and guides: https://arofi.net/blog
+- Yo! Uganda
+- ioTec Pay
+- Direct MTN Mobile Money and Airtel Money APIs
 
-## Legal
+Production transactions require approved live credentials, callback or webhook configuration, sufficient wallet balance or float where applicable, and provider compliance approval. Withdrawals are not guaranteed to be instant and remain subject to provider processing, limits and account controls.
+
+## Handbook Chapters
+
+The canonical documentation is the visual page-by-page handbook at https://arofi.net/docs. It includes:
+
+- Platform architecture
+- Routers and access points
+- Business and MikroTik onboarding
+- Packages and professional status controls
+- Mobile Money and card checkout
+- Voucher printing and QR redemption
+- Agents, locations and stock accountability
+- Live sales dashboard
+- Wallets and withdrawals
+- Payment gateways
+- Current pricing
+- Reports and exports
+- Troubleshooting and production verification
+
+Legacy documentation URLs redirect into the matching handbook chapter.
+
+## Legal and Contact
 
 - Privacy Policy: https://arofi.net/privacy
 - Terms of Service: https://arofi.net/terms
-
-## Contact
-
 - Email: support@arofi.net
-- Phone/WhatsApp: +256 787 726 388
+- Phone or WhatsApp: +256 787 726 388
 - WhatsApp: https://wa.me/256787726388
-- Company: AROSOFT Innovations Ltd — https://arosoftlabs.com
+- Company website: https://arosoftlabs.com
 
 ## Registration
 
-Sign up free at: https://arofi.net
-No IT team required. Self-onboarding in under 5 minutes.
+Create an account at https://arofi.net. A real production launch still requires a configured MikroTik site, tested captive portal and approved live payment credentials.
