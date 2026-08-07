@@ -94,7 +94,7 @@ COPY --from=builder /usr/src/app/scripts ./scripts
 
 RUN cp config/nginx.coolify.conf /etc/nginx/nginx.conf \
     && mkdir -p /run/nginx \
-    && chmod +x scripts/start-all.sh \
+    && chmod +x scripts/start-all.sh scripts/start-api.sh \
     && rm -rf /root/.npm /tmp/*
 
 EXPOSE 3000
@@ -105,9 +105,7 @@ ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/a
 CMD if [ "$SERVICE_NAME" = "all" ]; then \
       sh scripts/start-all.sh; \
     elif [ "$SERVICE_NAME" = "api" ]; then \
-      cd apps/api && \
-      if [ -n "$DATABASE_URL" ]; then ./node_modules/.bin/prisma migrate deploy || true; fi && \
-      (if [ -f dist/main.js ]; then node dist/main.js; else node dist/src/main.js; fi); \
+      exec sh scripts/start-api.sh; \
     elif [ "$SERVICE_NAME" = "admin" ]; then \
       server="$(find /usr/src/app/standalone/admin -type f -path '*/apps/admin-web/server.js' -print -quit)"; \
       if [ -z "$server" ] && [ -f /usr/src/app/standalone/admin/server.js ]; then server=/usr/src/app/standalone/admin/server.js; fi; \
