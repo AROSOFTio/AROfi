@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Keep MikroTik onboarding output literal, safe, and RouterOS-compatible.
+"""Keep MikroTik onboarding literal, safe, and router-gateway compatible.
 
-The RouterOS command must never contain rich-text Markdown links or escaped
-command prefixes. The generated provisioning script must also preserve an owner
-management path, quote IP-prefix selectors, and never use console row number 0
-as a firewall move destination because that row can be a built-in rule.
+This guarded build patch normalizes the copied one-run command, preserves an
+owner management path, avoids built-in firewall row moves, and prevents local
+*.wifi names from becoming required DNS dependencies during voucher login.
 """
 
 from pathlib import Path
@@ -12,8 +11,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN = ROOT / "apps/admin-web/src/components/RoutersManager.tsx"
+ROUTERS = ROOT / "apps/api/src/modules/routers/routers.service.ts"
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 MIKROTIK_SPEC = ROOT / "apps/api/src/modules/routers/mikrotik.service.spec.ts"
+PORTAL = ROOT / "apps/portal-web/src/components/PortalCheckout.tsx"
+QR_CONNECT = ROOT / "apps/portal-web/src/components/VoucherQrConnect.tsx"
+ROUTER_GATEWAY = "10.55.0.1"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -21,6 +24,15 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     if count != 1:
         raise RuntimeError(f"{label}: expected exactly one target, found {count}")
     return text.replace(old, new, 1)
+
+
+def replace_exact_count(text: str, old: str, new: str, expected: int, label: str) -> str:
+    count = text.count(old)
+    if count == 0 and text.count(new) == expected:
+        return text
+    if count != expected:
+        raise RuntimeError(f"{label}: expected {expected} targets, found {count}")
+    return text.replace(old, new)
 
 
 def patch_admin(text: str) -> str:
@@ -64,15 +76,36 @@ def patch_admin(text: str) -> str:
     if "return normalizeRouterOsCommand(command)" not in text:
         text = replace_once(text, old_function, new_function, "one-run command normalization")
 
-    required = [
+    for sentinel in [
         "function normalizeRouterOsCommand(value: string)",
         r".replace(/\\:/g, ':')",
         "return normalizeRouterOsCommand(command)",
-    ]
-    for sentinel in required:
+    ]:
         if sentinel not in text:
             raise RuntimeError(f"MikroTik command sanitizer missing sentinel: {sentinel}")
+    return text
 
+
+def patch_routers_service(text: str) -> str:
+    text = replace_exact_count(
+        text,
+        "        portalBaseUrl: this.buildTenantWifiLoginUrl(router.tenant),",
+        f"        portalBaseUrl: 'http://{ROUTER_GATEWAY}/login',",
+        2,
+        "numeric router portal URL",
+    )
+    text = replace_exact_count(
+        text,
+        "        dnsName: this.buildTenantWifiHost(router.tenant),",
+        "        dnsName: null,",
+        2,
+        "disable tenant-local hotspot DNS name",
+    )
+
+    if text.count(f"portalBaseUrl: 'http://{ROUTER_GATEWAY}/login'") != 2:
+        raise RuntimeError("Router provisioning is not using the numeric gateway login URL twice")
+    if text.count("dnsName: null") != 2:
+        raise RuntimeError("Router provisioning did not disable both tenant-local DNS names")
     return text
 
 
@@ -84,12 +117,7 @@ def patch_mikrotik_service(text: str) -> str:
         '      `:foreach r in=[/ip route find dst-address="0.0.0.0/0" active=yes] do={`,'
     )
     if old_route_selector in text:
-        text = replace_once(
-            text,
-            old_route_selector,
-            new_route_selector,
-            "quoted default-route selector",
-        )
+        text = replace_once(text, old_route_selector, new_route_selector, "quoted default-route selector")
 
     old_wired_block = """      `# 3d-2. Put wired LAN ports on the captive hotspot bridge too`,
       `# Excludes the detected WAN and ether1 so upstream internet stays intact.`,
@@ -114,12 +142,7 @@ def patch_mikrotik_service(text: str) -> str:
       `}`,
 """
     if "# 3d-2. Preserve owner management while assigning unused wired ports" not in text:
-        text = replace_once(
-            text,
-            old_wired_block,
-            new_wired_block,
-            "safe wired-port assignment",
-        )
+        text = replace_once(text, old_wired_block, new_wired_block, "safe wired-port assignment")
 
     firewall_moves = [
         (
@@ -151,6 +174,19 @@ def patch_mikrotik_service(text: str) -> str:
         if old in text:
             text = replace_once(text, old, new, label)
 
+    dns_marker = "      // keepalive-timeout=2m (MikroTik's own default) force-disconnected\n"
+    dns_guard = f'''      `# Use the numeric hotspot gateway for login/status so Android private DNS cannot break vouchers`,
+      `:do {{ /ip hotspot profile set [find name="${{profileName}}"] dns-name="" hotspot-address=${{gatewayIp}} }} on-error={{}}`,
+      `:do {{ /ip dns static remove [find comment="AROFi hotspot DNS gateway"] }} on-error={{}}`,
+'''
+    if "Android private DNS cannot break vouchers" not in text:
+        text = replace_once(text, dns_marker, dns_guard + dns_marker, "numeric hotspot gateway profile")
+
+    old_conn_target = "var target=(rc.loginUrl||lo||'http://10.55.0.1/login');"
+    new_conn_target = "var target='http://10.55.0.1/login';"
+    if old_conn_target in text:
+        text = replace_once(text, old_conn_target, new_conn_target, "router-hosted voucher login target")
+
     required = [
         'dst-address="0.0.0.0/0" active=yes',
         "# 3d-2. Preserve owner management while assigning unused wired ports",
@@ -160,6 +196,9 @@ def patch_mikrotik_service(text: str) -> str:
         "destination=$arofiHotspotInputAnchor",
         "destination=$arofiHotspotMgmtAnchor",
         "destination=$arofiHotspotForwardAnchor",
+        "Android private DNS cannot break vouchers",
+        'dns-name="" hotspot-address=${gatewayIp}',
+        "var target='http://10.55.0.1/login';",
     ]
     for sentinel in required:
         if sentinel not in text:
@@ -168,12 +207,36 @@ def patch_mikrotik_service(text: str) -> str:
     forbidden = [
         "dst-address=0.0.0.0/0 active=yes",
         "# 3d-2. Put wired LAN ports on the captive hotspot bridge too",
-        "destination=0",
+        "/ip firewall filter move $r destination=0",
+        old_conn_target,
     ]
     for unsafe in forbidden:
         if unsafe in text:
             raise RuntimeError(f"Unsafe MikroTik provisioning pattern remains: {unsafe}")
+    return text
 
+
+def patch_portal(text: str) -> str:
+    old_target = "      const target = new URL(loginUrl, window.location.href)\n"
+    new_target = """      const target = new URL(loginUrl, window.location.href)
+      // RouterOS may return a tenant-local *.wifi login URL. Public/private DNS
+      // resolvers cannot be trusted to resolve that name, so dedicated AROFi
+      // hotspot profiles always submit through their numeric gateway instead.
+      if (/\\.wifi$/i.test(target.hostname)) {
+        target.protocol = 'http:'
+        target.hostname = '10.55.0.1'
+        target.port = ''
+      }
+"""
+    if "if (/\\.wifi$/i.test(target.hostname))" not in text:
+        text = replace_once(text, old_target, new_target, "hosted portal numeric login fallback")
+
+    for sentinel in [
+        "if (/\\.wifi$/i.test(target.hostname))",
+        "target.hostname = '10.55.0.1'",
+    ]:
+        if sentinel not in text:
+            raise RuntimeError(f"Portal voucher reconnect safety marker missing: {sentinel}")
     return text
 
 
@@ -184,15 +247,10 @@ def patch_mikrotik_spec(text: str) -> str:
     )
     new_route_expectation = (
         "    expect(script).toContain(':foreach r in=[/ip route find "
-        "dst-address=\"0.0.0.0/0\" active=yes]')\n"
+        'dst-address="0.0.0.0/0" active=yes]\')\n'
     )
     if old_route_expectation in text:
-        text = replace_once(
-            text,
-            old_route_expectation,
-            new_route_expectation,
-            "quoted route selector test",
-        )
+        text = replace_once(text, old_route_expectation, new_route_expectation, "quoted route selector test")
 
     old_port_expectation = """    expect(script).toContain('/interface ethernet find')
     expect(script).toContain('$ethName != "ether1"')
@@ -205,34 +263,50 @@ def patch_mikrotik_spec(text: str) -> str:
     expect(script).toContain('destination=$arofiHotspotInputAnchor')
     expect(script).toContain('destination=$arofiHotspotMgmtAnchor')
     expect(script).toContain('destination=$arofiHotspotForwardAnchor')
-    expect(script).not.toContain('destination=0')
+    expect(script).not.toContain('/ip firewall filter move $r destination=0')
 """
     if "expect(script).toContain('$ethRunning = false')" not in text:
-        text = replace_once(
-            text,
-            old_port_expectation,
-            new_port_expectation,
-            "wired management and firewall safety tests",
-        )
+        text = replace_once(text, old_port_expectation, new_port_expectation, "wired management and firewall safety tests")
 
-    required = [
+    dns_test_marker = "    expect(script).toContain('/ip dns static add name=\"tenantname.wifi\" address=10.55.0.1')\n"
+    dns_test_new = dns_test_marker + "    expect(script).toContain('dns-name=\"\" hotspot-address=10.55.0.1')\n"
+    if "dns-name=\"\" hotspot-address=10.55.0.1" not in text:
+        text = replace_once(text, dns_test_marker, dns_test_new, "numeric hotspot profile test")
+
+    for sentinel in [
         'dst-address="0.0.0.0/0" active=yes',
         "expect(script).toContain('$ethName != \"ether2\"')",
         "expect(script).toContain('$ethRunning = false')",
-        "expect(script).not.toContain('destination=0')",
+        "expect(script).not.toContain('/ip firewall filter move $r destination=0')",
+        "dns-name=\"\" hotspot-address=10.55.0.1",
+    ]:
+        if sentinel not in text:
+            raise RuntimeError(f"MikroTik service test sentinel missing: {sentinel}")
+    return text
+
+
+def verify_qr_connect(text: str) -> str:
+    required = [
+        "const ROUTER_GATEWAY = '10.55.0.1'",
+        "new URL(`http://${ROUTER_GATEWAY}/login`)",
+        "intent://${ROUTER_GATEWAY}/login?voucher=",
     ]
     for sentinel in required:
         if sentinel not in text:
-            raise RuntimeError(f"MikroTik service test sentinel missing: {sentinel}")
-
+            raise RuntimeError(f"Voucher QR connector missing numeric gateway marker: {sentinel}")
+    if "sanitizeHotspotHost" in text:
+        raise RuntimeError("Voucher QR connector still accepts a tenant-local DNS hostname")
     return text
 
 
 def main() -> None:
     files = {
         ADMIN: patch_admin,
+        ROUTERS: patch_routers_service,
         MIKROTIK: patch_mikrotik_service,
+        PORTAL: patch_portal,
         MIKROTIK_SPEC: patch_mikrotik_spec,
+        QR_CONNECT: verify_qr_connect,
     }
 
     for path, patcher in files.items():
@@ -243,7 +317,7 @@ def main() -> None:
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
-    print("MikroTik command output and provisioning safety fixes applied.")
+    print("MikroTik command, management, and voucher gateway safety fixes applied.")
 
 
 if __name__ == "__main__":
