@@ -1,26 +1,10 @@
-# Coolify deployment for AROfi — split mode.
+# Coolify deployment for AROFi — split mode.
 #
-# Same image as the all-in-one Dockerfile, but run as 5 separate containers
-# (nginx, api, admin, portal, postgres) instead of one. This gives each
-# process its own memory ceiling (mem_limit) so a spike in one service can't
-# starve the others — important on small (2-4GB) hosts where one shared
-# container running nginx + 3 Node servers had no per-process isolation.
-#
-# Build: only the "api" service has a build: block. nginx, admin, and portal
-# share the same image (arofi-app:local) that api builds. This guarantees
-# exactly ONE Docker build (npm install + 3 Next.js/NestJS compilations)
-# instead of four, which was causing OOM failures on small VPS hosts.
-#
-# To switch a Coolify resource that's currently on the "Dockerfile" build
-# pack to this file: change its Build Pack to "Docker Compose" pointing at
-# this docker-compose.yaml. Rolling back is just switching the build pack
-# back — the root Dockerfile's all-in-one path (SERVICE_NAME=all) is
-# untouched.
-#
-# There are intentionally NO host bind mounts here: Coolify maps relative
-# compose bind mounts to a managed host path and creates them as directories,
-# which breaks file mounts like ./config/nginx.conf. The nginx config is
-# baked into the image instead (config/nginx.split.conf).
+# The application image is built once by the api service and reused by nginx,
+# admin and portal. Services use restart policies and their own health checks,
+# but docker compose startup never blocks on cross-service health. This is
+# important in Coolify because `docker compose up -d` has a short execution
+# window and previously failed while PostgreSQL was still reporting “Waiting”.
 
 x-app-env: &app-env
   NODE_ENV: ${NODE_ENV:-production}
@@ -31,77 +15,116 @@ x-app-env: &app-env
   ROUTER_CREDENTIAL_SECRET: ${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
   RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
   RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
-  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://arofi.net,https://arofi.net}
+
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://arofi.net}
   API_PUBLIC_HOST: ${API_PUBLIC_HOST:-arofi.net}
   PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:-arofi.net}
   APP_BASE_URL: ${APP_BASE_URL:-https://arofi.net}
   ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.net}
   PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.net/portal}
   VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://arofi.net/portal}
-  # Plain HTTP bootstrap endpoint for MikroTik RouterOS setup scripts. The
-  # public domain redirects port 80 to HTTPS, which is good for browsers but
-  # unreliable for fresh routers with an unset clock. nginx exposes only
-  # /api/mikrotik/* on this port.
   MIKROTIK_CALLBACK_HTTP_URL: ${MIKROTIK_CALLBACK_HTTP_URL:-http://95.111.234.34:18080}
+
   ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
-  # 2s fallback sweep; realtime state is primarily pushed by the Postgres
-  # LISTEN/NOTIFY bridge (RADIUS_DB_LISTEN_ENABLED) and the SSE event stream.
   ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-2000}
   RADIUS_DB_LISTEN_ENABLED: ${RADIUS_DB_LISTEN_ENABLED:-true}
   RADIUS_DISCONNECT_MAX_RETRIES: ${RADIUS_DISCONNECT_MAX_RETRIES:-5}
-  # Router liveness: 2s heartbeat, LIVE within 12s, STALE (suspected offline)
-  # within 30s, OFFLINE after that.
   ROUTER_HEARTBEAT_SECONDS: ${ROUTER_HEARTBEAT_SECONDS:-2}
   ROUTER_LIVE_WINDOW_SECONDS: ${ROUTER_LIVE_WINDOW_SECONDS:-12}
   ROUTER_STALE_WINDOW_SECONDS: ${ROUTER_STALE_WINDOW_SECONDS:-30}
-  # Admin login OTP + lockout policy (defaults are production-safe).
+
   ADMIN_OTP_TTL_MINUTES: ${ADMIN_OTP_TTL_MINUTES:-10}
   ADMIN_OTP_MAX_ATTEMPTS: ${ADMIN_OTP_MAX_ATTEMPTS:-5}
   ADMIN_OTP_RESEND_COOLDOWN_SECONDS: ${ADMIN_OTP_RESEND_COOLDOWN_SECONDS:-60}
   ADMIN_LOGIN_MAX_FAILURES: ${ADMIN_LOGIN_MAX_FAILURES:-8}
   ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES: ${ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES:-15}
-  # Operational alert recipient (disconnect failures, payment mismatches).
+
   ALERT_EMAIL: ${ALERT_EMAIL:-}
-  # Webhook auth: header secret or HMAC signature preferred; query-string
-  # secrets are ignored unless this migration flag is explicitly enabled.
   WEBHOOK_ALLOW_QUERY_SECRET: ${WEBHOOK_ALLOW_QUERY_SECRET:-false}
-  # Guaranteed captive-portal login fallback target (MikroTik hotspot address).
   HOTSPOT_LOGIN_URL: ${HOTSPOT_LOGIN_URL:-http://10.55.0.1/login}
-  # Optional single-tenant portal mapping used when no router key/domain is
-  # present; leave empty on multi-tenant platforms.
   PORTAL_DEFAULT_TENANT_DOMAIN: ${PORTAL_DEFAULT_TENANT_DOMAIN:-}
+
   RADIUS_SERVER_HOST: ${RADIUS_SERVER_HOST:-127.0.0.1}
   RADIUS_PUBLIC_HOST: ${RADIUS_PUBLIC_HOST:-167.233.68.36}
   RADIUS_AUTH_PORT: ${RADIUS_AUTH_PORT:-1812}
   RADIUS_ACCOUNTING_PORT: ${RADIUS_ACCOUNTING_PORT:-1813}
   RADIUS_SECONDARY_HOST: ${RADIUS_SECONDARY_HOST:-}
   RADIUS_DISCONNECT_ENABLED: ${RADIUS_DISCONNECT_ENABLED:-true}
+  RADIUS_DISCONNECT_HOST: ${RADIUS_DISCONNECT_HOST:-}
+  RADIUS_DISCONNECT_PORT: ${RADIUS_DISCONNECT_PORT:-3799}
+  RADIUS_DISCONNECT_SECRET: ${RADIUS_DISCONNECT_SECRET:-}
+
   PAYMENT_CUSTOMER_LABEL: ${PAYMENT_CUSTOMER_LABEL:-Pay}
   PAYMENT_DEFAULT_CURRENCY: ${PAYMENT_DEFAULT_CURRENCY:-UGX}
+  PLATFORM_PAYMENT_GATEWAY: ${PLATFORM_PAYMENT_GATEWAY:-YO_UGANDA}
+
+  YO_UGANDA_BASE_URL: ${YO_UGANDA_BASE_URL:-https://paymentsapi1.yo.co.ug/ybs/task.php}
+  YO_UGANDA_USERNAME: ${YO_UGANDA_USERNAME:-}
+  YO_UGANDA_PASSWORD: ${YO_UGANDA_PASSWORD:-}
+  YO_UGANDA_WEBHOOK_SECRET: ${YO_UGANDA_WEBHOOK_SECRET:-}
+  AGGREGATOR_PROVIDER: ${AGGREGATOR_PROVIDER:-YO_UGANDA}
+  AGGREGATOR_WEBHOOK_SECRET: ${AGGREGATOR_WEBHOOK_SECRET:-}
+
+  IOTEC_CLIENT_ID: ${IOTEC_CLIENT_ID:-}
+  IOTEC_CLIENT_SECRET: ${IOTEC_CLIENT_SECRET:-}
+  IOTEC_WALLET_ID: ${IOTEC_WALLET_ID:-}
+  IOTEC_IDENTITY_BASE_URL: ${IOTEC_IDENTITY_BASE_URL:-https://id.iotec.io}
+  IOTEC_PAY_BASE_URL: ${IOTEC_PAY_BASE_URL:-https://pay.iotec.io}
+  IOTEC_WEBHOOK_SECRET: ${IOTEC_WEBHOOK_SECRET:-}
+
   MTN_COLLECTION_PROVIDER: ${MTN_COLLECTION_PROVIDER:-AGGREGATOR}
-  AIRTEL_COLLECTION_PROVIDER: ${AIRTEL_COLLECTION_PROVIDER:-AGGREGATOR}
   MTN_DISBURSEMENT_PROVIDER: ${MTN_DISBURSEMENT_PROVIDER:-MTN_MOMO_DIRECT}
+  MTN_MOMO_COLLECTION_BASE_URL: ${MTN_MOMO_COLLECTION_BASE_URL:-}
+  MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY: ${MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY:-}
+  MTN_MOMO_COLLECTION_API_USER: ${MTN_MOMO_COLLECTION_API_USER:-}
+  MTN_MOMO_COLLECTION_API_KEY: ${MTN_MOMO_COLLECTION_API_KEY:-}
+  MTN_MOMO_COLLECTION_WEBHOOK_SECRET: ${MTN_MOMO_COLLECTION_WEBHOOK_SECRET:-}
+  MTN_MOMO_DISBURSEMENT_BASE_URL: ${MTN_MOMO_DISBURSEMENT_BASE_URL:-}
+  MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY: ${MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY:-}
+  MTN_MOMO_DISBURSEMENT_API_USER: ${MTN_MOMO_DISBURSEMENT_API_USER:-}
+  MTN_MOMO_DISBURSEMENT_API_KEY: ${MTN_MOMO_DISBURSEMENT_API_KEY:-}
+  MTN_MOMO_DISBURSEMENT_WEBHOOK_SECRET: ${MTN_MOMO_DISBURSEMENT_WEBHOOK_SECRET:-}
+  MTN_MOMO_TARGET_ENVIRONMENT: ${MTN_MOMO_TARGET_ENVIRONMENT:-sandbox}
+  MTN_MOMO_CURRENCY: ${MTN_MOMO_CURRENCY:-UGX}
+  MTN_ALLOWED_PREFIXES: ${MTN_ALLOWED_PREFIXES:-}
+
+  AIRTEL_COLLECTION_PROVIDER: ${AIRTEL_COLLECTION_PROVIDER:-AGGREGATOR}
   AIRTEL_DISBURSEMENT_PROVIDER: ${AIRTEL_DISBURSEMENT_PROVIDER:-AIRTEL_MONEY_DIRECT}
+  AIRTEL_MONEY_COLLECTION_BASE_URL: ${AIRTEL_MONEY_COLLECTION_BASE_URL:-}
+  AIRTEL_MONEY_DISBURSEMENT_BASE_URL: ${AIRTEL_MONEY_DISBURSEMENT_BASE_URL:-}
+  AIRTEL_MONEY_CLIENT_ID: ${AIRTEL_MONEY_CLIENT_ID:-}
+  AIRTEL_MONEY_CLIENT_SECRET: ${AIRTEL_MONEY_CLIENT_SECRET:-}
+  AIRTEL_MONEY_PUBLIC_KEY: ${AIRTEL_MONEY_PUBLIC_KEY:-}
+  AIRTEL_MONEY_COLLECTION_WEBHOOK_SECRET: ${AIRTEL_MONEY_COLLECTION_WEBHOOK_SECRET:-}
+  AIRTEL_MONEY_DISBURSEMENT_WEBHOOK_SECRET: ${AIRTEL_MONEY_DISBURSEMENT_WEBHOOK_SECRET:-}
+  AIRTEL_MONEY_COUNTRY: ${AIRTEL_MONEY_COUNTRY:-UG}
+  AIRTEL_MONEY_CURRENCY: ${AIRTEL_MONEY_CURRENCY:-UGX}
+  AIRTEL_ALLOWED_PREFIXES: ${AIRTEL_ALLOWED_PREFIXES:-}
+
+  # Pesapal remains hidden in Platform Admin but its environment entries stay
+  # available for future activation without another infrastructure migration.
   PESAPAL_MODE: ${PESAPAL_MODE:-sandbox}
   PESAPAL_BASE_URL: ${PESAPAL_BASE_URL:-https://cybqa.pesapal.com/pesapalv3}
   PESAPAL_CONSUMER_KEY: ${PESAPAL_CONSUMER_KEY:-}
   PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
   PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
   PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-https://arofi.net/portal}
+
   SMTP_HOST: ${SMTP_HOST:-}
   SMTP_PORT: ${SMTP_PORT:-587}
   SMTP_USER: ${SMTP_USER:-}
   SMTP_PASS: ${SMTP_PASS:-}
   SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AROFi}
   SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@arofi.net}
+  SMTP_ALLOW_SELF_SIGNED_CERT: ${SMTP_ALLOW_SELF_SIGNED_CERT:-false}
+  SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+
   WHATSAPP_GATEWAY_URL: ${WHATSAPP_GATEWAY_URL:-http://whatsapp:3000}
   WHATSAPP_GATEWAY_API_KEY: ${WHATSAPP_GATEWAY_API_KEY:-}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
   SENTRY_DSN: ${SENTRY_DSN:-}
-  # SSR calls from admin-web go straight to the api container on the compose
-  # network instead of 127.0.0.1 (which only worked inside the old single
-  # all-in-one container).
+
   API_SERVER_URL: ${API_SERVER_URL:-http://api:3000/api}
   NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
   PORT: ${PORT:-3000}
@@ -112,26 +135,22 @@ services:
     pull_policy: never
     restart: unless-stopped
     environment:
-      # Coolify assigns the configured domain to service "nginx" on port 3000
-      # and wires up the reverse proxy automatically.
       - SERVICE_FQDN_NGINX_3000
       - SERVICE_NAME=nginx
     ports:
       - "${MIKROTIK_BOOTSTRAP_HTTP_PORT:-18080}:3001"
+    # Order only. Do not block `docker compose up -d` waiting for health.
     depends_on:
-      api:
-        condition: service_healthy
-      admin:
-        condition: service_healthy
-      portal:
-        condition: service_healthy
+      - api
+      - admin
+      - portal
     mem_limit: 64m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 20
+      start_period: 180s
 
   api:
     build:
@@ -140,24 +159,19 @@ services:
     image: arofi-app:local
     restart: unless-stopped
     ports:
-      # Overridable so a second stack (e.g. dev.arofi.net) on the same host
-      # doesn't collide with this port range — set WINBOX_PROXY_HOST_PORT_RANGE
-      # to a different block (container side stays 31000-31100 either way,
-      # since that's what the app allocates routers.remotePort from).
       - "${WINBOX_PROXY_HOST_PORT_RANGE:-31000-31100}:31000-31100"
     environment:
       <<: *app-env
       SERVICE_NAME: api
     depends_on:
-      postgres:
-        condition: service_healthy
-    mem_limit: 512m
+      - postgres
+    mem_limit: 768m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 60s
+      retries: 20
+      start_period: 240s
 
   admin:
     image: arofi-app:local
@@ -167,15 +181,14 @@ services:
       <<: *app-env
       SERVICE_NAME: admin
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     mem_limit: 384m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 45s
+      start_period: 90s
 
   portal:
     image: arofi-app:local
@@ -185,29 +198,15 @@ services:
       <<: *app-env
       SERVICE_NAME: portal
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     mem_limit: 320m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/portal 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 45s
+      start_period: 90s
 
-  # FreeRADIUS is a first-class part of the stack: without it nothing answers
-  # MikroTik Access-Requests on UDP 1812 and paying customers never get
-  # online. It reads radcheck/radreply/radacct/nas straight from the same
-  # Postgres the API writes, and the API receives realtime accounting/auth
-  # events via Postgres LISTEN/NOTIFY triggers on radacct/radpostauth.
-  #
-  # SECURITY: UDP 1812/1813 are published on the host and left OPEN
-  # (RADIUS_CLIENT_CIDR defaults to 0.0.0.0/0) on purpose — AROFi is a
-  # self-service, nationwide SaaS where operators register routers at
-  # unknown IPs with zero server-side action required. Security is the
-  # shared secret plus live per-request DB credential validation, not an IP
-  # allowlist. Only narrow RADIUS_CLIENT_CIDR if you deliberately run a
-  # closed/private deployment — see config/freeradius/README.md.
   freeradius:
     build:
       context: .
@@ -226,24 +225,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-arofi}
     depends_on:
-      postgres:
-        condition: service_healthy
-    # 192m was too tight for FreeRADIUS + the rlm_sql connection pool: the
-    # server was OOM-killed and restart-looped (health flapped "unhealthy"),
-    # which dropped live-session tracking and CoA/disconnects. 384m gives the
-    # SQL pool headroom while staying small on a 7.8GB host.
+      - postgres
     mem_limit: 384m
     healthcheck:
-      # pgrep -x is unreliable in this Alpine/BusyBox image — it returned "not
-      # found" even with radiusd running as PID 1, so the container flapped
-      # "unhealthy" while RADIUS was actually fine. That falsely-unhealthy
-      # state made Coolify keep routing traffic to the previous deployment.
-      # pidof is a BusyBox builtin and matches reliably.
       test: ["CMD-SHELL", "pidof radiusd >/dev/null 2>&1 || pidof freeradius >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 90s
 
   postgres:
     image: postgres:15-alpine
@@ -254,18 +243,18 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-arofi}
     volumes:
       - pg-data:/var/lib/postgresql/data
-    mem_limit: 256m
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arofi} -d ${POSTGRES_DB:-arofi}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 30s
 
   whatsapp:
     image: devlikeapro/waha:latest
     restart: unless-stopped
     ports:
-      # Overridable for the same reason as the api service's WinBox range above.
       - "${WHATSAPP_HOST_PORT:-3005}:3000"
     environment:
       - WAHA_PRINT_QR=true
@@ -277,7 +266,8 @@ services:
       test: ["CMD-SHELL", "wget --header=X-Api-Key:$${WAHA_API_KEY} -qO- http://localhost:3000/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 120s
 
   backup:
     build:
@@ -297,8 +287,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
       AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-us-east-1}
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     volumes:
       - backup-data:/backups
     mem_limit: 128m
