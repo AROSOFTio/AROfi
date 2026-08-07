@@ -11,7 +11,7 @@ COPY apps/portal-web/package.json ./apps/portal-web/package.json
 COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
 
 RUN --mount=type=cache,target=/root/.npm \
-    NODE_ENV=development npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    NODE_ENV=development npm_config_jobs=1 npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
 COPY . .
 
@@ -75,6 +75,7 @@ RUN set -eux; \
     mkdir -p "$portal_dir/.next"; \
     cp -a apps/portal-web/.next/static "$portal_dir/.next/static"; \
     cp -a apps/portal-web/public "$portal_dir/public"; \
+    touch /runtime/builder-complete; \
     du -sh /runtime/admin /runtime/portal apps/api/dist node_modules/.prisma
 
 # Runtime image intentionally does not copy the root monorepo node_modules.
@@ -86,10 +87,14 @@ WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
 RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
+# This marker deliberately makes the runtime dependency stage wait for the
+# complete builder stage. Without it, BuildKit runs both large npm installs at
+# the same time and can exhaust the deployment server while Prisma is starting.
+COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
     cd apps/api && \
-    npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline && \
+    npm_config_jobs=1 npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline && \
     npm cache clean --force
 
 COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
