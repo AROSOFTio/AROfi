@@ -74,11 +74,19 @@ export class VouchersController {
     @Param('batchId') batchId: string,
     @Query('template') template: string | undefined,
     @Query('disposition') disposition: string | undefined,
+    @Query('preview') preview: string | undefined,
     @Res() response: Response,
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
-    const file = await this.vouchersService.renderBatchPdf(batchId, tenantId, user.id, template)
+    const file = await this.vouchersService.renderBatchPdf(
+      batchId,
+      tenantId,
+      user.id,
+      template,
+      preview !== 'true',
+    )
     response.setHeader('Content-Type', file.contentType)
+    response.setHeader('Cache-Control', 'private, no-store')
     response.setHeader('Content-Disposition', `${disposition === 'inline' ? 'inline' : 'attachment'}; filename="${file.filename}"`)
     response.send(file.buffer)
   }
@@ -119,9 +127,6 @@ export class VouchersController {
     const tenantId = this.accessScope.resolveTenantScope(user)
     const result = await this.vouchersService.redeemVoucher(dto, tenantId)
 
-    // This is deliberately called for both first redemption and legitimate
-    // reconnect responses. It is idempotent and repairs any redemption whose
-    // sale attribution was interrupted after internet access was activated.
     await this.voucherRedemptionSales.recordRedeemedVoucherAsSale(result.voucher.id)
 
     return result
@@ -141,4 +146,3 @@ export class VouchersController {
     return this.vouchersService.deleteVoucher(voucherId, tenantId)
   }
 }
-
