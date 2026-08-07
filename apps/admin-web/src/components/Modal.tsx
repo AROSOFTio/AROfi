@@ -11,6 +11,7 @@ export function Modal({
   open,
   onClose,
   size = 'default',
+  width,
   style,
   kicker,
   title,
@@ -20,6 +21,7 @@ export function Modal({
   open: boolean
   onClose: () => void
   size?: ModalSize
+  width?: number | string
   style?: CSSProperties
   kicker?: string
   title: ReactNode
@@ -52,10 +54,14 @@ export function Modal({
   }
 
   const sizeClass = size === 'compact' ? 'compact' : size === 'wide' ? 'wide' : ''
+  const resolvedStyle: CSSProperties = {
+    ...style,
+    ...(width == null ? {} : { maxWidth: width }),
+  }
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" onClick={handleOverlayClick}>
-      <div className={`modal-card ${sizeClass}`.trim()} style={style} onClick={(event) => event.stopPropagation()}>
+      <div className={`modal-card ${sizeClass}`.trim()} style={resolvedStyle} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="modal-close" onClick={onClose} disabled={closeDisabled}>
           Close
         </button>
@@ -66,3 +72,7 @@ export function Modal({
     </div>
   )
 }
+
+// Keep both import styles compatible. Existing dashboard components use the
+// named export, while the new guided voucher/package flows use the default.
+export default Modal
