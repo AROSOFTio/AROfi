@@ -2,16 +2,24 @@
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
+  // Keep browser and server source maps disabled in production. Generating them
+  // significantly increases peak memory during webpack compilation on the VPS.
+  productionBrowserSourceMaps: false,
   // Force a single build worker. Next's default (cpu-count - 1) spawns
   // multiple webpack/SWC worker processes that each carry their own memory
   // budget independent of NODE_OPTIONS, which overruns small (2-4GB) hosts.
-  // Next.js 16 moved outputFileTracingExcludes out of experimental
+  // Next.js 16 moved outputFileTracingExcludes out of experimental.
   outputFileTracingExcludes: {
     '*': ['**/node_modules/**'],
   },
   experimental: {
     cpus: 1,
     memoryBasedWorkersCount: true,
+    // Official Next.js low-memory mode reduces webpack's maximum resident
+    // memory at the cost of slightly longer compilation time.
+    webpackMemoryOptimizations: true,
+    webpackBuildWorker: true,
+    serverSourceMaps: false,
   },
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -67,7 +75,7 @@ const nextConfig = {
       },
       {
         // Ensure crawlers always receive a fresh robots.txt and sitemap
-        source: '/(robots\.txt|sitemap\.xml)',
+        source: '/(robots\\.txt|sitemap\\.xml)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' },
         ],
