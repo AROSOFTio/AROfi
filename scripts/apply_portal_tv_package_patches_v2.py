@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Build-safe package-duration, Smart TV, and gateway-setting UI patches.
+"""Build-safe package-duration and Smart TV portal improvements.
 
 Durations remain stored as minutes by the API. The admin UI accepts a number
 plus minutes/hours/days/weeks. The portal receives a compact quick-access panel
 and a permanent /portal/tv workflow using the existing MAC-bound voucher and
 payment activation endpoints.
 
-This patch runs after the unified gateway scripts. It therefore accepts both
-the original Mobile Money package heading and the gateway-aware replacement.
-Every mutation is guarded and idempotent so a text-only upstream change cannot
-silently produce a partial portal or stop the complete production deployment.
+This patch runs after the unified and live gateway scripts. It accepts both the
+original Mobile Money heading and the gateway-aware replacement, while treating
+the live ioTec/Yo! Uganda radio selector as the required final settings UI.
 """
 
 from pathlib import Path
@@ -37,12 +36,7 @@ def replace_once(path: str, old: str, new: str, sentinel: str | None = None) -> 
     write(path, text.replace(old, new, 1))
 
 
-def replace_one_of(
-    path: str,
-    candidates: tuple[str, ...],
-    new: str,
-    sentinel: str,
-) -> None:
+def replace_one_of(path: str, candidates: tuple[str, ...], new: str, sentinel: str) -> None:
     text = read(path)
     if sentinel in text or new in text:
         return
@@ -108,18 +102,6 @@ replace_once(
             />
           </div>""",
     "onChangeMinutes={setTrialDuration}",
-)
-
-
-# ---------------------------------------------------------------------------
-# Platform Settings: make the one live gateway switch unmistakable.
-# ---------------------------------------------------------------------------
-settings = "apps/admin-web/src/components/SettingsManager.tsx"
-replace_once(
-    settings,
-    '<Select name="paymentGateway" label="Use one gateway for collections, card checkout, and withdrawals" defaultValue={platformForm.paymentGateway} options={gatewayOptions} />',
-    '<Select name="paymentGateway" label="Active Payment Gateway" defaultValue={platformForm.paymentGateway} options={gatewayOptions} />',
-    'label="Active Payment Gateway"',
 )
 
 
@@ -292,30 +274,35 @@ replace_once(
     "{!tvOnly && multiDevicePackages.length > 0 && (",
 )
 
-text = read(portal)
+portal_text = read(portal)
 for obsolete in [
     "Connect this voucher to a Smart TV",
     "Already bought? Find My Voucher",
     "setVoucherTvMode(",
 ]:
-    if obsolete in text:
+    if obsolete in portal_text:
         raise RuntimeError(f"PortalCheckout still contains obsolete UI: {obsolete}")
 for required in [
     "Choose a Smart TV package or use a voucher above",
     "Select a package and choose a payment method",
     "paidNormalPackages.map(renderPackageButton)",
 ]:
-    if required not in text:
+    if required not in portal_text:
         raise RuntimeError(f"PortalCheckout missing required final marker: {required}")
-write(portal, text)
+write(portal, portal_text)
 
+# The live gateway script runs before this file and replaces the old dropdown
+# with the final ioTec/Yo! Uganda radio selector, readiness cards, callback URLs,
+# save flow, and live test button. Verify that final UI instead of rewriting it.
+settings = "apps/admin-web/src/components/SettingsManager.tsx"
 settings_text = read(settings)
 for required in [
     'name="paymentGateway"',
-    'label="Active Payment Gateway"',
-    "const gatewayOptions = ['YO_UGANDA', 'IOTEC_PAY', 'DIRECT_MNO']",
+    "(['IOTEC_PAY', 'YO_UGANDA'] as const)",
+    "Callback URLs to register with",
+    "Test active gateway",
 ]:
     if required not in settings_text:
-        raise RuntimeError(f"SettingsManager missing active gateway control: {required}")
+        raise RuntimeError(f"SettingsManager missing live payment gateway control: {required}")
 
-print('Build-safe package duration, Smart TV, and gateway-setting UI patches applied.')
+print('Build-safe package duration and Smart TV portal patches applied.')
