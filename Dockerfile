@@ -14,7 +14,6 @@ COPY apps/admin-web/package.json ./apps/admin-web/package.json
 COPY apps/portal-web/package.json ./apps/portal-web/package.json
 COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
 
-
 # Install dependencies in development mode to ensure compilers are available.
 # --no-audit/--no-fund skip registry round-trips that add ~15s; --prefer-offline
 # reuses the mounted npm cache so warm builds barely touch the network.
@@ -36,35 +35,34 @@ RUN python3 scripts/apply_iotec_source_patches.py \
 # Generate Prisma Client
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
-# Build apps sequentially so heap is fully released between each build.
-# NODE_OPTIONS is exported so child workers (webpack, SWC) inherit the cap.
-# A previous Coolify run exited 255 during Next.js static generation without a
-# compiler error. One CPU plus bounded heap/semi-space reduces build pressure
-# and the chance that the deployment helper is terminated mid-build.
+# Build apps sequentially so each Node process exits and releases its heap before
+# the next build starts. The largest Admin build runs first while BuildKit has
+# the smallest active layer set. Strict heap/thread caps prevent the deployment
+# host from killing docker compose with exit code 255 under memory pressure.
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV GENERATE_SOURCEMAP=false
+ENV UV_THREADPOOL_SIZE=1
 
-# Build portal-web first (smaller app). The .next/cache BuildKit cache mount
-# persists Next.js's compilation cache across deploys, so unchanged code is not
-# recompiled — this is the single biggest repeat-build speedup. It's a cache
-# mount (not an image layer), so the rm -rf of .next/cache below still applies.
-RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=768 --max-semi-space-size=16' && \
-    export NEXT_CPU_LIMIT=1 && \
-    export CI=1 && \
-    npm run build --workspace=arofi-portal
-
-# Build admin-web second (largest app — own dedicated step for memory isolation)
+# Build admin-web first. next.config.js enables Next's official webpack memory
+# optimizations and a single webpack build worker. The 640 MB V8 cap leaves RAM
+# available for Docker, BuildKit, Coolify, and the running production services.
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=768 --max-semi-space-size=16' && \
+    export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
     npm run build --workspace=arofi-admin
 
-# Build API last. Nest/TypeScript needs more heap than either single-worker
-# Next build, but it remains capped below the previous 2 GB setting.
-RUN export NODE_OPTIONS='--max-old-space-size=1536 --max-semi-space-size=16' && \
+# Build the smaller portal after Admin has completely exited.
+RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
+    export NODE_OPTIONS='--max-old-space-size=512 --max-semi-space-size=8' && \
+    export NEXT_CPU_LIMIT=1 && \
+    export CI=1 && \
+    npm run build --workspace=arofi-portal
+
+# Nest/TypeScript is also bounded to avoid a second host-level OOM after both
+# Next.js applications have compiled.
+RUN export NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' && \
     export CI=1 && \
     npm run build --workspace=arofi-api
 
@@ -88,7 +86,7 @@ RUN rm -rf \
 # Previously we did "COPY --from=builder /usr/src/app ./" which copied the entire
 # 3-5 GB builder workspace (source files + dev node_modules residue) to the
 # runtime layer, exhausting disk space on the VPS. Selective COPY copies only
-# the ~1 GB of production artifacts and avoids the OOM/disk-full crash.
+# the production artifacts and avoids the OOM/disk-full crash.
 FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
