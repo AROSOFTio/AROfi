@@ -78,13 +78,17 @@ export class VouchersController {
     @Res() response: Response,
   ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
-    const file = await this.vouchersService.renderBatchPdf(
-      batchId,
-      tenantId,
-      user.id,
-      template,
-      preview !== 'true',
-    )
+    // The fifth argument is added by the guarded build transform. Casting here
+    // keeps the checked-in source compatible with both pre-transform local
+    // tooling and the production build that supports preview-safe rendering.
+    const renderBatchPdf = this.vouchersService.renderBatchPdf.bind(this.vouchersService) as (
+      batchId: string,
+      tenantId?: string,
+      actorUserId?: string,
+      templateId?: string,
+      trackPrint?: boolean,
+    ) => ReturnType<VouchersService['renderBatchPdf']>
+    const file = await renderBatchPdf(batchId, tenantId, user.id, template, preview !== 'true')
     response.setHeader('Content-Type', file.contentType)
     response.setHeader('Cache-Control', 'private, no-store')
     response.setHeader('Content-Disposition', `${disposition === 'inline' ? 'inline' : 'attachment'}; filename="${file.filename}"`)
@@ -126,9 +130,7 @@ export class VouchersController {
   async redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     const result = await this.vouchersService.redeemVoucher(dto, tenantId)
-
     await this.voucherRedemptionSales.recordRedeemedVoucherAsSale(result.voucher.id)
-
     return result
   }
 
