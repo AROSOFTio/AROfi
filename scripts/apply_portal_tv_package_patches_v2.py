@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Build-safe package-duration and Smart TV portal improvements.
+"""Build-safe package-duration, Smart TV, and gateway-setting UI patches.
 
 Durations remain stored as minutes by the API. The admin UI accepts a number
 plus minutes/hours/days/weeks. The portal receives a compact quick-access panel
 and a permanent /portal/tv workflow using the existing MAC-bound voucher and
 payment activation endpoints.
+
+This patch runs after the unified gateway scripts. It therefore accepts both
+the original Mobile Money package heading and the gateway-aware replacement.
+Every mutation is guarded and idempotent so a text-only upstream change cannot
+silently produce a partial portal or stop the complete production deployment.
 """
 
 from pathlib import Path
@@ -13,11 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def read(path: str) -> str:
-    return (ROOT / path).read_text()
+    return (ROOT / path).read_text(encoding="utf-8")
 
 
 def write(path: str, text: str) -> None:
-    (ROOT / path).write_text(text)
+    (ROOT / path).write_text(text, encoding="utf-8")
 
 
 def replace_once(path: str, old: str, new: str, sentinel: str | None = None) -> None:
@@ -30,6 +35,24 @@ def replace_once(path: str, old: str, new: str, sentinel: str | None = None) -> 
     if count != 1:
         raise RuntimeError(f"{path}: expected one match, found {count}: {old[:160]!r}")
     write(path, text.replace(old, new, 1))
+
+
+def replace_one_of(
+    path: str,
+    candidates: tuple[str, ...],
+    new: str,
+    sentinel: str,
+) -> None:
+    text = read(path)
+    if sentinel in text or new in text:
+        return
+    matches = [candidate for candidate in candidates if candidate in text]
+    if len(matches) != 1:
+        previews = [candidate[:120] for candidate in candidates]
+        raise RuntimeError(
+            f"{path}: expected exactly one compatible source variant, found {len(matches)}: {previews!r}"
+        )
+    write(path, text.replace(matches[0], new, 1))
 
 
 def replace_between(path: str, start: str, end: str, replacement: str, sentinel: str) -> None:
@@ -85,6 +108,18 @@ replace_once(
             />
           </div>""",
     "onChangeMinutes={setTrialDuration}",
+)
+
+
+# ---------------------------------------------------------------------------
+# Platform Settings: make the one live gateway switch unmistakable.
+# ---------------------------------------------------------------------------
+settings = "apps/admin-web/src/components/SettingsManager.tsx"
+replace_once(
+    settings,
+    '<Select name="paymentGateway" label="Use one gateway for collections, card checkout, and withdrawals" defaultValue={platformForm.paymentGateway} options={gatewayOptions} />',
+    '<Select name="paymentGateway" label="Active Payment Gateway" defaultValue={platformForm.paymentGateway} options={gatewayOptions} />',
+    'label="Active Payment Gateway"',
 )
 
 
@@ -221,11 +256,14 @@ replace_once(
     "{(!activeActivation || showMorePackages) && (",
     "{(tvOnly || !activeActivation || showMorePackages) && (",
 )
-replace_once(
+replace_one_of(
     portal,
-    """                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>""",
+    (
+        """                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>""",
+        """                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and choose a payment method</p>""",
+    ),
     """                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>
-                    {tvOnly ? 'Choose a Smart TV package or use a voucher above' : 'Select a package and pay with Mobile Money'}
+                    {tvOnly ? 'Choose a Smart TV package or use a voucher above' : 'Select a package and choose a payment method'}
                   </p>""",
     "Choose a Smart TV package or use a voucher above",
 )
@@ -262,6 +300,22 @@ for obsolete in [
 ]:
     if obsolete in text:
         raise RuntimeError(f"PortalCheckout still contains obsolete UI: {obsolete}")
+for required in [
+    "Choose a Smart TV package or use a voucher above",
+    "Select a package and choose a payment method",
+    "paidNormalPackages.map(renderPackageButton)",
+]:
+    if required not in text:
+        raise RuntimeError(f"PortalCheckout missing required final marker: {required}")
 write(portal, text)
 
-print('Build-safe package duration and Smart TV portal patches applied.')
+settings_text = read(settings)
+for required in [
+    'name="paymentGateway"',
+    'label="Active Payment Gateway"',
+    "const gatewayOptions = ['YO_UGANDA', 'IOTEC_PAY', 'DIRECT_MNO']",
+]:
+    if required not in settings_text:
+        raise RuntimeError(f"SettingsManager missing active gateway control: {required}")
+
+print('Build-safe package duration, Smart TV, and gateway-setting UI patches applied.')
