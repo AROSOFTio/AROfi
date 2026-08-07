@@ -7,17 +7,28 @@ const ROUTER_GATEWAY = '10.55.0.1'
 
 type VoucherQrConnectProps = {
   voucher: string
-  /**
-   * Kept for backwards compatibility with already printed QR links. The router
-   * login target is deliberately the numeric gateway because Android private
-   * DNS and public resolvers cannot resolve tenant-local *.wifi hostnames.
-   */
   hotspotHost?: string
 }
 
-export default function VoucherQrConnect({ voucher }: VoucherQrConnectProps) {
+function sanitizeHotspotHost(value: string | undefined) {
+  const raw = (value ?? '').trim()
+  if (!raw) return null
+
+  try {
+    const parsed = new URL(raw.includes('://') ? raw : `http://${raw}`)
+    const hostname = parsed.hostname.trim().toLowerCase()
+    if (!hostname || hostname === 'localhost') return null
+    if (!/^[a-z0-9.-]+$/i.test(hostname)) return null
+    return hostname
+  } catch {
+    return null
+  }
+}
+
+export default function VoucherQrConnect({ voucher, hotspotHost }: VoucherQrConnectProps) {
   const [redirecting, setRedirecting] = useState(true)
   const cleanVoucher = voucher.trim().toUpperCase()
+  const localHost = useMemo(() => sanitizeHotspotHost(hotspotHost), [hotspotHost])
 
   const targets = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -27,15 +38,19 @@ export default function VoucherQrConnect({ voucher }: VoucherQrConnectProps) {
     const fallbackUrl = new URL('/portal', window.location.origin)
     fallbackUrl.searchParams.set('voucher', cleanVoucher)
     fallbackUrl.searchParams.set('intent', 'connect')
+    if (localHost) fallbackUrl.searchParams.set('host', localHost)
 
-    const localUrl = new URL(`http://${ROUTER_GATEWAY}/login`)
+    // Use the branded router-local DNS name first. It is served directly by
+    // MikroTik and gives the quickest captive-portal hand-off. The numeric
+    // gateway remains only as a fallback for old QR codes without a host.
+    const localUrl = new URL(`http://${localHost ?? ROUTER_GATEWAY}/login`)
     localUrl.searchParams.set('voucher', cleanVoucher)
 
     return {
       localUrl: localUrl.toString(),
       fallbackUrl: fallbackUrl.toString(),
     }
-  }, [cleanVoucher])
+  }, [cleanVoucher, localHost])
 
   useEffect(() => {
     if (!cleanVoucher || targets.localUrl === '#') {
@@ -43,20 +58,19 @@ export default function VoucherQrConnect({ voucher }: VoucherQrConnectProps) {
       return
     }
 
-    const timer = window.setTimeout(() => {
-      const isAndroid = /Android/i.test(window.navigator.userAgent)
-      if (isAndroid) {
-        const intentUrl =
-          `intent://${ROUTER_GATEWAY}/login?voucher=${encodeURIComponent(cleanVoucher)}` +
-          `#Intent;scheme=http;S.browser_fallback_url=${encodeURIComponent(targets.fallbackUrl)};end`
-        window.location.replace(intentUrl)
-        return
-      }
-      window.location.replace(targets.localUrl)
-    }, 450)
+    // Redirect immediately: the QR already contains the voucher code, so the
+    // router login page can redeem it without another tap or manual entry.
+    const isAndroid = /Android/i.test(window.navigator.userAgent)
+    if (isAndroid && localHost) {
+      const intentUrl =
+        `intent://${localHost}/login?voucher=${encodeURIComponent(cleanVoucher)}` +
+        `#Intent;scheme=http;S.browser_fallback_url=${encodeURIComponent(targets.fallbackUrl)};end`
+      window.location.replace(intentUrl)
+      return
+    }
 
-    return () => window.clearTimeout(timer)
-  }, [cleanVoucher, targets])
+    window.location.replace(targets.localUrl)
+  }, [cleanVoucher, localHost, targets])
 
   return (
     <main className="grid min-h-screen place-items-center bg-gradient-to-b from-blue-50 to-emerald-50 px-4 py-10 text-slate-950">
@@ -66,7 +80,7 @@ export default function VoucherQrConnect({ voucher }: VoucherQrConnectProps) {
         </div>
         <h1 className="mt-4 text-xl font-extrabold">Connecting your voucher</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Keep the venue WiFi connected. AROFi is opening the router login page and applying voucher <strong>{cleanVoucher || 'code'}</strong>.
+          Keep the venue WiFi connected. AROFi is applying voucher <strong>{cleanVoucher || 'code'}</strong> automatically.
         </p>
 
         {!cleanVoucher && (
@@ -87,7 +101,7 @@ export default function VoucherQrConnect({ voucher }: VoucherQrConnectProps) {
         )}
 
         <p className="mt-4 text-xs leading-5 text-slate-500">
-          If the router page does not open, connect to the venue WiFi first, return here, and tap “Connect voucher now”.
+          Stay connected to the venue WiFi while the voucher is applied.
         </p>
       </section>
     </main>
