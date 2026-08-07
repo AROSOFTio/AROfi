@@ -7,9 +7,8 @@ type ProvisioningInput = {
   remoteClientName?: string | null
 }
 
-type MutableMikrotikService = MikrotikService & {
-  buildProvisioningScript: (input: ProvisioningInput) => string
-  buildLoginHtml: (registrationKey: string, portalBaseUrl?: string | null) => string
+type MutableMikrotikService = {
+  buildProvisioningScript: (...args: any[]) => string
 }
 
 /**
@@ -24,15 +23,13 @@ export class MikrotikCompatibilityInitializer implements OnModuleInit {
   constructor(private readonly mikrotikService: MikrotikService) {}
 
   onModuleInit() {
-    const service = this.mikrotikService as MutableMikrotikService
+    const service = this.mikrotikService as unknown as MutableMikrotikService
     const originalBuildProvisioningScript = service.buildProvisioningScript.bind(service)
-    const originalBuildLoginHtml = service.buildLoginHtml.bind(service)
 
-    service.buildProvisioningScript = (input: ProvisioningInput) =>
-      this.hardenProvisioningScript(originalBuildProvisioningScript(input), input)
-
-    service.buildLoginHtml = (registrationKey: string, portalBaseUrl?: string | null) =>
-      this.addFreeTrialFlow(originalBuildLoginHtml(registrationKey, portalBaseUrl))
+    service.buildProvisioningScript = (...args: any[]) => {
+      const input = (args[0] ?? {}) as ProvisioningInput
+      return this.hardenProvisioningScript(originalBuildProvisioningScript(...args), input)
+    }
   }
 
   private hardenProvisioningScript(script: string, input: ProvisioningInput) {
@@ -177,60 +174,6 @@ export class MikrotikCompatibilityInitializer implements OnModuleInit {
       this.runtimeGuard(modernOpenSecurity('wifiwave2'), 'AROFi: wifiwave2 open-security step skipped.'),
       ':put "AROFi: optional Wi-Fi detection completed. Missing or managed radios do not stop HotSpot setup."',
     ].join('\n')
-  }
-
-  private addFreeTrialFlow(html: string) {
-    const trialHelperMarker = '    function normMac(v){'
-    if (html.includes(trialHelperMarker) && !html.includes('function isTrialPkg(p){')) {
-      html = html.replace(
-        trialHelperMarker,
-        [
-          '    function isTrialPkg(p){',
-          "      if(!p)return false;",
-          "      var h=((p.name||'')+' '+(p.code||'')).toLowerCase();",
-          "      return p.isTrialEnabled===true||Number(p.amountUgx||0)<=0||h.indexOf('trial')>=0;",
-          '    }',
-          '',
-          trialHelperMarker,
-        ].join('\n'),
-      )
-    }
-
-    const oldPackageCard =
-      "          c.innerHTML='<span><span class=\"pk-name\">'+esc(p.name)+'</span><span class=\"pk-dur\">'+esc(dur)+'</span></span><span class=\"pk-price\">UGX '+fn(p.amountUgx)+'</span><span class=\"pk-buy\">BUY</span>';"
-    const newPackageCard = [
-      '          var trial=isTrialPkg(p);',
-      "          c.innerHTML='<span><span class=\"pk-name\">'+esc(p.name)+'</span><span class=\"pk-dur\">'+esc(dur)+'</span></span><span class=\"pk-price\">'+(trial?'FREE':'UGX '+fn(p.amountUgx))+'</span><span class=\"pk-buy\">'+(trial?'START':'BUY')+'</span>';",
-    ].join('\n')
-    html = html.replace(oldPackageCard, newPackageCard)
-
-    const selectionMarker = '      selTv=isTvPkg(pkg);'
-    if (html.includes(selectionMarker) && !html.includes('if(isTrialPkg(pkg)){startTrial(pkg);return;}')) {
-      html = html.replace(
-        selectionMarker,
-        selectionMarker + '\n      if(isTrialPkg(pkg)){startTrial(pkg);return;}',
-      )
-    }
-
-    const payMarker = '    function pay(){'
-    if (html.includes(payMarker) && !html.includes('    function startTrial(pkg){')) {
-      const startTrialFunction = [
-        '    function startTrial(pkg){',
-        "      if(!pkg||!pkg.id){sst('Free trial package is unavailable.','err');return;}",
-        "      if(!mac&&!ip){sst('Open this page from the WiFi login screen so this device can be identified.','err');return;}",
-        "      sst('Starting your free trial...','info');",
-        "      apiCall('POST','/api/portal/start-trial',{packageId:pkg.id,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo},function(err,res){",
-        "        if(err){sst(err.message||'Free trial could not be started.','err');return;}",
-        "        if(res&&res.reconnect&&res.reconnect.username){sst('Free trial activated. Connecting...','ok');conn(res.reconnect);return;}",
-        "        sst('Free trial activated. Disconnect and reconnect to this WiFi to continue.','ok');",
-        '      });',
-        '    }',
-        '',
-      ].join('\n')
-      html = html.replace(payMarker, startTrialFunction + payMarker)
-    }
-
-    return html
   }
 
   private runtimeGuard(inner: string, errorMessage: string) {
