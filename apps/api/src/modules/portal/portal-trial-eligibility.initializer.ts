@@ -1,16 +1,17 @@
-import { Injectable, OnModuleInit } from '@nestjs/common'
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common'
 import { PrismaService } from '../../prisma.service'
 import { PortalService } from './portal.service'
 
 type MutablePortalService = PortalService & {
   getContext: (...args: any[]) => Promise<any>
+  startTrial: (...args: any[]) => Promise<any>
 }
 
 /**
- * Adds device-scoped trial eligibility to the portal context and removes free
- * trial packages after the current MAC address or client IP has used one.
- * This mirrors the server-side protection in startTrial, so the UI and the
- * activation rule cannot disagree.
+ * Keeps free-trial visibility and activation rules aligned for every tenant.
+ * Trial packages are explicitly marked in the portal response, hidden after a
+ * device has used a trial in that tenant, and protected again before the core
+ * activation method runs.
  */
 @Injectable()
 export class PortalTrialEligibilityInitializer implements OnModuleInit {
@@ -21,10 +22,11 @@ export class PortalTrialEligibilityInitializer implements OnModuleInit {
 
   onModuleInit() {
     const service = this.portalService as MutablePortalService
-    const original = service.getContext.bind(service)
+    const originalGetContext = service.getContext.bind(service)
+    const originalStartTrial = service.startTrial.bind(service)
 
     service.getContext = async (...args: any[]) => {
-      const result = await original(...args)
+      const result = await originalGetContext(...args)
       const hotspot = (args[3] ?? {}) as {
         macAddress?: string
         ipAddress?: string
@@ -32,34 +34,58 @@ export class PortalTrialEligibilityInitializer implements OnModuleInit {
       const tenantId = result?.tenant?.id as string | undefined
       const macAddress = this.normalizeMac(hotspot.macAddress)
       const ipAddress = hotspot.ipAddress?.trim() || undefined
-      const identityFilters: Array<Record<string, string>> = []
+      const identityFilters = this.buildIdentityFilters(macAddress, ipAddress)
+      const packageIds = Array.isArray(result?.packages)
+        ? result.packages
+            .map((pkg: any) => pkg?.id)
+            .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+        : []
 
-      if (macAddress) identityFilters.push({ boundMacAddress: macAddress })
-      if (ipAddress) identityFilters.push({ firstSeenIp: ipAddress })
+      const [previousTrial, packageFlags] = await Promise.all([
+        tenantId && identityFilters.length > 0
+          ? this.prisma.packageActivation.findFirst({
+              where: {
+                tenantId,
+                metadata: {
+                  path: ['trial'],
+                  equals: true,
+                } as any,
+                OR: identityFilters as any,
+              },
+              select: {
+                id: true,
+                status: true,
+                endsAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null,
+        tenantId && packageIds.length > 0
+          ? this.prisma.package.findMany({
+              where: {
+                tenantId,
+                id: { in: packageIds },
+              },
+              select: {
+                id: true,
+                isTrialEnabled: true,
+              },
+            })
+          : [],
+      ])
 
-      let previousTrial: { id: string; status: string; endsAt: Date } | null = null
-      if (tenantId && identityFilters.length > 0) {
-        previousTrial = await this.prisma.packageActivation.findFirst({
-          where: {
-            tenantId,
-            metadata: {
-              path: ['trial'],
-              equals: true,
-            } as any,
-            OR: identityFilters as any,
-          },
-          select: {
-            id: true,
-            status: true,
-            endsAt: true,
-          },
-          orderBy: { createdAt: 'desc' },
-        })
-      }
-
+      const trialFlagByPackageId = new Map(
+        packageFlags.map((pkg) => [pkg.id, pkg.isTrialEnabled]),
+      )
       const eligible = identityFilters.length > 0 && !previousTrial
       const packages = Array.isArray(result?.packages)
-        ? result.packages.filter((pkg: any) => eligible || !this.isTrialPackage(pkg))
+        ? result.packages
+            .map((pkg: any) => ({
+              ...pkg,
+              isTrialEnabled:
+                trialFlagByPackageId.get(pkg?.id) ?? Boolean(pkg?.isTrialEnabled),
+            }))
+            .filter((pkg: any) => eligible || !this.isTrialPackage(pkg))
         : result?.packages
 
       return {
@@ -74,11 +100,76 @@ export class PortalTrialEligibilityInitializer implements OnModuleInit {
             identityFilters.length === 0
               ? 'A MAC address or client IP is required for the one-time trial.'
               : previousTrial
-                ? 'This device has already used its free trial.'
+                ? 'This device has already used its free trial for this business.'
                 : null,
         },
       }
     }
+
+    service.startTrial = async (dto: {
+      packageId: string
+      macAddress?: string
+      clientIp?: string
+      routerId?: string
+      routerKey?: string
+      hotspotServerName?: string
+      loginUrl?: string
+      sessionReference?: string
+    }) => {
+      const macAddress = this.normalizeMac(dto.macAddress)
+      const ipAddress = dto.clientIp?.trim() || undefined
+      const identityFilters = this.buildIdentityFilters(macAddress, ipAddress)
+
+      const router = dto.routerKey
+        ? await this.prisma.router.findUnique({
+            where: { registrationKey: dto.routerKey },
+            select: { tenantId: true },
+          })
+        : dto.routerId
+          ? await this.prisma.router.findUnique({
+              where: { id: dto.routerId },
+              select: { tenantId: true },
+            })
+          : null
+
+      if (router?.tenantId && identityFilters.length > 0) {
+        const previousTrial = await this.prisma.packageActivation.findFirst({
+          where: {
+            tenantId: router.tenantId,
+            metadata: {
+              path: ['trial'],
+              equals: true,
+            } as any,
+            OR: identityFilters as any,
+          },
+          select: { id: true },
+        })
+
+        if (previousTrial) {
+          throw new BadRequestException(
+            'This device already used the free trial for this business. Use a paid package or a different device.',
+          )
+        }
+      }
+
+      // Prefer the stable MAC identity. HotSpot DHCP addresses are recycled;
+      // sending both MAC and IP to the legacy check could deny a new customer
+      // merely because another device previously held the same local IP.
+      return originalStartTrial({
+        ...dto,
+        clientIp: macAddress ? undefined : dto.clientIp,
+      })
+    }
+  }
+
+  private buildIdentityFilters(macAddress?: string, ipAddress?: string) {
+    if (macAddress) {
+      return [{ boundMacAddress: macAddress }]
+    }
+    if (ipAddress) {
+      return [{ firstSeenIp: ipAddress }]
+    }
+    return []
   }
 
   private isTrialPackage(pkg: any) {
