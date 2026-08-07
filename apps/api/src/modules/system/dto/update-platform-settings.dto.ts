@@ -1,4 +1,4 @@
-import { PaymentNetwork, PaymentProvider } from '@prisma/client'
+import { PaymentNetwork, PaymentProvider, PlatformPaymentGateway } from '@prisma/client'
 import { IsOptional, IsNumber, IsBoolean, IsString, IsArray, IsEnum, IsPhoneNumber } from 'class-validator'
 import { Type } from 'class-transformer'
 
@@ -187,6 +187,13 @@ export class UpdatePlatformSettingsDto {
   @IsEnum(PaymentNetwork, { each: true })
   allowedPaymentNetworks?: PaymentNetwork[]
 
+  @IsOptional()
+  @IsEnum(PlatformPaymentGateway)
+  paymentGateway?: PlatformPaymentGateway
+
+  // Deprecated per-network fields remain temporarily accepted for backwards
+  // compatibility with older clients. The admin console now writes only the
+  // single paymentGateway field.
   @IsOptional()
   @IsEnum(PaymentProvider)
   mtnCollectionProvider?: PaymentProvider

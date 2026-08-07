@@ -1,71 +1,43 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import FormProcessStatus from '@/components/FormProcessStatus'
-import { DurationInput } from '@/components/DurationInput'
+import Modal from './Modal'
 import { PackageCatalogResponse, TenantOverviewResponse } from '@/lib/admin-types'
 import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDuration } from '@/lib/format'
 
 type PackageItem = PackageCatalogResponse['items'][number]
 type PackageView = 'internet' | 'multi' | 'tv'
-
-type PackageFormState = {
+type PackageKind = 'INTERNET' | 'MULTI' | 'TV'
+type PackageForm = {
   tenantId: string
   name: string
   code: string
   description: string
   durationMinutes: string
-  isTrialEnabled: boolean
   dataLimitMb: string
   deviceLimit: string
   downloadSpeedKbps: string
   uploadSpeedKbps: string
-  initialPriceUgx: string
+  priceUgx: string
   isFeatured: boolean
 }
 
-type TvActivationFormState = {
-  macAddress: string
-  customerName: string
-  phoneNumber: string
+const emptyForm: PackageForm = {
+  tenantId: '', name: '', code: '', description: '', durationMinutes: '60', dataLimitMb: '', deviceLimit: '1',
+  downloadSpeedKbps: '', uploadSpeedKbps: '', priceUgx: '1000', isFeatured: false,
 }
 
-const initialFormState: PackageFormState = {
-  tenantId: '',
-  name: '',
-  code: '',
-  description: '',
-  durationMinutes: '60',
-  isTrialEnabled: false,
-  dataLimitMb: '',
-  deviceLimit: '1',
-  downloadSpeedKbps: '',
-  uploadSpeedKbps: '',
-  initialPriceUgx: '1000',
-  isFeatured: false,
-}
-
-function parseOptionalInt(value: string) {
-  if (!value.trim()) return undefined
+function optionalInt(value: string) {
   const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : undefined
+  return value.trim() && Number.isFinite(parsed) ? parsed : undefined
 }
-
-function packageSearchText(item: PackageItem) {
-  return `${item.name} ${item.code} ${item.description ?? ''}`.toLowerCase()
-}
-
-function isTvPackage(item: PackageItem) {
-  const haystack = packageSearchText(item)
-  return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
-}
-
-function isMultiDevicePackage(item: PackageItem) {
-  return !isTvPackage(item) && Number(item.deviceLimit ?? 1) > 1
-}
-
-function formatSpeed(item: PackageItem) {
+function searchText(item: PackageItem) { return `${item.name} ${item.code} ${item.description ?? ''}`.toLowerCase() }
+function isTrial(item: PackageItem) { return item.isTrialEnabled || /free[\s-]?trial|trial/i.test(`${item.name} ${item.code}`) }
+function isTv(item: PackageItem) { const value = searchText(item); return !isTrial(item) && (value.includes('tv') || value.includes('smart') || value.includes('stream')) }
+function isMulti(item: PackageItem) { return !isTrial(item) && !isTv(item) && Number(item.deviceLimit ?? 1) > 1 }
+function categoryOf(item: PackageItem): PackageView { return isTv(item) ? 'tv' : isMulti(item) ? 'multi' : 'internet' }
+function speedLabel(item: PackageItem) {
   if (!item.downloadSpeedKbps && !item.uploadSpeedKbps) return 'Unlimited'
   const down = item.downloadSpeedKbps ? `${Math.round(item.downloadSpeedKbps / 1024)} Mbps` : 'Unlimited'
   const up = item.uploadSpeedKbps ? `${Math.round(item.uploadSpeedKbps / 1024)} Mbps` : 'Unlimited'
@@ -75,823 +47,290 @@ function formatSpeed(item: PackageItem) {
 export default function PackagesManagerImproved() {
   const [catalog, setCatalog] = useState<PackageCatalogResponse | null>(null)
   const [tenants, setTenants] = useState<TenantOverviewResponse['items']>([])
-  const [formState, setFormState] = useState<PackageFormState>(initialFormState)
-  const [packageView, setPackageView] = useState<PackageView>('internet')
-  const [filterQuery, setFilterQuery] = useState('')
-  const [formVersion, setFormVersion] = useState(0)
+  const [view, setView] = useState<PackageView>('internet')
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
-  const [processText, setProcessText] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [tvActivationPackage, setTvActivationPackage] = useState<PackageItem | null>(null)
-  const [tvActivationForm, setTvActivationForm] = useState<TvActivationFormState>({
-    macAddress: '',
-    customerName: '',
-    phoneNumber: '',
-  })
-  const [activatingTv, setActivatingTv] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const [formStep, setFormStep] = useState(0)
+  const [kind, setKind] = useState<PackageKind>('INTERNET')
+  const [editing, setEditing] = useState<PackageItem | null>(null)
+  const [form, setForm] = useState<PackageForm>(emptyForm)
+  const [trialOpen, setTrialOpen] = useState(false)
+  const [trialDuration, setTrialDuration] = useState('5')
+  const [tvPackage, setTvPackage] = useState<PackageItem | null>(null)
+  const [tvMac, setTvMac] = useState('')
+  const [tvCustomer, setTvCustomer] = useState('')
+  const [tvPhone, setTvPhone] = useState('')
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  useEffect(() => {
-    void loadData()
-  }, [])
+  useEffect(() => { void loadData() }, [])
 
   async function loadData() {
     try {
       setLoading(true)
+      setError(null)
       const [catalogData, tenantData] = await Promise.all([
         clientFetchApi<PackageCatalogResponse>('/packages'),
         clientFetchApi<TenantOverviewResponse>('/tenants'),
       ])
       setCatalog(catalogData)
       setTenants(tenantData.items)
-      if (tenantData.items[0]) {
-        setFormState((previous) => previous.tenantId
-          ? previous
-          : { ...previous, tenantId: tenantData.items[0].id })
-      }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load package data')
+      setForm((current) => ({ ...current, tenantId: current.tenantId || tenantData.items[0]?.id || '' }))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to load packages')
     } finally {
       setLoading(false)
     }
   }
 
-  function openForm(nextState: PackageFormState, editingPackageId: string | null) {
+  const items = catalog?.items ?? []
+  const trial = items.find(isTrial) ?? null
+  const regularItems = items.filter((item) => !isTrial(item))
+  const counts = useMemo(() => ({
+    internet: regularItems.filter((item) => categoryOf(item) === 'internet').length,
+    multi: regularItems.filter((item) => categoryOf(item) === 'multi').length,
+    tv: regularItems.filter((item) => categoryOf(item) === 'tv').length,
+  }), [regularItems])
+  const visibleItems = useMemo(() => regularItems.filter((item) => categoryOf(item) === view && (!query.trim() || searchText(item).includes(query.trim().toLowerCase()))), [regularItems, view, query])
+
+  function createPackage() {
+    setEditing(null)
+    setKind(view === 'multi' ? 'MULTI' : view === 'tv' ? 'TV' : 'INTERNET')
+    setForm({
+      ...emptyForm,
+      tenantId: form.tenantId || tenants[0]?.id || '',
+      deviceLimit: view === 'multi' ? '2' : '1',
+      durationMinutes: view === 'tv' ? '1440' : '60',
+      name: view === 'multi' ? 'Family Package' : view === 'tv' ? 'Smart TV Package' : '',
+      code: view === 'multi' ? 'FAMILY' : view === 'tv' ? 'TV-DAILY' : '',
+      downloadSpeedKbps: view === 'tv' ? '8192' : '',
+      uploadSpeedKbps: view === 'tv' ? '2048' : '',
+    })
+    setFormStep(0)
     setError(null)
-    setFormError(null)
-    setSuccess(null)
-    setProcessText('')
-    setEditingId(editingPackageId)
-    setFormState(nextState)
-    setFormVersion((version) => version + 1)
-    setCreateOpen(true)
+    setFormOpen(true)
   }
 
-  function startEdit(item: PackageItem) {
-    openForm({
+  function editPackage(item: PackageItem) {
+    setEditing(item)
+    setKind(categoryOf(item) === 'multi' ? 'MULTI' : categoryOf(item) === 'tv' ? 'TV' : 'INTERNET')
+    setForm({
       tenantId: item.tenant.id,
       name: item.name,
       code: item.code,
       description: item.description ?? '',
       durationMinutes: String(item.durationMinutes),
-      isTrialEnabled: item.isTrialEnabled,
-      dataLimitMb: item.dataLimitMb != null ? String(item.dataLimitMb) : '',
-      deviceLimit: item.deviceLimit != null ? String(item.deviceLimit) : '1',
-      downloadSpeedKbps: item.downloadSpeedKbps != null ? String(item.downloadSpeedKbps) : '',
-      uploadSpeedKbps: item.uploadSpeedKbps != null ? String(item.uploadSpeedKbps) : '',
-      initialPriceUgx: String(item.activePriceUgx),
+      dataLimitMb: item.dataLimitMb == null ? '' : String(item.dataLimitMb),
+      deviceLimit: String(item.deviceLimit ?? 1),
+      downloadSpeedKbps: item.downloadSpeedKbps == null ? '' : String(item.downloadSpeedKbps),
+      uploadSpeedKbps: item.uploadSpeedKbps == null ? '' : String(item.uploadSpeedKbps),
+      priceUgx: String(item.activePriceUgx),
       isFeatured: item.isFeatured,
-    }, item.id)
-  }
-
-  function startCreate() {
-    setPackageView('internet')
-    openForm({ ...initialFormState, tenantId: formState.tenantId }, null)
-  }
-
-  function startCreateMultiDevicePackage() {
-    setPackageView('multi')
-    openForm({
-      ...initialFormState,
-      tenantId: formState.tenantId,
-      name: 'Family 2 Devices',
-      code: 'FAMILY-2',
-      description: 'Shared internet package for two devices.',
-      durationMinutes: String(24 * 60),
-      deviceLimit: '2',
-      initialPriceUgx: '1500',
-    }, null)
-  }
-
-  function startCreateTvPackage() {
-    setPackageView('tv')
-    openForm({
-      ...initialFormState,
-      tenantId: formState.tenantId,
-      name: 'Smart TV Daily',
-      code: 'TV-DAILY',
-      description: 'Smart TV streaming access. Connect the TV once, then keep access bound to that TV.',
-      durationMinutes: String(24 * 60),
-      isTrialEnabled: false,
-      deviceLimit: '1',
-      downloadSpeedKbps: '8192',
-      uploadSpeedKbps: '2048',
-      initialPriceUgx: '1000',
-      isFeatured: true,
-    }, null)
-  }
-
-  function startCreateTrialPackage() {
-    setPackageView('internet')
-    openForm({
-      ...initialFormState,
-      tenantId: formState.tenantId,
-      name: 'Free Trial',
-      code: 'FREE-TRIAL',
-      description: 'One-time free trial for a new device.',
-      durationMinutes: '5',
-      isTrialEnabled: true,
-      deviceLimit: '1',
-      initialPriceUgx: '0',
-    }, null)
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError(null)
-    setFormError(null)
-    setSuccess(null)
-
-    if (!formState.tenantId) {
-      const failure = 'Select a business before saving the package'
-      setError(failure)
-      setFormError(failure)
-      return
-    }
-
-    const durationMinutes = Number.parseInt(formState.durationMinutes, 10)
-    if (!Number.isFinite(durationMinutes) || durationMinutes < 1) {
-      const failure = 'Enter a valid package duration'
-      setError(failure)
-      setFormError(failure)
-      return
-    }
-
-    setSubmitting(true)
-    setProcessText(editingId ? 'Saving package changes.' : 'Creating package.')
-
-    const commonPayload = {
-      name: formState.name.trim(),
-      description: formState.description.trim() || undefined,
-      durationMinutes,
-      isTrialEnabled: formState.isTrialEnabled,
-      dataLimitMb: formState.isTrialEnabled ? undefined : parseOptionalInt(formState.dataLimitMb),
-      deviceLimit: formState.isTrialEnabled ? 1 : parseOptionalInt(formState.deviceLimit),
-      downloadSpeedKbps: formState.isTrialEnabled ? undefined : parseOptionalInt(formState.downloadSpeedKbps),
-      uploadSpeedKbps: formState.isTrialEnabled ? undefined : parseOptionalInt(formState.uploadSpeedKbps),
-      isFeatured: formState.isFeatured,
-    }
-
-    try {
-      if (editingId) {
-        await clientPatchApi(`/packages/${editingId}`, {
-          ...commonPayload,
-          priceUgx: formState.isTrialEnabled ? 0 : Number.parseInt(formState.initialPriceUgx, 10),
-        })
-      } else {
-        await clientPostApi('/packages', {
-          ...commonPayload,
-          tenantId: formState.tenantId,
-          code: formState.code.trim().toUpperCase(),
-          initialPriceUgx: formState.isTrialEnabled ? 0 : Number.parseInt(formState.initialPriceUgx, 10),
-          status: 'ACTIVE',
-        })
-      }
-
-      setProcessText('Refreshing package catalog.')
-      setSuccess(editingId ? 'Package updated successfully' : 'Package created successfully')
-      setCreateOpen(false)
-      setEditingId(null)
-      setFormState({ ...initialFormState, tenantId: formState.tenantId })
-      await loadData()
-    } catch (requestError) {
-      const failure = requestError instanceof Error
-        ? requestError.message
-        : editingId
-          ? 'Unable to update package'
-          : 'Unable to create package'
-      setError(failure)
-      setFormError(failure)
-    } finally {
-      setSubmitting(false)
-      setProcessText('')
-    }
-  }
-
-  async function handleStatusToggle(item: PackageItem) {
-    const nextStatus = item.status === 'ACTIVE' ? 'DRAFT' : 'ACTIVE'
-    setStatusUpdatingId(item.id)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      await clientPatchApi(`/packages/${item.id}`, { status: nextStatus })
-      setCatalog((previous) => {
-        if (!previous) return previous
-        const activeDelta = nextStatus === 'ACTIVE' ? 1 : -1
-        return {
-          ...previous,
-          summary: {
-            ...previous.summary,
-            activePackages: Math.max(0, previous.summary.activePackages + activeDelta),
-          },
-          items: previous.items.map((candidate) => candidate.id === item.id
-            ? { ...candidate, status: nextStatus }
-            : candidate),
-        }
-      })
-      setSuccess(`${item.name} is now ${nextStatus === 'ACTIVE' ? 'ON and visible to customers' : 'OFF and hidden from customers'}.`)
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to change package status')
-    } finally {
-      setStatusUpdatingId(null)
-    }
-  }
-
-  async function handleDelete(packageId: string) {
-    setDeleting(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await clientDeleteApi(`/packages/${packageId}`)
-      setSuccess('Package deleted successfully')
-      setDeleteConfirmId(null)
-      await loadData()
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to delete package')
-      setDeleteConfirmId(null)
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  function startTvActivation(item: PackageItem) {
-    setError(null)
-    setSuccess(null)
-    setTvActivationPackage(item)
-    setTvActivationForm({ macAddress: '', customerName: '', phoneNumber: '' })
-  }
-
-  async function handleTvActivation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!tvActivationPackage) return
-
-    setActivatingTv(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await clientPostApi(`/packages/${tvActivationPackage.id}/tv-activations`, {
-        tenantId: tvActivationPackage.tenant.id,
-        macAddress: tvActivationForm.macAddress.trim(),
-        customerName: tvActivationForm.customerName.trim() || undefined,
-        phoneNumber: tvActivationForm.phoneNumber.trim() || undefined,
-      })
-      setSuccess('Smart TV activated. Turn the TV WiFi off and on once to connect.')
-      setTvActivationPackage(null)
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to activate this TV')
-    } finally {
-      setActivatingTv(false)
-    }
-  }
-
-  const items = catalog?.items ?? []
-  const sectionCounts = useMemo(() => ({
-    internet: items.filter((item) => !isTvPackage(item) && !isMultiDevicePackage(item)).length,
-    multi: items.filter(isMultiDevicePackage).length,
-    tv: items.filter(isTvPackage).length,
-  }), [items])
-
-  const visibleItems = useMemo(() => {
-    const query = filterQuery.trim().toLowerCase()
-    return items.filter((item) => {
-      const inSection = packageView === 'tv'
-        ? isTvPackage(item)
-        : packageView === 'multi'
-          ? isMultiDevicePackage(item)
-          : !isTvPackage(item) && !isMultiDevicePackage(item)
-      return inSection && (!query || packageSearchText(item).includes(query))
     })
-  }, [items, packageView, filterQuery])
-
-  function renderStatusToggle(item: PackageItem) {
-    const active = item.status === 'ACTIVE'
-    const updating = statusUpdatingId === item.id
-    return (
-      <div className="package-status-control">
-        <button
-          type="button"
-          className={`package-status-switch ${active ? 'on' : ''}`}
-          onClick={() => void handleStatusToggle(item)}
-          disabled={updating}
-          aria-label={`${active ? 'Turn off' : 'Turn on'} ${item.name}`}
-          aria-pressed={active}
-          title={`${active ? 'Turn off' : 'Turn on'} ${item.name}`}
-        >
-          <span />
-        </button>
-        <strong>{updating ? 'Saving…' : active ? 'On' : 'Off'}</strong>
-      </div>
-    )
+    setFormStep(1)
+    setError(null)
+    setFormOpen(true)
   }
 
-  function renderActions(item: PackageItem) {
-    if (deleteConfirmId === item.id) {
-      return (
-        <div className="package-row-actions delete-confirm">
-          <span>Delete this package?</span>
-          <button
-            type="button"
-            className="btn btn-sm package-danger-button"
-            onClick={() => void handleDelete(item.id)}
-            disabled={deleting}
-          >
-            {deleting ? 'Deleting…' : 'Yes, delete'}
-          </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleteConfirmId(null)} disabled={deleting}>
-            Cancel
-          </button>
-        </div>
-      )
-    }
+  function applyKind(next: PackageKind) {
+    setKind(next)
+    setForm((current) => ({ ...current, deviceLimit: next === 'MULTI' ? (Number(current.deviceLimit) > 1 ? current.deviceLimit : '2') : '1' }))
+  }
 
-    return (
-      <div className="package-row-actions">
-        {packageView === 'tv' && (
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => startTvActivation(item)}>
-            Connect TV
-          </button>
-        )}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Edit</button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm package-delete-button"
-          onClick={() => {
-            setDeleteConfirmId(item.id)
-            setError(null)
-            setSuccess(null)
-          }}
-        >
-          Delete
-        </button>
-      </div>
-    )
+  async function savePackage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const durationMinutes = Number.parseInt(form.durationMinutes, 10)
+    const priceUgx = Number.parseInt(form.priceUgx, 10)
+    if (!form.tenantId || !form.name.trim() || !form.code.trim() || durationMinutes < 1 || priceUgx < 0) {
+      setError('Complete the business, name, code, duration, and price.')
+      return
+    }
+    try {
+      setSaving(true)
+      setError(null)
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        durationMinutes,
+        isTrialEnabled: false,
+        dataLimitMb: optionalInt(form.dataLimitMb),
+        deviceLimit: kind === 'MULTI' ? Math.max(2, optionalInt(form.deviceLimit) ?? 2) : 1,
+        downloadSpeedKbps: optionalInt(form.downloadSpeedKbps),
+        uploadSpeedKbps: optionalInt(form.uploadSpeedKbps),
+        isFeatured: form.isFeatured,
+      }
+      if (editing) {
+        await clientPatchApi(`/packages/${editing.id}`, { ...payload, priceUgx })
+      } else {
+        await clientPostApi('/packages', { ...payload, tenantId: form.tenantId, code: form.code.trim().toUpperCase(), initialPriceUgx: priceUgx, status: 'ACTIVE' })
+      }
+      setSuccess(editing ? 'Package updated.' : 'Package created.')
+      setFormOpen(false)
+      await loadData()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to save package')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggle(item: PackageItem) {
+    try {
+      setError(null)
+      await clientPatchApi(`/packages/${item.id}`, { status: item.status === 'ACTIVE' ? 'DRAFT' : 'ACTIVE' })
+      await loadData()
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to change package status') }
+  }
+
+  async function saveTrial(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!trial) return
+    const durationMinutes = Number.parseInt(trialDuration, 10)
+    if (!Number.isFinite(durationMinutes) || durationMinutes < 1) { setError('Enter a valid free trial duration.'); return }
+    try {
+      setSaving(true)
+      setError(null)
+      await clientPatchApi(`/packages/${trial.id}`, { durationMinutes })
+      setTrialOpen(false)
+      setSuccess('Free trial duration updated.')
+      await loadData()
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to update free trial') }
+    finally { setSaving(false) }
+  }
+
+  async function removePackage(id: string) {
+    try {
+      setSaving(true)
+      setError(null)
+      await clientDeleteApi(`/packages/${id}`)
+      setDeleteId(null)
+      setSuccess('Package deleted.')
+      await loadData()
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to delete package') }
+    finally { setSaving(false) }
+  }
+
+  async function activateTv(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!tvPackage || !tvMac.trim()) return
+    try {
+      setSaving(true)
+      setError(null)
+      await clientPostApi(`/packages/${tvPackage.id}/tv-activations`, {
+        tenantId: tvPackage.tenant.id,
+        macAddress: tvMac.trim(),
+        customerName: tvCustomer.trim() || undefined,
+        phoneNumber: tvPhone.trim() || undefined,
+      })
+      setTvPackage(null); setTvMac(''); setTvCustomer(''); setTvPhone('')
+      setSuccess('Smart TV activated. Reconnect the TV to WiFi once.')
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to activate Smart TV') }
+    finally { setSaving(false) }
   }
 
   return (
-    <>
+    <div className="clean-packages-page">
       <style>{`
-        .packages-page .page-header { margin-bottom: 16px; }
-        .packages-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-        .packages-toolbar-left, .packages-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .package-tabs { display: inline-flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-        .package-tab { appearance: none; border: 0; background: transparent; color: var(--text-2); font: inherit; font-weight: 700; padding: 9px 14px; border-radius: 9px; cursor: pointer; white-space: nowrap; }
-        .package-tab.active { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(37, 99, 235, .2); }
-        .package-tab-count { display: inline-flex; min-width: 20px; height: 20px; align-items: center; justify-content: center; margin-left: 5px; padding: 0 5px; border-radius: 999px; background: rgba(148, 163, 184, .18); font-size: 11px; }
-        .package-tab.active .package-tab-count { background: rgba(255, 255, 255, .2); }
-        .packages-search { width: min(280px, 100%); min-height: 44px; }
-        .package-modal-card { width: min(1080px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
-        .package-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; margin-bottom: 16px; }
-        .package-form-grid .form-group { min-width: 0; }
-        .package-form-full { grid-column: 1 / -1; }
-        .package-trial-notice { grid-column: 1 / -1; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 12px; background: #eff6ff; color: #1e3a8a; }
-        .package-trial-notice strong { display: block; margin-bottom: 3px; }
-        .package-trial-notice p { margin: 0; font-size: 13px; line-height: 1.45; }
-        .package-form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-        .packages-table-shell { overflow-x: auto; }
-        .packages-table { min-width: 1040px; }
-        .package-status-control { display: inline-flex; align-items: center; gap: 8px; }
-        .package-status-control strong { min-width: 25px; font-size: 12px; color: var(--text-2); }
-        .package-status-switch { position: relative; width: 52px; height: 30px; flex: 0 0 52px; padding: 0; border: 0; border-radius: 999px; background: #cbd5e1; cursor: pointer; transition: background .18s ease; }
-        .package-status-switch span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(15, 23, 42, .28); transition: transform .18s ease; }
-        .package-status-switch.on { background: #16a34a; }
-        .package-status-switch.on span { transform: translateX(22px); }
-        .package-status-switch:disabled { cursor: wait; opacity: .6; }
-        .package-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
-        .package-row-actions.delete-confirm { color: var(--danger-fg); font-size: 12px; }
-        .package-delete-button { color: var(--danger-fg) !important; }
-        .package-danger-button { background: var(--danger-fg) !important; color: #fff !important; border: 0 !important; }
-        .package-name { color: var(--text-primary); font-weight: 700; }
-        .package-sub-label { margin-top: 4px; font-size: 12px; color: var(--brand-fg); font-weight: 700; }
-        .packages-mobile-list { display: none; }
-        .package-mobile-card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 15px; box-shadow: 0 2px 10px rgba(15, 23, 42, .04); }
-        .package-mobile-card + .package-mobile-card { margin-top: 10px; }
-        .package-mobile-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-        .package-mobile-title { font-size: 17px; font-weight: 800; color: var(--text-primary); }
-        .package-mobile-code { margin-top: 3px; font-size: 11px; color: var(--text-muted); }
-        .package-mobile-price { font-size: 16px; font-weight: 800; color: var(--brand-fg); white-space: nowrap; }
-        .package-mobile-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
-        .package-mobile-meta div { padding: 9px 10px; border-radius: 10px; background: var(--surface-2, #f8fafc); min-width: 0; }
-        .package-mobile-meta span { display: block; margin-bottom: 3px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
-        .package-mobile-meta strong { display: block; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
-        .package-mobile-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-        .package-mobile-footer .package-row-actions { justify-content: flex-end; }
-        .package-section-info { margin-bottom: 12px; }
-        @media (max-width: 900px) {
-          .packages-toolbar { align-items: stretch; }
-          .packages-toolbar-left, .packages-toolbar-actions { width: 100%; }
-          .packages-toolbar-left { display: grid; grid-template-columns: 1fr; }
-          .package-tabs { width: 100%; overflow-x: auto; }
-          .package-tab { flex: 1; }
-          .packages-search { width: 100%; }
-          .packages-toolbar-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .packages-toolbar-actions .btn { width: 100%; min-height: 44px; }
-        }
-        @media (max-width: 760px) {
-          .packages-page .page-title { font-size: 25px; line-height: 1.15; }
-          .packages-page .page-subtitle { font-size: 13px; line-height: 1.45; }
-          .package-modal-card { width: calc(100vw - 12px) !important; max-width: none !important; max-height: calc(100dvh - 12px); padding: 20px 14px 18px !important; border-radius: 16px !important; }
-          .package-modal-card .modal-close { top: 12px; right: 12px; }
-          .package-modal-card .modal-title { padding-right: 54px; font-size: 24px; }
-          .package-form-grid { grid-template-columns: 1fr; gap: 14px; }
-          .package-form-full, .package-trial-notice { grid-column: auto; }
-          .package-form-grid .form-input { min-height: 48px; font-size: 16px; color: var(--text-primary); background: var(--surface); }
-          .package-form-actions { display: grid; grid-template-columns: 1fr; }
-          .package-form-actions .btn { width: 100%; min-height: 46px; }
-          .packages-desktop-table { display: none; }
-          .packages-mobile-list { display: block; }
-          .package-mobile-footer { align-items: flex-start; flex-direction: column; }
-          .package-mobile-footer .package-row-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .package-mobile-footer .package-row-actions .btn { width: 100%; min-height: 42px; }
-          .package-mobile-footer .package-row-actions.delete-confirm { grid-template-columns: 1fr; }
-          .package-mobile-footer .package-row-actions.delete-confirm span { grid-column: 1 / -1; }
-        }
-        @media (max-width: 430px) {
-          .package-tabs { display: grid; grid-template-columns: 1fr; }
-          .package-tab { width: 100%; }
-          .packages-toolbar-actions { grid-template-columns: 1fr; }
-          .package-mobile-meta { grid-template-columns: 1fr; }
-        }
+        .clean-packages-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:18px}
+        .clean-packages-header p{max-width:720px}
+        .trial-control{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:18px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:16px;margin-bottom:16px}
+        .trial-control h2{font-size:16px;margin:0 0 5px;color:#1e3a8a}.trial-control p{font-size:12px;line-height:1.5;margin:0;color:#475569}
+        .package-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+        .package-tabs{display:flex;gap:5px;padding:4px;border:1px solid var(--border);background:var(--surface);border-radius:12px}
+        .package-tab{border:0;background:transparent;padding:9px 14px;border-radius:9px;font-weight:800;color:var(--text-2);cursor:pointer}.package-tab.active{background:var(--brand);color:#fff}
+        .package-tab span{font-size:11px;margin-left:5px;opacity:.8}.package-tools{display:flex;gap:8px}.package-tools input{min-width:250px}
+        .package-list{display:grid;gap:9px}.package-row{display:grid;grid-template-columns:minmax(180px,1.3fr) 120px 110px 100px 150px auto;gap:12px;align-items:center;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+        .package-row strong{color:var(--text-primary)}.package-row small{display:block;color:var(--text-muted);margin-top:3px}.package-row-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+        .package-switch{width:48px;height:28px;border:0;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer}.package-switch span{position:absolute;width:22px;height:22px;top:3px;left:3px;border-radius:50%;background:#fff;transition:.18s}.package-switch.on{background:#16a34a}.package-switch.on span{transform:translateX(20px)}
+        .package-kind-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.package-kind{padding:17px;border:1px solid var(--border);border-radius:14px;background:var(--surface);text-align:left;cursor:pointer}.package-kind.active{border-color:var(--brand);box-shadow:0 0 0 2px rgba(37,99,235,.1)}.package-kind strong{display:block;margin-bottom:5px}.package-kind span{font-size:12px;color:var(--text-2);line-height:1.45}
+        .package-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.package-form-full{grid-column:1/-1}.package-form-actions{display:flex;justify-content:space-between;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+        @media(max-width:980px){.package-row{grid-template-columns:1fr 1fr 1fr}.package-row-actions{justify-content:flex-start}.package-tools{width:100%}.package-tools input{flex:1}}
+        @media(max-width:700px){.clean-packages-header,.trial-control{display:block}.clean-packages-header .btn,.trial-control .btn{width:100%;margin-top:14px}.package-tabs{width:100%;overflow:auto}.package-tab{flex:1}.package-tools{display:grid;grid-template-columns:1fr}.package-tools input{min-width:0;width:100%}.package-row{grid-template-columns:1fr 1fr}.package-row>div:first-child,.package-row-actions{grid-column:1/-1}.package-kind-grid,.package-form-grid{grid-template-columns:1fr}.package-form-full{grid-column:auto}}
       `}</style>
 
-      <div className="packages-page">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">Manage Packages</h1>
-            <p className="page-subtitle">Create and manage internet, multi-device, free-trial, and Smart TV access packages.</p>
-          </div>
-        </div>
-
-        {createOpen && (
-          <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !submitting && setCreateOpen(false)}>
-            <div className="modal-card wide package-modal-card" onClick={(event) => event.stopPropagation()}>
-              <button type="button" className="modal-close" onClick={() => setCreateOpen(false)} disabled={submitting}>Close</button>
-              <div className="modal-kicker">Package catalog</div>
-              <h2 className="modal-title">
-                {editingId ? 'Edit Package' : formState.isTrialEnabled ? 'Create Free Trial' : 'Create Package'}
-              </h2>
-              <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
-                <div className="package-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">Business</label>
-                    <select
-                      className="form-input"
-                      value={formState.tenantId}
-                      onChange={(event) => setFormState((previous) => ({ ...previous, tenantId: event.target.value }))}
-                      required
-                      disabled={Boolean(editingId)}
-                    >
-                      <option value="">Select business</option>
-                      {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Package Name</label>
-                    <input
-                      className="form-input"
-                      value={formState.name}
-                      onChange={(event) => setFormState((previous) => ({ ...previous, name: event.target.value }))}
-                      placeholder="Starter 2 Hours"
-                      required
-                    />
-                  </div>
-
-                  {!formState.isTrialEnabled && (
-                    <div className="form-group">
-                      <label className="form-label">Code</label>
-                      <input
-                        className="form-input"
-                        value={formState.code}
-                        onChange={(event) => setFormState((previous) => ({ ...previous, code: event.target.value.toUpperCase() }))}
-                        placeholder="STARTER-2H"
-                        required
-                        disabled={Boolean(editingId)}
-                      />
-                    </div>
-                  )}
-
-                  <div className="form-group">
-                    <label className="form-label">Duration</label>
-                    <DurationInput
-                      key={formVersion}
-                      valueMinutes={formState.durationMinutes}
-                      onChangeMinutes={(minutes) => setFormState((previous) => ({ ...previous, durationMinutes: minutes }))}
-                      inputClassName="form-input"
-                      selectClassName="form-input"
-                    />
-                  </div>
-
-                  {formState.isTrialEnabled && (
-                    <div className="package-trial-notice">
-                      <span aria-hidden="true">✨</span>
-                      <div>
-                        <strong>Dedicated free-trial package</strong>
-                        <p>This package is always free and limited to one use per device. Normal paid packages can no longer be accidentally changed into trials.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {!formState.isTrialEnabled && (
-                    <>
-                      <div className="form-group">
-                        <label className="form-label">Price (UGX)</label>
-                        <input
-                          className="form-input"
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          value={formState.initialPriceUgx}
-                          onChange={(event) => setFormState((previous) => ({ ...previous, initialPriceUgx: event.target.value }))}
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Maximum devices</label>
-                        <select
-                          className="form-input"
-                          value={formState.deviceLimit}
-                          onChange={(event) => setFormState((previous) => ({ ...previous, deviceLimit: event.target.value }))}
-                        >
-                          <option value="1">1 device — individual package</option>
-                          <option value="2">2 devices — couple / family</option>
-                          <option value="3">3 devices</option>
-                          <option value="4">4 devices</option>
-                          <option value="5">5 devices — maximum</option>
-                        </select>
-                        {Number(formState.deviceLimit) > 1 && (
-                          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.45 }}>
-                            This package will automatically appear under the Multi-device section.
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Data Limit MB (optional)</label>
-                        <input
-                          className="form-input"
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          value={formState.dataLimitMb}
-                          onChange={(event) => setFormState((previous) => ({ ...previous, dataLimitMb: event.target.value }))}
-                          placeholder="Unlimited"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Download Kbps (optional)</label>
-                        <input
-                          className="form-input"
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          value={formState.downloadSpeedKbps}
-                          onChange={(event) => setFormState((previous) => ({ ...previous, downloadSpeedKbps: event.target.value }))}
-                          placeholder="Unlimited"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Upload Kbps (optional)</label>
-                        <input
-                          className="form-input"
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          value={formState.uploadSpeedKbps}
-                          onChange={(event) => setFormState((previous) => ({ ...previous, uploadSpeedKbps: event.target.value }))}
-                          placeholder="Unlimited"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="form-group package-form-full">
-                    <label className="form-label">Description</label>
-                    <input
-                      className="form-input"
-                      value={formState.description}
-                      onChange={(event) => setFormState((previous) => ({ ...previous, description: event.target.value }))}
-                      placeholder="Fast daily hotspot access for customers."
-                    />
-                  </div>
-                </div>
-
-                <label style={{ fontSize: 13, color: 'var(--text-2)', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={formState.isFeatured}
-                    onChange={(event) => setFormState((previous) => ({ ...previous, isFeatured: event.target.checked }))}
-                  />
-                  Mark as featured
-                </label>
-
-                <div className="package-form-actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setCreateOpen(false)} disabled={submitting}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={submitting}>
-                    {submitting ? 'Saving…' : editingId ? 'Save Changes' : formState.isTrialEnabled ? 'Create Free Trial' : 'Create Package'}
-                  </button>
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <FormProcessStatus
-                    busy={submitting}
-                    error={formError}
-                    success={success}
-                    text={processText || 'Package changes are applied after AROFi saves them.'}
-                  />
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {tvActivationPackage && (
-          <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => !activatingTv && setTvActivationPackage(null)}>
-            <div className="modal-card package-modal-card" onClick={(event) => event.stopPropagation()}>
-              <button type="button" className="modal-close" onClick={() => setTvActivationPackage(null)} disabled={activatingTv}>Close</button>
-              <div className="modal-kicker">Smart TV access</div>
-              <h2 className="modal-title">Connect TV to {tvActivationPackage.name}</h2>
-              <p className="page-subtitle" style={{ marginTop: 6 }}>
-                Enter the TV wireless MAC address, then reconnect the TV to WiFi.
-              </p>
-              <form onSubmit={handleTvActivation} style={{ marginTop: 18 }}>
-                <div className="package-form-grid">
-                  <div className="form-group package-form-full">
-                    <label className="form-label">TV MAC Address</label>
-                    <input
-                      className="form-input"
-                      value={tvActivationForm.macAddress}
-                      onChange={(event) => setTvActivationForm((previous) => ({ ...previous, macAddress: event.target.value }))}
-                      placeholder="AA:BB:CC:DD:EE:FF"
-                      autoFocus
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Customer / Room Name</label>
-                    <input
-                      className="form-input"
-                      value={tvActivationForm.customerName}
-                      onChange={(event) => setTvActivationForm((previous) => ({ ...previous, customerName: event.target.value }))}
-                      placeholder="Room 12 TV"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Phone (optional)</label>
-                    <input
-                      className="form-input"
-                      inputMode="tel"
-                      value={tvActivationForm.phoneNumber}
-                      onChange={(event) => setTvActivationForm((previous) => ({ ...previous, phoneNumber: event.target.value }))}
-                      placeholder="0771 234 567"
-                    />
-                  </div>
-                </div>
-                <div className="info-panel">
-                  <strong>Find the TV MAC:</strong> Settings → Network → WiFi → Advanced or Status. Use the Wireless MAC, not Bluetooth MAC.
-                </div>
-                <div className="package-form-actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setTvActivationPackage(null)} disabled={activatingTv}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={activatingTv}>
-                    {activatingTv ? 'Activating…' : 'Activate TV'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {error && !formError && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
-        {success && !submitting && <p style={{ color: 'var(--success-fg)', fontSize: 13, marginBottom: 10 }}>{success}</p>}
-
-        <div className="packages-toolbar">
-          <div className="packages-toolbar-left">
-            <div className="package-tabs" role="tablist" aria-label="Package type">
-              <button type="button" className={`package-tab ${packageView === 'internet' ? 'active' : ''}`} onClick={() => setPackageView('internet')}>
-                Internet <span className="package-tab-count">{sectionCounts.internet}</span>
-              </button>
-              <button type="button" className={`package-tab ${packageView === 'multi' ? 'active' : ''}`} onClick={() => setPackageView('multi')}>
-                Multi-device <span className="package-tab-count">{sectionCounts.multi}</span>
-              </button>
-              <button type="button" className={`package-tab ${packageView === 'tv' ? 'active' : ''}`} onClick={() => setPackageView('tv')}>
-                TV / Smart TV <span className="package-tab-count">{sectionCounts.tv}</span>
-              </button>
-            </div>
-            <input
-              className="form-input packages-search"
-              value={filterQuery}
-              onChange={(event) => setFilterQuery(event.target.value)}
-              placeholder="Search packages…"
-              aria-label="Search packages"
-            />
-          </div>
-
-          <div className="packages-toolbar-actions">
-            <button type="button" className="btn btn-ghost" onClick={startCreateTrialPackage}>+ Free Trial</button>
-            <button type="button" className="btn btn-ghost" onClick={startCreateMultiDevicePackage}>+ Multi-device</button>
-            <button type="button" className="btn btn-ghost" onClick={startCreateTvPackage}>+ TV Package</button>
-            <button type="button" className="btn btn-primary" onClick={startCreate}>+ Internet Package</button>
-          </div>
-        </div>
-
-        <div className="card">
-          {packageView === 'multi' && (
-            <div className="info-panel package-section-info">
-              <strong>Multi-device packages:</strong> plans for two to five devices are kept here so the main Internet list stays clean.
-            </div>
-          )}
-          {packageView === 'tv' && (
-            <div className="info-panel package-section-info">
-              <strong>TV connection:</strong> choose a TV package, click Connect TV, enter its wireless MAC address, then reconnect the TV.
-            </div>
-          )}
-
-          <div className="packages-desktop-table packages-table-shell">
-            <table className="packages-table">
-              <thead>
-                <tr>
-                  <th>Package</th>
-                  <th>Price</th>
-                  <th>Duration</th>
-                  <th>Devices</th>
-                  <th>Speed</th>
-                  <th>Data</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr><td colSpan={8}><div className="empty-state"><p>Loading package catalog…</p></div></td></tr>
-                )}
-                {!loading && visibleItems.length === 0 && (
-                  <tr>
-                    <td colSpan={8}>
-                      <div className="empty-state">
-                        <p>{filterQuery ? 'No packages match your search.' : packageView === 'tv' ? 'No TV packages yet.' : packageView === 'multi' ? 'No multi-device packages yet.' : 'No internet packages yet.'}</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                {visibleItems.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <div className="package-name">{item.name}</div>
-                      <div style={{ marginTop: 3, fontSize: 11, color: 'var(--text-muted)' }}>{item.code}</div>
-                      {item.isTrialEnabled && <div className="package-sub-label">Free trial</div>}
-                    </td>
-                    <td style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{formatCurrency(item.activePriceUgx)}</td>
-                    <td>{formatDuration(item.durationMinutes)}</td>
-                    <td>{item.deviceLimit ?? 1}</td>
-                    <td>{formatSpeed(item)}</td>
-                    <td>{item.dataLimitMb ? `${item.dataLimitMb} MB` : 'Unlimited'}</td>
-                    <td>{renderStatusToggle(item)}</td>
-                    <td>{renderActions(item)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="packages-mobile-list">
-            {loading && <div className="empty-state"><p>Loading package catalog…</p></div>}
-            {!loading && visibleItems.length === 0 && (
-              <div className="empty-state"><p>{filterQuery ? 'No packages match your search.' : 'No packages in this section yet.'}</p></div>
-            )}
-            {visibleItems.map((item) => (
-              <article className="package-mobile-card" key={item.id}>
-                <div className="package-mobile-head">
-                  <div>
-                    <div className="package-mobile-title">{item.name}</div>
-                    <div className="package-mobile-code">{item.code}{item.isTrialEnabled ? ' · FREE TRIAL' : ''}</div>
-                  </div>
-                  <div className="package-mobile-price">{formatCurrency(item.activePriceUgx)}</div>
-                </div>
-                <div className="package-mobile-meta">
-                  <div><span>Duration</span><strong>{formatDuration(item.durationMinutes)}</strong></div>
-                  <div><span>Devices</span><strong>{item.deviceLimit ?? 1}</strong></div>
-                  <div><span>Speed</span><strong>{formatSpeed(item)}</strong></div>
-                  <div><span>Data</span><strong>{item.dataLimitMb ? `${item.dataLimitMb} MB` : 'Unlimited'}</strong></div>
-                </div>
-                <div className="package-mobile-footer">
-                  {renderStatusToggle(item)}
-                  {renderActions(item)}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
+      <div className="clean-packages-header">
+        <div><h1 className="page-title">Internet plans</h1><p className="page-subtitle">Manage one package category at a time. Creation and editing happen in popup forms, not inside the page.</p></div>
+        <button type="button" className="btn btn-primary" onClick={createPackage}>Create package</button>
       </div>
-    </>
+
+      <section className="trial-control">
+        <div>
+          <h2>Included free trial</h2>
+          <p>{trial ? `${formatDuration(trial.durationMinutes)} · ${trial.status === 'ACTIVE' ? 'On' : 'Off'}. This default trial cannot be created or deleted here.` : 'The default free trial has not been provisioned. Contact the platform administrator.'}</p>
+        </div>
+        {trial && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" className={`package-switch ${trial.status === 'ACTIVE' ? 'on' : ''}`} onClick={() => void toggle(trial)} aria-label="Toggle free trial"><span /></button>
+          <button type="button" className="btn btn-ghost" onClick={() => { setTrialDuration(String(trial.durationMinutes)); setTrialOpen(true) }}>Adjust duration</button>
+        </div>}
+      </section>
+
+      {error && <p style={{ color: 'var(--danger-fg)', fontWeight: 700 }}>{error}</p>}
+      {success && <p style={{ color: 'var(--success-fg)', fontWeight: 700 }}>{success}</p>}
+
+      <div className="package-toolbar">
+        <div className="package-tabs">
+          {([['internet','Internet'],['multi','Multi-device'],['tv','TV / Smart TV']] as const).map(([key,label]) => <button type="button" key={key} className={`package-tab ${view === key ? 'active' : ''}`} onClick={() => setView(key)}>{label}<span>{counts[key]}</span></button>)}
+        </div>
+        <div className="package-tools"><input className="form-input" placeholder="Search this category…" value={query} onChange={(event) => setQuery(event.target.value)} /><button type="button" className="btn btn-primary" onClick={createPackage}>+ Add {view === 'multi' ? 'multi-device' : view === 'tv' ? 'TV' : 'internet'} package</button></div>
+      </div>
+
+      <div className="package-list">
+        {loading && <div className="card">Loading packages…</div>}
+        {!loading && visibleItems.length === 0 && <div className="card"><div className="empty-state"><p>No packages in this category.</p></div></div>}
+        {visibleItems.map((item) => <div className="package-row" key={item.id}>
+          <div><strong>{item.name}</strong><small>{item.code}{item.description ? ` · ${item.description}` : ''}</small></div>
+          <div><small>Price</small><strong>{formatCurrency(item.activePriceUgx)}</strong></div>
+          <div><small>Duration</small><strong>{formatDuration(item.durationMinutes)}</strong></div>
+          <div><small>Devices</small><strong>{item.deviceLimit ?? 1}</strong></div>
+          <div><small>Speed</small><strong>{speedLabel(item)}</strong></div>
+          <div className="package-row-actions">
+            <button type="button" className={`package-switch ${item.status === 'ACTIVE' ? 'on' : ''}`} onClick={() => void toggle(item)} aria-label={`Toggle ${item.name}`}><span /></button>
+            {view === 'tv' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setTvPackage(item)}>Connect TV</button>}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => editPackage(item)}>Edit</button>
+            {deleteId === item.id ? <><button type="button" className="btn btn-sm" onClick={() => void removePackage(item.id)} disabled={saving}>Confirm delete</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleteId(null)}>Cancel</button></> : <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger-fg)' }} onClick={() => setDeleteId(item.id)}>Delete</button>}
+          </div>
+        </div>)}
+      </div>
+
+      <Modal open={formOpen} title={editing ? `Edit ${editing.name}` : 'Create internet package'} onClose={() => !saving && setFormOpen(false)} width={820}>
+        <form onSubmit={savePackage}>
+          {!editing && formStep === 0 && <>
+            <p style={{ marginTop: 0, color: 'var(--text-2)' }}>Choose the package type first. The next screen shows only fields relevant to that type.</p>
+            <div className="package-kind-grid">
+              {([['INTERNET','Internet','One-device standard access'],['MULTI','Multi-device','Shared access for two or more devices'],['TV','TV / Smart TV','Access bound to a television MAC address']] as const).map(([value,title,description]) => <button type="button" key={value} className={`package-kind ${kind === value ? 'active' : ''}`} onClick={() => applyKind(value)}><strong>{title}</strong><span>{description}</span></button>)}
+            </div>
+            <div className="package-form-actions"><button type="button" className="btn btn-ghost" onClick={() => setFormOpen(false)}>Cancel</button><button type="button" className="btn btn-primary" onClick={() => setFormStep(1)}>Continue</button></div>
+          </>}
+
+          {(editing || formStep === 1) && <>
+            <div className="package-form-grid">
+              <div className="form-group package-form-full"><label className="form-label">Business</label><select className="form-input" value={form.tenantId} onChange={(event) => setForm((current) => ({ ...current, tenantId: event.target.value }))} disabled={Boolean(editing)}><option value="">Select business</option>{tenants.map((tenant) => <option value={tenant.id} key={tenant.id}>{tenant.name}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">Package name</label><input className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></div>
+              <div className="form-group"><label className="form-label">Package code</label><input className="form-input" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} disabled={Boolean(editing)} required /></div>
+              <div className="form-group"><label className="form-label">Price UGX</label><input className="form-input" type="number" min={0} value={form.priceUgx} onChange={(event) => setForm((current) => ({ ...current, priceUgx: event.target.value }))} required /></div>
+              <div className="form-group"><label className="form-label">Duration minutes</label><input className="form-input" type="number" min={1} value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))} required /></div>
+              {kind === 'MULTI' && <div className="form-group"><label className="form-label">Number of devices</label><input className="form-input" type="number" min={2} value={form.deviceLimit} onChange={(event) => setForm((current) => ({ ...current, deviceLimit: event.target.value }))} /></div>}
+              <div className="form-group"><label className="form-label">Data limit MB (blank = unlimited)</label><input className="form-input" type="number" min={1} value={form.dataLimitMb} onChange={(event) => setForm((current) => ({ ...current, dataLimitMb: event.target.value }))} /></div>
+              <div className="form-group"><label className="form-label">Download speed Kbps</label><input className="form-input" type="number" min={1} value={form.downloadSpeedKbps} onChange={(event) => setForm((current) => ({ ...current, downloadSpeedKbps: event.target.value }))} /></div>
+              <div className="form-group"><label className="form-label">Upload speed Kbps</label><input className="form-input" type="number" min={1} value={form.uploadSpeedKbps} onChange={(event) => setForm((current) => ({ ...current, uploadSpeedKbps: event.target.value }))} /></div>
+              <div className="form-group package-form-full"><label className="form-label">Description</label><textarea className="form-input" rows={3} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></div>
+              <label className="package-form-full" style={{ display: 'flex', alignItems: 'center', gap: 9 }}><input type="checkbox" checked={form.isFeatured} onChange={(event) => setForm((current) => ({ ...current, isFeatured: event.target.checked }))} /> Feature this package on the customer portal</label>
+            </div>
+            <div className="package-form-actions"><button type="button" className="btn btn-ghost" onClick={() => !editing ? setFormStep(0) : setFormOpen(false)}>{editing ? 'Cancel' : 'Back'}</button><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Create package'}</button></div>
+          </>}
+        </form>
+      </Modal>
+
+      <Modal open={trialOpen} title="Adjust included free trial" onClose={() => !saving && setTrialOpen(false)} width={520}>
+        <form onSubmit={saveTrial}><p style={{ color: 'var(--text-2)' }}>The free trial is provisioned by the platform. You may only turn it on or off and adjust its duration.</p><div className="form-group"><label className="form-label">Trial duration minutes</label><input className="form-input" type="number" min={1} value={trialDuration} onChange={(event) => setTrialDuration(event.target.value)} required /></div><div className="package-form-actions"><button type="button" className="btn btn-ghost" onClick={() => setTrialOpen(false)}>Cancel</button><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save duration'}</button></div></form>
+      </Modal>
+
+      <Modal open={Boolean(tvPackage)} title={`Connect Smart TV${tvPackage ? ` · ${tvPackage.name}` : ''}`} onClose={() => !saving && setTvPackage(null)} width={560}>
+        <form onSubmit={activateTv}><div className="form-group"><label className="form-label">TV wireless MAC address</label><input className="form-input" placeholder="AA:BB:CC:DD:EE:FF" value={tvMac} onChange={(event) => setTvMac(event.target.value)} required /></div><div className="form-group"><label className="form-label">Customer name (optional)</label><input className="form-input" value={tvCustomer} onChange={(event) => setTvCustomer(event.target.value)} /></div><div className="form-group"><label className="form-label">Phone number (optional)</label><input className="form-input" value={tvPhone} onChange={(event) => setTvPhone(event.target.value)} /></div><div className="package-form-actions"><button type="button" className="btn btn-ghost" onClick={() => setTvPackage(null)}>Cancel</button><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Connecting…' : 'Activate TV'}</button></div></form>
+      </Modal>
+    </div>
   )
 }

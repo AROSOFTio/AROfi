@@ -1,15 +1,7 @@
-import AgentVoucherAccountabilityReport from '@/components/AgentVoucherAccountabilityReport'
-import AgentVoucherIssuancePanel from '@/components/AgentVoucherIssuancePanel'
-import VouchersManager from '@/components/VouchersManager'
+import VouchersWorkspace from '@/components/VouchersWorkspace'
 
 export const dynamic = 'force-dynamic'
 
 export default function VouchersPage() {
-  return (
-    <>
-      <AgentVoucherIssuancePanel />
-      <AgentVoucherAccountabilityReport />
-      <VouchersManager />
-    </>
-  )
+  return <VouchersWorkspace />
 }

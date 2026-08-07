@@ -8,6 +8,7 @@ import { PackageActivationService } from './package-activation.service'
 import { PaymentsService } from './payments.service'
 import { AirtelMoneyCollectionService } from './airtel-money-collection.service'
 import { AirtelMoneyDisbursementService } from './airtel-money-disbursement.service'
+import { IotecPayService } from './iotec-pay.service'
 import { MtnMomoCollectionService } from './mtn-momo-collection.service'
 import { MtnMomoDisbursementService } from './mtn-momo-disbursement.service'
 import { PaymentRouterService } from './payment-router.service'
@@ -26,6 +27,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module'
   providers: [
     AirtelMoneyCollectionService,
     AirtelMoneyDisbursementService,
+    IotecPayService,
     MtnMomoCollectionService,
     MtnMomoDisbursementService,
     PackageActivationService,
@@ -39,6 +41,14 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module'
     WalletLedgerService,
     VoucherCodeService,
   ],
-  exports: [PackageActivationService, PaymentRouterService, PaymentsService, PhoneNumberService, YoUgandaCollectionService, YoUgandaDisbursementService],
+  exports: [
+    IotecPayService,
+    PackageActivationService,
+    PaymentRouterService,
+    PaymentsService,
+    PhoneNumberService,
+    YoUgandaCollectionService,
+    YoUgandaDisbursementService,
+  ],
 })
 export class PaymentsModule {}

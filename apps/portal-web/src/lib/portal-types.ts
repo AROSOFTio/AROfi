@@ -13,6 +13,9 @@ export type PortalContextResponse = {
   }
   packages: PortalPackage[]
   paymentNetworks?: Array<'MTN' | 'AIRTEL'>
+  paymentGateway?: 'YO_UGANDA' | 'IOTEC_PAY' | 'PESAPAL' | 'DIRECT_MNO'
+  paymentMethods?: Array<'MOBILE_MONEY' | 'CARD'>
+  paymentGatewayWarning?: string | null
   activeActivation?: PortalActivation | null
   latestPayment?: PortalPayment | null
   session?: PortalCustomerSession | null
