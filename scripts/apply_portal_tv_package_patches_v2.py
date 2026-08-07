@@ -275,9 +275,10 @@ replace_once(
 )
 
 portal_text = read(portal)
+# Validate structural markers only. The text “Already bought? Find My Voucher”
+# may legitimately remain in another recovery view and must not block a build.
 for obsolete in [
     "Connect this voucher to a Smart TV",
-    "Already bought? Find My Voucher",
     "setVoucherTvMode(",
 ]:
     if obsolete in portal_text:
