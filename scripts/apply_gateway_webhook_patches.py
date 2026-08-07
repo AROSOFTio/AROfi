@@ -82,8 +82,8 @@ replace_once(
 replace_once(
     service,
     '          provider: PaymentProvider.AGGREGATOR,\n          network: PaymentNetwork.MTN,',
-    '          provider: PaymentProvider.YO_UGANDA,\n          network: disbursement.network ?? PaymentNetwork.UNKNOWN,',
-    sentinel='provider: PaymentProvider.YO_UGANDA,\n          network: disbursement.network',
+    '          provider: PaymentProvider.YO_UGANDA,\n          network: PaymentNetwork.UNKNOWN,',
+    sentinel='provider: PaymentProvider.YO_UGANDA,\n          network: PaymentNetwork.UNKNOWN',
 )
 
 controller = 'apps/api/src/modules/payments/payments.controller.ts'
@@ -105,26 +105,8 @@ replace_once(
   @Get('webhooks/pesapal')""",
     sentinel='PaymentProvider.PESAPAL,\n      PaymentNetwork.UNKNOWN',
 )
-replace_once(
-    controller,
-    """    return this.paymentsService.handleAggregatorCollectionWebhook(query, headers)
-  }
-
-  @Post('webhooks/yo-uganda')""",
-    """    return this.paymentsService.handleProviderWebhook(
-      PaymentProvider.PESAPAL,
-      PaymentNetwork.UNKNOWN,
-      query,
-      headers,
-      'collection',
-    )
-  }
-
-  @Post('webhooks/yo-uganda')""",
-    sentinel="@Get('webhooks/pesapal')",
-)
-# The sentinel above identifies the surrounding route but does not prove the
-# method body was changed, so normalize it explicitly when still legacy.
+# Normalize provider-specific GET callbacks when they still point to the legacy
+# generic aggregator handler.
 text = read(controller)
 legacy_pesapal_get = """  @Get('webhooks/pesapal')
   handlePesapalReturn(
