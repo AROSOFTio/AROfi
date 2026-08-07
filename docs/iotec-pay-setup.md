@@ -1,6 +1,6 @@
 # ioTec Pay setup for AROFi
 
-AROFi can use ioTec Pay as the single platform payment gateway for MTN and Airtel Mobile Money collections, UGX Visa/Mastercard collections, wallet top-ups, subscriptions, and Mobile Money disbursements. Credentials are read only from deployment environment variables; never commit live credentials to Git.
+AROFi supports ioTec Pay for Mobile Money collections, UGX Visa/Mastercard checkout, and Mobile Money disbursements. Credentials are read only from deployment environment variables; never commit live credentials to Git.
 
 ## 1. Rotate exposed credentials first
 
@@ -23,7 +23,7 @@ The test wallet and test number must be used only in the ioTec test environment.
 
 ## 3. Collection callback
 
-Configure the ioTec wallet collection callback to call:
+Configure the ioTec wallet callback to call:
 
 ```text
 https://arofi.net/api/payments/webhooks/iotec/collection
@@ -34,8 +34,6 @@ Add this custom request header in ioTec wallet settings:
 ```text
 x-webhook-secret: <same value as IOTEC_WEBHOOK_SECRET>
 ```
-
-The same collection callback handles Mobile Money and card status changes. AROFi redirects card customers to the `cardRedirectUrl` returned by ioTec and checks the authoritative transaction status before activating internet.
 
 ## 4. Disbursement callback
 
@@ -51,25 +49,17 @@ Use the same `x-webhook-secret` header.
 
 Sign in as Platform/SaaS Admin and open **Settings → Payments & Fees**.
 
-The single gateway selector contains:
+Choose **ioTec Pay** as the Platform Payment Gateway and save. The one global selection is used for new customer payments, Pro subscriptions, SMS-credit purchases, wallet top-ups, and withdrawals. ioTec Pay also enables UGX Visa/Mastercard checkout on the customer portal.
 
-1. Yo! Uganda
-2. ioTec Pay
-3. Pesapal
-4. Direct MTN + Airtel
+The visible gateway choices are:
 
-Choose **ioTec Pay** and save. The system then uses ioTec automatically for all new supported collection and disbursement operations. Existing pending transactions continue checking the provider that created them.
+- Yo! Uganda
+- ioTec Pay
+- Direct MTN + Airtel
 
-## 6. Card checkout
+Pesapal remains hidden until arbitrary payout/disbursement support is approved and integrated. Existing pending transactions continue checking the provider that originally created them.
 
-When ioTec Pay is active, the customer portal displays:
-
-- Mobile Money
-- Visa / Mastercard
-
-Card payments are submitted in UGX. The customer provides an email address and phone number, AROFi creates the ioTec card transaction, and the browser is redirected to the hosted card page. The phone number remains attached to the order so AROFi can activate and later locate the customer's internet session.
-
-## 7. Production checklist
+## 6. Production checklist
 
 - Business KYC approved by ioTec
 - Live wallet ID configured
@@ -79,7 +69,6 @@ Card payments are submitted in UGX. The customer provides an email address and p
 - `x-webhook-secret` configured on both callbacks
 - One MTN test collection completed
 - One Airtel test collection completed
-- One UGX Visa/Mastercard test completed
+- One low-value UGX card payment completed
 - One low-value disbursement completed
 - Failed payment and failed disbursement callbacks verified
-- Gateway switch tested to confirm it affects only new transactions
