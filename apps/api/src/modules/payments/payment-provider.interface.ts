@@ -1,4 +1,4 @@
-import { PaymentNetwork, PaymentProvider, PaymentStatus } from '@prisma/client'
+import { PaymentMethod, PaymentNetwork, PaymentProvider, PaymentStatus } from '@prisma/client'
 
 export type PaymentProviderResult = {
   status: string
@@ -26,6 +26,9 @@ export type CollectPaymentInput = {
   amountUgx: number
   currency: string
   phoneNumber: string
+  emailAddress?: string
+  payerName?: string
+  method?: PaymentMethod
   externalReference: string
   customerReference?: string
   narrative: string
@@ -69,7 +72,7 @@ export function mapRawStatusToPaymentStatus(status?: string) {
   if (['SUCCESSFUL', 'SUCCEEDED', 'PAID', 'COMPLETED', 'SUCCESS'].includes(normalized)) {
     return PaymentStatus.COMPLETED
   }
-  if (['FAILED', 'REJECTED', 'TIMEOUT', 'DECLINED'].includes(normalized)) {
+  if (['FAILED', 'REJECTED', 'TIMEOUT', 'DECLINED', 'ROLLEDBACK'].includes(normalized)) {
     return PaymentStatus.FAILED
   }
   if (['CANCELLED', 'CANCELED'].includes(normalized)) {
@@ -78,7 +81,11 @@ export function mapRawStatusToPaymentStatus(status?: string) {
   if (normalized === 'EXPIRED') {
     return PaymentStatus.EXPIRED
   }
-  if (['PENDING', 'PROCESSING', 'INITIATED'].includes(normalized)) {
+  if (
+    ['PENDING', 'PROCESSING', 'INITIATED', 'SENTTOVENDOR', 'AWAITINGAPPROVAL', 'SCHEDULED'].includes(
+      normalized,
+    )
+  ) {
     return PaymentStatus.PENDING
   }
   return PaymentStatus.PENDING
