@@ -103,8 +103,22 @@ export class RoutersController {
 
   @RequirePermissions(PERMISSIONS.routersManage)
   @Post(':routerId/compensation/manual')
-  manuallyCompensateLatestOutage(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+  manuallyCompensateLatestOutage(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Param('routerId') routerId: string,
+    @Body() body: { activationIds?: string[] },
+  ) {
     const tenantId = this.accessScope.resolveTenantScope(user)
+    const activationIds = Array.isArray(body.activationIds)
+      ? body.activationIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : []
+
+    if (activationIds.length > 0) {
+      return this.routersService.manuallyCompensateSelectedOutage(routerId, activationIds, tenantId)
+    }
+
+    // Preserve the existing endpoint behavior for older dashboard builds:
+    // a request without activationIds still compensates the latest outage.
     return this.routersService.manuallyCompensateLatestOutage(routerId, tenantId)
   }
 
@@ -140,4 +154,3 @@ export class RoutersController {
     return this.routersService.deleteRouter(routerId, tenantId ?? undefined)
   }
 }
-
