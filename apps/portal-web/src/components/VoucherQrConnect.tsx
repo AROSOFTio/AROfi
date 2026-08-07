@@ -3,20 +3,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Wifi } from 'lucide-react'
 
+const ROUTER_GATEWAY = '10.55.0.1'
+
 type VoucherQrConnectProps = {
   voucher: string
+  /**
+   * Kept for backwards compatibility with already printed QR links. The router
+   * login target is deliberately the numeric gateway because Android private
+   * DNS and public resolvers cannot resolve tenant-local *.wifi hostnames.
+   */
   hotspotHost?: string
 }
 
-function sanitizeHotspotHost(value?: string) {
-  const normalized = (value ?? '').trim().toLowerCase()
-  return /^[a-z0-9.-]+\.wifi$/i.test(normalized) ? normalized : '10.55.0.1'
-}
-
-export default function VoucherQrConnect({ voucher, hotspotHost }: VoucherQrConnectProps) {
+export default function VoucherQrConnect({ voucher }: VoucherQrConnectProps) {
   const [redirecting, setRedirecting] = useState(true)
   const cleanVoucher = voucher.trim().toUpperCase()
-  const safeHost = sanitizeHotspotHost(hotspotHost)
 
   const targets = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -27,14 +28,14 @@ export default function VoucherQrConnect({ voucher, hotspotHost }: VoucherQrConn
     fallbackUrl.searchParams.set('voucher', cleanVoucher)
     fallbackUrl.searchParams.set('intent', 'connect')
 
-    const localUrl = new URL(`http://${safeHost}/login`)
+    const localUrl = new URL(`http://${ROUTER_GATEWAY}/login`)
     localUrl.searchParams.set('voucher', cleanVoucher)
 
     return {
       localUrl: localUrl.toString(),
       fallbackUrl: fallbackUrl.toString(),
     }
-  }, [cleanVoucher, safeHost])
+  }, [cleanVoucher])
 
   useEffect(() => {
     if (!cleanVoucher || targets.localUrl === '#') {
@@ -46,7 +47,7 @@ export default function VoucherQrConnect({ voucher, hotspotHost }: VoucherQrConn
       const isAndroid = /Android/i.test(window.navigator.userAgent)
       if (isAndroid) {
         const intentUrl =
-          `intent://${safeHost}/login?voucher=${encodeURIComponent(cleanVoucher)}` +
+          `intent://${ROUTER_GATEWAY}/login?voucher=${encodeURIComponent(cleanVoucher)}` +
           `#Intent;scheme=http;S.browser_fallback_url=${encodeURIComponent(targets.fallbackUrl)};end`
         window.location.replace(intentUrl)
         return
@@ -55,7 +56,7 @@ export default function VoucherQrConnect({ voucher, hotspotHost }: VoucherQrConn
     }, 450)
 
     return () => window.clearTimeout(timer)
-  }, [cleanVoucher, safeHost, targets])
+  }, [cleanVoucher, targets])
 
   return (
     <main className="grid min-h-screen place-items-center bg-gradient-to-b from-blue-50 to-emerald-50 px-4 py-10 text-slate-950">
