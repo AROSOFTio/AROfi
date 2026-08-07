@@ -25,6 +25,14 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def replace_all_required(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        if new in text:
+            return text
+        raise RuntimeError(f"{label}: no matching source block found")
+    return text.replace(old, new)
+
+
 text = SERVICE.read_text()
 
 text = replace_once(
@@ -34,7 +42,9 @@ text = replace_once(
     "friendly voucher batch number",
 )
 
-text = replace_once(
+# The same compact agent projection appears in overview and create responses.
+# Adding territory to both is intentional and keeps stock/report clients useful.
+text = replace_all_required(
     text,
     """          agent: {
             select: {
@@ -53,7 +63,7 @@ text = replace_once(
               territory: true,
             },
           },""",
-    "created batch agent location",
+    "agent location projections",
 )
 
 text = replace_once(
