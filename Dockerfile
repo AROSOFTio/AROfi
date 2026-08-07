@@ -26,9 +26,10 @@ COPY . .
 
 # Apply the guarded source patches before Prisma generation and compilation.
 # The second phase replaces the legacy per-network selectors with one Platform
-# Admin gateway used for collections, card checkout, top-ups, and withdrawals.
+# Admin gateway; the final phase gives each callback an explicit provider ID.
 RUN python3 scripts/apply_iotec_source_patches.py \
-    && python3 scripts/apply_unified_gateway_patches.py
+    && python3 scripts/apply_unified_gateway_patches.py \
+    && python3 scripts/apply_gateway_webhook_patches.py
 
 # Generate Prisma Client
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
