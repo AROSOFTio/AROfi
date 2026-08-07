@@ -34,12 +34,22 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
-      - name: Apply guarded payment source patches
+      - name: Apply guarded production source patches
         run: |
           python3 scripts/apply_iotec_source_patches.py
           python3 scripts/apply_unified_gateway_patches.py
           python3 scripts/apply_gateway_webhook_patches.py
           python3 scripts/hide_pesapal_gateway.py
+          python3 scripts/apply_live_gateway_activation.py
+          python3 scripts/preserve_yo_uganda_gateway.py
+          python3 scripts/apply_voucher_preview_patches.py
+          python3 scripts/apply_voucher_dashboard_patches.py
+          python3 scripts/finalize_voucher_dashboard.py
+          python3 scripts/fix_lucide_icon_compat.py
+          python3 scripts/apply_public_content_patches.py
+          python3 scripts/apply_router_compensation_review.py
+          python3 scripts/apply_router_compensation_ui.py
+          python3 scripts/fix_support_ticket_workspace.py
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=apps/api/prisma/schema.prisma
