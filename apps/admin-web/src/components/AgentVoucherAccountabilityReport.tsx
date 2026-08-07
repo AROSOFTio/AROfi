@@ -65,7 +65,7 @@ export default function AgentVoucherAccountabilityReport() {
       setPackages(packageData.items ?? [])
       await loadReport(initialFilters)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load voucher accountability report')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load report')
     } finally {
       setLoading(false)
     }
@@ -83,7 +83,7 @@ export default function AgentVoucherAccountabilityReport() {
       setLoading(true)
       await loadReport(filters)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to apply report filters')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to apply filters')
     } finally {
       setLoading(false)
     }
@@ -107,53 +107,51 @@ export default function AgentVoucherAccountabilityReport() {
   return (
     <section className="card voucher-report-launcher">
       <style>{`
-        .voucher-report-launcher{padding:22px}
-        .voucher-report-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
-        .voucher-report-head h2{font-size:20px;margin:0 0 6px;color:var(--text-primary)}
-        .voucher-report-head p{margin:0;color:var(--text-2);font-size:13px;line-height:1.5;max-width:690px}
-        .voucher-report-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}
-        .voucher-report-summary div{padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)}
-        .voucher-report-summary span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px}
-        .voucher-report-summary strong{font-size:16px;color:var(--text-primary)}
-        .voucher-report-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:16px}
-        .voucher-report-table{max-height:46vh;overflow:auto;border:1px solid var(--border);border-radius:12px}
-        .voucher-report-table table{min-width:1120px;margin:0}
-        @media(max-width:780px){.voucher-report-head{display:block}.voucher-report-head .btn{width:100%;margin-top:14px}.voucher-report-summary{grid-template-columns:1fr 1fr}.voucher-report-filters{grid-template-columns:1fr}}
+        .voucher-report-launcher{padding:16px 18px}
+        .voucher-report-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+        .voucher-report-head h2{font-size:16px;line-height:1.3;font-weight:650;margin:0;color:var(--text-primary)}
+        .voucher-report-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}
+        .voucher-report-summary div{padding:10px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card)}
+        .voucher-report-summary span{display:block;font-size:11px;color:var(--text-muted);margin-bottom:2px}
+        .voucher-report-summary strong{font-size:14px;font-weight:650;color:var(--text-primary)}
+        .voucher-report-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+        .voucher-report-table{max-height:48vh;overflow:auto;border:1px solid var(--border);border-radius:9px}
+        .voucher-report-table table{min-width:1080px;margin:0}
+        .voucher-report-table th,.voucher-report-table td{padding:9px 10px;font-size:12.5px}
+        @media(max-width:780px){.voucher-report-summary{grid-template-columns:1fr 1fr}.voucher-report-filters{grid-template-columns:1fr}.voucher-report-head{align-items:center}}
+        @media(max-width:480px){.voucher-report-launcher{padding:14px}.voucher-report-summary{grid-template-columns:1fr}.voucher-report-head .btn{white-space:nowrap}}
       `}</style>
 
       <div className="voucher-report-head">
-        <div>
-          <h2>Voucher sales accountability</h2>
-          <p>See confirmed redemptions, unsold stock, platform fees, owner sales, and agent sales without keeping a full report open on the page.</p>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>Open full report</button>
+        <h2>Voucher sales</h2>
+        <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>Open report</button>
       </div>
 
       <div className="voucher-report-summary">
-        <div><span>Confirmed sales</span><strong>{summary?.recordedSales ?? 0}</strong></div>
-        <div><span>Gross sales</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
-        <div><span>Unsold vouchers</span><strong>{summary?.unsold ?? 0}</strong></div>
+        <div><span>Sales</span><strong>{summary?.recordedSales ?? 0}</strong></div>
+        <div><span>Gross</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
+        <div><span>Unsold</span><strong>{summary?.unsold ?? 0}</strong></div>
         <div><span>Unsold value</span><strong>{formatCurrency(summary?.unsoldValueUgx ?? 0)}</strong></div>
       </div>
-      {error && <p style={{ color: 'var(--danger-fg)', margin: '12px 0 0' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--danger-fg)', margin: '10px 0 0', fontSize: 12.5 }}>{error}</p>}
 
-      <Modal open={open} title="Voucher sales accountability" onClose={() => setOpen(false)} width={1180}>
+      <Modal open={open} title="Voucher sales" onClose={() => setOpen(false)} width={1120}>
         <form onSubmit={submit}>
           <div className="voucher-report-filters">
             <div className="form-group">
-              <label className="form-label">Sales owner</label>
+              <label className="form-label">Owner</label>
               <select className="form-input" value={filters.ownerType} onChange={(event) => setFilters((current) => ({ ...current, ownerType: event.target.value as Filters['ownerType'], agentId: event.target.value === 'MAIN' ? '' : current.agentId }))}>
-                <option value="ALL">Main + all agents</option><option value="AGENT">Agents only</option><option value="MAIN">Main / owner only</option>
+                <option value="ALL">Main + agents</option><option value="AGENT">Agents</option><option value="MAIN">Main / owner</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Specific agent</label>
+              <label className="form-label">Agent</label>
               <select className="form-input" value={filters.agentId} onChange={(event) => setFilters((current) => ({ ...current, agentId: event.target.value, ownerType: event.target.value ? 'AGENT' : current.ownerType }))} disabled={filters.ownerType === 'MAIN'}>
                 <option value="">All agents</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.code} — {agent.name}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Location / territory</label>
+              <label className="form-label">Location</label>
               <select className="form-input" value={filters.territory} onChange={(event) => setFilters((current) => ({ ...current, territory: event.target.value }))}>
                 <option value="">All locations</option>{territories.map((territory) => <option key={territory} value={territory}>{territory}</option>)}
               </select>
@@ -164,28 +162,28 @@ export default function AgentVoucherAccountabilityReport() {
                 <option value="">All packages</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
               </select>
             </div>
-            <div className="form-group"><label className="form-label">Sales from</label><input className="form-input" type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></div>
-            <div className="form-group"><label className="form-label">Sales to</label><input className="form-input" type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">From</label><input className="form-input" type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></div>
+            <div className="form-group"><label className="form-label">To</label><input className="form-input" type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></div>
           </div>
-          <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginBottom: 17 }}>
-            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Apply filters'}</button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setFilters(initialFilters); void loadReport(initialFilters) }}>Clear</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Apply'}</button>
+            <button type="button" className="btn btn-ghost" onClick={() => { setFilters(initialFilters); void loadReport(initialFilters) }}>Reset</button>
             <a className="btn btn-ghost" href={exportUrl}>Export CSV</a>
           </div>
         </form>
 
-        <div className="voucher-report-summary" style={{ marginBottom: 16 }}>
-          <div><span>Gross sales</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
+        <div className="voucher-report-summary" style={{ marginBottom: 14 }}>
+          <div><span>Gross</span><strong>{formatCurrency(summary?.recordedSalesUgx ?? 0)}</strong></div>
           <div><span>Agent sales</span><strong>{formatCurrency(summary?.agentSalesUgx ?? 0)}</strong></div>
           <div><span>Main sales</span><strong>{formatCurrency(summary?.mainSalesUgx ?? 0)}</strong></div>
-          <div><span>Platform fees</span><strong>{formatCurrency(summary?.recordedFeesUgx ?? 0)}</strong></div>
+          <div><span>Fees</span><strong>{formatCurrency(summary?.recordedFeesUgx ?? 0)}</strong></div>
         </div>
 
         <div className="voucher-report-table">
           <table>
-            <thead><tr><th>Owner</th><th>Code / name</th><th>Location</th><th>Assigned</th><th>Unsold</th><th>Redeemed / sales</th><th>Gross</th><th>Fees</th><th>Net</th><th>Exceptions</th></tr></thead>
+            <thead><tr><th>Owner</th><th>Code / name</th><th>Location</th><th>Assigned</th><th>Unsold</th><th>Redeemed</th><th>Gross</th><th>Fees</th><th>Net</th><th>Status</th></tr></thead>
             <tbody>
-              {!loading && rows.length === 0 && <tr><td colSpan={10}>No voucher stock or sales match these filters.</td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={10}>No results.</td></tr>}
               {rows.map((row) => (
                 <tr key={row.key}>
                   <td><span className={row.owner === 'Agent' ? 'badge badge-success' : 'badge badge-ghost'}>{row.owner}</span></td>
@@ -193,8 +191,10 @@ export default function AgentVoucherAccountabilityReport() {
                   <td>{row.territory}</td>
                   <td><strong>{row.metric.totalAssigned}</strong><div style={{ fontSize: 11 }}>{formatCurrency(row.metric.assignedValueUgx)}</div></td>
                   <td><strong>{row.metric.unsold}</strong><div style={{ fontSize: 11 }}>{formatCurrency(row.metric.unsoldValueUgx)}</div></td>
-                  <td><strong>{row.metric.redeemed}</strong><div style={{ fontSize: 11 }}>{row.metric.recordedSales} confirmed</div></td>
-                  <td>{formatCurrency(row.metric.recordedSalesUgx)}</td><td>{formatCurrency(row.metric.recordedFeesUgx)}</td><td>{formatCurrency(row.metric.recordedNetUgx)}</td>
+                  <td><strong>{row.metric.redeemed}</strong><div style={{ fontSize: 11 }}>{row.metric.recordedSales} sales</div></td>
+                  <td>{formatCurrency(row.metric.recordedSalesUgx)}</td>
+                  <td>{formatCurrency(row.metric.recordedFeesUgx)}</td>
+                  <td>{formatCurrency(row.metric.recordedNetUgx)}</td>
                   <td>{row.metric.expired > 0 || row.metric.voided > 0 ? <span className="badge badge-warning">{row.metric.expired} expired · {row.metric.voided} voided</span> : <span className="badge badge-success">Clear</span>}</td>
                 </tr>
               ))}
