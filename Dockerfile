@@ -84,24 +84,23 @@ RUN set -eux; \
     du -sh /runtime/admin /runtime/portal apps/api/dist node_modules/.prisma
 
 # Runtime image intentionally does not copy the root monorepo node_modules.
-# The previous image completed every build but Coolify died while exporting its
-# oversized final layer. Install only API production dependencies and copy the
-# two minimal Next standalone bundles.
+# Install only API production dependencies and copy the two minimal Next
+# standalone bundles. The API dependency install starts independently of the
+# long frontend builds so Coolify does not hit its deployment time limit after
+# all application builds have already succeeded.
 FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
 RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
-# This marker deliberately makes the runtime dependency stage wait for the
-# complete builder stage. Without it, BuildKit runs both large npm installs at
-# the same time and can exhaust the deployment server while Prisma is starting.
-COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
     cd apps/api && \
-    npm_config_jobs=1 npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline && \
-    npm cache clean --force
+    NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
+# Wait for the builder only after runtime dependencies are ready. BuildKit can
+# prepare this small runtime layer while the Admin, Portal and API compile.
+COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
 COPY --from=builder /usr/src/app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /usr/src/app/node_modules/.prisma ./apps/api/node_modules/.prisma
