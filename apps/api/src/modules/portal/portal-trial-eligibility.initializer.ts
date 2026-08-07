@@ -74,8 +74,10 @@ export class PortalTrialEligibilityInitializer implements OnModuleInit {
           : [],
       ])
 
-      const trialFlagByPackageId = new Map(
-        packageFlags.map((pkg) => [pkg.id, pkg.isTrialEnabled]),
+      const trialFlagByPackageId = new Map<string, boolean>(
+        packageFlags.map(
+          (pkg): [string, boolean] => [pkg.id, Boolean(pkg.isTrialEnabled)],
+        ),
       )
       const eligible = identityFilters.length > 0 && !previousTrial
       const packages = Array.isArray(result?.packages)
