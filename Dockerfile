@@ -19,7 +19,8 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
     && python3 scripts/hide_pesapal_gateway.py \
-    && python3 scripts/apply_voucher_preview_patches.py
+    && python3 scripts/apply_voucher_preview_patches.py \
+    && python3 scripts/apply_voucher_dashboard_patches.py
 
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
