@@ -28,6 +28,7 @@ export const REALTIME_EVENT_TYPES = [
 ] as const
 
 export type RealtimeEventType = (typeof REALTIME_EVENT_TYPES)[number]
+export type RealtimeConnectionState = 'connecting' | 'open' | 'error'
 
 export type RealtimeEvent = {
   id: string
@@ -47,15 +48,19 @@ const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 export function useRealtimeEvents(
   onEvent: (event: RealtimeEvent) => void,
   types: readonly RealtimeEventType[] = REALTIME_EVENT_TYPES,
+  onStatus?: (state: RealtimeConnectionState) => void,
 ) {
   const handlerRef = useRef(onEvent)
+  const statusRef = useRef(onStatus)
   handlerRef.current = onEvent
+  statusRef.current = onStatus
 
   // Keying the effect on the type LIST content (not array identity) avoids
   // tearing the connection down every render when callers pass literals.
   const typesKey = types.join(',')
 
   useEffect(() => {
+    statusRef.current?.('connecting')
     const source = new EventSource(`${apiBase}/events/stream`, { withCredentials: true })
 
     const listener = (raw: MessageEvent) => {
@@ -66,6 +71,9 @@ export function useRealtimeEvents(
         // Malformed frame — skip.
       }
     }
+
+    source.onopen = () => statusRef.current?.('open')
+    source.onerror = () => statusRef.current?.('error')
 
     for (const type of typesKey.split(',').filter(Boolean)) {
       source.addEventListener(type, listener)
