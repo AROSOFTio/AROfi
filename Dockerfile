@@ -18,6 +18,7 @@ COPY . .
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
+    && python3 scripts/hide_pesapal_gateway.py \
     && python3 scripts/apply_live_gateway_activation.py \
     && python3 scripts/preserve_yo_uganda_gateway.py \
     && python3 scripts/apply_voucher_preview_patches.py \
@@ -32,7 +33,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
     && python3 scripts/apply_mikrotik_background_install.py \
-    && python3 scripts/hide_pesapal_gateway.py
+    && python3 scripts/finalize_gateway_compile.py
 
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
