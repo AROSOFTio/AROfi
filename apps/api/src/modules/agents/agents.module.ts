@@ -4,11 +4,13 @@ import { BillingModule } from '../billing/billing.module'
 import { AgentVoucherMetricsService } from './agent-voucher-metrics.service'
 import { AgentsController } from './agents.controller'
 import { AgentsService } from './agents.service'
+import { VoucherDashboardController } from './voucher-dashboard.controller'
+import { VoucherDashboardService } from './voucher-dashboard.service'
 
 @Module({
   imports: [AuthModule, BillingModule],
-  controllers: [AgentsController],
-  providers: [AgentsService, AgentVoucherMetricsService],
-  exports: [AgentsService, AgentVoucherMetricsService],
+  controllers: [AgentsController, VoucherDashboardController],
+  providers: [AgentsService, AgentVoucherMetricsService, VoucherDashboardService],
+  exports: [AgentsService, AgentVoucherMetricsService, VoucherDashboardService],
 })
 export class AgentsModule {}
