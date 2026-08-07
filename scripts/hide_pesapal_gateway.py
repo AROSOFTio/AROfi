@@ -38,5 +38,10 @@ if old_help in text:
 elif new_help not in text:
     raise RuntimeError('SettingsManager gateway help text was not found')
 
+if "const gatewayOptions = ['YO_UGANDA', 'IOTEC_PAY', 'PESAPAL', 'DIRECT_MNO']" in text:
+    raise RuntimeError('Pesapal is still visible in the gateway options')
+if new_options not in text:
+    raise RuntimeError('Expected visible gateway options were not written')
+
 SETTINGS.write_text(text)
 print('Pesapal hidden from Platform Admin gateway selector.')
