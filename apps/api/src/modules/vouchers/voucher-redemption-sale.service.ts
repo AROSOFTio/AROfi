@@ -7,6 +7,7 @@ import {
   VoucherStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { RealtimeEventsService } from '../events/realtime-events.service'
 
 /**
  * Converts the financial redemption record into the single authoritative
@@ -17,10 +18,13 @@ import { PrismaService } from '../../prisma.service'
 export class VoucherRedemptionSaleService {
   private readonly logger = new Logger(VoucherRedemptionSaleService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEvents: RealtimeEventsService,
+  ) {}
 
   async recordRedeemedVoucherAsSale(voucherId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const outcome = await this.prisma.$transaction(async (tx) => {
       const voucher = await tx.voucher.findUnique({
         where: { id: voucherId },
         include: {
@@ -31,9 +35,17 @@ export class VoucherRedemptionSaleService {
                   id: true,
                   code: true,
                   name: true,
+                  territory: true,
                   commissionRateBps: true,
                 },
               },
+            },
+          },
+          package: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
             },
           },
           billingTransactions: {
@@ -64,7 +76,7 @@ export class VoucherRedemptionSaleService {
           transaction.grossAmountUgx > 0,
       )
       if (existingSale) {
-        return existingSale
+        return { sale: existingSale, voucher, publish: false }
       }
 
       const redemptionTransaction = voucher.billingTransactions.find(
@@ -101,6 +113,7 @@ export class VoucherRedemptionSaleService {
             agentId: agent?.id ?? null,
             agentCode: agent?.code ?? null,
             agentName: agent?.name ?? null,
+            agentLocation: agent?.territory ?? null,
             redeemedAt: voucher.redeemedAt?.toISOString() ?? new Date().toISOString(),
           } as Prisma.InputJsonValue,
         },
@@ -132,7 +145,29 @@ export class VoucherRedemptionSaleService {
         }
       }
 
-      return sale
+      return { sale, voucher, publish: true }
     })
+
+    if (outcome?.publish) {
+      this.realtimeEvents.publish('voucher.redeemed', {
+        tenantId: outcome.sale.tenantId,
+        data: {
+          voucherId: outcome.voucher.id,
+          voucherCode: outcome.voucher.code,
+          batchId: outcome.voucher.batchId,
+          batchNumber: outcome.voucher.batch.batchNumber,
+          packageId: outcome.voucher.packageId,
+          packageName: outcome.voucher.package.name,
+          agentId: outcome.voucher.batch.agent?.id ?? null,
+          agentName: outcome.voucher.batch.agent?.name ?? null,
+          agentLocation: outcome.voucher.batch.agent?.territory ?? null,
+          transactionId: outcome.sale.id,
+          amountUgx: outcome.sale.grossAmountUgx,
+          redeemedAt: outcome.voucher.redeemedAt?.toISOString() ?? new Date().toISOString(),
+        },
+      })
+    }
+
+    return outcome?.sale ?? null
   }
 }
