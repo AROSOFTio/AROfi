@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Keep MikroTik onboarding alive when a MAC-WinBox session is interrupted.
+# Keep MikroTik onboarding alive when a MAC-WinBox session is interrupted and
+# make every API-issued reconnect payload independent of tenant-local DNS.
 #
 # Fresh captive setup intentionally moves LAN/Wi-Fi interfaces onto the AROFi
 # hotspot bridge. A MAC-WinBox session using one of those interfaces can drop at
@@ -10,9 +11,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
+PORTAL_SERVICE = ROOT / "apps/api/src/modules/portal/portal.service.ts"
 ADMIN = ROOT / "apps/admin-web/src/components/RoutersManager.tsx"
 
 SENTINEL = "AROFi installation continues in background"
+RECONNECT_SENTINEL = "const safeLoginUrl = /\\.wifi(?=[:/]|$)/i.test(requestedLoginUrl)"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -58,6 +61,36 @@ def patch_mikrotik(text: str) -> str:
     return updated
 
 
+def patch_portal_service(text: str) -> str:
+    if RECONNECT_SENTINEL in text:
+        return text
+
+    old = """    return {
+      loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login',
+      username,
+      password,
+      method: 'mikrotik-hotspot-post',
+    }
+"""
+    new = """    const requestedLoginUrl =
+      loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login'
+    const safeLoginUrl = /\\.wifi(?=[:/]|$)/i.test(requestedLoginUrl)
+      ? 'http://10.55.0.1/login'
+      : requestedLoginUrl
+
+    return {
+      loginUrl: safeLoginUrl,
+      username,
+      password,
+      method: 'mikrotik-hotspot-post',
+    }
+"""
+    updated = replace_once(text, old, new, "numeric voucher reconnect gateway")
+    if RECONNECT_SENTINEL not in updated or "loginUrl: safeLoginUrl" not in updated:
+        raise RuntimeError("Portal reconnect payload did not receive the numeric gateway guard")
+    return updated
+
+
 def patch_admin(text: str) -> str:
     old = (
         "Plug the ISP cable into that port and use another port or MAC WinBox while running setup. "
@@ -76,7 +109,11 @@ def patch_admin(text: str) -> str:
 
 
 def main() -> None:
-    for path, patcher in ((MIKROTIK, patch_mikrotik), (ADMIN, patch_admin)):
+    for path, patcher in (
+        (MIKROTIK, patch_mikrotik),
+        (PORTAL_SERVICE, patch_portal_service),
+        (ADMIN, patch_admin),
+    ):
         if not path.exists():
             raise RuntimeError(f"Required source file missing: {path.relative_to(ROOT)}")
         original = path.read_text(encoding="utf-8")
@@ -84,7 +121,7 @@ def main() -> None:
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
-    print("MikroTik background installer and MAC-WinBox warning applied.")
+    print("MikroTik background installer, numeric reconnect gateway, and MAC-WinBox warning applied.")
 
 
 if __name__ == "__main__":
