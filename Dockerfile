@@ -22,7 +22,8 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_voucher_preview_patches.py \
     && python3 scripts/apply_voucher_dashboard_patches.py \
     && python3 scripts/finalize_voucher_dashboard.py \
-    && python3 scripts/fix_lucide_icon_compat.py
+    && python3 scripts/fix_lucide_icon_compat.py \
+    && python3 scripts/apply_public_content_patches.py
 
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
