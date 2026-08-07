@@ -1,6 +1,6 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { PaymentProvider } from '@prisma/client'
+import { PaymentMethod, PaymentProvider } from '@prisma/client'
 import {
   CollectPaymentInput,
   PaymentCollectionProvider,
@@ -10,7 +10,7 @@ import {
 
 @Injectable()
 export class PesapalCollectionService implements PaymentCollectionProvider {
-  readonly provider = PaymentProvider.AGGREGATOR
+  readonly provider = PaymentProvider.PESAPAL
   private token?: { value: string; expiresAt: number }
 
   constructor(private readonly configService: ConfigService) {}
@@ -35,7 +35,9 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
     const text = await response.text()
     const body = this.parseJson(text)
     if (!response.ok) {
-      throw new ServiceUnavailableException(this.sanitizeErrorMessage(this.readError(body) ?? text, response.status))
+      throw new ServiceUnavailableException(
+        this.sanitizeErrorMessage(this.readError(body) ?? text, response.status),
+      )
     }
 
     const token = this.readString(body, ['token', 'access_token'])
@@ -43,16 +45,23 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
       throw new ServiceUnavailableException('Pesapal auth response did not contain an access token')
     }
 
-    const expiresIn = Number(this.readString(body, ['expires_in']) ?? 3600)
+    const expiresIn = Number(this.readString(body, ['expires_in']) ?? 300)
     this.token = { value: token, expiresAt: Date.now() + expiresIn * 1000 }
     return token
   }
 
   async collectPayment(input: CollectPaymentInput): Promise<PaymentProviderResult> {
     const token = await this.createAccessToken()
+    const isCard = input.method === PaymentMethod.CARD
+    const emailAddress = input.emailAddress?.trim().toLowerCase()
+
+    if (isCard && !emailAddress) {
+      throw new ServiceUnavailableException('Customer email is required for Pesapal card checkout')
+    }
+
     const payload = {
       id: input.externalReference,
-      currency: input.currency,
+      currency: input.currency || 'UGX',
       amount: input.amountUgx,
       description: input.narrative,
       callback_url: input.returnUrl ?? this.returnUrl(input.externalReference),
@@ -60,12 +69,10 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
       billing_address: {
         phone_number: input.phoneNumber,
         country_code: 'UG',
-        email_address: `${input.externalReference.toLowerCase()}@arofi.local`,
-        first_name: input.customerReference ?? 'Portal',
+        email_address: emailAddress || `${input.externalReference.toLowerCase()}@payments.arofi.net`,
+        first_name: input.payerName || input.customerReference || 'AROFi',
         last_name: 'Customer',
       },
-      payment_method: 'MOBILE_MONEY',
-      mobile_money_network: input.network,
     }
 
     const response = await fetch(`${this.baseUrl()}/api/Transactions/SubmitOrderRequest`, {
@@ -80,12 +87,15 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
     const text = await response.text()
     const body = this.parseJson(text)
     if (!response.ok) {
-      throw new ServiceUnavailableException(this.sanitizeErrorMessage(this.readError(body) ?? text, response.status))
+      throw new ServiceUnavailableException(
+        this.sanitizeErrorMessage(this.readError(body) ?? text, response.status),
+      )
     }
 
     const orderTrackingId = this.readString(body, ['order_tracking_id', 'orderTrackingId'])
     const checkoutUrl = this.readString(body, ['redirect_url', 'checkout_url', 'checkoutUrl'])
-    const merchantReference = this.readString(body, ['merchant_reference', 'merchantReference']) ?? input.externalReference
+    const merchantReference =
+      this.readString(body, ['merchant_reference', 'merchantReference']) ?? input.externalReference
 
     return {
       status: 'OK',
@@ -95,9 +105,11 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
       checkoutUrl,
       orderTrackingId,
       merchantReference,
-      statusMessage: 'Payment checkout ready. Complete payment to activate internet.',
+      statusMessage: isCard
+        ? 'Pesapal checkout ready. Choose Visa or Mastercard on the secure payment page.'
+        : 'Pesapal checkout ready. Complete payment to activate internet.',
       amount: input.amountUgx.toString(),
-      currencyCode: input.currency,
+      currencyCode: input.currency || 'UGX',
       rawRequest: JSON.stringify(payload),
       rawResponse: text,
     }
@@ -116,7 +128,9 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
     const text = await response.text()
     const body = this.parseJson(text)
     if (!response.ok) {
-      throw new ServiceUnavailableException(this.sanitizeErrorMessage(this.readError(body) ?? text, response.status))
+      throw new ServiceUnavailableException(
+        this.sanitizeErrorMessage(this.readError(body) ?? text, response.status),
+      )
     }
 
     const rawStatus = (
@@ -135,7 +149,8 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
       transactionStatus,
       transactionReference: referenceId,
       orderTrackingId: referenceId,
-      statusMessage: this.readString(body, ['description', 'message']) ?? `Pesapal status ${rawStatus}`,
+      statusMessage:
+        this.readString(body, ['description', 'message']) ?? `Pesapal status ${rawStatus}`,
       amount: this.readString(body, ['amount']),
       currencyCode: this.readString(body, ['currency', 'currency_code']),
       rawRequest: url,
@@ -144,15 +159,24 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
   }
 
   async handleWebhook(payload: Record<string, unknown>): Promise<ProviderWebhookResult> {
-    const providerReference = this.readString(payload, ['order_tracking_id', 'OrderTrackingId', 'transactionReference'])
-    const externalReference = this.readString(payload, ['merchant_reference', 'MerchantReference', 'externalReference'])
+    const providerReference = this.readString(payload, [
+      'order_tracking_id',
+      'OrderTrackingId',
+      'transactionReference',
+    ])
+    const externalReference = this.readString(payload, [
+      'merchant_reference',
+      'MerchantReference',
+      'externalReference',
+    ])
     return {
       externalReference,
       providerReference,
       result: {
         status: 'OK',
         statusCode: 1,
-        transactionStatus: this.readString(payload, ['payment_status_description', 'status']) ?? 'PENDING',
+        transactionStatus:
+          this.readString(payload, ['payment_status_description', 'status']) ?? 'PENDING',
         transactionReference: providerReference,
         orderTrackingId: providerReference,
         rawRequest: '',
@@ -187,7 +211,7 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
 
   private required(key: string) {
     const value = this.configService.get<string>(key)?.trim()
-    if (!value || value.startsWith('CHANGE_ME')) {
+    if (!value || value.startsWith('CHANGE_ME') || value.startsWith('replace_with')) {
       throw new ServiceUnavailableException(`${key} is not configured`)
     }
     return value
@@ -215,12 +239,18 @@ export class PesapalCollectionService implements PaymentCollectionProvider {
   }
 
   private sanitizeErrorMessage(raw: string, httpStatus?: number): string {
-    if (httpStatus === 401) return 'Payment gateway authentication failed. Check PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET.'
-    if (httpStatus === 403) return 'Payment gateway access denied. The Pesapal account may lack required permissions.'
-    if (httpStatus === 429) return 'Payment gateway rate limit exceeded. Please try again in a moment.'
-    if (httpStatus && httpStatus >= 500) return 'Payment gateway is temporarily unavailable. Please try again.'
+    if (httpStatus === 401)
+      return 'Payment gateway authentication failed. Check PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET.'
+    if (httpStatus === 403)
+      return 'Payment gateway access denied. The Pesapal account may lack required permissions.'
+    if (httpStatus === 429)
+      return 'Payment gateway rate limit exceeded. Please try again in a moment.'
+    if (httpStatus && httpStatus >= 500)
+      return 'Payment gateway is temporarily unavailable. Please try again.'
     const stripped = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    return stripped.length > 200 ? `${stripped.slice(0, 200)}…` : stripped || 'Payment gateway error'
+    return stripped.length > 200
+      ? `${stripped.slice(0, 200)}…`
+      : stripped || 'Payment gateway error'
   }
 
   private readError(source: Record<string, unknown>) {
