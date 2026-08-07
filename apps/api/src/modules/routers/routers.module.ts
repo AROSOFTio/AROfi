@@ -5,6 +5,7 @@ import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { SmsModule } from '../sms/sms.module'
 import { MikrotikAloginController } from './mikrotik-alogin.controller'
+import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
@@ -23,6 +24,7 @@ import { RemoteProxyService } from './remote-proxy.service'
     RoutersService,
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
+    MikrotikCompatibilityInitializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,
