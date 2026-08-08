@@ -1,0 +1,135 @@
+#!/bin/sh
+# Targeted redeploy for one service in the existing Coolify Compose project.
+#
+# Run this on the Coolify server from a checkout of the commit to deploy:
+#   AROFI_COOLIFY_APPLICATION_ID=5 ./scripts/deploy_coolify_component.sh api
+#
+# Unlike the Coolify Compose Deploy button, this keeps unrelated containers
+# running. It builds only the requested Dockerfile.components target, replaces
+# that one service, waits for it to become healthy, and reloads Nginx so its
+# upstream DNS is refreshed. A failed health check recreates the previous image.
+
+set -eu
+
+application_id=${AROFI_COOLIFY_APPLICATION_ID:-}
+component=${1:-}
+
+if [ -z "$application_id" ] || [ -z "$component" ]; then
+  echo "Usage: AROFI_COOLIFY_APPLICATION_ID=<id> $0 <api|admin|portal|nginx>" >&2
+  exit 64
+fi
+
+case "$component" in
+  api) target=api-runtime ;;
+  admin) target=admin-runtime ;;
+  portal) target=portal-runtime ;;
+  nginx) target=nginx-runtime ;;
+  *)
+    echo "Unsupported component: $component" >&2
+    exit 64
+    ;;
+esac
+
+old_container_ids=$(docker ps -q \
+  --filter "label=coolify.applicationId=$application_id" \
+  --filter "label=com.docker.compose.service=$component")
+set -- $old_container_ids
+if [ "$#" -ne 1 ]; then
+  echo "Expected exactly one live $component container for Coolify application $application_id." >&2
+  exit 1
+fi
+old_container=$1
+
+project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$old_container")
+compose_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$old_container")
+environment_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' "$old_container")
+previous_image=$(docker inspect -f '{{ .Config.Image }}' "$old_container")
+
+if [ ! -f "$compose_file" ] || [ ! -f "$environment_file" ]; then
+  echo "Coolify Compose metadata is incomplete for $old_container." >&2
+  exit 1
+fi
+
+revision=$(git rev-parse --short=12 HEAD)
+image="arofi-$component:$revision"
+override_file=$(mktemp /tmp/arofi-component-override-XXXXXX.yml)
+trap 'rm -f "$override_file"' EXIT HUP INT TERM
+
+write_override() {
+  selected_image=$1
+  printf 'services:\n  %s:\n    image: %s\n' "$component" "$selected_image" > "$override_file"
+}
+
+compose_up() {
+  docker compose \
+    --project-name "$project" \
+    --project-directory "$(dirname "$compose_file")" \
+    --env-file "$environment_file" \
+    -f "$compose_file" \
+    -f "$override_file" \
+    up --detach --no-deps --no-build "$component"
+}
+
+reload_nginx() {
+  [ "$component" = nginx ] && return 0
+
+  nginx_ids=$(docker ps -q \
+    --filter "label=coolify.applicationId=$application_id" \
+    --filter "label=com.docker.compose.service=nginx")
+  set -- $nginx_ids
+  if [ "$#" -ne 1 ]; then
+    echo "Could not find the live Nginx container to refresh upstream DNS." >&2
+    return 1
+  fi
+  docker exec "$1" nginx -s reload
+}
+
+wait_for_health() {
+  attempts=0
+  while [ "$attempts" -lt 36 ]; do
+    current_ids=$(docker compose \
+      --project-name "$project" \
+      --project-directory "$(dirname "$compose_file")" \
+      --env-file "$environment_file" \
+      -f "$compose_file" \
+      -f "$override_file" \
+      ps -q "$component")
+    set -- $current_ids
+    if [ "$#" -eq 1 ]; then
+      state=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$1")
+      if [ "$state" = healthy ]; then
+        return 0
+      fi
+      if [ "$state" = unhealthy ] || [ "$state" = exited ] || [ "$state" = dead ]; then
+        return 1
+      fi
+    fi
+    attempts=$((attempts + 1))
+    sleep 5
+  done
+  return 1
+}
+
+echo "[fast-deploy] Building $component only from $revision..."
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+  --target "$target" \
+  --tag "$image" \
+  --file Dockerfile.components \
+  .
+
+echo "[fast-deploy] Replacing only $component..."
+write_override "$image"
+compose_up
+
+if wait_for_health; then
+  reload_nginx
+  echo "[fast-deploy] $component is healthy on $image."
+  exit 0
+fi
+
+echo "[fast-deploy] $component did not become healthy; restoring $previous_image." >&2
+write_override "$previous_image"
+compose_up
+wait_for_health || true
+reload_nginx || true
+exit 1
