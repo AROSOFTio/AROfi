@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import PublicAppearanceDock from '@/components/PublicAppearanceDock'
+import DocsEnhancer from '@/components/docs/DocsEnhancer'
 
 export default function Template({ children }: { children: ReactNode }) {
   const repairThemeScript = `
@@ -33,6 +34,7 @@ export default function Template({ children }: { children: ReactNode }) {
     <>
       <script dangerouslySetInnerHTML={{ __html: repairThemeScript }} />
       {children}
+      <DocsEnhancer />
       <PublicAppearanceDock />
     </>
   )
