@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
-"""Validate the MikroTik onboarding flow and final local hotspot integrations.
+"""Validate MikroTik onboarding and apply the final captive/session policy.
 
-The provisioning generator preserves the owner management port, so the one-run
-command imports in the foreground. Foreground import keeps RouterOS failures
-visible. Voucher QR codes are finalized here as router-local login URLs because
-an unauthenticated hotspot customer cannot depend on public internet access.
-
-This pass also makes captive detection deterministic:
-- normal phones never wait on RouterOS MAC authentication;
-- hotspot clients use the MikroTik gateway as their only DNS server;
-- arofi.net is always allowed before authentication so packages can load;
-- idle and keepalive logout are permanently disabled on every user profile.
+The one-run command imports in the foreground so RouterOS errors remain visible.
+Voucher QR codes use the local hotspot login URL. Captive detection and returning
+access are deterministic:
+- exact automatic RADIUS ``login-by=mac`` is removed;
+- trusted post-login ``mac-cookie`` reconnect is enabled;
+- clients use the MikroTik gateway as their only DNS server;
+- arofi.net is allowed before authentication so packages load;
+- idle, keepalive and local session logout timers are disabled.
 """
 
 from pathlib import Path
+import re
 import runpy
-
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
@@ -34,6 +32,11 @@ LOCAL_LOGIN_MARKERS = (
     "loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login'",
     "const reconnectLoginUrl = requestedLoginUrl",
 )
+FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
+FINAL_PROFILE = (
+    "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
+    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
+)
 
 
 def replace_once(path: Path, old: str, new: str, label: str) -> None:
@@ -48,111 +51,108 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-def patch_mikrotik(text: str) -> str:
+def validate_foreground_install() -> None:
+    text = MIKROTIK.read_text(encoding="utf-8")
     if BACKGROUND_SENTINEL in text:
         raise RuntimeError(
-            "Hidden MikroTik background import is still present; keep the import "
-            "foreground so RouterOS failures remain visible."
+            "Hidden MikroTik background import is still present; keep the import foreground."
         )
-
     if not any(marker in text for marker in FOREGROUND_IMPORT_MARKERS):
-        raise RuntimeError(
-            "MikroTik foreground import command is missing from buildOneRunCommand."
-        )
-
-    return text
+        raise RuntimeError("MikroTik foreground import command is missing.")
 
 
-def patch_portal_service(text: str) -> str:
+def validate_portal_reconnect() -> None:
+    text = PORTAL_SERVICE.read_text(encoding="utf-8")
     if not any(marker in text for marker in LOCAL_LOGIN_MARKERS):
         raise RuntimeError(
-            "Portal reconnect payload no longer preserves the router-provided "
-            "local hotspot login URL."
+            "Portal reconnect payload no longer preserves the router-provided local login URL."
         )
-
-    return text
-
-
-def patch_admin(text: str) -> str:
-    # UI wording has changed several times. It must not make production builds
-    # depend on one exact sentence, so this compatibility step is intentionally
-    # non-mutating.
-    return text
 
 
 def patch_deterministic_captive_flow() -> None:
-    # MAC auth delays captive detection on ordinary phones because RouterOS first
-    # attempts RADIUS authentication with the phone MAC. Smart-TV credentials are
-    # still submitted explicitly by the portal, so normal hotspot login should be
-    # cookie/http-pap only.
-    replace_once(
-        MIKROTIK,
-        "login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password",
-        "login-by=cookie,http-pap",
-        "non-blocking captive login modes",
-    )
-
-    # The client must use the MikroTik DNS proxy. Supplying public resolvers in
-    # DHCP lets Windows/Android bypass the router DNS path and makes captive
-    # detection inconsistent. The router itself still resolves upstream through
-    # 1.1.1.1 and 8.8.8.8.
-    replace_once(
-        MIKROTIK,
-        "`/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,",
-        "`/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,",
-        "gateway-only hotspot DHCP DNS",
-    )
-
-    # Do not rely on a saved per-router host list for the core AROFi API. The
-    # local login page always calls arofi.net to load packages, redeem vouchers,
-    # and poll payments before the customer is authenticated.
-    replace_once(
-        MIKROTIK,
-        """      ...this.buildWalledGarden(input.portalHosts ?? []),
-      // Also allow the raw HTTP-fallback IP by address so captive-portal
-""",
-        """      ...this.buildWalledGarden(input.portalHosts ?? []),
-      `/ip hotspot walled-garden remove [find comment=\"AROFi core portal\"]`,
-      `/ip hotspot walled-garden add dst-host=\"arofi.net\" action=allow comment=\"AROFi core portal\"`,
-      // Also allow the raw HTTP-fallback IP by address so captive-portal
-""",
-        "core AROFi pre-auth walled garden",
-    )
-
-    # Apply the long idle-timeout policy directly in the generated script. The
-    # later compatibility patch accepts these already-final values and validates
-    # them again, so build order remains idempotent.
-    replace_once(
-        MIKROTIK,
-        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
-""",
-        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=31d keepalive-timeout=none`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=31d keepalive-timeout=none }`,
-""",
-        "31-day idle hotspot policy",
-    )
-
     text = MIKROTIK.read_text(encoding="utf-8")
-    # TypeScript template literals may contain either `"` or `\"` depending on
-    # which guarded patch inserted the RouterOS command. They produce the same
-    # command at runtime. Normalize only for semantic validation so harmless
-    # source escaping can never fail a production build again.
-    normalized = text.replace('\\"', '"')
+
+    # Replace every generated HotSpot profile login mode with the exact policy.
+    # ``mac-cookie`` is trusted after successful login; the exact ``mac`` token
+    # and mac-auth-mode are forbidden because they delay the first portal.
+    text, login_count = re.subn(
+        r"login-by=[^\s`\"]+(?:\s+mac-auth-mode=mac-as-username-and-password)?",
+        FINAL_LOGIN_BY,
+        text,
+    )
+    text = text.replace(" mac-auth-mode=mac-as-username-and-password", "")
+    if login_count < 1:
+        raise RuntimeError("MikroTik HotSpot login-by command is missing.")
+    text = text.replace(
+        f"{FINAL_LOGIN_BY} split-user-domain=",
+        f"{FINAL_LOGIN_BY} http-cookie-lifetime=30d split-user-domain=",
+    )
+
+    # Client DNS must pass through the gateway so business.wifi and captive
+    # detection cannot be bypassed by public resolvers advertised through DHCP.
+    text = re.sub(
+        r"dns-server=\$\{gatewayIp\}(?:,1\.1\.1\.1,8\.8\.8\.8|,8\.8\.8\.8,1\.1\.1\.1)",
+        "dns-server=${gatewayIp}",
+        text,
+    )
+
+    # Core AROFi API must load before authentication.
+    if "AROFi core portal" not in text:
+        marker = "      ...this.buildWalledGarden(input.portalHosts ?? []),\n"
+        if marker not in text:
+            raise RuntimeError("Core AROFi walled-garden insertion point is missing.")
+        text = text.replace(
+            marker,
+            marker
+            + '      `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,\n'
+            + '      `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,\n',
+            1,
+        )
+
+    # Canonicalize both default and all-profile commands. Stop before the source
+    # template backtick so TypeScript syntax cannot be consumed by the regex.
+    profile_pattern = re.compile(
+        r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=[^\s`,]+"
+        r"(?:\s+idle-timeout=[^\s`,]+)?"
+        r"(?:\s+keepalive-timeout=[^\s`,]+)?"
+        r"(?:\s+session-timeout=[^\s`,]+)?"
+        r"(?=[^`\r\n]*`)"
+    )
+    text, profile_count = profile_pattern.subn(FINAL_PROFILE, text)
+    if profile_count < 2:
+        raise RuntimeError(
+            "Expected default and all-profile MikroTik persistence commands; "
+            f"normalized only {profile_count}."
+        )
+
+    MIKROTIK.write_text(text, encoding="utf-8")
+
+    final = MIKROTIK.read_text(encoding="utf-8")
+    normalized = final.replace('\\"', '"')
     required = (
-        "login-by=cookie,http-pap",
+        FINAL_LOGIN_BY,
+        "http-cookie-lifetime=30d",
         "dns-server=${gatewayIp}`",
         'dst-host="arofi.net" action=allow comment="AROFi core portal"',
-        "mac-cookie-timeout=365d idle-timeout=31d keepalive-timeout=none",
+        FINAL_PROFILE,
     )
     for marker in required:
         if marker not in normalized:
             raise RuntimeError(f"Deterministic captive-flow marker missing: {marker}")
 
-    if "login-by=mac," in normalized:
-        raise RuntimeError("Blocking MAC authentication remains in the provisioning generator")
+    login_values = re.findall(r"login-by=([^\s`\"']+)", normalized)
+    for value in login_values:
+        if "mac" in {part.strip().lower() for part in value.split(",")}:
+            raise RuntimeError(
+                f"Blocking automatic MAC authentication remains in login-by={value}"
+            )
+    if re.search(r"mac-auth-mode\s*=", normalized, flags=re.IGNORECASE):
+        raise RuntimeError("mac-auth-mode remains in the provisioning generator")
     if "dns-server=${gatewayIp},1.1.1.1,8.8.8.8" in normalized:
-        raise RuntimeError("Hotspot DHCP still advertises public DNS servers directly to clients")
+        raise RuntimeError("HotSpot DHCP still advertises public DNS directly")
+    for forbidden in ("idle-timeout=31d", "keepalive-timeout=30d", "mac-cookie-timeout=365d"):
+        if forbidden in normalized:
+            raise RuntimeError(f"Obsolete HotSpot timeout remains: {forbidden}")
 
 
 def patch_voucher_qr_local_login() -> None:
@@ -235,19 +235,12 @@ def run_required_patch(filename: str) -> None:
 
 
 def main() -> None:
-    for path, patcher in (
-        (MIKROTIK, patch_mikrotik),
-        (PORTAL_SERVICE, patch_portal_service),
-        (ADMIN, patch_admin),
-    ):
+    for path in (MIKROTIK, PORTAL_SERVICE, ADMIN):
         if not path.exists():
             raise RuntimeError(f"Required source file missing: {path.relative_to(ROOT)}")
 
-        original = path.read_text(encoding="utf-8")
-        updated = patcher(original)
-        if updated != original:
-            path.write_text(updated, encoding="utf-8")
-
+    validate_foreground_install()
+    validate_portal_reconnect()
     run_required_patch("refresh_mikrotik_portal_assets.py")
     run_required_patch("fix_sstp_remote_target.py")
     run_required_patch("fix_router_hardware_detection.py")
@@ -255,8 +248,8 @@ def main() -> None:
     patch_voucher_qr_local_login()
 
     print(
-        "MikroTik foreground installer, immediate captive detection, pre-auth package access, "
-        "31-day idle policy, local voucher QR routing, SSTP target, and hardware detection verified."
+        "MikroTik foreground installer, trusted returning-device reconnect, no-idle active-bundle policy, "
+        "pre-auth packages, local voucher QR, SSTP target and hardware detection verified."
     )
 
 
