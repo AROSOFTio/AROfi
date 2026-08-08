@@ -1,9 +1,9 @@
-# Coolify deployment for AROFi — fully split images.
+# Coolify deployment for AROFi.
 #
-# API, Admin, Portal and Nginx are now built as four independent images from
-# separate Dockerfile targets. They no longer reuse one arofi-app image. BuildKit
-# still shares the dependency/patched-source cache, so this separation does not
-# require downloading the monorepo dependencies four times.
+# Build the monorepo runtime once. Building the four near-identical runtime
+# targets concurrently makes Coolify run the Admin/Portal/API builders four
+# times, which exhausts an 8 GiB server during Next.js trace collection. Each
+# service below starts the same image with its own SERVICE_NAME instead.
 
 x-api-env: &api-env
   NODE_ENV: ${NODE_ENV:-production}
@@ -138,14 +138,11 @@ x-web-env: &web-env
 
 services:
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: nginx-runtime
-    image: arofi-nginx:${AROFI_IMAGE_TAG:-local}
+    image: arofi-runtime:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
-      - SERVICE_FQDN_NGINX_3000
+      SERVICE_NAME: nginx
+      SERVICE_FQDN_NGINX_3000: ${SERVICE_FQDN_NGINX_3000:-}
     ports:
       - "${MIKROTIK_BOOTSTRAP_HTTP_PORT:-18080}:3001"
     depends_on:
@@ -164,13 +161,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: api-runtime
-    image: arofi-api:${AROFI_IMAGE_TAG:-local}
+      target: runtime
+    image: arofi-runtime:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     ports:
       - "${WINBOX_PROXY_HOST_PORT_RANGE:-31000-31100}:31000-31100"
     environment:
       <<: *api-env
+      SERVICE_NAME: api
     depends_on:
       - postgres
     mem_limit: 768m
@@ -182,14 +180,11 @@ services:
       start_period: 240s
 
   admin:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: admin-runtime
-    image: arofi-admin:${AROFI_IMAGE_TAG:-local}
+    image: arofi-runtime:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
       <<: *web-env
+      SERVICE_NAME: admin
     depends_on:
       - api
     mem_limit: 384m
@@ -201,14 +196,11 @@ services:
       start_period: 90s
 
   portal:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: portal-runtime
-    image: arofi-portal:${AROFI_IMAGE_TAG:-local}
+    image: arofi-runtime:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
       <<: *web-env
+      SERVICE_NAME: portal
     depends_on:
       - api
     mem_limit: 320m
