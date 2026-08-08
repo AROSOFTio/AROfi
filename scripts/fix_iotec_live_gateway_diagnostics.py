@@ -109,12 +109,16 @@ replace_once(
 )
 replace_once(
     settings,
-    """                              {readiness?.configured && readiness?.webhookConfigured
-                                ? 'Ready for production testing'
-                                : `Setup required${readiness?.missingConfiguration?.length ? `: ${readiness.missingConfiguration.join(', ')}` : ''}`}""",
-    """                              {readiness?.configured && readiness?.webhookConfigured
-                                ? 'Live configuration loaded — test connection'
-                                : `Setup required${readiness?.missingConfiguration?.length ? `: ${readiness.missingConfiguration.join(', ')}` : ''}`}""",
+    """                              {gateway === 'YO_UGANDA'
+                                ? 'Current working gateway (unchanged)'
+                                : readiness?.configured && readiness?.webhookConfigured
+                                  ? 'Ready for production testing'
+                                  : `Setup required${readiness?.missingConfiguration?.length ? `: ${readiness.missingConfiguration.join(', ')}` : ''}`}""",
+    """                              {gateway === 'YO_UGANDA'
+                                ? 'Live gateway available'
+                                : readiness?.configured && readiness?.webhookConfigured
+                                  ? 'Live configuration loaded — test connection'
+                                  : `Setup required${readiness?.missingConfiguration?.length ? `: ${readiness.missingConfiguration.join(', ')}` : ''}`}""",
 )
 replace_once(
     settings,
