@@ -21,7 +21,7 @@ CAPTIVE_FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initiali
 
 FINAL_PERSISTENCE = (
     "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
-    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
+    "idle-timeout=31d keepalive-timeout=none session-timeout=0s"
 )
 
 

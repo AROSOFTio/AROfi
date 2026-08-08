@@ -215,18 +215,18 @@ replace_once(
 )
 
 # Build-time guards against future regressions. The final production policy is
-# deliberately no idle timeout and no keepalive timeout. A previous guard still
+# deliberately long idle timeout and no keepalive timeout. A previous guard still
 # expected the superseded finite keepalive-timeout=30d value and falsely rejected
 # the safer configuration.
 for marker in (
-    "idle-timeout=none",
+    "idle-timeout=31d",
     "keepalive-timeout=none",
     "session-timeout=0s",
 ):
     require(
         MIKROTIK,
         marker,
-        "MikroTik no-idle session protection is missing; active customers could be logged out for inactivity.",
+        "MikroTik 31-day idle session protection is missing; router session policy is inconsistent.",
     )
 require(
     RADIUS_CREDENTIAL,
@@ -249,4 +249,4 @@ require(
     "Expiry fallback disconnect target was not installed.",
 )
 
-print("Router presence, permanent no-idle protection, and expiry logout hardened.")
+print("Router presence, 31-day idle timeout, and expiry logout hardened.")

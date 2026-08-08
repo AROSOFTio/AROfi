@@ -25,11 +25,11 @@ export function appendInstantAloginInstaller(script: string) {
   if (!script.includes(SESSION_PERSISTENCE_MARKER)) {
     additions.push(
       SESSION_PERSISTENCE_MARKER,
-      '# Idle, screen-lock and temporary ARP silence must never end paid access.',
+      '# A 31-day idle timeout protects abandoned sessions without interrupting normal use.',
       '# RADIUS Session-Timeout, quota exhaustion, explicit revocation or package expiry remain authoritative.',
       ':foreach arofiUserProfile in=[/ip hotspot user profile find] do={',
       '  :do {',
-      '    /ip hotspot user profile set $arofiUserProfile idle-timeout=none keepalive-timeout=none session-timeout=0s shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d',
+      '    /ip hotspot user profile set $arofiUserProfile idle-timeout=31d keepalive-timeout=none session-timeout=0s shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d',
       '  } on-error={',
       '    :put "WARNING: Could not update one HotSpot user profile for persistent access."',
       '  }',

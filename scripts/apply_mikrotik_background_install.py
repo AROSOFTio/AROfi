@@ -119,7 +119,7 @@ def patch_deterministic_captive_flow() -> None:
         "core AROFi pre-auth walled garden",
     )
 
-    # Apply the permanent no-idle policy directly in the generated script. The
+    # Apply the long idle-timeout policy directly in the generated script. The
     # later compatibility patch accepts these already-final values and validates
     # them again, so build order remains idempotent.
     replace_once(
@@ -127,10 +127,10 @@ def patch_deterministic_captive_flow() -> None:
         """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
       `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
 """,
-        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none }`,
+        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=31d keepalive-timeout=none`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=31d keepalive-timeout=none }`,
 """,
-        "permanent no-idle hotspot policy",
+        "31-day idle hotspot policy",
     )
 
     text = MIKROTIK.read_text(encoding="utf-8")
@@ -143,7 +143,7 @@ def patch_deterministic_captive_flow() -> None:
         "login-by=cookie,http-pap",
         "dns-server=${gatewayIp}`",
         'dst-host="arofi.net" action=allow comment="AROFi core portal"',
-        "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
+        "mac-cookie-timeout=365d idle-timeout=31d keepalive-timeout=none",
     )
     for marker in required:
         if marker not in normalized:
@@ -256,7 +256,7 @@ def main() -> None:
 
     print(
         "MikroTik foreground installer, immediate captive detection, pre-auth package access, "
-        "permanent no-idle policy, local voucher QR routing, SSTP target, and hardware detection verified."
+        "31-day idle policy, local voucher QR routing, SSTP target, and hardware detection verified."
     )
 
 

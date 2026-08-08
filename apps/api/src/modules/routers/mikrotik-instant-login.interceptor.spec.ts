@@ -20,11 +20,11 @@ describe('appendInstantAloginInstaller', () => {
     expect(result).toContain('post-login redirect is instant')
   })
 
-  it('disables idle, keepalive and local profile session cutoffs', () => {
+  it('uses a long idle timeout while preserving bundle expiry cutoffs', () => {
     const result = appendInstantAloginInstaller(provisioningScript)
 
     expect(result).toContain(
-      'idle-timeout=none keepalive-timeout=none session-timeout=0s',
+      'idle-timeout=31d keepalive-timeout=none session-timeout=0s',
     )
     expect(result).toContain(
       'active bundles stay online until their real expiry',
@@ -40,7 +40,7 @@ describe('appendInstantAloginInstaller', () => {
 
     const result = appendInstantAloginInstaller(existingRouterScript)
 
-    expect(result).toContain('idle-timeout=none')
+    expect(result).toContain('idle-timeout=31d')
     expect(result).not.toContain('hotspot/alogin.html')
   })
 

@@ -2,7 +2,7 @@
 """Keep paid HotSpot sessions online until their real RADIUS expiry.
 
 This restores the production-proven settings used by yesterday's working flow:
-- no idle timeout;
+- 31-day idle timeout;
 - no keepalive timeout;
 - no local profile session timeout;
 - one device per credential;
@@ -20,7 +20,7 @@ MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 
 FINAL_PROFILE = (
     "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
-    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
+    "idle-timeout=31d keepalive-timeout=none session-timeout=0s"
 )
 
 text = MIKROTIK.read_text(encoding="utf-8")
@@ -54,6 +54,6 @@ for forbidden in (
         raise RuntimeError(f"Unstable HotSpot timeout setting remains: {forbidden}")
 
 print(
-    "Paid-session persistence restored: idle/keepalive disabled, "
+    "Paid-session persistence restored: 31-day idle / keepalive disabled, "
     "session-timeout=0s, 30-day same-device reconnect cookie."
 )
