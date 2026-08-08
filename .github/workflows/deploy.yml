@@ -51,6 +51,7 @@ jobs:
           python3 scripts/sanitize_mikrotik_command_output.py
           python3 scripts/apply_mikrotik_background_install.py
           python3 scripts/finalize_gateway_compile.py
+          python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=apps/api/prisma/schema.prisma
