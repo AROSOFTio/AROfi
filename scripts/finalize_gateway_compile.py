@@ -3,8 +3,8 @@
 
 This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
-gateway patches, validates the final ioTec OAuth/diagnostics output, and then
-runs the MikroTik captive-flow verifier as the final source mutation/check.
+gateway patches, validates the final ioTec OAuth/diagnostics output, then runs
+the MikroTik captive-flow verifier and permanent automatic-MAC-auth guard.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -22,6 +22,7 @@ PAYMENTS = ROOT / "apps/api/src/modules/payments/payments.service.ts"
 IOTEC = ROOT / "apps/api/src/modules/payments/iotec-pay.service.ts"
 SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
 CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
+MAC_AUTH_GUARD = ROOT / "scripts/forbid_mikrotik_auto_mac_auth.py"
 
 
 def normalize_router() -> None:
@@ -90,6 +91,12 @@ def verify_captive_flow_last() -> None:
     runpy.run_path(str(CAPTIVE_VERIFY), run_name="__main__")
 
 
+def enforce_no_automatic_mac_auth_last() -> None:
+    if not MAC_AUTH_GUARD.exists():
+        raise RuntimeError("Permanent automatic-MAC-auth guard is missing")
+    runpy.run_path(str(MAC_AUTH_GUARD), run_name="__main__")
+
+
 def main() -> None:
     if not ROUTER.exists() or not PAYMENTS.exists():
         raise RuntimeError("Required payment gateway source file is missing")
@@ -98,7 +105,11 @@ def main() -> None:
     normalize_payments()
     validate_iotec_final_state()
     verify_captive_flow_last()
-    print("Final payment gateway, ioTec diagnostics, and captive-flow state verified.")
+    enforce_no_automatic_mac_auth_last()
+    print(
+        "Final payment gateway, ioTec diagnostics, captive-flow state, and "
+        "permanent no-automatic-MAC-auth policy verified."
+    )
 
 
 if __name__ == "__main__":
