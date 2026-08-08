@@ -125,8 +125,8 @@ mikrotik_text = MIKROTIK.read_text(encoding="utf-8")
 controller_text = CONTROLLER.read_text(encoding="utf-8")
 required_mikrotik = (
     "const portalAssetVersion = Date.now().toString(36)",
-    'find name=\\\"hotspot/login.html\\\"',
-    'find name=\\\"hotspot/status.html\\\"',
+    "hotspot/login.html",
+    "hotspot/status.html",
 )
 for marker in required_mikrotik:
     if marker not in mikrotik_text:
