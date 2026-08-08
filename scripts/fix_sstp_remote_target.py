@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Fix RouterOS SSTP client generation for non-default server ports.
+"""Fix RouterOS SSTP client generation for non-default server ports and DNS.
 
 RouterOS does not accept ``connect-to=host:port`` when adding an SSTP client.
 The host belongs in ``connect-to`` and the TCP port belongs in the separate
-``port`` property. The old generator combined VPN_SERVER_HOST and
-VPN_SERVER_PORT into one value, causing ``bad address or dns name`` during the
-remote-access import.
+``port`` property. Some deployed RouterOS 6 devices also fail to establish the
+SSTP session through the public hostname even while normal DNS works, whereas
+the production IPv4 address connects immediately. Prefer VPN_SERVER_IP and use
+the known production IPv4 fallback so the generated command works first time.
 """
 
 from pathlib import Path
@@ -27,6 +28,20 @@ text = TARGET.read_text(encoding="utf-8")
 
 text = replace_once(
     text,
+    """    const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'arofi.net'
+    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
+""",
+    """    const configuredVpnHost = (process.env.VPN_SERVER_IP || process.env.VPN_SERVER_HOST || '').trim()
+    const domain = /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(configuredVpnHost)
+      ? configuredVpnHost
+      : '95.111.234.34'
+    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
+""",
+    "SSTP production IP selection",
+)
+
+text = replace_once(
+    text,
     '      `:local sstpTarget "${domain}:${sstpPort}"`,\n',
     '      `:local sstpTarget "${domain}"`,\n'
     '      `:local sstpPort ${sstpPort}`,\n',
@@ -41,6 +56,8 @@ text = replace_once(
 )
 
 required = (
+    "process.env.VPN_SERVER_IP",
+    "'95.111.234.34'",
     '`:local sstpTarget "${domain}"`',
     '`:local sstpPort ${sstpPort}`',
     'connect-to=$sstpTarget port=$sstpPort',
@@ -53,4 +70,4 @@ if 'connect-to=$sstpTarget user=' in text:
     raise RuntimeError("Unsafe SSTP client command without a separate port remains")
 
 TARGET.write_text(text, encoding="utf-8")
-print("SSTP remote target now uses separate connect-to host and port properties.")
+print("SSTP remote target now uses the production IP and separate host/port properties.")
