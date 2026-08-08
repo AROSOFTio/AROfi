@@ -63,6 +63,7 @@ describe('RouterCaptiveFlowInitializer', () => {
       '<html><head></head><body><script>',
       'var API="https://arofi.net",APIFB="http://95.111.234.34",RKEY="key",CONNECTED="http://business.wifi/login?connected=1";',
       'var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";',
+      'var pkgs=[],selId=null,selTv=false,trialStarting=false;',
       'var autoReady=false;',
       "var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<8000;",
       "var _up=new URLSearchParams(search);\n      if(_up.get('connected')==='1'){\n        document.getElementById('loading').style.display='none';\n        document.getElementById('content').style.display='block';\n        return;\n      }\n\n",
@@ -79,6 +80,9 @@ describe('RouterCaptiveFlowInitializer', () => {
       'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
     )
     expect(html).toContain('(Date.now()-_lastAuto)<2500')
+    expect(html).toContain('var pkgs=[],selId=null,selTv=false,trialStarting=false,authSubmitting=false;')
+    expect(html).toContain('if(authSubmitting)return;')
+    expect(html).toContain('authSubmitting=true;')
     expect(html).toContain('orig="$(link-orig)"||""')
     expect(html).toContain('function finishTarget()')
     expect(html).toContain("f.method='post';f.action=target;f.style.display='none'")
