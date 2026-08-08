@@ -83,7 +83,7 @@ describe('MikrotikCompatibilityInitializer', () => {
       wanInterface: 'ether3',
     })
 
-    expect(script).toContain(':local arofiRequestedWan \\"ether3\\"')
+    expect(script).toContain(':local arofiRequestedWan "ether3"')
     expect(script).toContain('Preserve one owner-management port')
     expect(script).toContain('customer HotSpot port enabled on')
     expect(script).toContain('owner management preserved on')
@@ -109,7 +109,7 @@ describe('MikrotikCompatibilityInitializer', () => {
     expect(script).toContain('/interface list member find where list=')
     expect(script).toContain('/ip dhcp-client find where status=bound')
     expect(script).toContain('route-based NAT fallback enabled without blocking setup')
-    expect(script).toContain(':if ($cbWanIface = \\"\\") do={')
+    expect(script).toContain(':if ($cbWanIface = "") do={')
     expect(script).toContain('HotSpot, RADIUS, DHCP and portal services are active')
   })
 })
