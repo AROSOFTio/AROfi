@@ -7,36 +7,54 @@ export class MikrotikAloginController {
 
   @Get('alogin-html/:key')
   @Header('Content-Type', 'text/html; charset=utf-8')
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async getAloginHtml(@Param('key') key: string) {
     // Reuse the existing key-scoped lookup so this public endpoint cannot be
-    // used for arbitrary router keys. The returned status HTML is not needed;
-    // a valid result confirms that this registration key belongs to a router.
+    // used for arbitrary router keys. The source HTML only validates the key;
+    // customers receive the invisible completion document below.
     const existingHtml = await this.routersService.getMikrotikStatusHtmlByKey(key)
     if (!existingHtml) {
       throw new NotFoundException('Router alogin.html not found')
     }
 
-    return this.buildInstantRedirectHtml()
+    return this.buildInstantCompletionHtml()
   }
 
-  private buildInstantRedirectHtml() {
-    // MikroTik processes these directives before sending the response. A real
-    // HTTP 302 removes the stock "You are logged in" waiting screen entirely.
-    // The meta refresh and link are fallbacks for unusual captive webviews.
-    return `$(if http-status == 302)AROFi connected$(endif)
-$(if http-header == "Location")$(link-redirect)$(endif)
-$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate$(endif)
+  private buildInstantCompletionHtml() {
+    return `
+$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
+$(if http-header == "Pragma")no-cache$(endif)
+$(if http-header == "Expires")0$(endif)
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="refresh" content="0;url=$(link-redirect)">
-  <title>Connected</title>
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta http-equiv="refresh" content="0;url=http://connectivitycheck.gstatic.com/generate_204">
+  <title></title>
+  <style>html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}body{visibility:hidden}</style>
 </head>
-<body>
-  <p>Connected. <a href="$(link-redirect)">Continue</a></p>
+<body aria-hidden="true">
+<script>
+(function(){
+  function finishTarget(){
+    var ua=navigator.userAgent||'';
+    if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';
+    if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';
+    return 'http://connectivitycheck.gstatic.com/generate_204';
+  }
+  var target='$(link-redirect)';
+  if(!target||target.indexOf('$(')===0||/\.wifi(?:\/|$)/i.test(target)||/\/login(?:[/?]|$)/i.test(target))target=finishTarget();
+  try{window.close();}catch(e){}
+  setTimeout(function(){try{window.location.replace(target);}catch(e){window.location.href=target;}},0);
+  setTimeout(function(){try{window.close();}catch(e){}},120);
+})();
+</script>
 </body>
 </html>
 `
