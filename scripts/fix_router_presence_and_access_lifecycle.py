@@ -224,7 +224,6 @@ if "idle-timeout=31d" not in mikrotik_text and "idle-timeout=none" not in mikrot
     )
 for marker in (
     "keepalive-timeout=none",
-    "session-timeout=0s",
 ):
     require(
         MIKROTIK,
