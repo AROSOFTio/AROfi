@@ -101,7 +101,9 @@ export class MikrotikController {
     return result;
   }
 
-  private prepareLoginHtml(html: string) {
+  // Public because the captive-flow initializer wraps this method to preserve
+  // the direct HTTP POST login flow without using MAC authentication.
+  prepareLoginHtml(html: string) {
     let prepared = html;
 
     // Never auto-submit returning-device credentials on initial captive-page
