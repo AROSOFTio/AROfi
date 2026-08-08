@@ -1,7 +1,7 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common'
 import { map } from 'rxjs/operators'
 
-const SESSION_PERSISTENCE_MARKER = '# AROFi: keep paid sessions online until RADIUS bundle expiry'
+const SESSION_PERSISTENCE_MARKER = '# AROFi: permanent active-bundle and returning-device policy'
 const ALOGIN_INSTALLER_MARKER = '# AROFi: replace MikroTik stock alogin.html with an immediate redirect'
 
 export function appendInstantAloginInstaller(script: string) {
@@ -22,19 +22,30 @@ export function appendInstantAloginInstaller(script: string) {
 
   const additions: string[] = []
 
+  // Defensive fallback. RouterCaptiveFlowInitializer normally installs the
+  // self-healing version of this policy before the response reaches this
+  // interceptor. These commands protect any alternate provisioning response
+  // path without introducing automatic RADIUS MAC authentication.
   if (!script.includes(SESSION_PERSISTENCE_MARKER)) {
     additions.push(
       SESSION_PERSISTENCE_MARKER,
-      '# A 31-day idle timeout protects abandoned sessions without interrupting normal use.',
-      '# RADIUS Session-Timeout, quota exhaustion, explicit revocation or package expiry remain authoritative.',
+      '# Active bundles end only at RADIUS/package expiry, quota exhaustion, or explicit revocation.',
+      '# mac-cookie is a trusted post-login reconnect cookie; login-by=mac remains forbidden.',
+      ':foreach arofiHotspotProfile in=[/ip hotspot profile find] do={',
+      '  :do {',
+      '    /ip hotspot profile set $arofiHotspotProfile login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d',
+      '  } on-error={',
+      '    :put "WARNING: Could not update one HotSpot profile for returning-device reconnect."',
+      '  }',
+      '}',
       ':foreach arofiUserProfile in=[/ip hotspot user profile find] do={',
       '  :do {',
-      '    /ip hotspot user profile set $arofiUserProfile idle-timeout=31d keepalive-timeout=none session-timeout=0s shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d',
+      '    /ip hotspot user profile set $arofiUserProfile idle-timeout=none keepalive-timeout=none session-timeout=0s shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d',
       '  } on-error={',
       '    :put "WARNING: Could not update one HotSpot user profile for persistent access."',
       '  }',
       '}',
-      ':put "AROFi HotSpot persistence installed - active bundles stay online until their real expiry."',
+      ':put "AROFi HotSpot persistence installed - active bundles stay online and returning devices reconnect automatically."',
       '',
     )
   }
