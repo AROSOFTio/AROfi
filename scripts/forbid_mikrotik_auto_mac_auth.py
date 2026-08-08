@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Hard build/CI guard: automatic MikroTik HotSpot MAC auth is forbidden.
+"""Hard build/CI guard for MikroTik authentication and reconnect policy.
 
-This repository may still use a MAC address as device identity, bind one paid
-activation to one device, or explicitly provision a Smart TV from the portal.
-It must NEVER make RouterOS automatically authenticate a newly connected phone
-by MAC address. That mode delays captive detection and caused repeated customer
-failures.
-
-Run this only after all build-time source patches. It rejects the build if any
-final provisioning command enables ``mac`` in ``login-by`` or sets
-``mac-auth-mode``. It also verifies the runtime removal patch, agent policy and
-CI/Docker gates remain installed.
+Automatic RADIUS MAC authentication (the exact ``mac`` token in ``login-by``)
+is permanently forbidden because it delays captive detection. Trusted
+``mac-cookie`` reconnect is required: RouterOS creates it only after a successful
+voucher/payment login and uses it to restore that same active customer.
 """
 
 from __future__ import annotations
@@ -30,10 +24,15 @@ COPILOT = ROOT / ".github/copilot-instructions.md"
 
 GUARD_COMMAND = "python3 scripts/forbid_mikrotik_auto_mac_auth.py"
 POLICY_MARKER = "AROFI_NO_AUTOMATIC_MAC_AUTH"
+FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
+FINAL_PERSISTENCE = (
+    "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
+    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
+)
 
 
 def fail(message: str) -> None:
-    raise RuntimeError(f"AUTOMATIC MAC AUTH IS FORBIDDEN: {message}")
+    raise RuntimeError(f"MIKROTIK SESSION POLICY REJECTED: {message}")
 
 
 def main() -> None:
@@ -44,26 +43,37 @@ def main() -> None:
 
     generated_source = MIKROTIK.read_text(encoding="utf-8")
 
-    # Match real RouterOS command values after build patches. Comments in policy
-    # documents are intentionally not scanned here.
+    # Match real RouterOS login-by values after all build patches. ``mac-cookie``
+    # is allowed and required; only a token exactly equal to ``mac`` is forbidden.
     login_values = re.findall(r"login-by=([^\s`\"']+)", generated_source)
-    bad_values = [
-        value for value in login_values
+    blocking_values = [
+        value
+        for value in login_values
         if "mac" in {part.strip().lower() for part in value.split(",")}
     ]
-    if bad_values:
-        fail("final MikroTik provisioning still contains login-by MAC mode: " + ", ".join(bad_values))
+    if blocking_values:
+        fail(
+            "final provisioning contains blocking automatic MAC auth: "
+            + ", ".join(blocking_values)
+        )
 
     if re.search(r"mac-auth-mode\s*=", generated_source, flags=re.IGNORECASE):
-        fail("final MikroTik provisioning still sets mac-auth-mode")
+        fail("final provisioning still sets mac-auth-mode")
 
-    if "login-by=cookie,http-pap" not in generated_source:
-        fail("final MikroTik provisioning does not explicitly use cookie,http-pap")
+    for marker, description in (
+        (FINAL_LOGIN_BY, "trusted cookie/mac-cookie/http-pap login policy"),
+        ("http-cookie-lifetime=30d", "HTTP cookie lifetime"),
+        (FINAL_PERSISTENCE, "no-idle/no-keepalive active-bundle policy"),
+    ):
+        if marker not in generated_source:
+            fail(f"final provisioning is missing {description}: {marker}")
 
     flow = FLOW.read_text(encoding="utf-8")
     required_flow_markers = (
-        ".filter((mode) => mode && mode !== 'mac')",
-        "const safeModes = Array.from(new Set([...modes, 'cookie', 'http-pap']))",
+        "const REQUIRED_LOGIN_METHODS = 'login-by=cookie,mac-cookie,http-pap'",
+        "const SESSION_POLICY_SCRIPT = 'arofi-session-policy'",
+        "idle-timeout=none keepalive-timeout=none session-timeout=0s",
+        "var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;",
         "f.method='post';f.action=target;f.style.display='none'",
         "document.body.appendChild(f);f.submit();}",
     )
@@ -72,10 +82,11 @@ def main() -> None:
             fail(f"runtime captive-flow protection missing marker: {marker}")
 
     forbidden_flow_markers = (
-        "[...modes, 'mac'",
-        "modes.push('mac')",
+        "login-by=mac,cookie",
+        "mac-auth-mode=mac-as-username-and-password",
         "window.setTimeout",
         "arofiLoginFrame",
+        "idle-timeout=31d",
     )
     for marker in forbidden_flow_markers:
         if marker in flow:
@@ -84,9 +95,11 @@ def main() -> None:
     finalizer = FINALIZER.read_text(encoding="utf-8")
     if "verify_router_captive_invariants.py" not in finalizer:
         fail("the final source-normalization stage no longer runs captive invariants")
+    if "forbid_mikrotik_auto_mac_auth.py" not in finalizer:
+        fail("the final source-normalization stage no longer runs this session guard")
 
     # Docker and both GitHub workflows independently run this guard. This makes
-    # accidental removal visible in local/Coolify builds and in branch/main CI.
+    # accidental removal visible in Coolify/local builds and in branch/main CI.
     for path in (DOCKERFILE, CI, DEPLOY):
         text = path.read_text(encoding="utf-8")
         if GUARD_COMMAND not in text:
@@ -96,10 +109,12 @@ def main() -> None:
         text = path.read_text(encoding="utf-8")
         if POLICY_MARKER not in text:
             fail(f"AI/agent policy marker missing from {path.relative_to(ROOT)}")
+        if "login-by=cookie,mac-cookie,http-pap" not in text:
+            fail(f"trusted returning-device policy missing from {path.relative_to(ROOT)}")
 
     print(
-        "AROFI_NO_AUTOMATIC_MAC_AUTH verified: RouterOS login-by is cookie,http-pap, "
-        "direct voucher POST is intact, and Docker/CI/agent guards are installed."
+        "AROFI_NO_AUTOMATIC_MAC_AUTH verified: exact MAC auth is absent, trusted "
+        "mac-cookie reconnect is required, active-bundle timers are disabled, and guards are installed."
     )
 
 
