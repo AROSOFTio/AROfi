@@ -6,9 +6,9 @@ type VoucherQrUrlBuilder = {
 }
 
 /**
- * Keeps printed voucher QR codes on a stable public HTTPS URL, then hands the
- * voucher to the router-local login page so MikroTik can supply MAC address,
- * login URL, router identity, and the rest of the captive-portal context.
+ * Keeps printed voucher QR codes on the MikroTik-local login URL. Customers
+ * scan after joining the hotspot Wi-Fi, so the QR must not depend on public
+ * internet access before the captive portal has authenticated them.
  *
  * VouchersService owns the PDF renderer and its URL helper is currently private.
  * This initializer applies the routing policy to the service instance without
@@ -22,28 +22,17 @@ export class VoucherQrRoutingInitializer implements OnModuleInit {
     const service = this.vouchersService as unknown as VoucherQrUrlBuilder
 
     service.buildVoucherPortalUrl = (voucherCode: string, hotspotDomain?: string) => {
-      const configuredBase =
-        process.env.VOUCHER_QR_BASE_URL ??
-        process.env.PORTAL_PUBLIC_HOST ??
-        process.env.API_PUBLIC_HOST ??
-        'arofi.net'
+      void hotspotDomain
+      const configuredBase = (
+        process.env.VOUCHER_QR_LOCAL_LOGIN_URL ??
+        'http://10.55.0.1/login'
+      ).trim()
       const withProtocol = /^https?:\/\//i.test(configuredBase)
         ? configuredBase
-        : `https://${configuredBase}`
+        : `http://${configuredBase}`
       const normalized = withProtocol.replace(/\/$/, '')
-      const portalBase = normalized.endsWith('/portal') ? normalized : `${normalized}/portal`
-      const url = new URL(`${portalBase}/qr`)
-      const localHost = (hotspotDomain ?? '')
-        .replace(/^https?:\/\//i, '')
-        .replace(/\/.*$/, '')
-        .toLowerCase()
-
-      url.searchParams.set('voucher', voucherCode.trim().toUpperCase())
-      url.searchParams.set('intent', 'connect')
-      if (/^[a-z0-9.-]+\.wifi$/i.test(localHost)) {
-        url.searchParams.set('host', localHost)
-      }
-      return url.toString()
+      const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
+      return `${loginBase}?voucher=${encodeURIComponent(voucherCode.trim().toUpperCase())}`
     }
   }
 }
