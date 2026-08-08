@@ -5,6 +5,12 @@ The provisioning generator preserves the owner management port, so the one-run
 command imports in the foreground. Foreground import keeps RouterOS failures
 visible. Voucher QR codes are finalized here as router-local login URLs because
 an unauthenticated hotspot customer cannot depend on public internet access.
+
+This pass also makes captive detection deterministic:
+- normal phones never wait on RouterOS MAC authentication;
+- hotspot clients use the MikroTik gateway as their only DNS server;
+- arofi.net is always allowed before authentication so packages can load;
+- idle and keepalive logout are permanently disabled on every user profile.
 """
 
 from pathlib import Path
@@ -72,6 +78,76 @@ def patch_admin(text: str) -> str:
     # depend on one exact sentence, so this compatibility step is intentionally
     # non-mutating.
     return text
+
+
+def patch_deterministic_captive_flow() -> None:
+    # MAC auth delays captive detection on ordinary phones because RouterOS first
+    # attempts RADIUS authentication with the phone MAC. Smart-TV credentials are
+    # still submitted explicitly by the portal, so normal hotspot login should be
+    # cookie/http-pap only.
+    replace_once(
+        MIKROTIK,
+        "login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password",
+        "login-by=cookie,http-pap",
+        "non-blocking captive login modes",
+    )
+
+    # The client must use the MikroTik DNS proxy. Supplying public resolvers in
+    # DHCP lets Windows/Android bypass the router DNS path and makes captive
+    # detection inconsistent. The router itself still resolves upstream through
+    # 1.1.1.1 and 8.8.8.8.
+    replace_once(
+        MIKROTIK,
+        "`/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,",
+        "`/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,",
+        "gateway-only hotspot DHCP DNS",
+    )
+
+    # Do not rely on a saved per-router host list for the core AROFi API. The
+    # local login page always calls arofi.net to load packages, redeem vouchers,
+    # and poll payments before the customer is authenticated.
+    replace_once(
+        MIKROTIK,
+        """      ...this.buildWalledGarden(input.portalHosts ?? []),
+      // Also allow the raw HTTP-fallback IP by address so captive-portal
+""",
+        """      ...this.buildWalledGarden(input.portalHosts ?? []),
+      `/ip hotspot walled-garden remove [find comment=\"AROFi core portal\"]`,
+      `/ip hotspot walled-garden add dst-host=\"arofi.net\" action=allow comment=\"AROFi core portal\"`,
+      // Also allow the raw HTTP-fallback IP by address so captive-portal
+""",
+        "core AROFi pre-auth walled garden",
+    )
+
+    # Apply the permanent no-idle policy directly in the generated script. The
+    # later compatibility patch accepts these already-final values and validates
+    # them again, so build order remains idempotent.
+    replace_once(
+        MIKROTIK,
+        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
+""",
+        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none }`,
+""",
+        "permanent no-idle hotspot policy",
+    )
+
+    text = MIKROTIK.read_text(encoding="utf-8")
+    required = (
+        "login-by=cookie,http-pap",
+        "dns-server=${gatewayIp}`",
+        'dst-host=\\"arofi.net\\" action=allow comment=\\"AROFi core portal\\"',
+        "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
+    )
+    for marker in required:
+        if marker not in text:
+            raise RuntimeError(f"Deterministic captive-flow marker missing: {marker}")
+
+    if "login-by=mac," in text:
+        raise RuntimeError("Blocking MAC authentication remains in the provisioning generator")
+    if "dns-server=${gatewayIp},1.1.1.1,8.8.8.8" in text:
+        raise RuntimeError("Hotspot DHCP still advertises public DNS servers directly to clients")
 
 
 def patch_voucher_qr_local_login() -> None:
@@ -170,11 +246,12 @@ def main() -> None:
     run_required_patch("refresh_mikrotik_portal_assets.py")
     run_required_patch("fix_sstp_remote_target.py")
     run_required_patch("fix_router_hardware_detection.py")
+    patch_deterministic_captive_flow()
     patch_voucher_qr_local_login()
 
     print(
-        "MikroTik foreground installer, local reconnect URL, fresh portal assets, "
-        "SSTP remote target, exact hardware detection, and local voucher QR routing verified."
+        "MikroTik foreground installer, immediate captive detection, pre-auth package access, "
+        "permanent no-idle policy, local voucher QR routing, SSTP target, and hardware detection verified."
     )
 
 
