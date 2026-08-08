@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Apply final compile-only payment gateway normalization.
+"""Apply final compile-only normalization and production invariant checks.
 
 This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
-gateway patches, then validates the final ioTec OAuth/diagnostics output.
+gateway patches, validates the final ioTec OAuth/diagnostics output, and then
+runs the MikroTik captive-flow verifier as the final source mutation/check.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -13,12 +14,14 @@ block with its final fallback implementation.
 
 from pathlib import Path
 import re
+import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER = ROOT / "apps/api/src/modules/payments/payment-router.service.ts"
 PAYMENTS = ROOT / "apps/api/src/modules/payments/payments.service.ts"
 IOTEC = ROOT / "apps/api/src/modules/payments/iotec-pay.service.ts"
 SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
+CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
 
 
 def normalize_router() -> None:
@@ -81,6 +84,12 @@ def validate_iotec_final_state() -> None:
             raise RuntimeError(f"Final ioTec Admin diagnostics marker missing: {marker}")
 
 
+def verify_captive_flow_last() -> None:
+    if not CAPTIVE_VERIFY.exists():
+        raise RuntimeError("Final MikroTik captive-flow verifier is missing")
+    runpy.run_path(str(CAPTIVE_VERIFY), run_name="__main__")
+
+
 def main() -> None:
     if not ROUTER.exists() or not PAYMENTS.exists():
         raise RuntimeError("Required payment gateway source file is missing")
@@ -88,7 +97,8 @@ def main() -> None:
     normalize_router()
     normalize_payments()
     validate_iotec_final_state()
-    print("Final payment gateway TypeScript and ioTec diagnostics state verified.")
+    verify_captive_flow_last()
+    print("Final payment gateway, ioTec diagnostics, and captive-flow state verified.")
 
 
 if __name__ == "__main__":
