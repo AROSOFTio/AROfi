@@ -28,10 +28,12 @@ text = MIKROTIK.read_text(encoding="utf-8")
 # Normalize every generated user-profile settings command, regardless of which
 # earlier compatibility patch supplied 1d, 30d, 365d or a finite keepalive.
 pattern = re.compile(
-    r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
-    r"(?:\s+idle-timeout=\S+)?"
-    r"(?:\s+keepalive-timeout=\S+)?"
-    r"(?:\s+session-timeout=\S+)?"
+    # Values live inside TypeScript template literals. Exclude the closing
+    # backtick/comma so normalization never removes the literal terminator.
+    r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=[^\s`,]+"
+    r"(?:\s+idle-timeout=[^\s`,]+)?"
+    r"(?:\s+keepalive-timeout=[^\s`,]+)?"
+    r"(?:\s+session-timeout=[^\s`,]+)?"
 )
 text, count = pattern.subn(FINAL_PROFILE, text)
 if count < 2:
