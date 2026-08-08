@@ -46,7 +46,6 @@ export default function LoginPage() {
 
     async function validateExistingSession() {
       try {
-        // The HttpOnly session cookie rides along automatically.
         const response = await fetch(`${apiBaseUrl}/auth/me`, {
           credentials: 'include',
           cache: 'no-store',
@@ -108,7 +107,7 @@ export default function LoginPage() {
       setFallbackOtp(typeof data?.otpFallback === 'string' ? data.otpFallback : '')
       setInfo(
         data?.otpFallback
-          ? `Email delivery failed, so a fallback code is shown below to keep sign-in working.`
+          ? 'Email delivery failed, so a fallback code is shown below to keep sign-in working.'
           : `We emailed a 6-digit verification code to ${email}. It expires in a few minutes.`,
       )
       if (typeof data?.resendAvailableAt === 'string') {
@@ -138,7 +137,6 @@ export default function LoginPage() {
         return
       }
 
-      // Session cookies (HttpOnly) were set by the API on this response.
       window.location.href = nextPath
     } catch {
       setError('Could not reach the server. Check your connection and try again.')
@@ -152,9 +150,6 @@ export default function LoginPage() {
     void verifyOtp(otp.trim())
   }
 
-  // Auto-submit the instant a valid 6-digit code is entered (typed, pasted,
-  // or auto-filled from the phone's SMS/email suggestion bar) — no need to
-  // also tap "Verify & Sign In".
   useEffect(() => {
     if (step === 'otp' && otp.length === 6 && !loading && !error) {
       void verifyOtp(otp)
@@ -194,175 +189,175 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-shell">
         <div className="login-card">
-        <div className="login-brand">
-          <img
-            src="/logo.png"
-            alt="AROFi"
-            className="brand-logo login-logo"
-          />
-          <h1>Sign in to AROFi</h1>
-          <p>Manage your WiFi business.</p>
-        </div>
-
-        {error && (
-          <div
-            style={{
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              borderRadius: 8,
-              padding: '10px 14px',
-              fontSize: 13,
-              color: '#f87171',
-              marginBottom: 18,
-            }}
-          >
-            {error}
+          <div className="login-brand">
+            <img
+              src="/brand/arofi-logo-blue.svg"
+              alt="AROFi"
+              className="brand-logo login-logo"
+            />
+            <h1>Sign in to AROFi</h1>
+            <p>Manage your WiFi business.</p>
           </div>
-        )}
 
-        {info && !error && (
-          <div className="login-notice">
-            {info}
-          </div>
-        )}
-
-        {fallbackOtp && !error && (
-          <div className="login-notice" style={{ marginTop: 12, fontFamily: 'monospace', letterSpacing: '0.2em', fontSize: 18, fontWeight: 700 }}>
-            {fallbackOtp}
-          </div>
-        )}
-
-        {step === 'credentials' ? (
-          <form onSubmit={handleCredentialsSubmit}>
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                className="form-input"
-                type="email"
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <input
-                className="form-input"
-                type="password"
-                placeholder="**********"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <label
+          {error && (
+            <div
               style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 9,
-                margin: '2px 0 14px',
-                color: 'var(--text-muted)',
-                fontSize: 12,
-                lineHeight: 1.45,
-                cursor: 'pointer',
+                background: 'rgba(239,68,68,0.1)',
+                border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: 8,
+                padding: '10px 14px',
+                fontSize: 13,
+                color: '#f87171',
+                marginBottom: 18,
               }}
             >
-              <input
-                type="checkbox"
-                checked={rememberDevice}
-                onChange={(event) => setRememberDevice(event.target.checked)}
-                style={{ marginTop: 2 }}
-              />
-              <span>
-                <strong style={{ color: 'var(--text-primary)' }}>Remember this device for 30 days</strong>
-                <small className="login-remember-note">Skip email verification on this private device.</small>
-              </span>
-            </label>
-            <button
-              type="submit"
-              className="btn btn-primary btn-block"
-              style={{ marginTop: 8 }}
-              disabled={loading}
-            >
-              {loading ? 'Checking...' : 'Continue'}
-            </button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
-              <a href="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>Forgot password?</a>
-              <a href="/forgot-email" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Forgot email?</a>
+              {error}
             </div>
-          </form>
-        ) : (
-          <form onSubmit={handleOtpSubmit}>
-            <div className="form-group">
-              <label className="form-label">Verification code</label>
-              <input
-                className="form-input"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                placeholder="123456"
-                value={otp}
-                onChange={(e) => {
-                  setOtp(e.target.value.replace(/\D/g, ''))
-                  setError('')
-                }}
-                required
-                autoFocus
-                autoComplete="one-time-code"
-                style={{ letterSpacing: 8, textAlign: 'center', fontSize: 20 }}
-              />
+          )}
+
+          {info && !error && (
+            <div className="login-notice">
+              {info}
             </div>
-            <button
-              type="submit"
-              className="btn btn-primary btn-block"
-              style={{ marginTop: 8 }}
-              disabled={loading || otp.length !== 6}
-            >
-              {loading ? 'Verifying...' : 'Verify and sign in'}
-            </button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('credentials')
-                  setOtp('')
-                  setError('')
-                  setInfo('')
-                }}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
-              >
-                ← Back
-              </button>
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={resendCountdown > 0 || loading}
+          )}
+
+          {fallbackOtp && !error && (
+            <div className="login-notice" style={{ marginTop: 12, fontFamily: 'monospace', letterSpacing: '0.2em', fontSize: 18, fontWeight: 700 }}>
+              {fallbackOtp}
+            </div>
+          )}
+
+          {step === 'credentials' ? (
+            <form onSubmit={handleCredentialsSubmit}>
+              <div className="form-group">
+                <label className="form-label">Email</label>
+                <input
+                  className="form-input"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  placeholder="**********"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+              <label
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: resendCountdown > 0 ? 'var(--text-muted)' : 'var(--green)',
-                  cursor: resendCountdown > 0 ? 'default' : 'pointer',
-                  padding: 0,
-                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 9,
+                  margin: '2px 0 14px',
+                  color: 'var(--text-muted)',
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  cursor: 'pointer',
                 }}
               >
-                {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+                <input
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(event) => setRememberDevice(event.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <strong style={{ color: 'var(--text-primary)' }}>Remember this device for 30 days</strong>
+                  <small className="login-remember-note">Skip email verification on this private device.</small>
+                </span>
+              </label>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                style={{ marginTop: 8 }}
+                disabled={loading}
+              >
+                {loading ? 'Checking...' : 'Continue'}
               </button>
-            </div>
-          </form>
-        )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
+                <a href="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>Forgot password?</a>
+                <a href="/forgot-email" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Forgot email?</a>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleOtpSubmit}>
+              <div className="form-group">
+                <label className="form-label">Verification code</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={otp}
+                  onChange={(e) => {
+                    setOtp(e.target.value.replace(/\D/g, ''))
+                    setError('')
+                  }}
+                  required
+                  autoFocus
+                  autoComplete="one-time-code"
+                  style={{ letterSpacing: 8, textAlign: 'center', fontSize: 20 }}
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                style={{ marginTop: 8 }}
+                disabled={loading || otp.length !== 6}
+              >
+                {loading ? 'Verifying...' : 'Verify and sign in'}
+              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('credentials')
+                    setOtp('')
+                    setError('')
+                    setInfo('')
+                  }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendCountdown > 0 || loading}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: resendCountdown > 0 ? 'var(--text-muted)' : 'var(--green)',
+                    cursor: resendCountdown > 0 ? 'default' : 'pointer',
+                    padding: 0,
+                    fontWeight: 700,
+                  }}
+                >
+                  {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+                </button>
+              </div>
+            </form>
+          )}
 
-        <p className="login-signup">
-          New to AROFi? <a href="/?register=1">Create a business account</a>
-        </p>
+          <p className="login-signup">
+            New to AROFi? <a href="/?register=1">Create a business account</a>
+          </p>
 
-        <p className="login-footer">
-          &copy; 2026 AROSOFT Innovations Ltd
-        </p>
+          <p className="login-footer">
+            &copy; 2026 AROSOFT Innovations Ltd
+          </p>
         </div>
       </div>
     </div>
