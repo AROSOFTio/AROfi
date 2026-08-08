@@ -30,9 +30,20 @@ export default function Template({ children }: { children: ReactNode }) {
     })();
   `
 
+  const brandStyles = `
+    .sidebar-logo{position:relative;min-height:86px}
+    .sidebar-logo>img{width:54px!important;height:54px!important;opacity:0!important;flex:0 0 54px}
+    .sidebar-logo:before{content:'';position:absolute;left:14px;top:17px;width:54px;height:54px;background:var(--arofi-badge,url('/brand/arofi-badge-blue.svg')) center/contain no-repeat;pointer-events:none}
+    .sidebar-logo h1 span{color:var(--arofi-accent,var(--green))!important}
+    [data-theme='dark'] .sidebar,[data-theme='dark'] .topbar{background-image:none!important;box-shadow:none!important}
+    [data-theme='dark'] .sidebar{background:#0f141b!important;border-color:#273240!important}
+    [data-theme='dark'] .topbar{background:#111821!important;border-color:#273240!important}
+  `
+
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: repairThemeScript }} />
+      <style dangerouslySetInnerHTML={{ __html: brandStyles }} />
       {children}
       <DocsEnhancer />
       <PublicAppearanceDock />
