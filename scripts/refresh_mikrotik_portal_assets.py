@@ -6,7 +6,7 @@ portal download URL and leaving old router files in place allows RouterOS,
 reverse proxies, or captive mini-browsers to keep showing a previous portal.
 This patch adds cache-busting download URLs, no-cache response headers, removes
 old router portal files before download, and embeds no-cache directives in the
-router-hosted login page itself.
+router-hosted login and status pages themselves.
 """
 
 from pathlib import Path
@@ -26,6 +26,27 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
             f"{path.relative_to(ROOT)}: expected one {label} match, found {count}."
         )
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def replace_expected(
+    path: Path,
+    old: str,
+    new: str,
+    label: str,
+    expected_total: int,
+) -> None:
+    """Replace every unpatched occurrence while accepting partially patched files."""
+    text = path.read_text(encoding="utf-8")
+    old_count = text.count(old)
+    new_count = text.count(new)
+    if old_count + new_count != expected_total:
+        raise RuntimeError(
+            f"{path.relative_to(ROOT)}: expected {expected_total} total {label} "
+            f"blocks, found old={old_count}, new={new_count}."
+        )
+    if old_count == 0:
+        return
+    path.write_text(text.replace(old, new), encoding="utf-8")
 
 
 # Generate a new URL on every provisioning-script request so no proxy or router
@@ -61,9 +82,11 @@ replace_once(
     "old portal-file cleanup block",
 )
 
-# Tell RouterOS and captive mini-browsers not to retain the page after it has
-# been updated. These RouterOS directives become actual response headers.
-replace_once(
+# Tell RouterOS and captive mini-browsers not to retain either page after it has
+# been updated. There are intentionally two page renderers with this prefix:
+# login.html and status.html. Older code assumed only one and broke every
+# Docker/Coolify build as soon as status.html was added.
+replace_expected(
     MIKROTIK,
     """    return `
 <!doctype html>
@@ -72,9 +95,9 @@ replace_once(
   <meta charset=\"utf-8\">
 """,
     """    return `
-$(if http-header == \"Cache-Control\")no-store, no-cache, must-revalidate, max-age=0$(endif)
-$(if http-header == \"Pragma\")no-cache$(endif)
-$(if http-header == \"Expires\")0$(endif)
+$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
+$(if http-header == "Pragma")no-cache$(endif)
+$(if http-header == "Expires")0$(endif)
 <!doctype html>
 <html>
 <head>
@@ -83,7 +106,8 @@ $(if http-header == \"Expires\")0$(endif)
   <meta http-equiv=\"Pragma\" content=\"no-cache\">
   <meta http-equiv=\"Expires\" content=\"0\">
 """,
-    "login page cache headers",
+    "portal page cache header",
+    expected_total=2,
 )
 
 NO_CACHE = "  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')\n  @Header('Pragma', 'no-cache')\n  @Header('Expires', '0')\n"
@@ -101,13 +125,16 @@ mikrotik_text = MIKROTIK.read_text(encoding="utf-8")
 controller_text = CONTROLLER.read_text(encoding="utf-8")
 required_mikrotik = (
     "const portalAssetVersion = Date.now().toString(36)",
-    'find name=\\"hotspot/login.html\\"',
-    'find name=\\"hotspot/status.html\\"',
-    '$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)',
+    'find name=\\\"hotspot/login.html\\\"',
+    'find name=\\\"hotspot/status.html\\\"',
 )
 for marker in required_mikrotik:
     if marker not in mikrotik_text:
         raise RuntimeError(f"Portal refresh marker missing: {marker}")
+
+cache_header_marker = '$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)'
+if mikrotik_text.count(cache_header_marker) != 2:
+    raise RuntimeError("No-cache directives were not applied to both MikroTik portal pages.")
 
 if controller_text.count("proxy-revalidate, max-age=0") < 3:
     raise RuntimeError("No-cache response headers were not applied to all MikroTik portal endpoints.")
