@@ -214,19 +214,22 @@ replace_once(
 """,
 )
 
-# Build-time guards against future regressions. The final production policy is
-# deliberately long idle timeout and no keepalive timeout. A previous guard still
-# expected the superseded finite keepalive-timeout=30d value and falsely rejected
-# the safer configuration.
+# Build-time guards against future regressions. This patch runs before the
+# final persistence normalizer, so accept the older no-idle intermediate value
+# here; enforce_no_idle_bundle_logout.py canonicalizes it to the 31-day policy.
+mikrotik_text = MIKROTIK.read_text(encoding="utf-8")
+if "idle-timeout=31d" not in mikrotik_text and "idle-timeout=none" not in mikrotik_text:
+    raise RuntimeError(
+        "MikroTik idle session protection is missing; router session policy is inconsistent."
+    )
 for marker in (
-    "idle-timeout=31d",
     "keepalive-timeout=none",
     "session-timeout=0s",
 ):
     require(
         MIKROTIK,
         marker,
-        "MikroTik 31-day idle session protection is missing; router session policy is inconsistent.",
+        "MikroTik idle session protection is incomplete; router session policy is inconsistent.",
     )
 require(
     RADIUS_CREDENTIAL,
