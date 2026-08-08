@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """Enforce the production MikroTik captive-portal contract.
 
-This runs after every other build-time source patch. It is deliberately based on
-semantic regular expressions rather than one large exact source block, so a
-formatting or comment change cannot silently restore a slow/broken HotSpot.
-
-The build is rejected unless all of these invariants are present:
+This is the final build gate after every source patch. It restores and validates
+only the proven captive behaviour:
 - ordinary phones never perform blocking RADIUS MAC authentication;
-- HotSpot clients receive only the MikroTik gateway as DNS;
-- the tenant ``business.wifi`` name resolves locally with a short TTL;
-- arofi.net is reachable before authentication so packages can load;
-- active sessions are never removed by idle/keepalive timers;
-- the HotSpot remains RADIUS-backed and has no bypass binding setup.
+- business.wifi resolves locally and quickly through 10.55.0.1;
+- arofi.net remains reachable before authentication so packages load;
+- voucher/payment credentials POST directly to RouterOS with no timer/iframe;
+- paid sessions survive idle phones and screen lock until RADIUS expiry.
 """
 
 from __future__ import annotations
@@ -20,26 +16,20 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
+MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
+CAPTIVE_FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
 
-
-def replace_required(pattern: str, replacement: str, text: str, label: str) -> str:
-    updated, count = re.subn(pattern, replacement, text, flags=re.MULTILINE)
-    if count == 0:
-        # An already-final source file is valid; only fail when neither the old
-        # pattern nor the required replacement exists.
-        if replacement not in text:
-            raise RuntimeError(f"MikroTik captive invariant not found: {label}")
-        return text
-    return updated
+FINAL_PERSISTENCE = (
+    "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
+    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
+)
 
 
 def main() -> None:
-    text = TARGET.read_text(encoding="utf-8")
+    text = MIKROTIK.read_text(encoding="utf-8")
 
-    # RouterOS MAC authentication makes every ordinary phone wait for a failed
-    # RADIUS MAC request before the operating system receives a captive redirect.
-    # Smart-TV access still works through the portal's explicit MAC credential.
+    # Remove the RADIUS MAC-auth preflight that delays the operating system's
+    # captive portal probe. Smart-TV MAC credentials are still posted explicitly.
     text = re.sub(
         r"login-by=[^\s`\"]+(?:\s+mac-auth-mode=mac-as-username-and-password)?",
         "login-by=cookie,http-pap",
@@ -47,26 +37,29 @@ def main() -> None:
     )
     text = text.replace(" mac-auth-mode=mac-as-username-and-password", "")
 
-    # Do not advertise public resolvers directly to customers. Android/Windows
-    # must ask 10.55.0.1 so RouterOS captive interception and business.wifi local
-    # DNS behave consistently. The router itself still uses public upstream DNS.
+    # Customers must use the MikroTik DNS proxy so tenant.wifi is answered
+    # locally and captive detection does not bypass the gateway.
     text = re.sub(
         r"dns-server=\$\{gatewayIp\}(?:,1\.1\.1\.1,8\.8\.8\.8|,8\.8\.8\.8,1\.1\.1\.1)",
         "dns-server=${gatewayIp}",
         text,
     )
 
-    # Package time/expiry and CoA are the only valid session terminators. Screen
-    # lock, radio power saving, or an idle phone must never remove a paid session.
-    text = re.sub(
-        r"add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
-        r"(?:\s+idle-timeout=\S+)?\s+keepalive-timeout=\S+",
-        "add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
-        text,
+    # Restore the exact persistence values used by the proven flow.
+    persistence_pattern = re.compile(
+        r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
+        r"(?:\s+idle-timeout=\S+)?"
+        r"(?:\s+keepalive-timeout=\S+)?"
+        r"(?:\s+session-timeout=\S+)?"
     )
+    text, persistence_count = persistence_pattern.subn(FINAL_PERSISTENCE, text)
+    if persistence_count < 2:
+        raise RuntimeError(
+            "MikroTik build rejected: default/all-profile persistence commands are missing."
+        )
 
-    # Resolve each generated tenant hostname locally and flush any stale cache
-    # immediately. A short static TTL keeps business.wifi fast after changes.
+    # Local tenant DNS is authoritative on the hotspot. Flush stale cache after
+    # installation so business.wifi responds immediately.
     old_dns_add = (
         '`/ip dns static add name="${this.escape(input.dnsName)}" '
         'address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,'
@@ -78,42 +71,63 @@ def main() -> None:
     )
     if new_dns_add not in text:
         if old_dns_add not in text:
-            raise RuntimeError("Tenant business.wifi static DNS generator is missing")
+            raise RuntimeError("MikroTik build rejected: tenant business.wifi DNS rule is missing.")
         text = text.replace(old_dns_add, new_dns_add, 1)
 
-    # The local login page calls the public API before the user is authenticated.
-    # Always create this core rule independently from optional saved host lists.
+    # The router-served portal needs AROFi context/packages before authentication.
     if 'comment=\\"AROFi core portal\\"' not in text:
         marker = "      ...this.buildWalledGarden(input.portalHosts ?? []),\n"
         if marker not in text:
-            raise RuntimeError("HotSpot walled-garden insertion marker is missing")
-        core_rules = (
+            raise RuntimeError("MikroTik build rejected: walled-garden insertion point is missing.")
+        text = text.replace(
+            marker,
             marker
             + '      `/ip hotspot walled-garden remove [find comment=\\"AROFi core portal\\"]`,\n'
-            + '      `/ip hotspot walled-garden add dst-host=\\"arofi.net\\" action=allow comment=\\"AROFi core portal\\"`,\n'
+            + '      `/ip hotspot walled-garden add dst-host=\\"arofi.net\\" action=allow comment=\\"AROFi core portal\\"`,\n',
+            1,
         )
-        text = text.replace(marker, core_rules, 1)
 
-    TARGET.write_text(text, encoding="utf-8")
+    MIKROTIK.write_text(text, encoding="utf-8")
 
-    final = TARGET.read_text(encoding="utf-8")
-    required = {
+    final = MIKROTIK.read_text(encoding="utf-8")
+    flow = CAPTIVE_FLOW.read_text(encoding="utf-8")
+
+    required_mikrotik = {
         "fast phone login modes": "login-by=cookie,http-pap",
         "gateway-only customer DNS": "dns-server=${gatewayIp}`",
         "short local tenant DNS TTL": "address=${gatewayIp} ttl=1m comment=\"AROFi hotspot DNS gateway\"",
         "DNS cache flush": "/ip dns cache flush",
         "pre-auth package API": 'dst-host=\\"arofi.net\\" action=allow comment=\\"AROFi core portal\\"',
-        "permanent paid session": "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
+        "proven paid-session persistence": FINAL_PERSISTENCE,
         "RADIUS authentication": "use-radius=yes radius-accounting=yes",
         "bypass removal": "/ip hotspot ip-binding remove [find type=bypassed]",
     }
-    missing = [label for label, marker in required.items() if marker not in final]
+    required_flow = {
+        "direct RouterOS POST": "f.method='post';f.action=target;f.style.display='none'",
+        "immediate form submission": "document.body.appendChild(f);f.submit();}",
+        "native login destination": "rc.loginUrl||lo||'http://10.55.0.1/login'",
+        "MAC mode removal": ".filter((mode) => mode && mode !== 'mac')",
+    }
+
+    missing = [
+        *[label for label, marker in required_mikrotik.items() if marker not in final],
+        *[label for label, marker in required_flow.items() if marker not in flow],
+    ]
     forbidden = {
         "blocking MAC login": "login-by=mac",
         "MAC auth mode": "mac-auth-mode=mac-as-username-and-password",
         "public DNS advertised to clients": "dns-server=${gatewayIp},1.1.1.1,8.8.8.8",
+        "unstable 365-day cookie": "mac-cookie-timeout=365d",
     }
-    present_forbidden = [label for label, marker in forbidden.items() if marker in final]
+    forbidden_flow = {
+        "delayed login timer": "window.setTimeout",
+        "hidden-frame login delay": "arofiLoginFrame",
+        "status-page override": "patchStatusHtml",
+    }
+    present_forbidden = [
+        *[label for label, marker in forbidden.items() if marker in final],
+        *[label for label, marker in forbidden_flow.items() if marker in flow],
+    ]
 
     if missing or present_forbidden:
         details = []
@@ -121,11 +135,11 @@ def main() -> None:
             details.append("missing: " + ", ".join(missing))
         if present_forbidden:
             details.append("forbidden: " + ", ".join(present_forbidden))
-        raise RuntimeError("MikroTik captive portal build rejected (" + "; ".join(details) + ")")
+        raise RuntimeError("MikroTik captive build rejected (" + "; ".join(details) + ")")
 
     print(
-        "MikroTik captive invariants verified: instant redirect, local business.wifi DNS, "
-        "pre-auth packages, and no idle/keepalive logout."
+        "Yesterday's captive flow verified: instant direct POST, no MAC delay, "
+        "fast business.wifi DNS, pre-auth packages, and persistent paid sessions."
     )
 
 
