@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Apply final compile-only payment gateway normalization.
 
-This runs after every feature patch. It intentionally does not change the
-Platform Admin gateway selector; it only removes TypeScript enum-alias
-comparisons and unresolved platform settings constants that can be recreated by
-later gateway patches.
+This runs after every feature patch. It removes TypeScript enum-alias
+comparisons and unresolved platform settings constants recreated by later
+gateway patches, then applies the final ioTec live-gateway diagnostics/UI pass.
 """
 
 from pathlib import Path
 import re
+import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER = ROOT / "apps/api/src/modules/payments/payment-router.service.ts"
@@ -50,12 +50,20 @@ def normalize_payments() -> None:
     PAYMENTS.write_text(text, encoding="utf-8")
 
 
+def apply_iotec_live_diagnostics() -> None:
+    patch = ROOT / "scripts/fix_iotec_live_gateway_diagnostics.py"
+    if not patch.exists():
+        raise RuntimeError("ioTec live gateway diagnostics patch is missing")
+    runpy.run_path(str(patch), run_name="__main__")
+
+
 def main() -> None:
     if not ROUTER.exists() or not PAYMENTS.exists():
         raise RuntimeError("Required payment gateway source file is missing")
 
     normalize_router()
     normalize_payments()
+    apply_iotec_live_diagnostics()
     print("Final payment gateway TypeScript normalization applied.")
 
 
