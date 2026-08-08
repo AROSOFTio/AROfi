@@ -7,6 +7,8 @@ This is the final build gate after every source patch. It restores and validates
 - business.wifi resolves locally and quickly through 10.55.0.1;
 - arofi.net remains reachable before authentication so packages load;
 - voucher/payment/reconnect credentials POST directly to RouterOS;
+- Mobile Money remains in the captive page and polls immediately;
+- post-auth alogin/status documents are invisible and close the captive window;
 - active bundles survive idle phones, screen lock and temporary accounting gaps.
 """
 
@@ -18,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 CAPTIVE_FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
+CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik.controller.ts"
 
 FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
 FINAL_PERSISTENCE = (
@@ -99,6 +102,7 @@ def main() -> None:
 
     final = MIKROTIK.read_text(encoding="utf-8")
     flow = CAPTIVE_FLOW.read_text(encoding="utf-8")
+    controller = CONTROLLER.read_text(encoding="utf-8")
 
     required_mikrotik = {
         "trusted returning-device login modes": FINAL_LOGIN_BY,
@@ -118,15 +122,32 @@ def main() -> None:
         "trusted mac-cookie mode": "login-by=cookie,mac-cookie,http-pap",
         "returning activation auto reconnect": "var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;",
         "short redirect loop guard": "(Date.now()-_lastAuto)<2500",
+        "original probe capture": 'orig="$(link-orig)"||""',
+        "connectivity target resolver": "function finishTarget()",
         "direct RouterOS POST": "f.method='post';f.action=target;f.style.display='none'",
-        "immediate form submission": "document.body.appendChild(f);f.submit();}",
+        "connectivity-check destination": "add('dst',finishTarget())",
+        "no RouterOS popup": "add('popup','false')",
+        "immediate hidden form submission": "document.documentElement.style.visibility='hidden';f.submit();}",
         "native login destination": "rc.loginUrl||lo||'http://10.55.0.1/login'",
+        "immediate QR voucher start": "prepared = prepared.replace('setTimeout(login, 200);', 'login();')",
+        "in-place Mobile Money": "if(pmt.activation&&pmt.reconnect&&pmt.reconnect.username){closePay();conn(pmt.reconnect);return;}",
+        "immediate payment polling": "function check()",
         "no idle/keepalive logout": "idle-timeout=none keepalive-timeout=none session-timeout=0s",
+    }
+    required_controller = {
+        "alogin endpoint": "@Get('alogin-html/:key')",
+        "invisible completion transformer": "prepareCompletionHtml(_html: string)",
+        "close captive window": "window.close()",
+        "Android connectivity check": "connectivitycheck.gstatic.com/generate_204",
+        "Windows connectivity check": "www.msftconnecttest.com/connecttest.txt",
+        "Apple connectivity check": "captive.apple.com/hotspot-detect.html",
+        "hidden completion body": "body{visibility:hidden}",
     }
 
     missing = [
         *[label for label, marker in required_mikrotik.items() if marker not in final],
         *[label for label, marker in required_flow.items() if marker not in flow],
+        *[label for label, marker in required_controller.items() if marker not in controller],
     ]
 
     login_values = re.findall(r"login-by=([^\s`\"']+)", final)
@@ -151,15 +172,21 @@ def main() -> None:
         "unstable 365-day cookie": "mac-cookie-timeout=365d",
     }
     forbidden_flow = {
-        "delayed login timer": "window.setTimeout",
         "hidden-frame login delay": "arofiLoginFrame",
-        "status-page override": "patchStatusHtml",
+        "status-page runtime override": "patchStatusHtml",
+    }
+    forbidden_controller = {
+        "visible connected heading": ">Connected<",
+        "visible connected instruction": "You can close this page now",
     }
     present_forbidden.extend(
         label for label, marker in forbidden_markers.items() if marker in final
     )
     present_forbidden.extend(
         label for label, marker in forbidden_flow.items() if marker in flow
+    )
+    present_forbidden.extend(
+        label for label, marker in forbidden_controller.items() if marker in controller
     )
 
     if missing or present_forbidden:
@@ -171,8 +198,8 @@ def main() -> None:
         raise RuntimeError("MikroTik captive build rejected (" + "; ".join(details) + ")")
 
     print(
-        "Captive flow verified: no blocking MAC auth, trusted mac-cookie return, "
-        "instant direct POST, fast local DNS, and no local active-bundle logout timers."
+        "Captive flow verified: business DNS, no blocking MAC auth, trusted return, "
+        "instant voucher/MoMo POST, invisible completion, and no local active-bundle timers."
     )
 
 
