@@ -44,6 +44,7 @@ project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project
 compose_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$old_container")
 environment_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' "$old_container")
 previous_image=$(docker inspect -f '{{ .Config.Image }}' "$old_container")
+live_networks=$(docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$old_container")
 
 if [ ! -f "$compose_file" ]; then
   compose_file="$PWD/docker-compose.yaml"
@@ -82,6 +83,55 @@ compose_up() {
     -f "$compose_file" \
     -f "$override_file" \
     up --detach --no-deps --no-build "$component"
+}
+
+attach_live_networks() {
+  current_ids=$(docker compose \
+    --project-name "$project" \
+    --project-directory "$(dirname "$compose_file")" \
+    --env-file "$environment_file" \
+    -f "$compose_file" \
+    -f "$override_file" \
+    ps -q "$component")
+  set -- $current_ids
+  if [ "$#" -ne 1 ]; then
+    echo "Could not identify the replacement $component container." >&2
+    return 1
+  fi
+  replacement_container=$1
+
+  for network in $live_networks; do
+    if docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$replacement_container" | grep -Fxq "$network"; then
+      continue
+    fi
+    echo "[fast-deploy] Attaching $component to existing network $network."
+    docker network connect --alias "$component" "$network" "$replacement_container"
+  done
+}
+
+detach_new_networks() {
+  current_ids=$(docker compose \
+    --project-name "$project" \
+    --project-directory "$(dirname "$compose_file")" \
+    --env-file "$environment_file" \
+    -f "$compose_file" \
+    -f "$override_file" \
+    ps -q "$component")
+  set -- $current_ids
+  if [ "$#" -ne 1 ]; then
+    return 1
+  fi
+  replacement_container=$1
+
+  docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$replacement_container" | while read -r network; do
+    [ -n "$network" ] || continue
+    if printf '%s\n' "$live_networks" | grep -Fxq "$network"; then
+      continue
+    fi
+    echo "[fast-deploy] Removing temporary Compose network $network from $component."
+    docker network disconnect "$network" "$replacement_container"
+    docker network rm "$network" >/dev/null 2>&1 || true
+  done
 }
 
 reload_nginx() {
@@ -134,6 +184,8 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
 echo "[fast-deploy] Replacing only $component..."
 write_override "$image"
 compose_up
+attach_live_networks
+detach_new_networks
 
 if wait_for_health; then
   reload_nginx
@@ -144,6 +196,8 @@ fi
 echo "[fast-deploy] $component did not become healthy; restoring $previous_image." >&2
 write_override "$previous_image"
 compose_up
+attach_live_networks || true
+detach_new_networks || true
 wait_for_health || true
 reload_nginx || true
 exit 1
