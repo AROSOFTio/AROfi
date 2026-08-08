@@ -1,12 +1,11 @@
-# Coolify deployment for AROFi — split mode.
+# Coolify deployment for AROFi — fully split images.
 #
-# The application image is built once by the api service and reused by nginx,
-# admin and portal. Services use restart policies and their own health checks,
-# but docker compose startup never blocks on cross-service health. This is
-# important in Coolify because `docker compose up -d` has a short execution
-# window and previously failed while PostgreSQL was still reporting “Waiting”.
+# API, Admin, Portal and Nginx are now built as four independent images from
+# separate Dockerfile targets. They no longer reuse one arofi-app image. BuildKit
+# still shares the dependency/patched-source cache, so this separation does not
+# require downloading the monorepo dependencies four times.
 
-x-app-env: &app-env
+x-api-env: &api-env
   NODE_ENV: ${NODE_ENV:-production}
   DATABASE_URL: postgresql://${POSTGRES_USER:-arofi}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-arofi}?schema=public
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -22,7 +21,7 @@ x-app-env: &app-env
   APP_BASE_URL: ${APP_BASE_URL:-https://arofi.net}
   ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.net}
   PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.net/portal}
-  VOUCHER_QR_BASE_URL: ${VOUCHER_QR_BASE_URL:-https://arofi.net/portal}
+  VOUCHER_QR_LOCAL_LOGIN_URL: ${VOUCHER_QR_LOCAL_LOGIN_URL:-http://10.55.0.1/login}
   MIKROTIK_CALLBACK_HTTP_URL: ${MIKROTIK_CALLBACK_HTTP_URL:-http://95.111.234.34:18080}
 
   ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
@@ -101,8 +100,6 @@ x-app-env: &app-env
   AIRTEL_MONEY_CURRENCY: ${AIRTEL_MONEY_CURRENCY:-UGX}
   AIRTEL_ALLOWED_PREFIXES: ${AIRTEL_ALLOWED_PREFIXES:-}
 
-  # Pesapal remains hidden in Platform Admin but its environment entries stay
-  # available for future activation without another infrastructure migration.
   PESAPAL_MODE: ${PESAPAL_MODE:-sandbox}
   PESAPAL_BASE_URL: ${PESAPAL_BASE_URL:-https://cybqa.pesapal.com/pesapalv3}
   PESAPAL_CONSUMER_KEY: ${PESAPAL_CONSUMER_KEY:-}
@@ -125,21 +122,32 @@ x-app-env: &app-env
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
   SENTRY_DSN: ${SENTRY_DSN:-}
 
+  PORT: ${PORT:-3000}
+
+# Web containers do not receive database, JWT, payment or router secrets.
+x-web-env: &web-env
+  NODE_ENV: ${NODE_ENV:-production}
   API_SERVER_URL: ${API_SERVER_URL:-http://api:3000/api}
   NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
-  PORT: ${PORT:-3000}
+  APP_BASE_URL: ${APP_BASE_URL:-https://arofi.net}
+  ADMIN_BASE_URL: ${ADMIN_BASE_URL:-https://arofi.net}
+  PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://arofi.net/portal}
+  HOTSPOT_LOGIN_URL: ${HOTSPOT_LOGIN_URL:-http://10.55.0.1/login}
+  PORT: "3000"
+  HOSTNAME: 0.0.0.0
 
 services:
   nginx:
-    image: arofi-app:local
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: nginx-runtime
+    image: arofi-nginx:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
       - SERVICE_FQDN_NGINX_3000
-      - SERVICE_NAME=nginx
     ports:
       - "${MIKROTIK_BOOTSTRAP_HTTP_PORT:-18080}:3001"
-    # Order only. Do not block `docker compose up -d` waiting for health.
     depends_on:
       - api
       - admin
@@ -156,13 +164,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: arofi-app:local
+      target: api-runtime
+    image: arofi-api:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     ports:
       - "${WINBOX_PROXY_HOST_PORT_RANGE:-31000-31100}:31000-31100"
     environment:
-      <<: *app-env
-      SERVICE_NAME: api
+      <<: *api-env
     depends_on:
       - postgres
     mem_limit: 768m
@@ -174,12 +182,14 @@ services:
       start_period: 240s
 
   admin:
-    image: arofi-app:local
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: admin-runtime
+    image: arofi-admin:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
-      <<: *app-env
-      SERVICE_NAME: admin
+      <<: *web-env
     depends_on:
       - api
     mem_limit: 384m
@@ -191,12 +201,14 @@ services:
       start_period: 90s
 
   portal:
-    image: arofi-app:local
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: portal-runtime
+    image: arofi-portal:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
-      <<: *app-env
-      SERVICE_NAME: portal
+      <<: *web-env
     depends_on:
       - api
     mem_limit: 320m
@@ -211,6 +223,7 @@ services:
     build:
       context: .
       dockerfile: config/freeradius/Dockerfile
+    image: arofi-freeradius:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     ports:
       - "1812:1812/udp"
@@ -273,6 +286,7 @@ services:
     build:
       context: .
       dockerfile: config/backup/Dockerfile
+    image: arofi-backup:${AROFI_IMAGE_TAG:-local}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-arofi}
