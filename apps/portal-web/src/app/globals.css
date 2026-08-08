@@ -26,7 +26,6 @@
   --brand: #2563EB;
 }
 
-
 body {
   min-height: 100vh;
   background: #f8fafc;
@@ -42,4 +41,34 @@ body {
 ::selection {
   background: rgba(29, 78, 216, 0.16);
   color: #0f172a;
+}
+
+/* The platform fallback logo is borderless. Tenant-uploaded custom logos remain untouched. */
+img[src="/logo.png"] {
+  content: url('/portal/brand/arofi-logo-blue.svg');
+  object-fit: contain !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+div:has(> img[src="/logo.png"].h-10) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.h-14.w-14:has(> img[src="/logo.png"].h-10) {
+  width: 124px !important;
+  height: 44px !important;
+  justify-content: flex-start !important;
+}
+
+img[src="/logo.png"].h-10 {
+  width: 124px !important;
+  height: 44px !important;
+  max-width: none !important;
 }
