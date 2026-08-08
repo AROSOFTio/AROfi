@@ -45,15 +45,29 @@ compose_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.pr
 environment_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' "$old_container")
 previous_image=$(docker inspect -f '{{ .Config.Image }}' "$old_container")
 
-if [ ! -f "$compose_file" ] || [ ! -f "$environment_file" ]; then
-  echo "Coolify Compose metadata is incomplete for $old_container." >&2
+if [ ! -f "$compose_file" ]; then
+  compose_file="$PWD/docker-compose.yaml"
+  echo "[fast-deploy] Coolify cleaned its old Compose artifact; using $compose_file."
+fi
+if [ ! -f "$compose_file" ]; then
+  echo "No Compose file is available for the live Coolify project." >&2
   exit 1
 fi
 
 revision=$(git rev-parse --short=12 HEAD)
 image="arofi-$component:$revision"
 override_file=$(mktemp /tmp/arofi-component-override-XXXXXX.yml)
-trap 'rm -f "$override_file"' EXIT HUP INT TERM
+generated_environment_file=
+trap 'rm -f "$override_file" "$generated_environment_file"' EXIT HUP INT TERM
+
+if [ ! -f "$environment_file" ]; then
+  generated_environment_file=$(mktemp /tmp/arofi-component-environment-XXXXXX.env)
+  docker ps -q --filter "label=coolify.applicationId=$application_id" | while read -r container_id; do
+    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id"
+  done | awk -F= '!seen[$1]++ { print }' > "$generated_environment_file"
+  environment_file=$generated_environment_file
+  echo "[fast-deploy] Reconstructed the Compose environment from the running services."
+fi
 
 write_override() {
   selected_image=$1
