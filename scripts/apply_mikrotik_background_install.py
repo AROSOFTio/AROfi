@@ -134,19 +134,24 @@ def patch_deterministic_captive_flow() -> None:
     )
 
     text = MIKROTIK.read_text(encoding="utf-8")
+    # TypeScript template literals may contain either `"` or `\"` depending on
+    # which guarded patch inserted the RouterOS command. They produce the same
+    # command at runtime. Normalize only for semantic validation so harmless
+    # source escaping can never fail a production build again.
+    normalized = text.replace('\\"', '"')
     required = (
         "login-by=cookie,http-pap",
         "dns-server=${gatewayIp}`",
-        'dst-host=\\"arofi.net\\" action=allow comment=\\"AROFi core portal\\"',
+        'dst-host="arofi.net" action=allow comment="AROFi core portal"',
         "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
     )
     for marker in required:
-        if marker not in text:
+        if marker not in normalized:
             raise RuntimeError(f"Deterministic captive-flow marker missing: {marker}")
 
-    if "login-by=mac," in text:
+    if "login-by=mac," in normalized:
         raise RuntimeError("Blocking MAC authentication remains in the provisioning generator")
-    if "dns-server=${gatewayIp},1.1.1.1,8.8.8.8" in text:
+    if "dns-server=${gatewayIp},1.1.1.1,8.8.8.8" in normalized:
         raise RuntimeError("Hotspot DHCP still advertises public DNS servers directly to clients")
 
 
