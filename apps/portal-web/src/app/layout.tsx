@@ -6,6 +6,10 @@ const TITLE = 'AROFi WiFi Portal – Buy Internet Access | MTN MoMo & Airtel Mon
 const DESCRIPTION =
   'Connect to high-speed WiFi instantly. Pay with MTN Mobile Money or Airtel Money. No app needed — just your phone number. Secure hotspot access powered by AROFi, Uganda\'s leading WiFi billing platform.'
 
+const FAVICON = '/portal/brand/arofi-favicon-v2.svg'
+const MARK = '/portal/brand/arofi-mark-blue.svg'
+const LOGO = '/portal/brand/arofi-logo-blue.svg'
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://arofi.net'),
   title: TITLE,
@@ -29,9 +33,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
-    shortcut: '/logo.png',
+    icon: [{ url: FAVICON, type: 'image/svg+xml' }],
+    apple: MARK,
+    shortcut: FAVICON,
   },
   openGraph: {
     title: TITLE,
@@ -42,9 +46,9 @@ export const metadata: Metadata = {
     siteName: 'AROFi WiFi Portal',
     images: [
       {
-        url: 'https://arofi.net/logo.png',
-        width: 512,
-        height: 512,
+        url: `https://arofi.net${LOGO}`,
+        width: 620,
+        height: 220,
         alt: 'AROFi – Buy WiFi with Mobile Money Uganda',
       },
     ],
@@ -53,7 +57,7 @@ export const metadata: Metadata = {
     card: 'summary',
     title: TITLE,
     description: DESCRIPTION,
-    images: ['https://arofi.net/logo.png'],
+    images: [`https://arofi.net${LOGO}`],
   },
   alternates: {
     canonical: SITE_URL,
@@ -81,8 +85,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/logo.png" />
-        <link rel="apple-touch-icon" href="/logo.png" />
+        <link rel="icon" href={FAVICON} type="image/svg+xml" />
+        <link rel="shortcut icon" href={FAVICON} type="image/svg+xml" />
+        <link rel="apple-touch-icon" href={MARK} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -94,6 +99,7 @@ export default function RootLayout({
               description: DESCRIPTION,
               applicationCategory: 'UtilitiesApplication',
               operatingSystem: 'Web',
+              image: `https://arofi.net${LOGO}`,
               offers: {
                 '@type': 'Offer',
                 priceCurrency: 'UGX',
@@ -103,6 +109,7 @@ export default function RootLayout({
                 '@type': 'Organization',
                 name: 'AROSOFT Innovations Ltd',
                 url: 'https://arosoftlabs.com',
+                logo: `https://arofi.net${MARK}`,
               },
             }),
           }}
@@ -119,7 +126,7 @@ export default function RootLayout({
                 rel="noreferrer"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textDecoration: 'none', letterSpacing: '0.04em' }}
               >
-                <img src="/logo.png" alt="" aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 2, objectFit: 'contain' }} />
+                <img src={MARK} alt="" aria-hidden="true" style={{ width: 20, height: 17, objectFit: 'contain' }} />
                 AROSOFT
               </a>
             </p>
