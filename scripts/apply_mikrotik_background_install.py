@@ -2,8 +2,9 @@
 """Validate MikroTik onboarding and apply the final captive/session policy.
 
 The one-run command imports in the foreground so RouterOS errors remain visible.
-Voucher QR codes use the local hotspot login URL. Captive detection and returning
-access are deterministic:
+Voucher QR routing is intentionally left to the final business-QR guard; this
+script must never rewrite a printed QR to a gateway IP. Captive detection and
+returning access are deterministic:
 - exact automatic RADIUS ``login-by=mac`` is removed;
 - trusted post-login ``mac-cookie`` reconnect is enabled;
 - clients use the MikroTik gateway as their only DNS server;
@@ -19,9 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 PORTAL_SERVICE = ROOT / "apps/api/src/modules/portal/portal.service.ts"
 ADMIN = ROOT / "apps/admin-web/src/components/RoutersManager.tsx"
-VOUCHERS_SERVICE = ROOT / "apps/api/src/modules/vouchers/vouchers.service.ts"
-VOUCHERS_MANAGER = ROOT / "apps/admin-web/src/components/VouchersManager.tsx"
-VOUCHER_QR_ROUTING = ROOT / "apps/api/src/modules/vouchers/voucher-qr-routing.initializer.ts"
+BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
 
 BACKGROUND_SENTINEL = "AROFi installation continues in background"
 FOREGROUND_IMPORT_MARKERS = (
@@ -37,18 +36,6 @@ FINAL_PROFILE = (
     "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
     "idle-timeout=none keepalive-timeout=none session-timeout=0s"
 )
-
-
-def replace_once(path: Path, old: str, new: str, label: str) -> None:
-    text = path.read_text(encoding="utf-8")
-    if new in text:
-        return
-    count = text.count(old)
-    if count != 1:
-        raise RuntimeError(
-            f"{path.relative_to(ROOT)}: expected one {label} match, found {count}."
-        )
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
 def validate_foreground_install() -> None:
@@ -155,76 +142,19 @@ def patch_deterministic_captive_flow() -> None:
             raise RuntimeError(f"Obsolete HotSpot timeout remains: {forbidden}")
 
 
-def patch_voucher_qr_local_login() -> None:
-    replace_once(
-        VOUCHERS_MANAGER,
-        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
-  if (dnsName) {
-    return `http://${dnsName}/login?voucher=${encodeURIComponent(code)}`
-  }
-  // Fallback
-  const base =
-    process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
-    'https://arofi.net/portal'
-  const normalized = base.replace(/\/$/, '')
-  const separator = normalized.includes('?') ? '&' : '?'
-  return `${normalized}${separator}voucher=${encodeURIComponent(code)}`
-}
-""",
-        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
-  void dnsName
-  const base =
-    process.env.NEXT_PUBLIC_VOUCHER_QR_LOCAL_LOGIN_URL ||
-    'http://10.55.0.1/login'
-  const normalized = base.replace(/\/$/, '')
-  const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
-  return `${loginBase}?voucher=${encodeURIComponent(code.trim().toUpperCase())}`
-}
-""",
-        "Admin voucher QR local-login helper",
-    )
-
-    replace_once(
-        VOUCHERS_SERVICE,
-        """  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
-    const baseUrl = hotspotDomain
-      ? `http://${hotspotDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/login`
-      : this.getVoucherQrBaseUrl()
-    const separator = baseUrl.includes('?') ? '&' : '?'
-    return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
-  }
-""",
-        """  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
-    void hotspotDomain
-    const configuredBase = (
-      process.env.VOUCHER_QR_LOCAL_LOGIN_URL ??
-      'http://10.55.0.1/login'
-    ).trim()
-    const withProtocol = /^https?:\/\//i.test(configuredBase)
-      ? configuredBase
-      : `http://${configuredBase}`
-    const normalized = withProtocol.replace(/\/$/, '')
-    const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
-    return `${loginBase}?voucher=${encodeURIComponent(voucherCode.trim().toUpperCase())}`
-  }
-""",
-        "API voucher QR local-login helper",
-    )
-
-    routing_text = VOUCHER_QR_ROUTING.read_text(encoding="utf-8")
-    manager_text = VOUCHERS_MANAGER.read_text(encoding="utf-8")
-    service_text = VOUCHERS_SERVICE.read_text(encoding="utf-8")
-
-    for marker in ("VOUCHER_QR_LOCAL_LOGIN_URL", "http://10.55.0.1/login"):
-        if marker not in routing_text or marker not in service_text:
-            raise RuntimeError(f"Server voucher QR local-login marker missing: {marker}")
-
-    for marker in ("NEXT_PUBLIC_VOUCHER_QR_LOCAL_LOGIN_URL", "http://10.55.0.1/login"):
-        if marker not in manager_text:
-            raise RuntimeError(f"Admin voucher QR local-login marker missing: {marker}")
-
-    if "NEXT_PUBLIC_VOUCHER_QR_BASE_URL" in manager_text:
-        raise RuntimeError("Admin voucher QR still accepts the obsolete public QR base URL")
+def validate_qr_guard() -> None:
+    if not BUSINESS_QR_GUARD.exists():
+        raise RuntimeError(
+            "Business voucher QR guard is missing; gateway-IP QR rewrites are forbidden."
+        )
+    guard = BUSINESS_QR_GUARD.read_text(encoding="utf-8")
+    for marker in (
+        "http://<business>.wifi/login?voucher=<CODE>",
+        "VOUCHER_QR_LOCAL_LOGIN_URL",
+        "http://10.55.0.1/login?voucher=",
+    ):
+        if marker not in guard:
+            raise RuntimeError(f"Business voucher QR guard marker missing: {marker}")
 
 
 def run_required_patch(filename: str) -> None:
@@ -241,15 +171,15 @@ def main() -> None:
 
     validate_foreground_install()
     validate_portal_reconnect()
+    validate_qr_guard()
     run_required_patch("refresh_mikrotik_portal_assets.py")
     run_required_patch("fix_sstp_remote_target.py")
     run_required_patch("fix_router_hardware_detection.py")
     patch_deterministic_captive_flow()
-    patch_voucher_qr_local_login()
 
     print(
         "MikroTik foreground installer, trusted returning-device reconnect, no-idle active-bundle policy, "
-        "pre-auth packages, local voucher QR, SSTP target and hardware detection verified."
+        "pre-auth packages, business QR guard, SSTP target and hardware detection verified."
     )
 
 
