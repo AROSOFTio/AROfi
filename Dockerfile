@@ -34,6 +34,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
     && python3 scripts/apply_mikrotik_background_install.py \
+    && python3 scripts/fix_router_presence_and_access_lifecycle.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/finalize_gateway_compile.py
 
