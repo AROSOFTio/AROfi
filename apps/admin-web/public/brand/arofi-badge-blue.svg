@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">AROFi blue WiFi badge</title>
+  <desc id="desc">Circular AROFi logo with WiFi symbol and High Speed Zero Limits tagline.</desc>
+  <defs>
+    <path id="topArc" d="M 104 400 A 296 296 0 0 1 696 400"/>
+    <path id="bottomArc" d="M 696 400 A 296 296 0 0 1 104 400"/>
+  </defs>
+  <circle cx="400" cy="400" r="366" fill="#ffffff" stroke="#2563eb" stroke-width="44"/>
+  <circle cx="400" cy="400" r="316" fill="#ffffff" stroke="#2563eb" stroke-width="8"/>
+  <text fill="#2563eb" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="34" letter-spacing="4">
+    <textPath href="#topArc" startOffset="50%" text-anchor="middle">HIGH SPEED • ZERO LIMITS</textPath>
+  </text>
+  <text fill="#2563eb" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="34" letter-spacing="6">
+    <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">AROFi • WIFI</textPath>
+  </text>
+  <g fill="none" stroke="#2563eb" stroke-linecap="round">
+    <path d="M292 302c65-61 151-61 216 0" stroke-width="24"/>
+    <path d="M330 344c43-38 97-38 140 0" stroke-width="24"/>
+    <path d="M367 385c21-17 45-17 66 0" stroke-width="24"/>
+  </g>
+  <circle cx="400" cy="418" r="14" fill="#2563eb"/>
+  <text x="400" y="510" text-anchor="middle" fill="#2563eb" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="104" font-weight="900" letter-spacing="-7">AROFi</text>
+  <text x="400" y="575" text-anchor="middle" fill="#2563eb" font-family="Arial, Helvetica, sans-serif" font-size="47" font-weight="800" letter-spacing="15">WIFI</text>
+  <circle cx="142" cy="400" r="9" fill="#2563eb"/>
+  <circle cx="658" cy="400" r="9" fill="#2563eb"/>
+</svg>
