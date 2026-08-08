@@ -20,16 +20,21 @@ describe('appendInstantAloginInstaller', () => {
     expect(result).toContain('post-login redirect is instant')
   })
 
-  it('uses a long idle timeout while preserving bundle expiry cutoffs', () => {
+  it('disables local logout timers and enables trusted returning-device mac-cookie', () => {
     const result = appendInstantAloginInstaller(provisioningScript)
 
     expect(result).toContain(
-      'idle-timeout=31d keepalive-timeout=none session-timeout=0s',
+      'login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d',
     )
     expect(result).toContain(
-      'active bundles stay online until their real expiry',
+      'idle-timeout=none keepalive-timeout=none session-timeout=0s',
     )
-    expect(result).toContain('mac-cookie-timeout=30d')
+    expect(result).toContain(
+      'active bundles stay online and returning devices reconnect automatically',
+    )
+    expect(result).toContain('add-mac-cookie=yes mac-cookie-timeout=30d')
+    expect(result).not.toContain('idle-timeout=31d')
+    expect(result).not.toContain('keepalive-timeout=30d')
   })
 
   it('adds persistence even when an existing router script has no status page URL', () => {
@@ -40,7 +45,8 @@ describe('appendInstantAloginInstaller', () => {
 
     const result = appendInstantAloginInstaller(existingRouterScript)
 
-    expect(result).toContain('idle-timeout=31d')
+    expect(result).toContain('idle-timeout=none')
+    expect(result).toContain('login-by=cookie,mac-cookie,http-pap')
     expect(result).not.toContain('hotspot/alogin.html')
   })
 
@@ -49,7 +55,7 @@ describe('appendInstantAloginInstaller', () => {
     const second = appendInstantAloginInstaller(first)
 
     expect(second).toBe(first)
-    expect(second.match(/keep paid sessions online until RADIUS bundle expiry/g)).toHaveLength(1)
+    expect(second.match(/permanent active-bundle and returning-device policy/g)).toHaveLength(1)
     expect(second.match(/replace MikroTik stock alogin\.html/g)).toHaveLength(1)
   })
 
