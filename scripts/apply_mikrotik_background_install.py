@@ -9,6 +9,7 @@ router-provided local ``*.wifi`` login URL and use 10.55.0.1 only as fallback.
 """
 
 from pathlib import Path
+import runpy
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,7 +74,14 @@ def main() -> None:
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
-    print("MikroTik foreground installer and local hotspot reconnect URL verified.")
+    portal_refresh = ROOT / "scripts/refresh_mikrotik_portal_assets.py"
+    if not portal_refresh.exists():
+        raise RuntimeError(
+            f"Required portal refresh patch missing: {portal_refresh.relative_to(ROOT)}"
+        )
+    runpy.run_path(str(portal_refresh), run_name="__main__")
+
+    print("MikroTik foreground installer, local reconnect URL, and fresh portal assets verified.")
 
 
 if __name__ == "__main__":
