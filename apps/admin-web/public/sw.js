@@ -1,5 +1,5 @@
-const CACHE_NAME = 'arofi-admin-v3'
-const APP_SHELL = ['/', '/dashboard', '/login', '/logo.png', '/manifest.webmanifest']
+const CACHE_NAME = 'arofi-admin-v4-brand'
+const APP_SHELL = ['/', '/dashboard', '/login', '/brand/arofi-logo-blue.svg', '/brand/arofi-mark-blue.svg', '/brand/arofi-favicon-v2.svg', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).catch(() => undefined))
