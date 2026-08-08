@@ -81,9 +81,11 @@ def main() -> None:
         if marker not in flow:
             fail(f"runtime captive-flow protection missing marker: {marker}")
 
+    # Do not reject the literal mac-auth-mode text in FLOW: it intentionally
+    # appears inside the removal regex. Final generated RouterOS commands above
+    # are the authoritative place where its absence is enforced.
     forbidden_flow_markers = (
         "login-by=mac,cookie",
-        "mac-auth-mode=mac-as-username-and-password",
         "window.setTimeout",
         "arofiLoginFrame",
         "idle-timeout=31d",
@@ -93,10 +95,13 @@ def main() -> None:
             fail(f"runtime captive flow contains forbidden behavior: {marker}")
 
     finalizer = FINALIZER.read_text(encoding="utf-8")
-    if "verify_router_captive_invariants.py" not in finalizer:
-        fail("the final source-normalization stage no longer runs captive invariants")
-    if "forbid_mikrotik_auto_mac_auth.py" not in finalizer:
-        fail("the final source-normalization stage no longer runs this session guard")
+    for marker, message in (
+        ("guard_active_bundle_disconnects.py", "active-bundle disconnect guard"),
+        ("verify_router_captive_invariants.py", "captive invariants"),
+        ("forbid_mikrotik_auto_mac_auth.py", "session guard"),
+    ):
+        if marker not in finalizer:
+            fail(f"the final source-normalization stage no longer runs {message}")
 
     # Docker and both GitHub workflows independently run this guard. This makes
     # accidental removal visible in Coolify/local builds and in branch/main CI.
