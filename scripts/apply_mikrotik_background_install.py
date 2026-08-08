@@ -60,6 +60,13 @@ def patch_admin(text: str) -> str:
     return text
 
 
+def run_required_patch(filename: str) -> None:
+    patch = ROOT / "scripts" / filename
+    if not patch.exists():
+        raise RuntimeError(f"Required MikroTik patch missing: {patch.relative_to(ROOT)}")
+    runpy.run_path(str(patch), run_name="__main__")
+
+
 def main() -> None:
     for path, patcher in (
         (MIKROTIK, patch_mikrotik),
@@ -74,14 +81,13 @@ def main() -> None:
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
-    portal_refresh = ROOT / "scripts/refresh_mikrotik_portal_assets.py"
-    if not portal_refresh.exists():
-        raise RuntimeError(
-            f"Required portal refresh patch missing: {portal_refresh.relative_to(ROOT)}"
-        )
-    runpy.run_path(str(portal_refresh), run_name="__main__")
+    run_required_patch("refresh_mikrotik_portal_assets.py")
+    run_required_patch("fix_sstp_remote_target.py")
 
-    print("MikroTik foreground installer, local reconnect URL, and fresh portal assets verified.")
+    print(
+        "MikroTik foreground installer, local reconnect URL, fresh portal assets, "
+        "and SSTP remote target verified."
+    )
 
 
 if __name__ == "__main__":
