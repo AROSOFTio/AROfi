@@ -4,21 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 type Mode = 'light' | 'dark'
-type Accent = 'blue' | 'green' | 'gold'
 
 const MODE_KEY = 'arofi-theme'
-const ACCENT_KEY = 'arofi-accent-theme'
-
-const accents: Array<{ key: Accent; label: string; color: string }> = [
-  { key: 'blue', label: 'Blue', color: '#2563eb' },
-  { key: 'green', label: 'Green', color: '#059669' },
-  { key: 'gold', label: 'Gold', color: '#d59a24' },
-]
 
 export default function PublicAppearanceDock() {
   const pathname = usePathname()
   const [mode, setMode] = useState<Mode>('light')
-  const [accent, setAccent] = useState<Accent>('blue')
   const [mounted, setMounted] = useState(false)
 
   const visible = useMemo(() => {
@@ -29,86 +20,54 @@ export default function PublicAppearanceDock() {
   }, [pathname])
 
   useEffect(() => {
-    const cookies = document.cookie.split('; ').reduce<Record<string, string>>((all, item) => {
-      const [key, ...value] = item.split('=')
-      all[key] = value.join('=')
-      return all
+    const cookies = document.cookie.split('; ').reduce<Record<string, string>>((values, item) => {
+      const [key, ...parts] = item.split('=')
+      values[key] = parts.join('=')
+      return values
     }, {})
 
-    let storedMode: string | null = null
-    let storedAccent: string | null = null
+    let saved: string | null = null
     try {
-      storedMode = localStorage.getItem(MODE_KEY)
-      storedAccent = localStorage.getItem(ACCENT_KEY)
+      saved = localStorage.getItem(MODE_KEY)
     } catch {
-      // Cookies remain available when local storage is restricted.
+      // Cookie persistence remains available when local storage is restricted.
     }
-
-    storedMode ||= cookies[MODE_KEY] ?? null
-    storedAccent ||= cookies[ACCENT_KEY] ?? null
-    const nextMode: Mode = storedMode === 'dark' || storedMode === 'light'
-      ? storedMode
+    saved ||= cookies[MODE_KEY] ?? null
+    const nextMode: Mode = saved === 'dark' || saved === 'light'
+      ? saved
       : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    const nextAccent: Accent = storedAccent === 'green' || storedAccent === 'gold' || storedAccent === 'blue'
-      ? storedAccent
-      : 'blue'
 
     setMode(nextMode)
-    setAccent(nextAccent)
-    apply(nextMode, nextAccent)
+    applyMode(nextMode)
     setMounted(true)
   }, [])
 
-  function apply(nextMode: Mode, nextAccent: Accent) {
+  function applyMode(nextMode: Mode) {
     document.documentElement.setAttribute('data-theme', nextMode)
-    document.documentElement.setAttribute('data-accent-theme', nextAccent)
     document.documentElement.style.colorScheme = nextMode
     try {
       localStorage.setItem(MODE_KEY, nextMode)
-      localStorage.setItem(ACCENT_KEY, nextAccent)
     } catch {
       // Cookie persistence below is the fallback.
     }
     document.cookie = `${MODE_KEY}=${nextMode}; Max-Age=31536000; Path=/; SameSite=Lax`
-    document.cookie = `${ACCENT_KEY}=${nextAccent}; Max-Age=31536000; Path=/; SameSite=Lax`
   }
 
   function chooseMode(nextMode: Mode) {
     setMode(nextMode)
-    apply(nextMode, accent)
-  }
-
-  function chooseAccent(nextAccent: Accent) {
-    setAccent(nextAccent)
-    apply(mode, nextAccent)
+    applyMode(nextMode)
   }
 
   return (
     <>
       {visible && mounted ? (
-        <aside className="public-appearance-dock" aria-label="Website appearance">
-          <img src={`/brand/arofi-badge-${accent}.svg`} alt={`AROFi ${accent} badge`} />
-          <div className="public-mode-toggle" role="group" aria-label="Light or dark mode">
-            <button type="button" aria-pressed={mode === 'light'} onClick={() => chooseMode('light')} title="Light mode">
-              <SunIcon /> <span>Light</span>
-            </button>
-            <button type="button" aria-pressed={mode === 'dark'} onClick={() => chooseMode('dark')} title="Dark mode">
-              <MoonIcon /> <span>Dark</span>
-            </button>
-          </div>
-          <div className="public-accent-toggle" role="group" aria-label="AROFi colour theme">
-            {accents.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                aria-label={`${item.label} theme`}
-                aria-pressed={accent === item.key}
-                title={`${item.label} theme`}
-                style={{ '--swatch': item.color } as React.CSSProperties}
-                onClick={() => chooseAccent(item.key)}
-              />
-            ))}
-          </div>
+        <aside className="public-mode-dock" aria-label="Website appearance">
+          <button type="button" aria-label="Light mode" title="Light mode" aria-pressed={mode === 'light'} onClick={() => chooseMode('light')}>
+            <SunIcon />
+          </button>
+          <button type="button" aria-label="Dark mode" title="Dark mode" aria-pressed={mode === 'dark'} onClick={() => chooseMode('dark')}>
+            <MoonIcon />
+          </button>
         </aside>
       ) : null}
 
@@ -118,8 +77,9 @@ export default function PublicAppearanceDock() {
           --arofi-accent: #2563eb;
           --arofi-accent-strong: #1d4ed8;
           --arofi-accent-soft: rgba(37, 99, 235, .11);
-          --arofi-accent-line: rgba(37, 99, 235, .30);
-          --arofi-badge: url('/brand/arofi-badge-blue.svg');
+          --arofi-accent-line: rgba(37, 99, 235, .28);
+          --arofi-logo: url('/brand/arofi-logo-blue.svg');
+          --arofi-mark: url('/brand/arofi-mark-blue.svg');
           --green: #2563eb;
           --green-dark: #1d4ed8;
           --green-light: #eff6ff;
@@ -134,8 +94,9 @@ export default function PublicAppearanceDock() {
           --arofi-accent: #059669;
           --arofi-accent-strong: #047857;
           --arofi-accent-soft: rgba(5, 150, 105, .11);
-          --arofi-accent-line: rgba(5, 150, 105, .30);
-          --arofi-badge: url('/brand/arofi-badge-green.svg');
+          --arofi-accent-line: rgba(5, 150, 105, .28);
+          --arofi-logo: url('/brand/arofi-logo-green.svg');
+          --arofi-mark: url('/brand/arofi-mark-green.svg');
           --green: #059669;
           --green-dark: #047857;
           --green-light: #ecfdf5;
@@ -150,8 +111,9 @@ export default function PublicAppearanceDock() {
           --arofi-accent: #d59a24;
           --arofi-accent-strong: #a96913;
           --arofi-accent-soft: rgba(213, 154, 36, .13);
-          --arofi-accent-line: rgba(213, 154, 36, .34);
-          --arofi-badge: url('/brand/arofi-badge-gold.svg');
+          --arofi-accent-line: rgba(213, 154, 36, .32);
+          --arofi-logo: url('/brand/arofi-logo-gold.svg');
+          --arofi-mark: url('/brand/arofi-mark-gold.svg');
           --green: #d59a24;
           --green-dark: #a96913;
           --green-light: #fff8e7;
@@ -192,7 +154,7 @@ export default function PublicAppearanceDock() {
           --text-2: #b2bdc9;
           --text-3: #8592a2;
           --glass-bg: rgba(18,24,32,.96);
-          --glass-border: rgba(148,163,184,.17);
+          --glass-border: rgba(148,163,184,.16);
           --glass-blur: 12px;
           --shadow-sm: 0 1px 3px rgba(0,0,0,.28);
           --shadow-md: 0 16px 36px rgba(0,0,0,.34);
@@ -210,43 +172,54 @@ export default function PublicAppearanceDock() {
           --input: 215 21% 21%;
         }
         :root[data-theme='dark'][data-accent-theme='blue'] {
-          --arofi-accent: #60a5fa; --arofi-accent-strong:#3b82f6; --green:#60a5fa; --green-dark:#93c5fd;
-          --green-light:rgba(59,130,246,.14); --green-mid:rgba(96,165,250,.30); --green-soft:rgba(59,130,246,.10); --brand:#60a5fa; --brand-2:#3b82f6;
+          --arofi-accent:#60a5fa;--arofi-accent-strong:#3b82f6;--green:#60a5fa;--green-dark:#93c5fd;
+          --green-light:rgba(59,130,246,.14);--green-mid:rgba(96,165,250,.30);--green-soft:rgba(59,130,246,.10);--brand:#60a5fa;--brand-2:#3b82f6;
         }
         :root[data-theme='dark'][data-accent-theme='green'] {
-          --arofi-accent: #34d399; --arofi-accent-strong:#10b981; --green:#34d399; --green-dark:#6ee7b7;
-          --green-light:rgba(16,185,129,.14); --green-mid:rgba(52,211,153,.30); --green-soft:rgba(16,185,129,.10); --brand:#34d399; --brand-2:#10b981;
+          --arofi-accent:#34d399;--arofi-accent-strong:#10b981;--green:#34d399;--green-dark:#6ee7b7;
+          --green-light:rgba(16,185,129,.14);--green-mid:rgba(52,211,153,.30);--green-soft:rgba(16,185,129,.10);--brand:#34d399;--brand-2:#10b981;
         }
         :root[data-theme='dark'][data-accent-theme='gold'] {
-          --arofi-accent: #f2bd58; --arofi-accent-strong:#d59a24; --green:#f2bd58; --green-dark:#f7cf7b;
-          --green-light:rgba(213,154,36,.15); --green-mid:rgba(242,189,88,.30); --green-soft:rgba(213,154,36,.11); --brand:#f2bd58; --brand-2:#d59a24;
+          --arofi-accent:#f2bd58;--arofi-accent-strong:#d59a24;--green:#f2bd58;--green-dark:#f7cf7b;
+          --green-light:rgba(213,154,36,.15);--green-mid:rgba(242,189,88,.30);--green-soft:rgba(213,154,36,.11);--brand:#f2bd58;--brand-2:#d59a24;
         }
 
         body { background: var(--bg-app) !important; color: var(--text-1); }
         :root[data-theme='dark'] body { background-image: none !important; }
 
-        .home-shell {
-          background: var(--bg-app) !important;
-          color: var(--text-1) !important;
+        /* Public pages are always AROFi blue. Accent selection remains dashboard-only. */
+        .home-shell, .docs-book-shell {
+          --arofi-accent: #2563eb;
+          --arofi-accent-strong: #1d4ed8;
+          --arofi-accent-soft: rgba(37,99,235,.11);
+          --arofi-accent-line: rgba(37,99,235,.28);
         }
+        :root[data-theme='dark'] .home-shell,
+        :root[data-theme='dark'] .docs-book-shell {
+          --arofi-accent: #60a5fa;
+          --arofi-accent-strong: #3b82f6;
+          --arofi-accent-soft: rgba(59,130,246,.14);
+          --arofi-accent-line: rgba(96,165,250,.30);
+        }
+        .home-shell { background: var(--bg-app) !important; color: var(--text-1) !important; }
         .home-nav {
           background: color-mix(in srgb, var(--bg-card) 94%, transparent) !important;
           border-color: var(--border) !important;
           box-shadow: 0 6px 22px rgba(15,23,42,.05) !important;
         }
         :root[data-theme='dark'] .home-nav { box-shadow: 0 8px 24px rgba(0,0,0,.24) !important; }
-        .home-brand { position: relative; min-width: 54px; }
-        .home-brand img { opacity: 0 !important; width: 48px !important; height: 48px !important; }
-        .home-brand::before {
-          content: '';
-          width: 48px;
-          height: 48px;
-          position: absolute;
-          inset: 50% auto auto 0;
-          transform: translateY(-50%);
-          background: var(--arofi-badge) center/contain no-repeat;
+        .home-brand { min-width: 112px !important; display:flex !important; align-items:center !important; }
+        .home-brand::before { display:none !important; content:none !important; }
+        .home-brand img {
+          content: url('/brand/arofi-logo-blue.svg') !important;
+          opacity: 1 !important;
+          display:block !important;
+          width: 108px !important;
+          height: 42px !important;
+          object-fit: contain !important;
+          object-position:left center !important;
         }
-        .home-brand-text { display: none !important; }
+        .home-brand-text { display:none !important; }
         .home-hero::before, .home-hero::after, .home-shell::before, .home-shell::after { display:none !important; }
         .home-console, .home-why-card, .home-feature, .home-preview-card, .home-faq-item, .pricing-card, .home-contact-card {
           background: var(--bg-card) !important;
@@ -260,53 +233,59 @@ export default function PublicAppearanceDock() {
         :root[data-theme='dark'] .home-faq-item,
         :root[data-theme='dark'] .pricing-card,
         :root[data-theme='dark'] .home-contact-card { background-image:none !important; }
-        .home-kicker, .home-feature > svg, .home-live, .home-feed-amount, .home-bar { color: var(--arofi-accent) !important; }
-        .home-bar { background: var(--arofi-accent) !important; }
-        .btn-primary {
-          background: var(--arofi-accent-strong) !important;
-          border-color: var(--arofi-accent-strong) !important;
-          box-shadow: none !important;
+        .home-kicker, .home-feature > svg, .home-live, .home-feed-amount { color:var(--arofi-accent) !important; }
+        .home-bar { background:var(--arofi-accent) !important; }
+        .home-shell .btn-primary {
+          background:var(--arofi-accent-strong) !important;
+          border-color:var(--arofi-accent-strong) !important;
+          box-shadow:none !important;
         }
-        .btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
-        .btn-ghost { background: var(--bg-card) !important; color: var(--text-1) !important; border-color: var(--border) !important; }
-        .home-nav a, .home-section-head p, .home-feature p, .home-why-card p, .home-faq-item p { color: var(--text-2) !important; }
+        .home-shell .btn-ghost { background:var(--bg-card) !important;color:var(--text-1) !important;border-color:var(--border) !important; }
+        .home-nav a,.home-section-head p,.home-feature p,.home-why-card p,.home-faq-item p { color:var(--text-2) !important; }
 
-        .public-appearance-dock {
-          position: fixed;
-          z-index: 250;
-          top: 76px;
-          right: 18px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 7px;
-          border: 1px solid var(--border);
-          border-radius: 15px;
-          background: var(--glass-bg);
-          box-shadow: var(--shadow-md);
-          backdrop-filter: blur(var(--glass-blur));
+        .public-mode-dock {
+          position:fixed;
+          z-index:250;
+          top:76px;
+          right:18px;
+          display:flex;
+          align-items:center;
+          gap:3px;
+          padding:3px;
+          background:var(--bg-card);
+          border:1px solid var(--border);
+          border-radius:10px;
+          box-shadow:var(--shadow-sm);
         }
-        .public-appearance-dock > img { width: 35px; height: 35px; object-fit: contain; }
-        .public-mode-toggle { display:flex; padding:3px; gap:2px; border-radius:10px; background:var(--bg-hover); }
-        .public-mode-toggle button {
-          height:30px; padding:0 8px; display:flex; align-items:center; gap:5px; border:0; border-radius:8px;
-          background:transparent; color:var(--text-3); font:700 11px/1 inherit; cursor:pointer;
+        .public-mode-dock button {
+          width:32px;
+          height:32px;
+          display:grid;
+          place-items:center;
+          padding:0;
+          border:0;
+          border-radius:7px;
+          background:transparent;
+          color:var(--text-3);
+          cursor:pointer;
         }
-        .public-mode-toggle button[aria-pressed='true'] { background:var(--bg-card); color:var(--text-1); box-shadow:var(--shadow-sm); }
-        .public-accent-toggle { display:flex; align-items:center; gap:5px; padding:0 3px; }
-        .public-accent-toggle button {
-          width:19px; height:19px; padding:0; border-radius:999px; cursor:pointer; background:var(--swatch);
-          border:2px solid var(--bg-card); box-shadow:0 0 0 1px var(--border);
-        }
-        .public-accent-toggle button[aria-pressed='true'] { box-shadow:0 0 0 2px var(--bg-card),0 0 0 4px var(--arofi-accent); }
+        .public-mode-dock button:hover { color:var(--text-1);background:var(--bg-hover); }
+        .public-mode-dock button[aria-pressed='true'] { color:#2563eb;background:#eff6ff; }
+        :root[data-theme='dark'] .public-mode-dock button[aria-pressed='true'] { color:#60a5fa;background:rgba(59,130,246,.14); }
 
-        .book-brand { position:relative; }
-        .book-brand img { opacity:0 !important; width:39px !important; height:39px !important; }
-        .book-brand::before { content:''; position:absolute; left:0; top:50%; width:39px; height:39px; transform:translateY(-50%); background:var(--arofi-badge) center/contain no-repeat; }
-        :root[data-theme='dark'] .docs-book-shell { background:#0b0f14 !important; color:#eef2f7 !important; }
+        .book-brand { position:relative;min-width:184px; }
+        .book-brand::before { display:none !important;content:none !important; }
+        .book-brand img {
+          content:url('/brand/arofi-logo-blue.svg') !important;
+          opacity:1 !important;
+          width:82px !important;
+          height:34px !important;
+          object-fit:contain !important;
+        }
+        :root[data-theme='dark'] .docs-book-shell { background:#0b0f14 !important;color:#eef2f7 !important; }
         :root[data-theme='dark'] .book-topbar,
-        :root[data-theme='dark'] .book-contents { background:#111821 !important; border-color:#293442 !important; box-shadow:0 16px 34px rgba(0,0,0,.30) !important; }
-        :root[data-theme='dark'] .book-page { background:#151c25 !important; color:#eef2f7 !important; border-color:#303c4b !important; box-shadow:0 22px 48px rgba(0,0,0,.34) !important; }
+        :root[data-theme='dark'] .book-contents { background:#111821 !important;border-color:#293442 !important;box-shadow:0 16px 34px rgba(0,0,0,.30) !important; }
+        :root[data-theme='dark'] .book-page { background:#151c25 !important;color:#eef2f7 !important;border-color:#303c4b !important;box-shadow:0 22px 48px rgba(0,0,0,.34) !important; }
         :root[data-theme='dark'] .book-page h1,
         :root[data-theme='dark'] .book-page h2,
         :root[data-theme='dark'] .book-page h3,
@@ -317,14 +296,44 @@ export default function PublicAppearanceDock() {
         :root[data-theme='dark'] .contents-item,
         :root[data-theme='dark'] .contents-search input,
         :root[data-theme='dark'] .book-top-actions a,
-        :root[data-theme='dark'] .book-top-actions button { background:#151d27 !important; color:#dbe3ec !important; border-color:#2a3644 !important; }
-        .contents-item.active { border-color:var(--arofi-accent-line) !important; background:var(--arofi-accent-soft) !important; }
+        :root[data-theme='dark'] .book-top-actions button { background:#151d27 !important;color:#dbe3ec !important;border-color:#2a3644 !important; }
+        .contents-item.active { border-color:var(--arofi-accent-line) !important;background:var(--arofi-accent-soft) !important; }
 
-        @media (max-width: 760px) {
-          .public-appearance-dock { top:auto; right:auto; left:12px; bottom:12px; padding:6px; }
-          .public-appearance-dock > img { width:30px; height:30px; }
-          .public-mode-toggle button span { display:none; }
-          .public-mode-toggle button { width:30px; justify-content:center; padding:0; }
+        /* Remove the obsolete shield logo from sign-in and Aria. */
+        .login-logo {
+          content:url('/brand/arofi-logo-blue.svg') !important;
+          width:150px !important;
+          height:58px !important;
+          object-fit:contain !important;
+          border:0 !important;
+          border-radius:0 !important;
+          background:transparent !important;
+          box-shadow:none !important;
+        }
+        .chat-bubble {
+          width:58px !important;
+          height:58px !important;
+          padding:0 !important;
+          border:0 !important;
+          border-radius:0 !important;
+          background:transparent !important;
+          box-shadow:none !important;
+        }
+        .chat-bubble-logo {
+          content:url('/brand/arofi-mark-blue.svg') !important;
+          width:56px !important;
+          height:50px !important;
+          object-fit:contain !important;
+          border:0 !important;
+          border-radius:0 !important;
+          background:transparent !important;
+          box-shadow:none !important;
+        }
+
+        @media (max-width:760px) {
+          .public-mode-dock { top:auto;right:12px;bottom:12px; }
+          .home-brand { min-width:92px !important; }
+          .home-brand img { width:92px !important;height:38px !important; }
         }
       `}</style>
     </>
@@ -332,9 +341,9 @@ export default function PublicAppearanceDock() {
 }
 
 function SunIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
 }
 
 function MoonIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 15.1A8.4 8.4 0 0 1 8.9 3.2a8.5 8.5 0 1 0 11.9 11.9Z"/></svg>
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 15.1A8.4 8.4 0 0 1 8.9 3.2a8.5 8.5 0 1 0 11.9 11.9Z"/></svg>
 }
