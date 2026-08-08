@@ -30,17 +30,25 @@ case "$component" in
     ;;
 esac
 
+project_container_ids=$(docker ps -q --filter "label=coolify.applicationId=$application_id")
+set -- $project_container_ids
+if [ "$#" -lt 1 ]; then
+  echo "Could not find a live container for Coolify application $application_id." >&2
+  exit 1
+fi
+project_container=$1
+
+project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$project_container")
 old_container_ids=$(docker ps -q \
-  --filter "label=coolify.applicationId=$application_id" \
+  --filter "label=com.docker.compose.project=$project" \
   --filter "label=com.docker.compose.service=$component")
 set -- $old_container_ids
 if [ "$#" -ne 1 ]; then
-  echo "Expected exactly one live $component container for Coolify application $application_id." >&2
+  echo "Expected exactly one live $component container in Compose project $project." >&2
   exit 1
 fi
 old_container=$1
 
-project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$old_container")
 compose_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$old_container")
 environment_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' "$old_container")
 previous_image=$(docker inspect -f '{{ .Config.Image }}' "$old_container")
@@ -63,7 +71,7 @@ trap 'rm -f "$override_file" "$generated_environment_file"' EXIT HUP INT TERM
 
 if [ ! -f "$environment_file" ]; then
   generated_environment_file=$(mktemp /tmp/arofi-component-environment-XXXXXX.env)
-  docker ps -q --filter "label=coolify.applicationId=$application_id" | while read -r container_id; do
+  docker ps -q --filter "label=com.docker.compose.project=$project" | while read -r container_id; do
     docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id"
   done | awk -F= '!seen[$1]++ { print }' > "$generated_environment_file"
   environment_file=$generated_environment_file
@@ -138,7 +146,7 @@ reload_nginx() {
   [ "$component" = nginx ] && return 0
 
   nginx_ids=$(docker ps -q \
-    --filter "label=coolify.applicationId=$application_id" \
+    --filter "label=com.docker.compose.project=$project" \
     --filter "label=com.docker.compose.service=nginx")
   set -- $nginx_ids
   if [ "$#" -ne 1 ]; then
