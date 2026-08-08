@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
 CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik.controller.ts"
+ALOGIN_CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik-alogin.controller.ts"
 FINALIZER = ROOT / "scripts/finalize_gateway_compile.py"
 DOCKERFILE = ROOT / "Dockerfile"
 CI = ROOT / ".github/workflows/ci.yml"
@@ -37,7 +38,18 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
-    required_files = (MIKROTIK, FLOW, CONTROLLER, FINALIZER, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
+    required_files = (
+        MIKROTIK,
+        FLOW,
+        CONTROLLER,
+        ALOGIN_CONTROLLER,
+        FINALIZER,
+        DOCKERFILE,
+        CI,
+        DEPLOY,
+        AGENTS,
+        COPILOT,
+    )
     missing_files = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
     if missing_files:
         fail("required guard/policy files missing: " + ", ".join(missing_files))
@@ -89,15 +101,31 @@ def main() -> None:
             fail(f"runtime captive-flow protection missing marker: {marker}")
 
     controller = CONTROLLER.read_text(encoding="utf-8")
+    alogin = ALOGIN_CONTROLLER.read_text(encoding="utf-8")
+    completion = controller + "\n" + alogin
+
     for marker in (
-        "@Get('alogin-html/:key')",
         "prepareCompletionHtml(_html: string)",
         "window.close()",
         "body{visibility:hidden}",
         "connectivitycheck.gstatic.com/generate_204",
     ):
         if marker not in controller:
-            fail(f"invisible post-login completion missing marker: {marker}")
+            fail(f"invisible status completion missing marker: {marker}")
+
+    for marker in (
+        "@Get('alogin-html/:key')",
+        "buildInstantCompletionHtml()",
+        "window.close()",
+        "body{visibility:hidden}",
+        "connectivitycheck.gstatic.com/generate_204",
+    ):
+        if marker not in alogin:
+            fail(f"invisible alogin completion missing marker: {marker}")
+
+    route_count = completion.count("@Get('alogin-html/:key')")
+    if route_count != 1:
+        fail(f"alogin-html must have exactly one route owner after finalization; found {route_count}")
 
     # Do not reject literal old-flow strings in FLOW: they intentionally appear
     # as replacement targets. The required replacement markers above and the
@@ -111,13 +139,19 @@ def main() -> None:
         if marker in flow:
             fail(f"runtime captive flow contains forbidden behavior: {marker}")
 
-    for marker in (">Connected<", "You can close this page now"):
-        if marker in controller:
+    for marker in (
+        ">Connected<",
+        "You can close this page now",
+        "<title>Connected</title>",
+        "Connected. <a",
+    ):
+        if marker in completion:
             fail(f"visible post-login page text remains: {marker}")
 
     finalizer = FINALIZER.read_text(encoding="utf-8")
     for marker, message in (
         ("enforce_business_voucher_qr.py", "business voucher QR guard"),
+        ("enforce_instant_captive_completion.py", "instant captive completion guard"),
         ("guard_active_bundle_disconnects.py", "active-bundle disconnect guard"),
         ("verify_router_captive_invariants.py", "captive invariants"),
         ("forbid_mikrotik_auto_mac_auth.py", "session guard"),
@@ -138,6 +172,10 @@ def main() -> None:
             fail(f"AI/agent policy marker missing from {path.relative_to(ROOT)}")
         if "login-by=cookie,mac-cookie,http-pap" not in text:
             fail(f"trusted returning-device policy missing from {path.relative_to(ROOT)}")
+        if "AROFI_BUSINESS_VOUCHER_QR" not in text:
+            fail(f"business voucher QR policy missing from {path.relative_to(ROOT)}")
+        if "AROFI_INSTANT_CAPTIVE_COMPLETION" not in text:
+            fail(f"instant captive completion policy missing from {path.relative_to(ROOT)}")
 
     print(
         "AROFI_NO_AUTOMATIC_MAC_AUTH verified: exact MAC auth is absent, trusted "
