@@ -28,12 +28,32 @@ export class MikrotikController {
 
   @Get('status-html/:key')
   @Header('Content-Type', 'text/html')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async getStatusHtml(@Param('key') key: string) {
     const html = await this.routersService.getMikrotikStatusHtmlByKey(key);
     if (!html) {
       throw new NotFoundException('Router status.html not found');
     }
-    return html;
+    return this.prepareCompletionHtml(html);
+  }
+
+  // RouterOS uses alogin.html immediately after accepting credentials. It must
+  // never show a second "Connected" page. Serve the same invisible close/204
+  // response used by status.html so voucher and Mobile Money logins finish in
+  // the original captive window without asking the customer to tap again.
+  @Get('alogin-html/:key')
+  @Header('Content-Type', 'text/html')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async getAloginHtml(@Param('key') key: string) {
+    const html = await this.routersService.getMikrotikStatusHtmlByKey(key);
+    if (!html) {
+      throw new NotFoundException('Router alogin.html not found');
+    }
+    return this.prepareCompletionHtml(html);
   }
 
   @Get('mobile-setup/:key')
@@ -106,9 +126,8 @@ export class MikrotikController {
   prepareLoginHtml(html: string) {
     let prepared = html;
 
-    // Never auto-submit returning-device credentials on initial captive-page
-    // load. New visitors must see bundles first, while explicit voucher,
-    // recovery, trial, and successful-payment actions can still call conn().
+    // The runtime captive-flow initializer restores this only when the API has
+    // confirmed an ACTIVE, unexpired activation for the same router and MAC.
     prepared = prepared.replace(
       'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
       'var autoReady=false;',
@@ -152,10 +171,52 @@ export class MikrotikController {
 
     prepared = prepared.replace(
       `    function selPkg(id){`,
-      `    function startTrial(id){\n      if(trialStarting)return;\n      var pkg=null;\n      for(var i=0;i<pkgs.length;i++){if(pkgs[i].id===id){pkg=pkgs[i];break;}}\n      if(!pkg)return;\n      trialStarting=true;\n      sst('Starting your free trial...','info');\n      apiCall('POST','/api/portal/start-trial',{packageId:id,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo},function(err,res){\n        if(err){trialStarting=false;sst(err.message||'Unable to start the free trial.','err');return;}\n        if(res&&res.reconnect&&res.reconnect.username){sst('Trial started! Connecting...','ok');conn(res.reconnect);return;}\n        trialStarting=false;\n        sst('Trial started. Reconnect to this WiFi if internet does not begin automatically.','ok');\n      });\n    }\n\n    function selPkg(id){`,
+      `    function startTrial(id){\n      if(trialStarting)return;\n      var pkg=null;\n      for(var i=0;i<pkgs.length;i++){if(pkgs[i].id===id){pkg=pkgs[i];break;}}\n      if(!pkg)return;\n      trialStarting=true;\n      sst('Starting your free trial...','info');\n      apiCall('POST','/api/portal/start-trial',{packageId:id,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo},function(err,res){\n        if(err){trialStarting=false;sst(err.message||'Unable to start the free trial.','err');return;}\n        if(res&&res.reconnect&&res.reconnect.username){conn(res.reconnect);return;}\n        trialStarting=false;\n        sst('Trial started. Reconnect to this WiFi if internet does not begin automatically.','ok');\n      });\n    }\n\n    function selPkg(id){`,
     );
 
     return prepared;
+  }
+
+  // Both status.html and alogin.html use this invisible completion document.
+  // It first asks the captive mini-browser to close, then falls back to the
+  // operating system's connectivity-check URL. There is deliberately no
+  // customer-facing "Connected" page and no extra button.
+  prepareCompletionHtml(_html: string) {
+    return `
+$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
+$(if http-header == "Pragma")no-cache$(endif)
+$(if http-header == "Expires")0$(endif)
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta http-equiv="refresh" content="0;url=http://connectivitycheck.gstatic.com/generate_204">
+  <title></title>
+  <style>html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}body{visibility:hidden}</style>
+</head>
+<body aria-hidden="true">
+<script>
+(function(){
+  function finishTarget(){
+    var ua=navigator.userAgent||'';
+    if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';
+    if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';
+    return 'http://connectivitycheck.gstatic.com/generate_204';
+  }
+  var target='$(link-redirect)';
+  if(!target||target.indexOf('$(')===0||/\\.wifi(?:\\/|$)/i.test(target)||/\\/login(?:[/?]|$)/i.test(target))target=finishTarget();
+  try{window.close();}catch(e){}
+  setTimeout(function(){try{window.location.replace(target);}catch(e){window.location.href=target;}},0);
+  setTimeout(function(){try{window.close();}catch(e){}},120);
+})();
+</script>
+</body>
+</html>
+`;
   }
 
   private resolveProvisioningNasIp(selfReportedNasIp?: string, httpSourceIp?: string) {
