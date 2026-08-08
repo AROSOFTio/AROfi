@@ -14,6 +14,7 @@ RUN --mount=type=cache,target=/root/.npm \
     NODE_ENV=development npm_config_jobs=1 npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
 COPY . .
+RUN chmod +x scripts/run_with_heartbeat.sh
 
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
@@ -33,6 +34,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
     && python3 scripts/apply_mikrotik_background_install.py \
+    && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/finalize_gateway_compile.py
 
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
@@ -46,17 +48,17 @@ RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
-    npm run build --workspace=arofi-admin
+    sh scripts/run_with_heartbeat.sh "AROFi Admin build" npm run build --workspace=arofi-admin
 
 RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=512 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
-    npm run build --workspace=arofi-portal
+    sh scripts/run_with_heartbeat.sh "AROFi Portal build" npm run build --workspace=arofi-portal
 
 RUN export NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' && \
     export CI=1 && \
-    npm run build --workspace=arofi-api
+    sh scripts/run_with_heartbeat.sh "AROFi API build" npm run build --workspace=arofi-api
 
 # Assemble minimal Next.js standalone bundles. Each bundle contains only the
 # server files and production dependencies traced by Next.js, rather than the
@@ -93,10 +95,14 @@ WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
 RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
+COPY scripts/run_with_heartbeat.sh /usr/local/bin/run-with-heartbeat
+RUN chmod +x /usr/local/bin/run-with-heartbeat
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
     cd apps/api && \
-    NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    /usr/local/bin/run-with-heartbeat "API runtime dependency install" \
+      env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 \
+      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
 # Wait for the builder only after runtime dependencies are ready. BuildKit can
 # prepare this small runtime layer while the Admin, Portal and API compile.
