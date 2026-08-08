@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
+CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik.controller.ts"
 FINALIZER = ROOT / "scripts/finalize_gateway_compile.py"
 DOCKERFILE = ROOT / "Dockerfile"
 CI = ROOT / ".github/workflows/ci.yml"
@@ -36,7 +37,7 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
-    required_files = (MIKROTIK, FLOW, FINALIZER, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
+    required_files = (MIKROTIK, FLOW, CONTROLLER, FINALIZER, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
     missing_files = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
     if missing_files:
         fail("required guard/policy files missing: " + ", ".join(missing_files))
@@ -74,19 +75,35 @@ def main() -> None:
         "const SESSION_POLICY_SCRIPT = 'arofi-session-policy'",
         "idle-timeout=none keepalive-timeout=none session-timeout=0s",
         "var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;",
+        "function finishTarget()",
         "f.method='post';f.action=target;f.style.display='none'",
-        "document.body.appendChild(f);f.submit();}",
+        "add('dst',finishTarget())",
+        "add('popup','false')",
+        "document.documentElement.style.visibility='hidden';f.submit();}",
+        "prepared = prepared.replace('setTimeout(login, 200);', 'login();')",
+        "if(pmt.activation&&pmt.reconnect&&pmt.reconnect.username){closePay();conn(pmt.reconnect);return;}",
+        "function check()",
     )
     for marker in required_flow_markers:
         if marker not in flow:
             fail(f"runtime captive-flow protection missing marker: {marker}")
 
-    # Do not reject the literal mac-auth-mode text in FLOW: it intentionally
-    # appears inside the removal regex. Final generated RouterOS commands above
-    # are the authoritative place where its absence is enforced.
+    controller = CONTROLLER.read_text(encoding="utf-8")
+    for marker in (
+        "@Get('alogin-html/:key')",
+        "prepareCompletionHtml(_html: string)",
+        "window.close()",
+        "body{visibility:hidden}",
+        "connectivitycheck.gstatic.com/generate_204",
+    ):
+        if marker not in controller:
+            fail(f"invisible post-login completion missing marker: {marker}")
+
+    # Do not reject literal old-flow strings in FLOW: they intentionally appear
+    # as replacement targets. The required replacement markers above and the
+    # generated RouterOS source are the authoritative final-state checks.
     forbidden_flow_markers = (
         "login-by=mac,cookie",
-        "window.setTimeout",
         "arofiLoginFrame",
         "idle-timeout=31d",
     )
@@ -94,8 +111,13 @@ def main() -> None:
         if marker in flow:
             fail(f"runtime captive flow contains forbidden behavior: {marker}")
 
+    for marker in (">Connected<", "You can close this page now"):
+        if marker in controller:
+            fail(f"visible post-login page text remains: {marker}")
+
     finalizer = FINALIZER.read_text(encoding="utf-8")
     for marker, message in (
+        ("enforce_business_voucher_qr.py", "business voucher QR guard"),
         ("guard_active_bundle_disconnects.py", "active-bundle disconnect guard"),
         ("verify_router_captive_invariants.py", "captive invariants"),
         ("forbid_mikrotik_auto_mac_auth.py", "session guard"),
@@ -119,7 +141,8 @@ def main() -> None:
 
     print(
         "AROFI_NO_AUTOMATIC_MAC_AUTH verified: exact MAC auth is absent, trusted "
-        "mac-cookie reconnect is required, active-bundle timers are disabled, and guards are installed."
+        "mac-cookie reconnect is required, active-bundle timers are disabled, and "
+        "voucher/MoMo completion is one invisible direct POST."
     )
 
 
