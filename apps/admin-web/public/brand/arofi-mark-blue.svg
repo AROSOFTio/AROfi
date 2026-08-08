@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 220" role="img" aria-labelledby="title">
+  <title id="title">AROFi</title>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(8 8)" fill="none" stroke="url(#blue)" stroke-linecap="round">
+    <path d="M30 62C76 19 142 19 188 62" stroke-width="23"/>
+    <path d="M55 96C88 67 130 67 163 96" stroke-width="23"/>
+    <path d="M83 130C101 115 123 115 141 130" stroke-width="23"/>
+    <path d="M113 151c36 0 72-13 100-39 15-14 27-31 35-51" stroke-width="11"/>
+  </g>
+  <circle cx="126" cy="176" r="20" fill="url(#blue)"/>
+  <circle cx="126" cy="176" r="9" fill="#38BDF8" opacity=".72"/>
+</svg>
