@@ -7,8 +7,9 @@ apps/admin-web/.next
 apps/portal-web/.next
 apps/api/dist
 .git
-.github
 *.md
+!AGENTS.md
+!.github/copilot-instructions.md
 docs/
 *.log
 .env
