@@ -47,10 +47,13 @@ def main() -> None:
 
     # Restore the exact persistence values used by the proven flow.
     persistence_pattern = re.compile(
-        r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
-        r"(?:\s+idle-timeout=\S+)?"
-        r"(?:\s+keepalive-timeout=\S+)?"
-        r"(?:\s+session-timeout=\S+)?"
+        # Keep the closing TypeScript template delimiter outside the match;
+        # this normalizer runs after the timeout normalizer in the Docker build.
+        r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=[^\s`,]+"
+        r"(?:\s+idle-timeout=[^\s`,]+)?"
+        r"(?:\s+keepalive-timeout=[^\s`,]+)?"
+        r"(?:\s+session-timeout=[^\s`,]+)?"
+        r"(?=[^`\r\n]*`)"
     )
     text, persistence_count = persistence_pattern.subn(FINAL_PERSISTENCE, text)
     if persistence_count < 2:
