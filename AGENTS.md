@@ -67,6 +67,7 @@ Any change touching MikroTik onboarding, HotSpot profiles, captive login, Smart 
 
 ```bash
 python3 scripts/enforce_business_voucher_qr.py
+python3 scripts/enforce_instant_captive_completion.py
 python3 scripts/verify_router_captive_invariants.py
 python3 scripts/forbid_mikrotik_auto_mac_auth.py
 ```
