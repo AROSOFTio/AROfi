@@ -39,7 +39,8 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
-    && python3 scripts/finalize_gateway_compile.py
+    && python3 scripts/finalize_gateway_compile.py \
+    && python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
 RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
