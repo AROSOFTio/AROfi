@@ -115,6 +115,14 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
         "var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<2500;",
       )
 
+      // The voucher redemption request and context request can finish at almost
+      // the same time. Keep one shared lock so both callbacks cannot submit two
+      // RouterOS login forms and create a redirect race.
+      prepared = prepared.replace(
+        'var pkgs=[],selId=null,selTv=false,trialStarting=false;',
+        'var pkgs=[],selId=null,selTv=false,trialStarting=false,authSubmitting=false;',
+      )
+
       // Keep the original captive probe URL. After authentication it is the best
       // signal to Android/iOS/Windows that internet is available and lets the OS
       // close its mini-browser. QR scans whose original URL is local .wifi use a
@@ -187,7 +195,7 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
       // second AROFi page. RouterOS redirects to a connectivity check so the
       // operating system closes the captive browser after authentication.
       const oldConnect = "function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}"
-      const instantConnect = "function finishTarget(){var o=orig||'';if(o&&o.indexOf('$(')!==0&&!/\\.wifi(?:\\/|$)/i.test(o)&&!/\\/login(?:[/?]|$)/i.test(o))return o;var ua=navigator.userAgent||'';if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';return 'http://connectivitycheck.gstatic.com/generate_204';}function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}closePay();closeMsg();var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',finishTarget());add('popup','false');document.body.appendChild(f);document.documentElement.style.visibility='hidden';f.submit();}"
+      const instantConnect = "function finishTarget(){var o=orig||'';if(o&&o.indexOf('$(')!==0&&!/\\.wifi(?:\\/|$)/i.test(o)&&!/\\/login(?:[/?]|$)/i.test(o))return o;var ua=navigator.userAgent||'';if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';return 'http://connectivitycheck.gstatic.com/generate_204';}function conn(rc){if(authSubmitting)return;if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}authSubmitting=true;closePay();closeMsg();var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',finishTarget());add('popup','false');document.body.appendChild(f);document.documentElement.style.visibility='hidden';f.submit();}"
       prepared = prepared.split(oldConnect).join(instantConnect)
 
       // Trial remains visible but occupies only one compact, breathing button.
