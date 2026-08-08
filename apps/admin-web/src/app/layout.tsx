@@ -10,9 +10,11 @@ const SITE_NAME = 'AROFi by AROSOFT'
 const TITLE = 'AROFi – #1 WiFi Hotspot Billing & Mobile Money System in Uganda'
 const DESCRIPTION =
   'AROFi is Uganda\'s best hotspot billing software. Manage MikroTik routers, sell WiFi packages, collect MTN MoMo & Airtel Money payments, issue vouchers, and track sessions — all from one multi-business cloud console. Self-onboarding. No IT needed.'
+const FAVICON = '/brand/arofi-favicon-v2.svg'
+const BRAND_MARK = '/brand/arofi-mark-blue.svg'
+const BRAND_LOGO = '/brand/arofi-logo-blue.svg'
 
 const KEYWORDS = [
-  // Core product
   'wifi billing system Uganda',
   'hotspot billing software Uganda',
   'mobile money wifi billing',
@@ -22,7 +24,6 @@ const KEYWORDS = [
   'captive portal billing Uganda',
   'wifi management software Uganda',
   'internet cafe billing software Uganda',
-  // Mobile Money
   'MTN MoMo wifi payment',
   'Airtel Money wifi payment',
   'mobile money hotspot payment Uganda',
@@ -33,7 +34,6 @@ const KEYWORDS = [
   'mobile money internet billing Uganda',
   'how to accept MTN MoMo for wifi',
   'how to accept Airtel Money for internet',
-  // MikroTik specific
   'MikroTik hotspot setup Uganda',
   'MikroTik billing system Uganda',
   'MikroTik RADIUS billing',
@@ -44,7 +44,6 @@ const KEYWORDS = [
   'how to set up MikroTik hotspot billing',
   'MikroTik settings for wifi business Uganda',
   'best MikroTik billing software Uganda',
-  // Uganda & Kampala geo
   'wifi business Uganda',
   'hotspot business Uganda',
   'how to start wifi business Uganda',
@@ -58,7 +57,6 @@ const KEYWORDS = [
   'Uganda internet billing',
   'affordable wifi billing Uganda',
   'cheap wifi software Uganda',
-  // Business setup
   'how to set up online wifi billing',
   'how to set up wifi business Uganda',
   'how to bill wifi customers automatically',
@@ -68,32 +66,27 @@ const KEYWORDS = [
   'sell wifi vouchers Uganda',
   'prepaid wifi Uganda',
   'wifi packages Uganda',
-  // Free / SaaS angle
   'free wifi billing software Uganda',
   'free hotspot billing system',
   'best free wifi billing software Africa',
   'SaaS wifi billing Africa',
   'cloud wifi billing Uganda',
   'online wifi billing system Uganda',
-  // Multi-tenant & agent
   'multi-business wifi billing',
   'wifi reseller system Uganda',
   'wifi agent management system',
   'ISP reseller billing Uganda',
   'wifi franchise billing Uganda',
   'wholesale wifi billing Uganda',
-  // Tech & RADIUS
   'RADIUS server billing Uganda',
   'FreeRADIUS hotspot Uganda',
   'RADIUS hotspot management',
   'hotspot authentication system Uganda',
-  // Competitor adjacent
   'Mikrotik CHR billing Uganda',
   'Splynx alternative Uganda',
   'WHMCS alternative Uganda hotspot',
   'Ubersmith alternative Africa',
   'best billing software for wifi Uganda',
-  // AI/discovery
   'AROFi',
   'AROFi wifi billing',
   'AROSOFT Uganda',
@@ -122,9 +115,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
-    shortcut: '/logo.png',
+    icon: [{ url: FAVICON, type: 'image/svg+xml' }],
+    apple: BRAND_MARK,
+    shortcut: FAVICON,
   },
   openGraph: {
     title: TITLE,
@@ -168,28 +161,18 @@ export const metadata: Metadata = {
     },
   },
   other: {
-    // AI / LLM discovery hints
     'ai-content-type': 'product',
     'ai-product-category': 'WiFi Hotspot Billing Software',
     'ai-geography': 'Uganda, East Africa',
     'ai-primary-use-case': 'MikroTik hotspot billing with MTN MoMo and Airtel Money',
-    // Schema hints for crawlers
     'application-name': 'AROFi',
-    'msapplication-TileColor': '#0a0f1e',
-    'msapplication-TileImage': '/logo.png',
-    // Google Search Console verification — replace REPLACE_WITH_REAL_TOKEN after
-    // verifying via Search Console > Settings > Ownership verification > HTML tag
-    // 'google-site-verification': 'REPLACE_WITH_REAL_TOKEN',
-    // Bing Webmaster Tools verification
-    // 'msvalidate.01': 'REPLACE_WITH_REAL_TOKEN',
-    // Link to AI-readable summary
+    'msapplication-TileColor': '#2563EB',
+    'msapplication-TileImage': FAVICON,
     'llms-txt': `${SITE_URL}/llms.txt`,
-    // Geographic meta tags for local SEO
     'geo.region': 'UG-C',
     'geo.placename': 'Kampala',
     'geo.position': '0.3476;32.5825',
     'ICBM': '0.3476, 32.5825',
-    // 'yandex-verification': 'REPLACE_WITH_REAL_TOKEN',
   },
 }
 
@@ -248,6 +231,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       '@type': 'Organization',
       name: 'AROSOFT Innovations Ltd',
       url: 'https://arosoftlabs.com',
+      logo: `${SITE_URL}${BRAND_MARK}`,
       address: {
         '@type': 'PostalAddress',
         addressCountry: 'UG',
@@ -285,23 +269,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       'Automated session management',
       'Mobile money collection',
     ],
-    screenshot: `${SITE_URL}/logo.png`,
+    screenshot: `${SITE_URL}${BRAND_LOGO}`,
   }
 
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="icon" href="/logo.png" />
-        <link rel="apple-touch-icon" href="/logo.png" />
-        {/* AI/LLM crawler discovery */}
+        <link rel="icon" href={FAVICON} type="image/svg+xml" />
+        <link rel="shortcut icon" href={FAVICON} type="image/svg+xml" />
+        <link rel="apple-touch-icon" href={BRAND_MARK} />
         <link rel="llms" href="/llms.txt" type="text/plain" />
-        {/* Structured Data / JSON-LD for Google, Bing & AI crawlers */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* LocalBusiness schema for Uganda local SEO */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -315,11 +297,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               url: SITE_URL,
               logo: {
                 '@type': 'ImageObject',
-                url: `${SITE_URL}/logo.png`,
-                width: 512,
-                height: 512,
+                url: `${SITE_URL}${BRAND_MARK}`,
+                width: 260,
+                height: 220,
               },
-              image: `${SITE_URL}/logo.png`,
+              image: `${SITE_URL}${BRAND_LOGO}`,
               telephone: '+256787726388',
               email: 'support@arofi.net',
               address: {
@@ -349,7 +331,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }),
           }}
         />
-        {/* Page-specific FAQPage/Product schema (must mirror visible content) lives on the homepage itself — see apps/admin-web/src/app/page.tsx */}
       </head>
       <body>
         {children}
