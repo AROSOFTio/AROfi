@@ -41,7 +41,7 @@ describe('RouterCaptiveFlowInitializer', () => {
     expect(script).toContain('interval=1m')
   })
 
-  it('restores active returning-device auto reconnect with an immediate top-level RouterOS POST', () => {
+  it('finishes voucher, return and MoMo access with one immediate RouterOS POST and no connected page', () => {
     const oldConnect = "function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}"
     const controller = {
       prepareLoginHtml: jest.fn((html: string) => html),
@@ -61,8 +61,16 @@ describe('RouterCaptiveFlowInitializer', () => {
 
     const html = controller.prepareLoginHtml([
       '<html><head></head><body><script>',
+      'var API="https://arofi.net",APIFB="http://95.111.234.34",RKEY="key",CONNECTED="http://business.wifi/login?connected=1";',
+      'var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";',
       'var autoReady=false;',
       "var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<8000;",
+      "var _up=new URLSearchParams(search);\n      if(_up.get('connected')==='1'){\n        document.getElementById('loading').style.display='none';\n        document.getElementById('content').style.display='block';\n        return;\n      }\n\n",
+      'setTimeout(login, 200);',
+      "      sst('Verifying voucher...','info');",
+      "          sst('Success! Connecting...','ok');\n          conn(res.reconnect);",
+      "        var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));\n        if(cu){window.location.href=cu;return;}\n        sst(selTv?'Enter your Mobile Money PIN. After approval, reconnect the Smart TV to WiFi.':'Enter your Mobile Money PIN on your phone. Waiting for approval...','info');\n        poll(pmt.id,pmt.statusToken);",
+      "    function poll(id,tok){\n      var n=0,iv=setInterval(function(){\n        if(++n>200){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}\n        apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){\n          if(err) return;\n          if(p.activation){\n            if(selTv){\n              clearInterval(iv);\n              document.getElementById('pbtn').disabled=false;\n              closePay();\n              var tvm=normMac(document.getElementById('tvmac').value);\n              sst('Payment approved. Smart TV '+tvm+' is active. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');\n            }else if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}\n          }\n          else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}\n        });\n      },600);\n    }\n\n    function rec(){",
       oldConnect,
       '</script></body></html>',
     ].join(''))
@@ -71,10 +79,25 @@ describe('RouterCaptiveFlowInitializer', () => {
       'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
     )
     expect(html).toContain('(Date.now()-_lastAuto)<2500')
+    expect(html).toContain('orig="$(link-orig)"||""')
+    expect(html).toContain('function finishTarget()')
     expect(html).toContain("f.method='post';f.action=target;f.style.display='none'")
-    expect(html).toContain('document.body.appendChild(f);f.submit();}')
+    expect(html).toContain("add('dst',finishTarget())")
+    expect(html).toContain("add('popup','false')")
+    expect(html).toContain('document.documentElement.style.visibility=\'hidden\';f.submit();}')
+    expect(html).toContain('function check()')
+    expect(html).toContain('check();')
+    expect(html).toContain('setTimeout(check,500)')
+    expect(html).toContain('login();')
+
+    expect(html).not.toContain('?connected=1')
+    expect(html).not.toContain("_up.get('connected')")
+    expect(html).not.toContain('setTimeout(login, 200)')
+    expect(html).not.toContain('window.location.href=cu')
+    expect(html).not.toContain('setInterval(function()')
+    expect(html).not.toContain("sst('Success! Connecting...'")
+    expect(html).not.toContain("sst('Payment Approved! Connecting...'")
     expect(html).not.toContain('window.location.href=target+\'?username=')
-    expect(html).not.toContain('window.setTimeout')
     expect(html).not.toContain('arofiLoginFrame')
   })
 })
