@@ -1,0 +1,85 @@
+name: Publish component images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    name: Detect release components
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      admin: ${{ steps.filter.outputs.admin }}
+      portal: ${{ steps.filter.outputs.portal }}
+      nginx: ${{ steps.filter.outputs.nginx }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'turbo.json'
+              - 'Dockerfile.components'
+            admin:
+              - 'apps/admin-web/**'
+              - 'packages/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'turbo.json'
+              - 'Dockerfile.components'
+            portal:
+              - 'apps/portal-web/**'
+              - 'packages/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'turbo.json'
+              - 'Dockerfile.components'
+            nginx:
+              - 'config/nginx.split.conf'
+              - 'Dockerfile.components'
+
+  publish-api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    uses: ./.github/workflows/reusable-component-image.yml
+    with:
+      component: api
+      target: api-runtime
+
+  publish-admin:
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
+    uses: ./.github/workflows/reusable-component-image.yml
+    with:
+      component: admin
+      target: admin-runtime
+
+  publish-portal:
+    needs: changes
+    if: needs.changes.outputs.portal == 'true'
+    uses: ./.github/workflows/reusable-component-image.yml
+    with:
+      component: portal
+      target: portal-runtime
+
+  publish-nginx:
+    needs: changes
+    if: needs.changes.outputs.nginx == 'true'
+    uses: ./.github/workflows/reusable-component-image.yml
+    with:
+      component: nginx
+      target: nginx-runtime
