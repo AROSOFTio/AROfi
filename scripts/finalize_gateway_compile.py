@@ -3,16 +3,22 @@
 
 This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
-gateway patches, then applies the final ioTec live-gateway diagnostics/UI pass.
+gateway patches, then validates the final ioTec OAuth/diagnostics output.
+
+The diagnostics patch is deliberately NOT executed again here. The Docker build
+already runs it before the OAuth compatibility patch; executing it a second time
+made the build fail because the OAuth patch had correctly replaced that token
+block with its final fallback implementation.
 """
 
 from pathlib import Path
 import re
-import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER = ROOT / "apps/api/src/modules/payments/payment-router.service.ts"
 PAYMENTS = ROOT / "apps/api/src/modules/payments/payments.service.ts"
+IOTEC = ROOT / "apps/api/src/modules/payments/iotec-pay.service.ts"
+SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
 
 
 def normalize_router() -> None:
@@ -50,11 +56,29 @@ def normalize_payments() -> None:
     PAYMENTS.write_text(text, encoding="utf-8")
 
 
-def apply_iotec_live_diagnostics() -> None:
-    patch = ROOT / "scripts/fix_iotec_live_gateway_diagnostics.py"
-    if not patch.exists():
-        raise RuntimeError("ioTec live gateway diagnostics patch is missing")
-    runpy.run_path(str(patch), run_name="__main__")
+def validate_iotec_final_state() -> None:
+    if not IOTEC.exists() or not SETTINGS.exists():
+        raise RuntimeError("Required ioTec source or Admin settings file is missing")
+
+    iotec_text = IOTEC.read_text(encoding="utf-8")
+    settings_text = SETTINGS.read_text(encoding="utf-8")
+
+    for marker in (
+        "client_secret_post",
+        "client_secret_basic",
+        "Loaded client ID",
+        "Buffer.from(`${clientId}:${clientSecret}`",
+    ):
+        if marker not in iotec_text:
+            raise RuntimeError(f"Final ioTec OAuth marker missing: {marker}")
+
+    for marker in (
+        "gatewayTestFailed",
+        "Testing live connection",
+        "Test live gateway",
+    ):
+        if marker not in settings_text:
+            raise RuntimeError(f"Final ioTec Admin diagnostics marker missing: {marker}")
 
 
 def main() -> None:
@@ -63,8 +87,8 @@ def main() -> None:
 
     normalize_router()
     normalize_payments()
-    apply_iotec_live_diagnostics()
-    print("Final payment gateway TypeScript normalization applied.")
+    validate_iotec_final_state()
+    print("Final payment gateway TypeScript and ioTec diagnostics state verified.")
 
 
 if __name__ == "__main__":
