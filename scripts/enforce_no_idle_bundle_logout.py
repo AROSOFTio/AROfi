@@ -1,65 +1,59 @@
 #!/usr/bin/env python3
-"""Ensure active HotSpot bundles are never ended by inactivity.
+"""Keep paid HotSpot sessions online until their real RADIUS expiry.
 
-Only the RADIUS Session-Timeout tied to the package expiry should end a paid
-session automatically. MikroTik idle/keepalive timers are disabled. A long MAC
-cookie is retained only to let the same device reconnect automatically after it
-walks out of range or temporarily disables Wi-Fi; package expiry still removes
-the cookie through Session-Timeout/Disconnect-Request.
+This restores the production-proven settings used by yesterday's working flow:
+- no idle timeout;
+- no keepalive timeout;
+- no local profile session timeout;
+- one device per credential;
+- a 30-day MAC cookie only for automatic same-device reconnection.
+
+Package expiry, quota exhaustion, explicit revocation and RADIUS CoA remain the
+only authoritative ways to end access.
 """
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 
-OLD_DEFAULT = (
-    '`/ip hotspot user profile set [find default=yes] shared-users=1 '
-    'add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`'
-)
-NEW_DEFAULT = (
-    '`/ip hotspot user profile set [find default=yes] shared-users=1 '
-    'add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none '
-    'keepalive-timeout=none`'
-)
-OLD_ALL = (
-    '`:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile '
-    'set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d '
-    'keepalive-timeout=30d }`'
-)
-NEW_ALL = (
-    '`:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile '
-    'set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d '
-    'idle-timeout=none keepalive-timeout=none }`'
+FINAL_PROFILE = (
+    "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
+    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
 )
 
 text = MIKROTIK.read_text(encoding="utf-8")
 
-for old, new, label in (
-    (OLD_DEFAULT, NEW_DEFAULT, "default HotSpot user profile"),
-    (OLD_ALL, NEW_ALL, "all HotSpot user profiles"),
-):
-    if new in text:
-        continue
-    count = text.count(old)
-    if count != 1:
-        raise RuntimeError(
-            f"{MIKROTIK.relative_to(ROOT)}: expected one {label} marker, found {count}."
-        )
-    text = text.replace(old, new, 1)
+# Normalize every generated user-profile settings command, regardless of which
+# earlier compatibility patch supplied 1d, 30d, 365d or a finite keepalive.
+pattern = re.compile(
+    r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
+    r"(?:\s+idle-timeout=\S+)?"
+    r"(?:\s+keepalive-timeout=\S+)?"
+    r"(?:\s+session-timeout=\S+)?"
+)
+text, count = pattern.subn(FINAL_PROFILE, text)
+if count < 2:
+    raise RuntimeError(
+        "Expected the default and all-profile MikroTik persistence commands; "
+        f"normalized only {count}."
+    )
 
 MIKROTIK.write_text(text, encoding="utf-8")
 
 updated = MIKROTIK.read_text(encoding="utf-8")
-required = (
-    "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
-    "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none }",
-)
-for marker in required:
-    if marker not in updated:
-        raise RuntimeError(f"No-idle-logout protection missing: {marker}")
+if updated.count(FINAL_PROFILE) < 2:
+    raise RuntimeError("Proven HotSpot persistence settings were not applied everywhere.")
+
+for forbidden in (
+    "keepalive-timeout=30d",
+    "mac-cookie-timeout=365d",
+):
+    if forbidden in updated:
+        raise RuntimeError(f"Unstable HotSpot timeout setting remains: {forbidden}")
 
 print(
-    "Active bundle protection verified: idle-timeout=none, "
-    "keepalive-timeout=none, automatic same-device reconnect retained."
+    "Paid-session persistence restored: idle/keepalive disabled, "
+    "session-timeout=0s, 30-day same-device reconnect cookie."
 )
