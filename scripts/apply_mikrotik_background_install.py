@@ -83,10 +83,11 @@ def main() -> None:
 
     run_required_patch("refresh_mikrotik_portal_assets.py")
     run_required_patch("fix_sstp_remote_target.py")
+    run_required_patch("fix_router_hardware_detection.py")
 
     print(
         "MikroTik foreground installer, local reconnect URL, fresh portal assets, "
-        "and SSTP remote target verified."
+        "SSTP remote target, and exact hardware detection verified."
     )
 
 
