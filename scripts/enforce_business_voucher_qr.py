@@ -9,7 +9,8 @@ route the request through the expected HotSpot context. The stable contract is:
 
 The business hostname is generated once by the API and is used by router DNS,
 PDF QR codes and the Admin preview. This patch runs after all older source
-patches so no previous build step can force the gateway IP back into QR codes.
+patches and is idempotent so repeated build/final verification cannot change or
+break the route.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ ADMIN_TYPES = ROOT / "apps/admin-web/src/lib/admin-types.ts"
 
 COMMON_IMPORT = "import { buildTenantHotspotDomain, buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'"
 ROUTER_COMMON_IMPORT = "import { buildTenantHotspotDomain } from '../../common/tenant-hotspot-domain'"
+QR_COMMON_IMPORT = "import { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'"
 
 
 def replace_regex(path: Path, pattern: str, replacement: str, label: str) -> None:
@@ -95,21 +97,26 @@ def patch_api_qr() -> None:
         ROUTER_COMMON_IMPORT,
         "import { PrismaService } from '../../prisma.service'",
     )
-    replace_regex(
-        ROUTERS_SERVICE,
-        r"  private buildTenantWifiHost\(tenant\?: \{ name\?: string \| null; domain\?: string \| null \} \| null\) \{.*?\n  \}\n\n  private buildTenantWifiLabel\(value: string\) \{.*?\n  \}\n",
-        """  private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
+    routers_text = ROUTERS_SERVICE.read_text(encoding="utf-8")
+    if "return buildTenantHotspotDomain(tenant?.name)" not in routers_text:
+        replace_regex(
+            ROUTERS_SERVICE,
+            r"  private buildTenantWifiHost\(tenant\?: \{ name\?: string \| null; domain\?: string \| null \} \| null\) \{.*?\n  \}\n\n  private buildTenantWifiLabel\(value: string\) \{.*?\n  \}\n",
+            """  private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
     return buildTenantHotspotDomain(tenant?.name)
   }
 """,
-        "router tenant hotspot-domain builder",
-    )
+            "router tenant hotspot-domain builder",
+        )
 
     initializer = QR_INITIALIZER.read_text(encoding="utf-8")
-    initializer = initializer.replace(
-        "import { VouchersService } from './vouchers.service'",
-        "import { VouchersService } from './vouchers.service'\nimport { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'",
-    )
+    if QR_COMMON_IMPORT not in initializer:
+        anchor = "import { VouchersService } from './vouchers.service'"
+        if anchor not in initializer:
+            raise RuntimeError(
+                "apps/api/src/modules/vouchers/voucher-qr-routing.initializer.ts: import anchor missing."
+            )
+        initializer = initializer.replace(anchor, QR_COMMON_IMPORT + "\n" + anchor, 1)
     initializer, count = re.subn(
         r"    service\.buildVoucherPortalUrl = \(voucherCode: string, hotspotDomain\?: string\) => \{.*?\n    \}\n",
         """    service.buildVoucherPortalUrl = (voucherCode: string, hotspotDomain?: string) => {
@@ -153,36 +160,42 @@ def patch_admin_preview() -> None:
             "apps/admin-web/src/components/VouchersManager.tsx: voucher QR helper not found."
         )
 
-    text = text.replace(
-        "                    portalHost={getVoucherPortalHost()}\n                  />",
-        """                    portalHost={getVoucherPortalHost()}
+    if "hotspotDomain={printBatch.tenant.hotspotDomain}" not in text:
+        text = text.replace(
+            "                    portalHost={getVoucherPortalHost()}\n                  />",
+            """                    portalHost={getVoucherPortalHost()}
                     hotspotDomain={printBatch.tenant.hotspotDomain}
                   />""",
-        1,
-    )
-    text = text.replace(
-        "  portalHost,\n  adLine = DEFAULT_VOUCHER_AD,",
-        "  portalHost,\n  hotspotDomain,\n  adLine = DEFAULT_VOUCHER_AD,",
-        1,
-    )
-    text = text.replace(
-        "  portalHost: string\n  adLine?: string",
-        "  portalHost: string\n  hotspotDomain?: string | null\n  adLine?: string",
-        1,
-    )
-    text = text.replace(
-        "    // Always use the hosted portal URL — dnsName-based URLs only work on the\n    // local hotspot network and show \"unknown page\" when scanned elsewhere.\n    const portalUrl = getVoucherQrPortalUrl(code)",
-        """    // Printed vouchers are intentionally local to this venue. The exact
+            1,
+        )
+    if "  hotspotDomain,\n  adLine = DEFAULT_VOUCHER_AD," not in text:
+        text = text.replace(
+            "  portalHost,\n  adLine = DEFAULT_VOUCHER_AD,",
+            "  portalHost,\n  hotspotDomain,\n  adLine = DEFAULT_VOUCHER_AD,",
+            1,
+        )
+    if "  hotspotDomain?: string | null\n  adLine?: string" not in text:
+        text = text.replace(
+            "  portalHost: string\n  adLine?: string",
+            "  portalHost: string\n  hotspotDomain?: string | null\n  adLine?: string",
+            1,
+        )
+    if "const portalUrl = getVoucherQrPortalUrl(code, hotspotDomain)" not in text:
+        text = text.replace(
+            "    // Always use the hosted portal URL — dnsName-based URLs only work on the\n    // local hotspot network and show \"unknown page\" when scanned elsewhere.\n    const portalUrl = getVoucherQrPortalUrl(code)",
+            """    // Printed vouchers are intentionally local to this venue. The exact
     // hostname comes from the API so the QR and MikroTik DNS cannot diverge.
     const portalUrl = getVoucherQrPortalUrl(code, hotspotDomain)""",
-        1,
-    )
-    text = text.replace("  }, [code])", "  }, [code, hotspotDomain])", 1)
+            1,
+        )
+    if "  }, [code, hotspotDomain])" not in text:
+        text = text.replace("  }, [code])", "  }, [code, hotspotDomain])", 1)
 
     required = (
         "hotspotDomain={printBatch.tenant.hotspotDomain}",
         "const portalUrl = getVoucherQrPortalUrl(code, hotspotDomain)",
         "http://${safeHost}/login?voucher=${encodeURIComponent(code.trim().toUpperCase())}",
+        "  }, [code, hotspotDomain])",
     )
     missing = [marker for marker in required if marker not in text]
     if missing:
