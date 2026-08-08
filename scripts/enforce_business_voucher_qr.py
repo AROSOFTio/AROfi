@@ -138,8 +138,8 @@ def patch_admin_preview() -> None:
     text = VOUCHERS_MANAGER.read_text(encoding="utf-8")
 
     text, count = re.subn(
-        r"function getVoucherQrPortalUrl\(code: string, dnsName\?: string\) \{.*?\n\}\n",
-        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
+        r"function getVoucherQrPortalUrl\(code: string, dnsName\?: string(?: \| null)?\) \{.*?\n\}\n",
+        """function getVoucherQrPortalUrl(code: string, dnsName?: string | null) {
   const host = (dnsName ?? 'arofi.wifi')
     .trim()
     .toLowerCase()
