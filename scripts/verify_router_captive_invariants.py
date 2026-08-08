@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 CAPTIVE_FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
 CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik.controller.ts"
+ALOGIN_CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik-alogin.controller.ts"
 
 FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
 FINAL_PERSISTENCE = (
@@ -103,6 +104,7 @@ def main() -> None:
     final = MIKROTIK.read_text(encoding="utf-8")
     flow = CAPTIVE_FLOW.read_text(encoding="utf-8")
     controller = CONTROLLER.read_text(encoding="utf-8")
+    alogin = ALOGIN_CONTROLLER.read_text(encoding="utf-8")
 
     required_mikrotik = {
         "trusted returning-device login modes": FINAL_LOGIN_BY,
@@ -135,20 +137,33 @@ def main() -> None:
         "no idle/keepalive logout": "idle-timeout=none keepalive-timeout=none session-timeout=0s",
     }
     required_controller = {
-        "alogin endpoint": "@Get('alogin-html/:key')",
-        "invisible completion transformer": "prepareCompletionHtml(_html: string)",
-        "close captive window": "window.close()",
-        "Android connectivity check": "connectivitycheck.gstatic.com/generate_204",
-        "Windows connectivity check": "www.msftconnecttest.com/connecttest.txt",
-        "Apple connectivity check": "captive.apple.com/hotspot-detect.html",
-        "hidden completion body": "body{visibility:hidden}",
+        "invisible status transformer": "prepareCompletionHtml(_html: string)",
+        "status closes captive window": "window.close()",
+        "status Android connectivity check": "connectivitycheck.gstatic.com/generate_204",
+        "status Windows connectivity check": "www.msftconnecttest.com/connecttest.txt",
+        "status Apple connectivity check": "captive.apple.com/hotspot-detect.html",
+        "hidden status body": "body{visibility:hidden}",
+    }
+    required_alogin = {
+        "dedicated alogin endpoint": "@Get('alogin-html/:key')",
+        "invisible alogin builder": "buildInstantCompletionHtml()",
+        "alogin closes captive window": "window.close()",
+        "alogin Android connectivity check": "connectivitycheck.gstatic.com/generate_204",
+        "alogin Windows connectivity check": "www.msftconnecttest.com/connecttest.txt",
+        "alogin Apple connectivity check": "captive.apple.com/hotspot-detect.html",
+        "hidden alogin body": "body{visibility:hidden}",
     }
 
     missing = [
         *[label for label, marker in required_mikrotik.items() if marker not in final],
         *[label for label, marker in required_flow.items() if marker not in flow],
         *[label for label, marker in required_controller.items() if marker not in controller],
+        *[label for label, marker in required_alogin.items() if marker not in alogin],
     ]
+
+    route_count = (controller + "\n" + alogin).count("@Get('alogin-html/:key')")
+    if route_count != 1:
+        missing.append(f"exactly one alogin route (found {route_count})")
 
     login_values = re.findall(r"login-by=([^\s`\"']+)", final)
     blocking_mac_values = [
@@ -175,9 +190,11 @@ def main() -> None:
         "hidden-frame login delay": "arofiLoginFrame",
         "status-page runtime override": "patchStatusHtml",
     }
-    forbidden_controller = {
+    forbidden_completion = {
         "visible connected heading": ">Connected<",
         "visible connected instruction": "You can close this page now",
+        "visible connected title": "<title>Connected</title>",
+        "visible connected link": "Connected. <a",
     }
     present_forbidden.extend(
         label for label, marker in forbidden_markers.items() if marker in final
@@ -185,8 +202,9 @@ def main() -> None:
     present_forbidden.extend(
         label for label, marker in forbidden_flow.items() if marker in flow
     )
+    completion = controller + "\n" + alogin
     present_forbidden.extend(
-        label for label, marker in forbidden_controller.items() if marker in controller
+        label for label, marker in forbidden_completion.items() if marker in completion
     )
 
     if missing or present_forbidden:
@@ -199,7 +217,7 @@ def main() -> None:
 
     print(
         "Captive flow verified: business DNS, no blocking MAC auth, trusted return, "
-        "instant voucher/MoMo POST, invisible completion, and no local active-bundle timers."
+        "instant voucher/MoMo POST, one invisible completion route, and no local active-bundle timers."
     )
 
 
