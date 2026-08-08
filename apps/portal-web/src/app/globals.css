@@ -44,31 +44,28 @@ body {
 }
 
 /* The platform fallback logo is borderless. Tenant-uploaded custom logos remain untouched. */
-img[src="/logo.png"] {
-  content: url('/portal/brand/arofi-logo-blue.svg');
-  object-fit: contain !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
 div:has(> img[src="/logo.png"].h-10) {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
-
-.h-14.w-14:has(> img[src="/logo.png"].h-10) {
   width: 124px !important;
   height: 44px !important;
-  justify-content: flex-start !important;
+  flex: 0 0 124px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  background-image: url('/portal/brand/arofi-logo-blue.svg') !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+  box-shadow: none !important;
 }
 
 img[src="/logo.png"].h-10 {
   width: 124px !important;
   height: 44px !important;
   max-width: none !important;
+  opacity: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
