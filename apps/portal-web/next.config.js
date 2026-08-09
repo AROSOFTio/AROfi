@@ -12,7 +12,7 @@ const nextConfig = {
     cpus: 1,
     memoryBasedWorkersCount: true,
     webpackMemoryOptimizations: true,
-    webpackBuildWorker: true,
+    webpackBuildWorker: false,
     serverSourceMaps: false,
   },
   images: {

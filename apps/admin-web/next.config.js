@@ -15,7 +15,7 @@ const nextConfig = {
     // Official Next.js low-memory mode reduces webpack's maximum resident
     // memory at the cost of slightly longer compilation time.
     webpackMemoryOptimizations: true,
-    webpackBuildWorker: true,
+    webpackBuildWorker: false,
     serverSourceMaps: false,
   },
   images: {

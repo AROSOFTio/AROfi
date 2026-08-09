@@ -82,14 +82,14 @@ RUN touch /tmp/api-build-complete
 
 FROM patched-source AS admin-build
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' \
+    export NODE_OPTIONS='--max-old-space-size=384 --max-semi-space-size=4' \
     && export NEXT_CPU_LIMIT=1 \
     && export CI=1 \
     && sh scripts/run_with_heartbeat.sh "AROFi Admin build" npm run build --workspace=arofi-admin
 
 FROM patched-source AS portal-build
 RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=512 --max-semi-space-size=8' \
+    export NODE_OPTIONS='--max-old-space-size=384 --max-semi-space-size=4' \
     && export NEXT_CPU_LIMIT=1 \
     && export CI=1 \
     && sh scripts/run_with_heartbeat.sh "AROFi Portal build" npm run build --workspace=arofi-portal
