@@ -245,10 +245,10 @@ describe('MikrotikService', () => {
     expect(httpIdx).toBeLessThan(httpsIdx)
 
     expect(cmd).toContain('/api/mikrotik/script/test-reg-key')
-    expect(cmd).toContain(':while ($attempts < 3)')
+    expect(cmd).toContain(':while (($arofiOk = 0) && ($attempts < 2))')
     expect(cmd).toContain(':set arofiOk 1')
     expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
     expect(cmd).toContain('port 80')
-    expect(cmd).toContain('/system clock')
+    expect(cmd).toContain('maximum connection count reached')
   })
 })

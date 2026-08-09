@@ -106,7 +106,9 @@ export class MikrotikPolicyInitializer implements OnModuleInit {
       return input
     }
 
-    const clientMatch = input.match(/\/interface sstp-client add name="([^"]+)"/)
+    const clientMatch =
+      input.match(/\/interface sstp-client add name="([^"]+)"/) ||
+      input.match(/\/interface sstp-client add name=\\"([^"\\]+)\\"/)
     if (!clientMatch) {
       this.logger.warn('Remote-access script has no SSTP client definition; leaving it unchanged')
       return input

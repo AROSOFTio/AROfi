@@ -21,10 +21,13 @@ const unsafeRemoteAccessScript = [
 
 describe('MikrotikPolicyInitializer', () => {
   function createSubject() {
-    const mikrotik = {
+    const mikrotik: { buildProvisioningScript: (...args: any[]) => string } = {
       buildProvisioningScript: jest.fn(() => unsafeProvisioningScript),
     }
-    const routers = {
+    const routers: {
+      getProvisioningScriptByKey: (key: string) => Promise<string>
+      getRemoteAccessInstallScript: (token: string) => Promise<string>
+    } = {
       getProvisioningScriptByKey: jest.fn(async () => unsafeProvisioningScript),
       getRemoteAccessInstallScript: jest.fn(async () => unsafeRemoteAccessScript),
     }

@@ -99,7 +99,7 @@ export function appendInstantAloginInstaller(script: string) {
         ':do { /file remove [find name="hotspot/alogin.html"] } on-error={}',
         ':local arofiAloginOk 0',
         ':do {',
-        `  /tool fetch url="${aloginUrl}" check-certificate=no mode=https dst-path="hotspot/alogin.html"`,
+        `  /tool fetch url="${aloginUrl}" check-certificate=no dst-path="hotspot/alogin.html"`,
         '  :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
         '    :set arofiAloginOk 1',
         '    :put "AROFi HotSpot alogin.html installed - post-login redirect is instant."',

@@ -6,7 +6,7 @@ import {
 describe('appendInstantAloginInstaller', () => {
   const provisioningScript = [
     '# AROFi MikroTik onboarding script (safe / additive)',
-    '/tool fetch url="https://arofi.net/api/mikrotik/status-html/router-key" check-certificate=no mode=https dst-path="hotspot/status.html"',
+    '/tool fetch url="https://arofi.net/api/mikrotik/status-html/router-key" check-certificate=no dst-path="hotspot/status.html"',
     '/tool fetch url="http://203.0.113.10/api/mikrotik/status-html/router-key" mode=http dst-path="hotspot/status.html"',
   ].join('\n')
 

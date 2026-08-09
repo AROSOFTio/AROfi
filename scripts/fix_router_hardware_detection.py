@@ -55,9 +55,9 @@ replace_once(
 
 replace_once(
     MIKROTIK,
-    """      `  /tool fetch url=\"${callbackUrl}?nasIp=$nasIp\" check-certificate=no mode=https keep-result=no`,
+    """      `  /tool fetch url=\"${callbackUrl}?nasIp=$nasIp\" check-certificate=no keep-result=no`,
 """,
-    """      `  /tool fetch url=\"${callbackUrl}?nasIp=$nasIp\" http-header-field=$arofiHeaders check-certificate=no mode=https keep-result=no`,
+    """      `  /tool fetch url=\"${callbackUrl}?nasIp=$nasIp\" http-header-field=$arofiHeaders check-certificate=no keep-result=no`,
 """,
     "HTTPS provisioning metadata callback",
 )

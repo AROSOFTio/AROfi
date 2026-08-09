@@ -2243,6 +2243,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     // strings are plain ASCII on purpose — RouterOS's parser rejects em-dashes
     // and other non-ASCII punctuation inside an imported .rsc with a cryptic
     // "expected end of command".
+    const parseGuard = (command: string, message: string) => {
+      const escaped = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$')
+      return `:do { :local arofiCmd [:parse "${escaped}"]; $arofiCmd } on-error={ :put "${message}" }`
+    }
+
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
@@ -2265,9 +2270,24 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // tunnel only needs to exist for WinBox/API reachability — it must
       // never touch hotspot/RADIUS/firewall config on its own. Re-running the
       // provisioning script is now only ever a deliberate operator action.
-      `/ppp profile add name="AROFi_Profile"`,
-      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,
-      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,
+      `:do { /ppp profile add name="AROFi_Profile" } on-error={}`,
+      parseGuard(
+        `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" profile="AROFi_Profile" add-default-route=no disabled=yes`,
+        'AROFi: SSTP add failed - unsupported RouterOS option or SSTP not available.',
+      ),
+      parseGuard(
+        `/interface sstp-client set [find name="${remoteClientName}"] authentication=pap`,
+        'AROFi: SSTP authentication option skipped.',
+      ),
+      parseGuard(
+        `/interface sstp-client set [find name="${remoteClientName}"] keepalive-timeout=60`,
+        'AROFi: SSTP keepalive option skipped.',
+      ),
+      parseGuard(
+        `/interface sstp-client set [find name="${remoteClientName}"] verify-server-certificate=no`,
+        'AROFi: SSTP certificate verification option skipped.',
+      ),
+      `:do { /interface sstp-client set [find name="${remoteClientName}"] disabled=no; :set sstpOk 1 } on-error={}`,
       // The SSTP tunnel interface must NOT be added to the router's "LAN"
       // interface list. It served no purpose here — WinBox/API remote access
       // connects over the tunnel's own PPP-assigned IP directly, never via

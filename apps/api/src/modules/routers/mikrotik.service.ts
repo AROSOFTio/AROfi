@@ -155,31 +155,33 @@ export class MikrotikService {
       ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
       'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
       ':delay 2s; '
-    // Retry loop: up to 3 rounds with a 5-second wait between rounds.
+    // Retry loop: two rounds with a longer cleanup delay between rounds.
     // Strategy: try plain HTTP fallback FIRST (no TLS, always works when TCP
     // port 80 is open) and HTTPS second. On fresh/rebooted routers the clock
     // may still be off enough to kill the TLS handshake, so HTTP is the most
-    // reliable first attempt. :while exits early once a download succeeds.
+    // reliable first attempt. RouterOS also has a small global fetch connection
+    // pool; repeated fast failed fetches can trigger "maximum connection count
+    // reached", especially on v6.49. Keep attempts low and wait before retry.
     return (
       dnsBootstrap +
       ':local arofiOk 0; :local attempts 0; ' +
-      ':while ($attempts < 3) do={ ' +
+      ':while (($arofiOk = 0) && ($attempts < 2)) do={ ' +
         ':set attempts ($attempts + 1); ' +
         ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
         // 1st attempt within each round: plain HTTP (no TLS risk)
-        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
+        `:do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc"; :delay 6s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
         // 2nd attempt within each round: HTTPS (if HTTP failed, e.g. port 80 blocked)
         ':if ($arofiOk = 0) do={ ' +
           ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 6s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
         '}; ' +
-        ':if ($arofiOk = 1) do={ :set attempts 3 } else={ ' +
-          ':if ($attempts < 3) do={ :put "Retrying..."; :delay 5s } ' +
+        ':if ($arofiOk = 0) do={ ' +
+          ':if ($attempts < 2) do={ :put "Retrying after router fetch cleanup..."; :delay 10s } ' +
         '} ' +
       '}; ' +
       ':if ($arofiOk = 0) do={ ' +
-        ':put "ERROR: AROFi server unreachable after 3 attempts."; ' +
-        ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) AND HTTPS (port 443). 3) System clock correct (check /system clock). 4) Re-paste when WAN is stable." ' +
+        ':put "ERROR: AROFi server unreachable after 2 attempts."; ' +
+        ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) or HTTPS (port 443). 3) Wait 30 seconds if RouterOS says maximum connection count reached. 4) Re-paste once when WAN is stable." ' +
       '} else={ ' +
         ':local f [/file find name="arofi-setup.rsc"]; :if ([:len $f]>0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Re-paste when WAN is stable." } ' +
       '}'
@@ -330,7 +332,7 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
       // keepalive-timeout=2m (MikroTik's own default) force-disconnected
       // customers for mere inactivity: phones/laptops stop answering the
       // HotSpot's ARP-based keepalive probe within 1-2 minutes of the screen
@@ -345,8 +347,8 @@ export class MikrotikService {
       // 30 days), while still bounded (not an unbounded/infinite value that
       // could behave unpredictably), so idle time is never the reason a
       // customer gets disconnected.
-      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
+      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s }`,
       `# Remove HotSpot bypass bindings so every device must authenticate through AROFi`,
       `:do { /ip hotspot ip-binding remove [find type=bypassed] } on-error={}`,
       // dns-name on the profile only controls which name the HotSpot itself answers
@@ -564,10 +566,9 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
-    // 1s heartbeat: router-side /ip hotspot active is the fastest source of
-    // truth for "who is online right now", especially when accounting stop
-    // rows arrive before the router has fully removed a client.
-    const intervalSeconds = 1
+    // 5s heartbeat: fast enough for dashboard live status without hammering
+    // small RouterOS devices or the API during busy hotspot sessions.
+    const intervalSeconds = 5
     const source =
       `:local arofiActiveUsers 0; ` +
       `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={}; ` +
@@ -597,7 +598,7 @@ export class MikrotikService {
       `  }`,
       `} on-error={}`,
       `:do {`,
-      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" check-certificate=no mode=https keep-result=no`,
+      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" check-certificate=no keep-result=no`,
       `  :put "AROFi provisioning callback sent (NAS IP: $nasIp)."`,
       `} on-error={`,
       `  :do {`,
@@ -642,7 +643,7 @@ export class MikrotikService {
       `:local arofiHtmlOk 0`,
       `:local arofiStatusOk 0`,
       `:do {`,
-      `  /tool fetch url="${loginHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/login.html"`,
+      `  /tool fetch url="${loginHtmlUrl}" check-certificate=no dst-path="hotspot/login.html"`,
       `  :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
       `    :put "AROFi HotSpot login.html installed."`,
       `    :set arofiHtmlOk 1`,
@@ -666,7 +667,7 @@ export class MikrotikService {
       // manual tap on some captive-portal webviews. Our version meta-refreshes +
       // JS-redirects immediately so the customer never has to touch anything.
       `:do {`,
-      `  /tool fetch url="${statusHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/status.html"`,
+      `  /tool fetch url="${statusHtmlUrl}" check-certificate=no dst-path="hotspot/status.html"`,
       `  :if ([:len [/file find name="hotspot/status.html"]] > 0) do={`,
       `    :put "AROFi HotSpot status.html installed."`,
       `    :set arofiStatusOk 1`,
