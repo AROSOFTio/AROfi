@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt'
-import ChatWidget from '@/components/ChatWidget'
+import DeferredChatWidget from '@/components/DeferredChatWidget'
 
 const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
@@ -335,7 +335,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <PwaInstallPrompt appName="AROFi Admin" />
-        <ChatWidget />
+        <DeferredChatWidget />
       </body>
     </html>
   )
