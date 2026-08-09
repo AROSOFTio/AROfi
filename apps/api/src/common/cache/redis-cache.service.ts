@@ -20,7 +20,6 @@ export class RedisCacheService implements OnModuleDestroy {
     }
 
     this.redis = new Redis(this.redisUrl, {
-      lazyConnect: true,
       enableOfflineQueue: false,
       maxRetriesPerRequest: 1,
       connectTimeout: Math.max(250, this.connectTimeoutMs),
@@ -86,12 +85,11 @@ export class RedisCacheService implements OnModuleDestroy {
   }
 
   private async get<T>(key: string): Promise<{ hit: boolean; value?: T }> {
-    if (!this.redis) {
+    if (!this.redis || this.redis.status !== 'ready') {
       return { hit: false }
     }
 
     try {
-      await this.ensureConnected()
       const raw = await this.redis.get(key)
       if (raw === null) {
         return { hit: false }
@@ -104,26 +102,29 @@ export class RedisCacheService implements OnModuleDestroy {
   }
 
   private async set(key: string, value: unknown, ttlSeconds: number) {
-    if (!this.redis || ttlSeconds <= 0) {
+    if (!this.redis || this.redis.status !== 'ready' || ttlSeconds <= 0) {
+      return
+    }
+
+    const serialized = JSON.stringify(value)
+    if (serialized === undefined) {
       return
     }
 
     try {
-      await this.ensureConnected()
-      await this.redis.set(key, JSON.stringify(value), 'EX', Math.max(1, Math.floor(ttlSeconds)))
+      await this.redis.set(key, serialized, 'EX', Math.max(1, Math.floor(ttlSeconds)))
     } catch (error) {
       this.warnUnavailable(error)
     }
   }
 
   private async deleteByPrefix(namespace: string) {
-    if (!this.redis) {
+    if (!this.redis || this.redis.status !== 'ready') {
       return
     }
 
     const pattern = `${this.keyPrefix}:${this.cacheVersion}:${namespace}:*`
     try {
-      await this.ensureConnected()
       let cursor = '0'
       do {
         const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200)
@@ -135,13 +136,6 @@ export class RedisCacheService implements OnModuleDestroy {
     } catch (error) {
       this.warnUnavailable(error)
     }
-  }
-
-  private async ensureConnected() {
-    if (!this.redis || this.redis.status === 'ready' || this.redis.status === 'connecting') {
-      return
-    }
-    await this.redis.connect()
   }
 
   private stableStringify(value: unknown): string {
