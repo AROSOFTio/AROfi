@@ -42,7 +42,6 @@ export class RedisCacheService implements OnModuleDestroy {
       params: request.params ?? {},
       query: request.query ?? {},
       scope: {
-        userId: request.user?.id ?? null,
         tenantId: request.user?.tenantId ?? null,
         role: request.user?.role ?? null,
       },
