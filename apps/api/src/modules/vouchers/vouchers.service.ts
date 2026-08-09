@@ -512,7 +512,7 @@ export class VouchersService {
           batchId: batch.id,
           packageId: dto.packageId,
           code: voucherCodes[index],
-          serialNumber: this.voucherCodeService.generateSerialNumber(batchNumber, index + 1),
+          serialNumber: this.generateBatchScopedSerialNumber(batch.id, index + 1),
           faceValueUgx,
           expiresAt: resolvedExpiresAt,
         })),
@@ -1623,6 +1623,11 @@ export class VouchersService {
       : this.getVoucherQrBaseUrl()
     const separator = baseUrl.includes('?') ? '&' : '?'
     return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
+  }
+
+  private generateBatchScopedSerialNumber(batchId: string, index: number) {
+    const batchPart = batchId.replace(/[^a-zA-Z0-9]/g, '').slice(-10).toUpperCase()
+    return `SN-${batchPart}-${index.toString().padStart(4, '0')}`
   }
 
   private buildTenantHotspotDomain(tenantName?: string | null) {

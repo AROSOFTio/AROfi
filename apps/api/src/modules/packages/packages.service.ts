@@ -14,12 +14,17 @@ import { UpdatePackageDto } from './dto/update-package.dto'
 
 @Injectable()
 export class PackagesService {
+  private readonly defaultTrialCode = 'FREE-TRIAL'
+  private readonly defaultTrialDurationMinutes = 10
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly radiusCredentialService: RadiusCredentialService,
   ) {}
 
   async getCatalog(tenantId?: string) {
+    await this.ensureDefaultTrialPackages(tenantId)
+
     const items = await this.prisma.package.findMany({
       where: {
         status: { not: PackageStatus.ARCHIVED },
@@ -123,6 +128,58 @@ export class PackagesService {
         prices: true,
       },
     })
+  }
+
+  private async ensureDefaultTrialPackages(tenantId?: string) {
+    const tenantIds = tenantId
+      ? [tenantId]
+      : (await this.prisma.tenant.findMany({ select: { id: true } })).map((tenant) => tenant.id)
+
+    await Promise.all(
+      tenantIds.map(async (id) => {
+        const existingTrial = await this.prisma.package.findFirst({
+          where: {
+            tenantId: id,
+            status: { not: PackageStatus.ARCHIVED },
+            OR: [
+              { isTrialEnabled: true },
+              { code: this.defaultTrialCode },
+              { name: { contains: 'trial', mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true },
+        })
+
+        if (existingTrial) return
+
+        try {
+          await this.prisma.package.create({
+            data: {
+              tenantId: id,
+              name: 'Free Trial',
+              code: this.defaultTrialCode,
+              description: 'One-time free trial for new hotspot customers.',
+              durationMinutes: this.defaultTrialDurationMinutes,
+              isTrialEnabled: true,
+              deviceLimit: 1,
+              isFeatured: true,
+              status: PackageStatus.ACTIVE,
+              prices: {
+                create: {
+                  amountUgx: 0,
+                  isDefault: true,
+                },
+              },
+            },
+          })
+        } catch (error) {
+          if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
+            return
+          }
+          throw error
+        }
+      }),
+    )
   }
 
   async updatePackage(packageId: string, dto: UpdatePackageDto, tenantId?: string) {

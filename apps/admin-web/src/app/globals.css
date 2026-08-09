@@ -7997,4 +7997,152 @@ html[data-theme="dark"] .sic-metric {
   border-color: var(--border-soft) !important;
 }
 
+/* Final responsive polish: keep public nav/CTA rows aligned on narrow screens. */
+.home-nav {
+  flex-wrap: nowrap;
+}
+.home-brand {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.home-actions {
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+.home-actions .btn,
+.home-cta .btn {
+  white-space: nowrap;
+}
+.home-cta {
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .home-shell {
+    padding: 14px;
+  }
+  .home-nav {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px 12px;
+  }
+  .home-brand img {
+    width: 38px;
+    height: 38px;
+  }
+  .home-brand-text {
+    font-size: 19px;
+  }
+  .home-actions {
+    justify-self: end;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 7px;
+  }
+  .home-actions .btn {
+    min-height: 38px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .home-actions .btn-primary {
+    grid-column: 1 / -1;
+  }
+  .home-hero {
+    margin-top: 42px !important;
+    gap: 24px;
+  }
+  .home-cta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .home-cta .btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  .home-cta .btn-primary {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 430px) {
+  .home-nav {
+    grid-template-columns: 1fr;
+  }
+  .home-actions {
+    justify-self: stretch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .home-actions .btn-primary {
+    grid-column: 1 / -1;
+  }
+  .home-cta {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Human-support floating button: replaces the old Aria/logo bubble. */
+.chat-bubble {
+  overflow: visible;
+  background: linear-gradient(135deg, var(--brand), #0ea5e9);
+  animation: supportBubbleBreathe 2.4s ease-in-out infinite;
+}
+.chat-bubble::after {
+  content: "Support";
+  position: absolute;
+  right: 62px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+}
+.chat-bubble:hover::after,
+.chat-bubble:focus-visible::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(-2px);
+}
+.chat-bubble-support-icon {
+  color: #fff;
+  animation: supportIconShake 1.9s ease-in-out infinite;
+}
+.chat-bubble-message-icon {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  padding: 3px;
+  width: 23px;
+  height: 23px;
+  border-radius: 999px;
+  color: var(--brand);
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, .22);
+}
+@keyframes supportBubbleBreathe {
+  0%, 100% { box-shadow: 0 4px 12px var(--arofi-theme-accent-border), 0 0 0 0 rgba(37, 99, 235, .28); }
+  50% { box-shadow: 0 8px 24px var(--arofi-theme-accent-border), 0 0 0 9px rgba(37, 99, 235, 0); }
+}
+@keyframes supportIconShake {
+  0%, 72%, 100% { transform: rotate(0deg); }
+  76% { transform: rotate(-10deg); }
+  80% { transform: rotate(9deg); }
+  84% { transform: rotate(-7deg); }
+  88% { transform: rotate(5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble,
+  .chat-bubble-support-icon {
+    animation: none !important;
+  }
+}
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Sparkles } from 'lucide-react'
+import { Headphones } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
@@ -89,10 +89,10 @@ export default function DashboardShell({ children, initials, session, workspaceT
               type="button"
               className="topbar-ai-support"
               onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))}
-              aria-label="Open AI support chat"
+              aria-label="Open support chat"
             >
-              <Sparkles size={15} />
-              <span>AI Support</span>
+              <Headphones size={15} />
+              <span>Support</span>
             </button>
             <NotificationBell />
             <div style={{ position: 'relative' }}>

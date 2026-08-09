@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight, Headphones, MessageCircle } from 'lucide-react'
 
 interface SuggestedLink {
   label: string
@@ -20,7 +20,7 @@ type ChatWidgetProps = {
 }
 
 const DEFAULT_GREETING =
-  "Hi! I'm Aria, AROFi's AI assistant. Ask me about pricing, routers, mobile money payouts, or anything else about the platform."
+  "Hi! I'm AROFi Support. Ask about pricing, routers, vouchers, mobile money payouts, or message a human on WhatsApp anytime."
 
 const WHATSAPP_NUMBER = '256787726388'
 const WHATSAPP_HREF = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi AROFi team, I need help with my account.')}`
@@ -52,7 +52,7 @@ export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
         setAiMessages([
           {
             role: 'assistant',
-            text: `Hi ${data.user.displayName.split(' ')[0]}! I'm Aria. Ask me about your routers, revenue, or any account issue — I can see your live numbers and help troubleshoot.`,
+            text: `Hi ${data.user.displayName.split(' ')[0]}! I'm AROFi Support. Ask me about routers, revenue, vouchers, or any account issue — I can help troubleshoot and hand you to a human if needed.`,
           },
         ])
       })
@@ -107,8 +107,8 @@ export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
         <div className="chat-window">
           <div className="chat-header">
             <div>
-              <h3><Sparkles size={15} /> Aria</h3>
-              <div className="chat-header-desc">{sessionUser ? `Your AI copilot, ${sessionUser.displayName.split(' ')[0]}` : "AROFi's AI assistant"}</div>
+              <h3><Headphones size={15} /> AROFi Support</h3>
+              <div className="chat-header-desc">{sessionUser ? `Human-ready support, ${sessionUser.displayName.split(' ')[0]}` : 'AI help with human escalation'}</div>
             </div>
             <button className="close-btn" onClick={() => setIsOpen(false)} aria-label="Close chat">
               &times;
@@ -156,8 +156,21 @@ export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
           </div>
         </div>
       ) : (
-        <div className="chat-bubble" onClick={() => setIsOpen(true)} role="button" aria-label="Chat with Aria, AROFi's AI assistant">
-          <img src="/brand/arofi-mark-blue.svg" alt="" className="chat-bubble-logo" />
+        <div
+          className="chat-bubble"
+          onClick={() => setIsOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setIsOpen(true)
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Open AROFi human support chat"
+        >
+          <Headphones size={25} className="chat-bubble-support-icon" aria-hidden="true" />
+          <MessageCircle size={16} className="chat-bubble-message-icon" aria-hidden="true" />
         </div>
       )}
     </div>

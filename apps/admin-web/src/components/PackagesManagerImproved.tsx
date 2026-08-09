@@ -85,7 +85,7 @@ export default function PackagesManagerImproved() {
   const [editing, setEditing] = useState<PackageItem | null>(null)
   const [form, setForm] = useState<PackageForm>(emptyForm)
   const [trialOpen, setTrialOpen] = useState(false)
-  const [trialDuration, setTrialDuration] = useState('5')
+  const [trialDuration, setTrialDuration] = useState('10')
   const [tvPackage, setTvPackage] = useState<PackageItem | null>(null)
   const [tvMac, setTvMac] = useState('')
   const [tvCustomer, setTvCustomer] = useState('')
@@ -299,7 +299,7 @@ export default function PackagesManagerImproved() {
         .trial-control-main{display:flex;align-items:center;gap:10px;min-width:0}
         .trial-control h2{font-size:14px;line-height:1.2;font-weight:650;margin:0;color:var(--text-primary)}
         .trial-meta{font-size:12.5px;color:var(--text-muted);white-space:nowrap}
-        .trial-actions{display:flex;align-items:center;gap:8px}
+        .trial-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .package-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
         .package-tabs{display:inline-flex;gap:3px;padding:3px;border:1px solid var(--border);background:var(--bg-card);border-radius:10px}
         .package-tab{height:34px;border:0;background:transparent;padding:0 13px;border-radius:7px;font:600 13px var(--ui-font);color:var(--text-2);cursor:pointer}
@@ -312,9 +312,9 @@ export default function PackagesManagerImproved() {
         .package-row strong{display:block;color:var(--text-primary);font-size:13.5px;font-weight:650;line-height:1.25}
         .package-row small{display:block;color:var(--text-muted);font-size:11.5px;line-height:1.35;margin-top:2px}
         .package-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:nowrap}
-        .package-switch{width:36px;height:20px;border:0;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;flex:0 0 auto;padding:0}
+        .package-switch{width:40px;height:22px;border:0;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;flex:0 0 auto;padding:0}
         .package-switch span{position:absolute;width:16px;height:16px;top:2px;left:2px;border-radius:50%;background:#fff;transition:transform .16s ease;box-shadow:0 1px 2px rgba(15,23,42,.15)}
-        .package-switch.on{background:#16a34a}.package-switch.on span{transform:translateX(16px)}
+        .package-switch.on{background:#16a34a}.package-switch.on span{transform:translateX(20px)}
         .package-kind-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
         .package-kind{height:48px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);text-align:left;cursor:pointer;font:600 13px var(--ui-font);color:var(--text-2)}
         .package-kind.active{border-color:var(--brand);background:var(--green-light);color:var(--brand)}
@@ -324,7 +324,7 @@ export default function PackagesManagerImproved() {
         .package-feedback{margin:0 0 10px;font-size:12.5px;font-weight:600}
         @media(max-width:1100px){.package-row{grid-template-columns:minmax(180px,1fr) repeat(4,minmax(75px,.45fr));}.package-row-actions{grid-column:1/-1;justify-content:flex-end;border-top:1px solid var(--border-soft);padding-top:8px}}
         @media(max-width:760px){.clean-packages-header{align-items:center}.trial-control{align-items:flex-start}.trial-control-main{display:block}.trial-meta{white-space:normal;margin-top:3px}.package-toolbar{align-items:stretch}.package-tabs{display:grid;grid-template-columns:repeat(3,1fr);width:100%}.package-tab{padding:0 7px}.package-tools{width:100%;display:grid;grid-template-columns:1fr auto}.package-tools input{min-width:0}.package-row{grid-template-columns:1fr 1fr;padding:12px}.package-row>div:first-child,.package-row-actions{grid-column:1/-1}.package-row-actions{justify-content:flex-start}.package-kind-grid,.package-form-grid{grid-template-columns:1fr}.package-form-full{grid-column:auto}}
-        @media(max-width:480px){.clean-packages-header{align-items:flex-start}.clean-packages-header .btn{white-space:nowrap}.trial-control{display:block}.trial-actions{margin-top:10px}.package-tools{grid-template-columns:1fr}.package-row-actions{display:grid;grid-template-columns:auto 1fr 1fr}.package-row-actions .package-switch{margin-right:4px}.package-row-actions .btn{width:100%}}
+        @media(max-width:480px){.clean-packages-header{align-items:flex-start}.clean-packages-header .btn{white-space:nowrap}.trial-control{display:block}.trial-actions{margin-top:10px}.trial-actions .btn{flex:1;justify-content:center}.package-tools{grid-template-columns:1fr}.package-row-actions{display:grid;grid-template-columns:auto 1fr 1fr}.package-row-actions .package-switch{margin-right:4px}.package-row-actions .btn{width:100%}}
       `}</style>
 
       <div className="clean-packages-header">
@@ -336,7 +336,7 @@ export default function PackagesManagerImproved() {
         <div className="trial-control-main">
           <h2>Free trial</h2>
           <span className="trial-meta">
-            {trial ? `${formatDuration(trial.durationMinutes)} · ${trial.status === 'ACTIVE' ? 'Active' : 'Off'}` : 'Not available'}
+            {trial ? `${formatDuration(trial.durationMinutes)} · ${trial.status === 'ACTIVE' ? 'Active' : 'Off'}` : 'Creating default 10-minute trial…'}
           </span>
         </div>
         {trial && (

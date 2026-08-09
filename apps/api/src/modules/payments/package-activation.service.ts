@@ -197,7 +197,7 @@ export class PackageActivationService {
           batchId: batch.id,
           packageId: params.packageId,
           code,
-          serialNumber: this.voucherCodeService.generateSerialNumber(batchNumber, index + 1),
+          serialNumber: this.generateBatchScopedSerialNumber(batch.id, index + 1),
           faceValueUgx: 0,
           expiresAt,
         })),
@@ -212,6 +212,11 @@ export class PackageActivationService {
       )
       return []
     }
+  }
+
+  private generateBatchScopedSerialNumber(batchId: string, index: number) {
+    const batchPart = batchId.replace(/[^a-zA-Z0-9]/g, '').slice(-10).toUpperCase()
+    return `SN-${batchPart}-${index.toString().padStart(4, '0')}`
   }
 
   private async generateUniqueVoucherCodes(tx: Prisma.TransactionClient, quantity: number) {
