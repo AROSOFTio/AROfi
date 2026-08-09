@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
 import type { Response } from 'express'
+import { RedisCache } from '../../common/cache/redis-cache.decorators'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -20,6 +21,7 @@ export class PaymentsController {
 
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.paymentsRead)
+  @RedisCache({ namespace: 'payments:overview', ttlSeconds: 12 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -174,4 +176,3 @@ export class PaymentsController {
     return this.paymentsService.checkPaymentStatus(paymentId, undefined, token)
   }
 }
-
