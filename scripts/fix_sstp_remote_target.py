@@ -13,6 +13,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
+MIKROTIK_SPEC = ROOT / "apps/api/src/modules/routers/mikrotik.service.spec.ts"
 ROUTERS = ROOT / "apps/api/src/modules/routers/routers.service.ts"
 ADMIN_COMMANDS = ROOT / "apps/admin-web/src/lib/mikrotik-commands.ts"
 
@@ -116,6 +117,34 @@ replace_regex_once(
     "short dashboard installer helper",
 )
 
+one_run_test = r'''  it('buildOneRunCommand: uses one delayed HTTPS fetch and preserves RouterOS errors', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        API_PUBLIC_HOST: 'arofi.net',
+        MIKROTIK_CALLBACK_HTTP_URL: 'http://95.111.234.34',
+      }),
+    )
+
+    const cmd = service.buildOneRunCommand('test-reg-key')
+
+    expect(cmd).toContain('/ip dns set servers=8.8.8.8,1.1.1.1')
+    expect(cmd).toContain(':delay 20s')
+    expect(cmd).toContain('https://arofi.net/api/mikrotik/script/test-reg-key')
+    expect(cmd).toContain('check-certificate=no')
+    expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
+    expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)
+    expect(cmd).not.toContain('http://95.111.234.34')
+    expect(cmd).not.toContain(':while')
+    expect(cmd).not.toContain('Retrying after router fetch cleanup')
+  })'''
+
+replace_regex_once(
+    MIKROTIK_SPEC,
+    r"  it\('buildOneRunCommand:.*?\n  \}\)\n(?=\}\)\s*$)",
+    one_run_test + "\n",
+    "single-fetch onboarding unit test",
+)
+
 # The dashboard checks these globals after importing vpn.rsc. Ensure the
 # generated remote script sets them truthfully rather than leaving "not-run".
 replace_once(
@@ -174,6 +203,15 @@ if helper.count('/tool fetch') != 1:
 for forbidden in (':while', 'Retrying after router fetch cleanup'):
     if forbidden in helper:
         raise RuntimeError(f"Dashboard installer retry loop remains: {forbidden}")
+
+spec_text = MIKROTIK_SPEC.read_text(encoding="utf-8")
+for marker in (
+    "uses one delayed HTTPS fetch",
+    r"expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)",
+    "expect(cmd).not.toContain(':while')",
+):
+    if marker not in spec_text:
+        raise RuntimeError(f"Single-fetch unit-test marker missing: {marker}")
 
 router_text = ROUTERS.read_text(encoding="utf-8")
 for marker in (
