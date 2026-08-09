@@ -23,6 +23,24 @@ describe('RedisCacheService', () => {
     )
   })
 
+  it('shares safe reads within a tenant while isolating other tenants', () => {
+    const cache = new RedisCacheService()
+    const request = (tenantId: string, userId: string) => ({
+      method: 'GET',
+      route: { path: '/overview' },
+      params: {},
+      query: {},
+      user: { id: userId, tenantId, role: 'TENANT_ADMIN' },
+    })
+
+    expect(cache.buildHttpKey('routers:overview', request('tenant-1', 'user-a'))).toBe(
+      cache.buildHttpKey('routers:overview', request('tenant-1', 'user-b')),
+    )
+    expect(cache.buildHttpKey('routers:overview', request('tenant-1', 'user-a'))).not.toBe(
+      cache.buildHttpKey('routers:overview', request('tenant-2', 'user-a')),
+    )
+  })
+
   it('coalesces concurrent cache misses into one calculation', async () => {
     const cache = new RedisCacheService()
     let resolveLoader: (value: { total: number }) => void = () => undefined
