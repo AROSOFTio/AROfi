@@ -10,6 +10,11 @@ export class RemoteProxyService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
+    if (process.env.REMOTE_PROXY_ENABLED === 'false') {
+      this.logger.warn('REMOTE_PROXY_ENABLED=false - remote WinBox proxy listeners disabled in this process')
+      return
+    }
+
     this.logger.log('Initializing remote WinBox access proxies...')
     try {
       // Sanitize any legacy remotePort values that are outside the 31000-31100 range

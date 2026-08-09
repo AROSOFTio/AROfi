@@ -155,8 +155,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Sync all existing router VPN credentials to RADIUS database
-    void this.syncAllRouterVpnCredentialsToRadius()
+    // Sync all existing router VPN credentials to RADIUS database. In split
+    // deployments this belongs to the worker/proxy process, not the HTTP API.
+    if (process.env.ROUTER_RADIUS_SYNC_ON_START_ENABLED !== 'false') {
+      void this.syncAllRouterVpnCredentialsToRadius()
+    }
 
     // Start router alert checking loop if alerts are enabled. Runs every 5s
     // so OFFLINE/ONLINE transitions reach the dashboard (via the realtime
