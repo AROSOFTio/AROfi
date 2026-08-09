@@ -99,10 +99,18 @@ RUN chmod +x /usr/local/bin/run-with-heartbeat
 COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
-    cd apps/api && \
-    /usr/local/bin/run-with-heartbeat "API runtime dependency install" \
-      env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 \
-      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    --mount=type=cache,target=/root/.cache \
+    cd apps/api || exit 1; \
+    attempt=1; \
+    until /usr/local/bin/run-with-heartbeat "API runtime dependency install (attempt $attempt)" \
+      env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 npm_config_fetch_retries=5 \
+      npm_config_fetch_retry_mintimeout=5000 npm_config_fetch_retry_maxtimeout=60000 \
+      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
+        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+        attempt=$((attempt + 1)); \
+        rm -rf node_modules; \
+        sleep 10; \
+    done
 
 COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
 COPY --from=builder /usr/src/app/apps/api/prisma ./apps/api/prisma

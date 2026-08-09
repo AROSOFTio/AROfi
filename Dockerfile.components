@@ -18,7 +18,16 @@ COPY apps/portal-web/package.json ./apps/portal-web/package.json
 COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
 
 RUN --mount=type=cache,target=/root/.npm \
-    NODE_ENV=development npm_config_jobs=1 npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    --mount=type=cache,target=/root/.cache \
+    attempt=1; \
+    until NODE_ENV=development npm_config_jobs=1 npm_config_fetch_retries=5 \
+      npm_config_fetch_retry_mintimeout=5000 npm_config_fetch_retry_maxtimeout=60000 \
+      npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
+        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+        attempt=$((attempt + 1)); \
+        rm -rf node_modules; \
+        sleep 10; \
+    done
 
 FROM dependencies AS patched-source
 COPY . .
@@ -94,9 +103,17 @@ RUN apk add --no-cache openssl libc6-compat freeradius-utils
 COPY --from=api-build /tmp/api-build-complete /tmp/api-build-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
-    cd apps/api \
-    && env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 \
-      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    --mount=type=cache,target=/root/.cache \
+    cd apps/api || exit 1; \
+    attempt=1; \
+    until env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 npm_config_fetch_retries=5 \
+      npm_config_fetch_retry_mintimeout=5000 npm_config_fetch_retry_maxtimeout=60000 \
+      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
+        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+        attempt=$((attempt + 1)); \
+        rm -rf node_modules; \
+        sleep 10; \
+    done
 
 COPY --from=api-build /usr/src/app/apps/api/dist ./apps/api/dist
 COPY --from=api-build /usr/src/app/apps/api/prisma ./apps/api/prisma
