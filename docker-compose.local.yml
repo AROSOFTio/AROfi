@@ -112,14 +112,14 @@ services:
     restart: unless-stopped
     command:
       - redis-server
+      - --save
+      - ""
       - --appendonly
-      - "yes"
+      - "no"
       - --maxmemory
       - 128mb
       - --maxmemory-policy
       - allkeys-lru
-    volumes:
-      - redis-data-local:/data
     mem_limit: 192m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -145,5 +145,4 @@ services:
 
 volumes:
   pg-data-local:
-  redis-data-local:
   wa-sessions-local:
