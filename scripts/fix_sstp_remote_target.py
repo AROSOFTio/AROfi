@@ -28,12 +28,24 @@ required = (
     '/interface sstp-client set [find name="${remoteClientName}"] keepalive-timeout=60',
     '/interface sstp-client set [find name="${remoteClientName}"] verify-server-certificate=no',
     'add-default-route=no disabled=yes',
-    'SSTP client could not be enabled or verified',
 )
 
 for marker in required:
     if marker not in text:
         fail(f"SSTP remote-access compatibility marker missing: {marker}")
+
+# The operator-facing failure text was shortened in the stable RouterOS
+# compatibility rollback. Accept either safe wording so this verifier remains
+# idempotent across the hardened and rolled-back generators.
+failure_markers = (
+    "SSTP client could not be enabled.",
+    "SSTP client could not be enabled or verified",
+)
+if not any(marker in text for marker in failure_markers):
+    fail(
+        "SSTP remote-access compatibility marker missing: "
+        "SSTP client could not be enabled[ or verified]"
+    )
 
 for forbidden in (
     'authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,',
