@@ -65,6 +65,12 @@ RUN export NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' \
     && export CI=1 \
     && sh scripts/run_with_heartbeat.sh "AROFi API build" npm run build --workspace=arofi-api
 
+# The production API dependencies are intentionally installed only after the
+# full API build succeeds. Without this dependency BuildKit runs two npm
+# installs at once, which exhausts the small deployment host and can abort the
+# build session before Nest has a chance to finish.
+RUN touch /tmp/api-build-complete
+
 FROM patched-source AS admin-build
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' \
@@ -83,6 +89,9 @@ FROM node:20-alpine AS api-runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils
 
+# Keep this before the production dependency install to serialize the two
+# memory- and I/O-heavy npm phases in an API-only Coolify deployment.
+COPY --from=api-build /tmp/api-build-complete /tmp/api-build-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
     cd apps/api \
