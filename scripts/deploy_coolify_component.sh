@@ -54,6 +54,13 @@ environment_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compos
 previous_image=$(docker inspect -f '{{ .Config.Image }}' "$old_container")
 live_networks=$(docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$old_container")
 
+case "$component" in
+  api) network_aliases="api arofi-api-v2" ;;
+  admin) network_aliases="admin arofi-admin-v2" ;;
+  portal) network_aliases="portal arofi-portal-v2" ;;
+  nginx) network_aliases="nginx arofi-nginx-v2" ;;
+esac
+
 if [ ! -f "$compose_file" ]; then
   compose_file="$PWD/docker-compose.yaml"
   echo "[fast-deploy] Coolify cleaned its old Compose artifact; using $compose_file."
@@ -112,8 +119,12 @@ attach_live_networks() {
     if docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$replacement_container" | grep -Fxq "$network"; then
       continue
     fi
+    alias_args=
+    for alias in $network_aliases; do
+      alias_args="$alias_args --alias $alias"
+    done
     echo "[fast-deploy] Attaching $component to existing network $network."
-    docker network connect --alias "$component" "$network" "$replacement_container"
+    docker network connect $alias_args "$network" "$replacement_container"
   done
 }
 
