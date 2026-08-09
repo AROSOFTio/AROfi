@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
@@ -64,6 +65,12 @@ export class PaymentsService {
   // billed amount, to absorb minor gateway rounding. UGX has no minor units so
   // this is deliberately tiny — real underpayments are always well beyond it.
   private readonly paymentAmountToleranceUgx = 1
+
+  // Portal clients can resume from a mobile-money PIN screen at the same time
+  // as the normal poll runs. Coalesce those checks and back off only when the
+  // provider explicitly reports temporary unavailability.
+  private readonly paymentStatusChecksInFlight = new Set<string>()
+  private readonly paymentStatusRetryAfter = new Map<string, { until: number; failures: number }>()
 
   private readonly paymentInclude = {
     tenant: {
@@ -582,16 +589,37 @@ export class PaymentsService {
       return this.attachReconnectPayload(fullPayment)
     }
 
-    const referenceId = payment.providerReference ?? payment.externalReference
-    const gatewayResponse = await this.paymentRouterService
-      .resolveCollection(payment.network)
-      .getPaymentStatus(referenceId)
+    const retryState = this.paymentStatusRetryAfter.get(payment.id)
+    if (this.paymentStatusChecksInFlight.has(payment.id) || (retryState && retryState.until > Date.now())) {
+      return this.attachReconnectPayload(await this.getPayment(payment.id))
+    }
 
-    return this.applyProviderTransition(payment.id, gatewayResponse, {
-      eventType: PaymentEventType.STATUS_CHECK,
-      notes: gatewayResponse.statusMessage ?? 'Payment status check completed',
-      payload: gatewayResponse,
-    })
+    const referenceId = payment.providerReference ?? payment.externalReference
+    this.paymentStatusChecksInFlight.add(payment.id)
+    try {
+      const gatewayResponse = await this.paymentRouterService
+        .resolveCollection(payment.network)
+        .getPaymentStatus(referenceId)
+
+      this.paymentStatusRetryAfter.delete(payment.id)
+      return this.applyProviderTransition(payment.id, gatewayResponse, {
+        eventType: PaymentEventType.STATUS_CHECK,
+        notes: gatewayResponse.statusMessage ?? 'Payment status check completed',
+        payload: gatewayResponse,
+      })
+    } catch (error) {
+      if (!(error instanceof ServiceUnavailableException)) {
+        throw error
+      }
+
+      const failures = Math.min((retryState?.failures ?? 0) + 1, 5)
+      const retryDelayMs = Math.min(30_000, 1_000 * 2 ** failures)
+      this.paymentStatusRetryAfter.set(payment.id, { until: Date.now() + retryDelayMs, failures })
+      this.logger.warn(`Payment provider is temporarily unavailable; delaying the next status check by ${retryDelayMs}ms.`)
+      return this.attachReconnectPayload(await this.getPayment(payment.id))
+    } finally {
+      this.paymentStatusChecksInFlight.delete(payment.id)
+    }
   }
 
   // Shared-secret verification for provider webhooks, matching the pattern

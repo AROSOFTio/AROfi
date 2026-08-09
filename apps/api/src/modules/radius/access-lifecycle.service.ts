@@ -32,6 +32,7 @@ const disconnectMaxRetries = () =>
 export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AccessLifecycleService.name)
   private timer?: NodeJS.Timeout
+  private runInProgress = false
 
   constructor(
     private readonly prisma: PrismaService,
@@ -98,9 +99,9 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.timer = setInterval(() => {
-      void this.runOnce().catch((error) => this.logger.error(error))
+      void this.runScheduledCycle()
     }, Number.parseInt(process.env.ACCESS_WORKER_INTERVAL_MS ?? '5000', 10))
-    void this.runOnce().catch((error) => this.logger.error(error))
+    void this.runScheduledCycle()
   }
 
   onModuleDestroy() {
@@ -119,6 +120,21 @@ export class AccessLifecycleService implements OnModuleInit, OnModuleDestroy {
     await this.markStuckPendingPayments()
     await this.pollPendingDisbursements()
     await this.reconcileOrphanedPayments()
+  }
+
+  private async runScheduledCycle() {
+    if (this.runInProgress) {
+      return
+    }
+
+    this.runInProgress = true
+    try {
+      await this.runOnce()
+    } catch (error) {
+      this.logger.error(error)
+    } finally {
+      this.runInProgress = false
+    }
   }
 
   private async cleanupExpiredRadiusCredentials() {

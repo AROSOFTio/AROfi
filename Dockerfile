@@ -93,6 +93,10 @@ RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
 COPY scripts/run_with_heartbeat.sh /usr/local/bin/run-with-heartbeat
 RUN chmod +x /usr/local/bin/run-with-heartbeat
+# BuildKit previously started this install beside the builder dependency
+# install. Make it wait for the builder to prevent CPU/swap exhaustion on the
+# production host during a full deployment.
+COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
     cd apps/api && \
@@ -100,7 +104,6 @@ RUN --mount=type=cache,target=/root/.npm \
       env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 \
       npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
-COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
 COPY --from=builder /usr/src/app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /usr/src/app/node_modules/.prisma ./apps/api/node_modules/.prisma

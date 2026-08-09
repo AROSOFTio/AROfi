@@ -429,6 +429,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [companionVoucherCodes, setCompanionVoucherCodes] = useState<string[]>([])
   const [copiedVoucherCode, setCopiedVoucherCode] = useState('')
   const autoConnectSignatureRef = useRef<string | null>(null)
+  const paymentStatusPollInFlightRef = useRef(false)
   const isReturningDeviceReconnectPayload = Boolean(
     context?.returningDevice?.existingActiveAccess &&
     context?.returningDevice?.reconnect?.username &&
@@ -650,25 +651,52 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
-    // Poll at 800ms for near-instant auto-connect the moment the customer
-    // approves the Yo! Uganda Mobile Money PIN on their phone.
-    void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-    const interval = window.setInterval(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 800)
+    // Poll sequentially so a slow provider never creates overlapping requests.
+    let stopped = false
+    let timeout: ReturnType<typeof window.setTimeout> | undefined
+    let failureDelayMs = 2_000
 
-    // Triple-check when user switches back from their banking app.
+    const poll = async () => {
+      if (stopped || paymentStatusPollInFlightRef.current) return
+
+      paymentStatusPollInFlightRef.current = true
+      const payment = await handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
+      paymentStatusPollInFlightRef.current = false
+
+      if (stopped || !payment) {
+        if (!stopped) {
+          failureDelayMs = Math.min(failureDelayMs * 2, 10_000)
+          timeout = window.setTimeout(() => void poll(), failureDelayMs)
+        }
+        return
+      }
+
+      failureDelayMs = 2_000
+      const stillWaiting =
+        pendingStatuses.includes(payment.status) ||
+        (payment.status === 'COMPLETED' && Boolean(payment.activation) && !hasUsableReconnect(payment))
+      if (stillWaiting) {
+        timeout = window.setTimeout(() => void poll(), 2_000)
+      }
+    }
+
+    void poll()
+
+    // One immediate check on return is enough; the in-flight guard prevents
+    // a second provider request while the regular poll is still running.
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
-      void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken)
-      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 300)
-      window.setTimeout(() => void handleCheckPaymentStatus(currentPayment.id, currentPayment.statusToken), 800)
+      if (timeout) window.clearTimeout(timeout)
+      void poll()
     }
     document.addEventListener('visibilitychange', onVisible)
 
     return () => {
-      window.clearInterval(interval)
+      stopped = true
+      if (timeout) window.clearTimeout(timeout)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [currentPayment])
+  }, [currentPayment?.id, currentPayment?.status, currentPayment?.statusToken, currentPayment?.activation?.id])
 
   useEffect(() => {
     if (isContextLoading || paymentReturnHandled || typeof window === 'undefined') {
@@ -903,8 +931,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
   }
 
-  async function handleCheckPaymentStatus(paymentId: string, statusToken?: string | null) {
-    const token = statusToken ?? currentPayment?.statusToken
+  async function handleCheckPaymentStatus(paymentId: string, statusToken?: string | null): Promise<PortalPayment | null> {
+    try {
+      const token = statusToken ?? currentPayment?.statusToken
     const response = await fetch(`/api/payments/${paymentId}/check-status${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
       method: 'POST',
     })
@@ -914,7 +943,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
     }
 
     const payment = await readJson<PortalPayment>(response)
-    setCurrentPayment(payment)
+      const paymentChanged =
+        currentPayment?.id !== payment.id ||
+        currentPayment?.status !== payment.status ||
+        currentPayment?.statusMessage !== payment.statusMessage ||
+        currentPayment?.activation?.id !== payment.activation?.id ||
+        currentPayment?.reconnect?.username !== payment.reconnect?.username ||
+        currentPayment?.reconnect?.password !== payment.reconnect?.password
+    if (paymentChanged) {
+      setCurrentPayment(payment)
+    }
 
       if (payment.activation && isTvPackage(payment.package)) {
       setCheckoutOpen(false)
@@ -943,7 +981,17 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       setStatusMessage('Waiting for PIN approval on your phone...')
     }
 
-    await loadContext(payment.phoneNumber, portalToken, hotspotParams)
+    // The context query is substantially heavier than a status read. Only
+    // refresh packages, sessions and latest-payment data after a transition.
+    if (paymentChanged || payment.status === 'FAILED') {
+      await loadContext(payment.phoneNumber, portalToken, hotspotParams)
+    }
+
+    return payment
+    } catch {
+      // The sequential caller backs off transient connection/provider errors.
+      return null
+    }
   }
 
   async function handlePaymentReturn(paymentId: string, statusToken?: string | null) {
