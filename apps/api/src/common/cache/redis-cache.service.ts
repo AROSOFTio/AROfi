@@ -9,9 +9,14 @@ export class RedisCacheService implements OnModuleDestroy {
   private readonly keyPrefix = process.env.CACHE_KEY_PREFIX?.trim() || 'arofi'
   private readonly cacheVersion = process.env.CACHE_VERSION?.trim() || 'v1'
   private readonly connectTimeoutMs = Number.parseInt(process.env.REDIS_CONNECT_TIMEOUT_MS ?? '1000', 10)
+  private readonly failureCooldownMs = Math.max(
+    1_000,
+    Number.parseInt(process.env.REDIS_FAILURE_COOLDOWN_MS ?? '5000', 10) || 5_000,
+  )
   private readonly inFlight = new Map<string, Promise<unknown>>()
   private readonly redis?: RedisProtocolClient
   private warnedUnavailable = false
+  private unavailableUntil = 0
 
   constructor() {
     if (!this.redisUrl) {
@@ -22,7 +27,7 @@ export class RedisCacheService implements OnModuleDestroy {
     try {
       this.redis = new RedisProtocolClient(this.redisUrl, this.connectTimeoutMs)
     } catch (error) {
-      this.warnUnavailable(error)
+      this.markUnavailable(error)
     }
   }
 
@@ -76,43 +81,42 @@ export class RedisCacheService implements OnModuleDestroy {
   }
 
   private async get<T>(key: string): Promise<{ hit: boolean; value?: T }> {
-    if (!this.redis) {
+    if (!this.canUseRedis()) {
       return { hit: false }
     }
 
     try {
-      const raw = await this.redis.get(key)
-      this.warnedUnavailable = false
+      const raw = await this.redis!.get(key)
+      this.markAvailable()
       if (raw === null) {
         return { hit: false }
       }
       return { hit: true, value: JSON.parse(raw) as T }
     } catch (error) {
-      this.warnUnavailable(error)
+      this.markUnavailable(error)
       return { hit: false }
     }
   }
 
   private async set(key: string, value: unknown, ttlSeconds: number) {
-    if (!this.redis || ttlSeconds <= 0) {
-      return
-    }
-
-    const serialized = JSON.stringify(value)
-    if (serialized === undefined) {
+    if (!this.canUseRedis() || ttlSeconds <= 0) {
       return
     }
 
     try {
-      await this.redis.setEx(key, ttlSeconds, serialized)
-      this.warnedUnavailable = false
+      const serialized = JSON.stringify(value)
+      if (serialized === undefined) {
+        return
+      }
+      await this.redis!.setEx(key, ttlSeconds, serialized)
+      this.markAvailable()
     } catch (error) {
-      this.warnUnavailable(error)
+      this.markUnavailable(error)
     }
   }
 
   private async deleteByPrefix(namespace: string) {
-    if (!this.redis) {
+    if (!this.canUseRedis()) {
       return
     }
 
@@ -120,14 +124,23 @@ export class RedisCacheService implements OnModuleDestroy {
     try {
       let cursor = '0'
       do {
-        const [nextCursor, keys] = await this.redis.scan(cursor, pattern, 200)
+        const [nextCursor, keys] = await this.redis!.scan(cursor, pattern, 200)
         cursor = nextCursor
-        await this.redis.unlink(keys)
+        await this.redis!.unlink(keys)
       } while (cursor !== '0')
-      this.warnedUnavailable = false
+      this.markAvailable()
     } catch (error) {
-      this.warnUnavailable(error)
+      this.markUnavailable(error)
     }
+  }
+
+  private canUseRedis() {
+    return Boolean(this.redis && Date.now() >= this.unavailableUntil)
+  }
+
+  private markAvailable() {
+    this.unavailableUntil = 0
+    this.warnedUnavailable = false
   }
 
   private stableStringify(value: unknown): string {
@@ -144,7 +157,8 @@ export class RedisCacheService implements OnModuleDestroy {
       .join(',')}}`
   }
 
-  private warnUnavailable(error: unknown) {
+  private markUnavailable(error: unknown) {
+    this.unavailableUntil = Date.now() + this.failureCooldownMs
     if (this.warnedUnavailable) {
       return
     }
