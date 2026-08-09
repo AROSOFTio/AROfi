@@ -330,7 +330,7 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
       // keepalive-timeout=2m (MikroTik's own default) force-disconnected
       // customers for mere inactivity: phones/laptops stop answering the
       // HotSpot's ARP-based keepalive probe within 1-2 minutes of the screen
@@ -340,13 +340,10 @@ export class MikrotikService {
       // credentials already prevent session sharing, so keepalive-timeout has
       // no security job to do here — only the RADIUS Session-Timeout
       // attribute (and CoA disconnect) should ever end a session, exactly at
-      // package expiry. Set to 30 days: effectively never fires before any
-      // real package expires (longest realistic package is nowhere close to
-      // 30 days), while still bounded (not an unbounded/infinite value that
-      // could behave unpredictably), so idle time is never the reason a
-      // customer gets disconnected.
-      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
+      // package expiry. mac-cookie is still enabled for trusted reconnect only
+      // after a real voucher/payment login; it is not automatic MAC auth.
+      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s }`,
       `# Remove HotSpot bypass bindings so every device must authenticate through AROFi`,
       `:do { /ip hotspot ip-binding remove [find type=bypassed] } on-error={}`,
       // dns-name on the profile only controls which name the HotSpot itself answers
@@ -604,7 +601,7 @@ export class MikrotikService {
       `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" mode=http keep-result=no`,
       `    :put "AROFi provisioning callback sent by HTTP fallback (NAS IP: $nasIp)."`,
       `  } on-error={`,
-      `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
+      `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, and HTTP/HTTPS access to arofi.net."`,
       `  }`,
       `}`,
     ]

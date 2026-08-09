@@ -2246,7 +2246,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
+      `:global arofiRemoteAccessStatus "failed"`,
+      `:global arofiRemoteAccessMessage "SSTP client was not verified"`,
       `:local sstpOk 0`,
+      `:local sstpRunning 0`,
+      `:local sstpId ""`,
       `:local sstpTarget "${domain}:${sstpPort}"`,
       `:do { /interface sstp-client disable [find name="${remoteClientName}"] } on-error={}`,
       `:do { /interface sstp-client remove [find name="${remoteClientName}"] } on-error={}`,
@@ -2277,8 +2281,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // traffic, this silently gave devices a path to the internet that
       // bypassed the hotspot/RADIUS gate entirely — customers online with no
       // voucher or payment. Remote access still works fully without it.
-      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
-      `:if ($sstpOk = 1) do={ :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
+      `:set sstpOk 0`,
+      `:do { :set sstpId [/interface sstp-client find name="${remoteClientName}"] } on-error={}`,
+      `:if ([:len $sstpId] > 0) do={ :do { :local actualTarget [/interface sstp-client get $sstpId connect-to]; :local actualUser [/interface sstp-client get $sstpId user]; :local actualDisabled [/interface sstp-client get $sstpId disabled]; :if (($actualTarget = $sstpTarget) && ($actualUser = "router-${router.id}") && ($actualDisabled = false)) do={ :set sstpOk 1; :set arofiRemoteAccessStatus "ok"; :set arofiRemoteAccessMessage "SSTP client enabled"; :do { :local actualRunning [/interface sstp-client get $sstpId running]; :if ($actualRunning = true) do={ :set sstpRunning 1; :set arofiRemoteAccessMessage "SSTP client enabled and connected" } else={ :set arofiRemoteAccessMessage "SSTP client enabled; tunnel is pending connection" } } on-error={} } } on-error={} }`,
+      `:if ($sstpOk = 0) do={ :set arofiRemoteAccessStatus "failed"; :set arofiRemoteAccessMessage "SSTP client could not be enabled or verified"; :put "ERROR: SSTP client could not be enabled or verified."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command."; :log warning "AROFi Remote Access failed: SSTP client could not be enabled or verified." }`,
+      `:if ($sstpOk = 1) do={ :if ($sstpRunning = 1) do={ :log info "AROFi Remote Access connected."; :put "AROFi Remote Access connected." } else={ :log info "AROFi Remote Access configured; tunnel pending."; :put "AROFi Remote Access configured; tunnel pending connection." } }`,
     ].join('\n')
   }
 
