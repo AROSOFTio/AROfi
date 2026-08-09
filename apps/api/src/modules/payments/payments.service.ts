@@ -598,7 +598,7 @@ export class PaymentsService {
     this.paymentStatusChecksInFlight.add(payment.id)
     try {
       const gatewayResponse = await this.paymentRouterService
-        .resolveCollection(payment.network)
+        .resolveCollection(payment.network, payment.provider)
         .getPaymentStatus(referenceId)
 
       this.paymentStatusRetryAfter.delete(payment.id)
