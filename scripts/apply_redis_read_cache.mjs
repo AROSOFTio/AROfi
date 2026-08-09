@@ -173,51 +173,5 @@ function patchPaymentsService() {
   write(relativePath, source)
 }
 
-function patchReportsService() {
-  const relativePath = 'apps/api/src/modules/reports/reports.service.ts'
-  let source = read(relativePath)
-
-  if (!source.includes('this.fetchRows(type, filters, tenantId, 50)')) {
-    source = replaceOnce(
-      source,
-      '    const rows = await this.fetchRows(type, filters, tenantId)\n    return {\n      type,\n      total: rows.length,\n      rows: rows.slice(0, 50),\n    }',
-      '    const rows = await this.fetchRows(type, filters, tenantId, 50)\n    return {\n      type,\n      total: rows.length,\n      rows,\n    }',
-      'report preview row limit',
-    )
-
-    source = replaceOnce(
-      source,
-      '  private async fetchRows(type: ReportType, filters: ReportFilters, tenantId?: string) {',
-      '  private async fetchRows(type: ReportType, filters: ReportFilters, tenantId?: string, limit = 20_000) {',
-      'report fetchRows limit parameter',
-    )
-    source = source
-      .replace('return this.fetchSalesRows(filters, tenantId)', 'return this.fetchSalesRows(filters, tenantId, limit)')
-      .replace('return this.fetchDisbursementRows(filters, tenantId)', 'return this.fetchDisbursementRows(filters, tenantId, limit)')
-      .replace('return this.fetchVoucherRows(filters, tenantId)', 'return this.fetchVoucherRows(filters, tenantId, limit)')
-      .replace(
-        '  private async fetchSalesRows(filters: ReportFilters, tenantId?: string) {',
-        '  private async fetchSalesRows(filters: ReportFilters, tenantId: string | undefined, limit: number) {',
-      )
-      .replace(
-        '  private async fetchDisbursementRows(filters: ReportFilters, tenantId?: string) {',
-        '  private async fetchDisbursementRows(filters: ReportFilters, tenantId: string | undefined, limit: number) {',
-      )
-      .replace(
-        '  private async fetchVoucherRows(filters: ReportFilters, tenantId?: string) {',
-        '  private async fetchVoucherRows(filters: ReportFilters, tenantId: string | undefined, limit: number) {',
-      )
-
-    const takeCount = source.split('take: 20_000').length - 1
-    if (takeCount !== 3) {
-      throw new Error(`report query limits: expected 3 take clauses, found ${takeCount}`)
-    }
-    source = source.replaceAll('take: 20_000', 'take: limit')
-  }
-
-  write(relativePath, source)
-}
-
 patchPaymentsService()
-patchReportsService()
-console.log('Redis read-cache source optimizations applied')
+console.log('Redis portal catalog optimization applied')
