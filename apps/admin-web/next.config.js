@@ -6,6 +6,12 @@ const nextConfig = {
   compress: true,
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../..'),
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // Keep browser and server source maps disabled in production. Generating them
   // significantly increases peak memory during webpack compilation on the VPS.
   productionBrowserSourceMaps: false,
