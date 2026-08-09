@@ -29,6 +29,7 @@ import { EventsModule } from './modules/events/events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
+import { RedisCacheModule } from './common/cache/redis-cache.module';
 
 @Controller('health')
 export class HealthController {
@@ -48,6 +49,7 @@ export class HealthController {
         limit: 120,
       },
     ]),
+    RedisCacheModule,
     PrismaModule,
     EventsModule,
     AgentsModule,
