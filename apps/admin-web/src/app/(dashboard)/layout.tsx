@@ -1,5 +1,4 @@
-import { AdminSessionResponse } from '@/lib/admin-types'
-import { fetchApi } from '@/lib/api'
+import { getAdminSession } from '@/lib/api'
 import { isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
 import DashboardShell from '../../components/DashboardShell'
 import PremiumUiStyles from '../../components/PremiumUiStyles'
@@ -13,7 +12,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  const session = await getAdminSession()
   if (!session?.user) {
     return <SessionRecoveryGate />
   }
