@@ -1,5 +1,6 @@
 import { BadRequestException, Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common'
 import type { Response } from 'express'
+import { RedisCache } from '../../common/cache/redis-cache.decorators'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -20,6 +21,7 @@ export class ReportsController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.reportsRead)
+  @RedisCache({ namespace: 'reports:preview', ttlSeconds: 20 })
   @Get(':type/preview')
   preview(
     @CurrentUser() user: AuthenticatedAdminUser,
