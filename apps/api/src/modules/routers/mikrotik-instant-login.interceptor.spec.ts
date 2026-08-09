@@ -1,4 +1,7 @@
-import { appendInstantAloginInstaller } from './mikrotik-instant-login.interceptor'
+import {
+  appendInstantAloginInstaller,
+  enforceDeliveredSessionPolicy,
+} from './mikrotik-instant-login.interceptor'
 
 describe('appendInstantAloginInstaller', () => {
   const provisioningScript = [
@@ -35,6 +38,38 @@ describe('appendInstantAloginInstaller', () => {
     expect(result).toContain('add-mac-cookie=yes mac-cookie-timeout=30d')
     expect(result).not.toContain('idle-timeout=31d')
     expect(result).not.toContain('keepalive-timeout=30d')
+  })
+
+  it('strips automatic MAC auth from the final delivered script even when a marker already exists', () => {
+    const regressedScript = [
+      '# AROFi MikroTik onboarding script (safe / additive)',
+      '# AROFi: permanent active-bundle and returning-device policy',
+      '/ip hotspot profile set [find] login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password',
+      '/ip hotspot user profile set [find] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d',
+    ].join('\n')
+
+    const result = appendInstantAloginInstaller(regressedScript)
+
+    expect(result).toContain('login-by=cookie,mac-cookie,http-pap')
+    expect(result).toContain(
+      'shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s',
+    )
+    expect(result).not.toMatch(/login-by=[^\s]*\bmac(?:,|\s)/)
+    expect(result).not.toContain('mac-auth-mode=')
+    expect(result).not.toContain('keepalive-timeout=30d')
+  })
+
+  it('normalizes alternate profile values directly', () => {
+    const result = enforceDeliveredSessionPolicy([
+      '/ip hotspot profile set [find] login-by=http-pap,mac',
+      '/ip hotspot user profile set [find] shared-users=4 add-mac-cookie=no mac-cookie-timeout=365d idle-timeout=5m keepalive-timeout=2m session-timeout=1h',
+    ].join('\n'))
+
+    expect(result).toContain('login-by=cookie,mac-cookie,http-pap')
+    expect(result).toContain(
+      'shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s',
+    )
+    expect(result).not.toContain('login-by=http-pap,mac')
   })
 
   it('adds persistence even when an existing router script has no status page URL', () => {
