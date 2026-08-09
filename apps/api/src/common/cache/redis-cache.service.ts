@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common'
 import { createHash } from 'crypto'
-import Redis from 'ioredis'
+import { RedisProtocolClient } from './redis-protocol.client'
 
 @Injectable()
 export class RedisCacheService implements OnModuleDestroy {
@@ -10,7 +10,7 @@ export class RedisCacheService implements OnModuleDestroy {
   private readonly cacheVersion = process.env.CACHE_VERSION?.trim() || 'v1'
   private readonly connectTimeoutMs = Number.parseInt(process.env.REDIS_CONNECT_TIMEOUT_MS ?? '1000', 10)
   private readonly inFlight = new Map<string, Promise<unknown>>()
-  private readonly redis?: Redis
+  private readonly redis?: RedisProtocolClient
   private warnedUnavailable = false
 
   constructor() {
@@ -19,19 +19,11 @@ export class RedisCacheService implements OnModuleDestroy {
       return
     }
 
-    this.redis = new Redis(this.redisUrl, {
-      enableOfflineQueue: false,
-      maxRetriesPerRequest: 1,
-      connectTimeout: Math.max(250, this.connectTimeoutMs),
-      commandTimeout: Math.max(250, this.connectTimeoutMs),
-      retryStrategy: (attempt) => Math.min(attempt * 250, 2_000),
-    })
-
-    this.redis.on('ready', () => {
-      this.warnedUnavailable = false
-      this.logger.log('Redis cache connected')
-    })
-    this.redis.on('error', (error) => this.warnUnavailable(error))
+    try {
+      this.redis = new RedisProtocolClient(this.redisUrl, this.connectTimeoutMs)
+    } catch (error) {
+      this.warnUnavailable(error)
+    }
   }
 
   onModuleDestroy() {
@@ -85,12 +77,13 @@ export class RedisCacheService implements OnModuleDestroy {
   }
 
   private async get<T>(key: string): Promise<{ hit: boolean; value?: T }> {
-    if (!this.redis || this.redis.status !== 'ready') {
+    if (!this.redis) {
       return { hit: false }
     }
 
     try {
       const raw = await this.redis.get(key)
+      this.warnedUnavailable = false
       if (raw === null) {
         return { hit: false }
       }
@@ -102,7 +95,7 @@ export class RedisCacheService implements OnModuleDestroy {
   }
 
   private async set(key: string, value: unknown, ttlSeconds: number) {
-    if (!this.redis || this.redis.status !== 'ready' || ttlSeconds <= 0) {
+    if (!this.redis || ttlSeconds <= 0) {
       return
     }
 
@@ -112,14 +105,15 @@ export class RedisCacheService implements OnModuleDestroy {
     }
 
     try {
-      await this.redis.set(key, serialized, 'EX', Math.max(1, Math.floor(ttlSeconds)))
+      await this.redis.setEx(key, ttlSeconds, serialized)
+      this.warnedUnavailable = false
     } catch (error) {
       this.warnUnavailable(error)
     }
   }
 
   private async deleteByPrefix(namespace: string) {
-    if (!this.redis || this.redis.status !== 'ready') {
+    if (!this.redis) {
       return
     }
 
@@ -127,12 +121,11 @@ export class RedisCacheService implements OnModuleDestroy {
     try {
       let cursor = '0'
       do {
-        const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200)
+        const [nextCursor, keys] = await this.redis.scan(cursor, pattern, 200)
         cursor = nextCursor
-        if (keys.length > 0) {
-          await this.redis.unlink(...keys)
-        }
+        await this.redis.unlink(keys)
       } while (cursor !== '0')
+      this.warnedUnavailable = false
     } catch (error) {
       this.warnUnavailable(error)
     }
