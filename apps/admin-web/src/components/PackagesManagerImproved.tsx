@@ -312,9 +312,9 @@ export default function PackagesManagerImproved() {
         .package-row strong{display:block;color:var(--text-primary);font-size:13.5px;font-weight:650;line-height:1.25}
         .package-row small{display:block;color:var(--text-muted);font-size:11.5px;line-height:1.35;margin-top:2px}
         .package-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:nowrap}
-        .package-switch{width:40px;height:22px;border:0;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;flex:0 0 auto;padding:0}
-        .package-switch span{position:absolute;width:16px;height:16px;top:2px;left:2px;border-radius:50%;background:#fff;transition:transform .16s ease;box-shadow:0 1px 2px rgba(15,23,42,.15)}
-        .package-switch.on{background:#16a34a}.package-switch.on span{transform:translateX(20px)}
+        .package-switch{width:36px!important;min-width:36px!important;max-width:36px!important;height:20px!important;min-height:20px!important;border:1px solid #cbd5e1!important;border-radius:999px!important;background:#e2e8f0!important;position:relative!important;cursor:pointer;flex:0 0 36px!important;padding:0!important;box-shadow:inset 0 1px 2px rgba(15,23,42,.08)!important;vertical-align:middle}
+        .package-switch span{position:absolute!important;width:14px!important;height:14px!important;top:2px!important;left:2px!important;border-radius:50%!important;background:#fff!important;transition:transform .16s ease,box-shadow .16s ease!important;box-shadow:0 1px 3px rgba(15,23,42,.22)!important}
+        .package-switch.on{background:#16a34a!important;border-color:#15803d!important}.package-switch.on span{transform:translateX(16px)!important}
         .package-kind-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
         .package-kind{height:48px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);text-align:left;cursor:pointer;font:600 13px var(--ui-font);color:var(--text-2)}
         .package-kind.active{border-color:var(--brand);background:var(--green-light);color:var(--brand)}
