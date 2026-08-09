@@ -6,6 +6,7 @@ import { RadiusAuthorizationPolicyService } from './radius-authorization-policy.
 import { RadiusCredentialService } from './radius-credential.service'
 import { RadiusService } from './radius.service'
 import { AccessLifecycleService } from './access-lifecycle.service'
+import { ExpiryRouterLogoutInitializer } from './expiry-router-logout.initializer'
 import { RadiusDbListenerService } from './radius-db-listener.service'
 import { RadiusSignalSyncService } from './radius-signal-sync.service'
 import { YoUgandaDisbursementService } from '../payments/yo-uganda-disbursement.service'
@@ -22,6 +23,7 @@ import { RouterCredentialsService } from '../routers/router-credentials.service'
     RadiusSignalSyncService,
     RadiusDbListenerService,
     AccessLifecycleService,
+    ExpiryRouterLogoutInitializer,
     YoUgandaDisbursementService,
     MikrotikService,
     RouterCredentialsService,
