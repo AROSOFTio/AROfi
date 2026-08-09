@@ -26,6 +26,12 @@ services:
       # Database (points to the local postgres service below)
       - DATABASE_URL=postgresql://${POSTGRES_USER:-arofi}:${POSTGRES_PASSWORD:-localpassword}@postgres:5432/${POSTGRES_DB:-arofi}?schema=public
 
+      # Redis read cache. Redis is private to this Compose network.
+      - REDIS_URL=redis://redis:6379
+      - CACHE_KEY_PREFIX=arofi
+      - CACHE_VERSION=v1
+      - REDIS_CONNECT_TIMEOUT_MS=1000
+
       # Secrets — use values from .env.local or the defaults below
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
       - PORTAL_TOKEN_SECRET=${PORTAL_TOKEN_SECRET:-dev-portal-secret-change-in-production}
@@ -75,6 +81,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || exit 1"]
       interval: 15s
@@ -99,6 +107,26 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis-data-local:/data
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   whatsapp:
     image: devlikeapro/waha:latest
     restart: unless-stopped
@@ -117,4 +145,5 @@ services:
 
 volumes:
   pg-data-local:
+  redis-data-local:
   wa-sessions-local:
