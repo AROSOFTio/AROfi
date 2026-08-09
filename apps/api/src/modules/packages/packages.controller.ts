@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -20,6 +21,7 @@ export class PackagesController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.packagesRead)
+  @RedisCache({ namespace: 'packages:catalog', ttlSeconds: 300 })
   @Get()
   getCatalog(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -27,6 +29,7 @@ export class PackagesController {
   }
 
   @RequirePermissions(PERMISSIONS.packagesManage)
+  @InvalidateRedisCache('packages:catalog', 'portal:catalog')
   @Post()
   createPackage(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreatePackageDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -37,6 +40,7 @@ export class PackagesController {
   }
 
   @RequirePermissions(PERMISSIONS.packagesManage)
+  @InvalidateRedisCache('packages:catalog', 'portal:catalog')
   @Patch(':packageId')
   updatePackage(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -48,6 +52,7 @@ export class PackagesController {
   }
 
   @RequirePermissions(PERMISSIONS.packagesManage)
+  @InvalidateRedisCache('packages:catalog', 'portal:catalog')
   @Delete(':packageId')
   deletePackage(@CurrentUser() user: AuthenticatedAdminUser, @Param('packageId') packageId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
@@ -55,6 +60,7 @@ export class PackagesController {
   }
 
   @RequirePermissions(PERMISSIONS.packagesManage)
+  @InvalidateRedisCache('packages:catalog', 'portal:catalog')
   @Post(':packageId/prices')
   addPricing(
     @CurrentUser() user: AuthenticatedAdminUser,
