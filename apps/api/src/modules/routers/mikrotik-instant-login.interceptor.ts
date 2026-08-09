@@ -3,6 +3,34 @@ import { map } from 'rxjs/operators'
 
 const SESSION_PERSISTENCE_MARKER = '# AROFi: permanent active-bundle and returning-device policy'
 const ALOGIN_INSTALLER_MARKER = '# AROFi: replace MikroTik stock alogin.html with an immediate redirect'
+const REQUIRED_LOGIN_BY = 'login-by=cookie,mac-cookie,http-pap'
+const REQUIRED_USER_PROFILE =
+  'shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s'
+
+/**
+ * Final delivery-layer protection.
+ *
+ * The source generator has been rewritten by several historical build patches.
+ * This function runs on the actual provisioning script returned to the router,
+ * after every generator, initializer and compatibility pass. Therefore a future
+ * source regression cannot deliver blocking RADIUS login-by=mac to RouterOS.
+ */
+export function enforceDeliveredSessionPolicy(script: string) {
+  let updated = script
+
+  updated = updated.replace(
+    /login-by=[^\s`"']+(?:\s+mac-auth-mode=mac-as-username-and-password)?/g,
+    REQUIRED_LOGIN_BY,
+  )
+  updated = updated.replace(/\s+mac-auth-mode=mac-as-username-and-password/g, '')
+
+  updated = updated.replace(
+    /shared-users=[^\s}]+\s+add-mac-cookie=[^\s}]+\s+mac-cookie-timeout=[^\s}]+(?:\s+idle-timeout=[^\s}]+)?(?:\s+keepalive-timeout=[^\s}]+)?(?:\s+session-timeout=[^\s}]+)?/g,
+    REQUIRED_USER_PROFILE,
+  )
+
+  return updated
+}
 
 export function appendInstantAloginInstaller(script: string) {
   if (!script) {
@@ -19,6 +47,11 @@ export function appendInstantAloginInstaller(script: string) {
   if (!looksLikeProvisioningScript) {
     return script
   }
+
+  // Always normalize the exact script being delivered, even when another
+  // initializer already added the persistence marker. Marker presence must
+  // never be allowed to hide a reintroduced login-by=mac command.
+  script = enforceDeliveredSessionPolicy(script)
 
   const additions: string[] = []
 
@@ -93,7 +126,7 @@ export function appendInstantAloginInstaller(script: string) {
     return script
   }
 
-  return [script.trimEnd(), '', ...additions].join('\n')
+  return enforceDeliveredSessionPolicy([script.trimEnd(), '', ...additions].join('\n'))
 }
 
 @Injectable()
