@@ -15,15 +15,20 @@ interface AiMessage {
   links?: SuggestedLink[]
 }
 
+type ChatWidgetProps = {
+  initiallyOpen?: boolean
+}
+
 const DEFAULT_GREETING =
   "Hi! I'm Aria, AROFi's AI assistant. Ask me about pricing, routers, mobile money payouts, or anything else about the platform."
 
 const WHATSAPP_NUMBER = '256787726388'
 const WHATSAPP_HREF = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi AROFi team, I need help with my account.')}`
 
-export default function ChatWidget() {
-  const [isOpen, setIsOpen] = useState(false)
+export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
+  const [isOpen, setIsOpen] = useState(initiallyOpen)
   const [sessionUser, setSessionUser] = useState<{ displayName: string } | null>(null)
+  const sessionRequestedRef = useRef(false)
 
   // AI assistant chat (Aria)
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([{ role: 'assistant', text: DEFAULT_GREETING }])
@@ -31,9 +36,13 @@ export default function ChatWidget() {
   const [aiLoading, setAiLoading] = useState(false)
   const aiMessagesEndRef = useRef<HTMLDivElement>(null)
 
-  // If signed in, personalize Aria's greeting — the real account snapshot
-  // (routers, revenue) is fetched per-message by the backend once they ask.
+  // Loading every visitor's session during the initial page render added an
+  // unnecessary authenticated API request to every route. Personalize Aria
+  // only after the user actually opens the assistant.
   useEffect(() => {
+    if (!isOpen || sessionRequestedRef.current) return
+    sessionRequestedRef.current = true
+
     let cancelled = false
     fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
@@ -48,10 +57,11 @@ export default function ChatWidget() {
         ])
       })
       .catch(() => {})
+
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isOpen])
 
   useEffect(() => {
     aiMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
