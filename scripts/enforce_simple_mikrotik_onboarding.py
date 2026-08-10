@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Restore the production MikroTik onboarding command to one direct fetch.
+"""Enforce the production MikroTik onboarding command contract.
 
-This script runs late in the Docker source-patch pipeline, after WAN support has
-been added. It deliberately changes only ``buildOneRunCommand`` and preserves
-the selected-WAN bootstrap. The operator-facing onboarding command must not use
-retry loops, HTTP/HTTPS retry rounds, or artificial 20-second cooldowns.
+The final operator-facing command must stay compatible with RouterOS 6 and 7,
+use one HTTPS download, import in the foreground, preserve selected-WAN setup,
+and never reintroduce retry loops or artificial 20-second cooldowns.
 """
 
 from __future__ import annotations
@@ -29,19 +28,29 @@ def main() -> None:
     )
 
     replacement = r'''  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
-    const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    const httpsBase = this.resolveApiBaseUrl().replace(/^http:\/\//i, 'https://')
+    const url = `${httpsBase}/api/mikrotik/script/${this.escape(registrationKey)}`
     const requestedWanInterface = this.normalizeWanInterface(wanInterface)
     const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
-    const dnsBootstrap =
-      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
+    const bootstrap =
+      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
+      ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
+      'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
+      ':delay 2s; '
 
     return (
       wanBootstrap +
-      dnsBootstrap +
+      bootstrap +
       ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
       `/tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; ` +
+      ':local arofiFile [/file find name="arofi-setup.rsc"]; ' +
+      ':if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ' +
+      ':if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ' +
+      ':put "AROFi setup downloaded. Installing..."; ' +
       '/import file-name="arofi-setup.rsc"; ' +
-      '/file remove "arofi-setup.rsc"'
+      ':delay 1s; ' +
+      '/file remove $arofiFile; ' +
+      ':put "AROFi setup installed."'
     )
   }
 
@@ -77,24 +86,32 @@ def main() -> None:
         'fallbackUrl',
         'arofiOk',
         'attempts',
+        'http://arofi.net',
     )
     for marker in forbidden:
         if marker in method:
-            raise RuntimeError(f"Forbidden onboarding retry/cooldown marker remains: {marker}")
+            raise RuntimeError(f"Forbidden onboarding retry/cooldown/insecure marker remains: {marker}")
 
     required = (
         'wanBootstrap +',
-        'dnsBootstrap +',
+        "replace(/^http:\\/\\//i, 'https://')",
+        '/ip dns set servers=8.8.8.8,1.1.1.1',
+        '[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]',
+        '[:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]',
         '/tool fetch url=',
+        'check-certificate=no',
         '/import file-name="arofi-setup.rsc"',
-        '/file remove "arofi-setup.rsc"',
+        '/file remove $arofiFile',
     )
     for marker in required:
         if marker not in method:
-            raise RuntimeError(f"Single-fetch onboarding marker missing: {marker}")
+            raise RuntimeError(f"Single-fetch RouterOS 6/7 onboarding marker missing: {marker}")
 
     MIKROTIK.write_text(updated, encoding="utf-8")
-    print("MikroTik onboarding normalized to one direct fetch with no retry loop or cooldown.")
+    print(
+        "MikroTik onboarding verified: RouterOS 6/7 bootstrap, one HTTPS fetch, "
+        "foreground import, no retry loop and no 20-second cooldown."
+    )
 
 
 if __name__ == "__main__":
