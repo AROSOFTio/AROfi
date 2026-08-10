@@ -7,7 +7,6 @@ import { SmsModule } from '../sms/sms.module'
 import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
-import { MikrotikPolicyInitializer } from './mikrotik-policy.initializer'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
@@ -26,7 +25,6 @@ import { RemoteProxyService } from './remote-proxy.service'
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
     MikrotikCompatibilityInitializer,
-    MikrotikPolicyInitializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,

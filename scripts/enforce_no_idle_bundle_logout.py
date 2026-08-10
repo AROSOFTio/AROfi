@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Keep active HotSpot bundles online until their real RADIUS expiry.
+"""Keep paid HotSpot sessions online until their real RADIUS expiry.
 
-The final RouterOS user-profile policy is:
+This restores the production-proven settings used by yesterday's working flow:
 - no idle timeout;
 - no keepalive timeout;
-- no local session timeout;
+- no local profile session timeout;
 - one device per credential;
-- a 30-day trusted MAC cookie for automatic same-device reconnection.
+- a 30-day MAC cookie only for automatic same-device reconnection.
 
 Package expiry, quota exhaustion, explicit revocation and RADIUS CoA remain the
-only authoritative ways to end access. A local inactivity timer must never end
-an otherwise active bundle.
+only authoritative ways to end access.
 """
 
 from pathlib import Path
@@ -27,16 +26,12 @@ FINAL_PROFILE = (
 text = MIKROTIK.read_text(encoding="utf-8")
 
 # Normalize every generated user-profile settings command, regardless of which
-# earlier compatibility patch supplied 1d, 30d, 31d, 365d or a finite keepalive.
+# earlier compatibility patch supplied 1d, 30d, 365d or a finite keepalive.
 pattern = re.compile(
-    # Values live inside TypeScript template literals. Stop before the next
-    # same-line closing backtick so normalization cannot remove delimiters or
-    # the closing brace in the all-profile command.
-    r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=[^\s`,]+"
-    r"(?:\s+idle-timeout=[^\s`,]+)?"
-    r"(?:\s+keepalive-timeout=[^\s`,]+)?"
-    r"(?:\s+session-timeout=[^\s`,]+)?"
-    r"(?=[^`\r\n]*`)"
+    r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
+    r"(?:\s+idle-timeout=\S+)?"
+    r"(?:\s+keepalive-timeout=\S+)?"
+    r"(?:\s+session-timeout=\S+)?"
 )
 text, count = pattern.subn(FINAL_PROFILE, text)
 if count < 2:
@@ -49,10 +44,9 @@ MIKROTIK.write_text(text, encoding="utf-8")
 
 updated = MIKROTIK.read_text(encoding="utf-8")
 if updated.count(FINAL_PROFILE) < 2:
-    raise RuntimeError("Permanent HotSpot persistence settings were not applied everywhere.")
+    raise RuntimeError("Proven HotSpot persistence settings were not applied everywhere.")
 
 for forbidden in (
-    "idle-timeout=31d",
     "keepalive-timeout=30d",
     "mac-cookie-timeout=365d",
 ):
@@ -60,6 +54,6 @@ for forbidden in (
         raise RuntimeError(f"Unstable HotSpot timeout setting remains: {forbidden}")
 
 print(
-    "Active-bundle persistence restored: idle/keepalive disabled, "
-    "session-timeout=0s, 30-day trusted same-device reconnect cookie."
+    "Paid-session persistence restored: idle/keepalive disabled, "
+    "session-timeout=0s, 30-day same-device reconnect cookie."
 )

@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
-"""Validate MikroTik onboarding and apply the final captive/session policy.
+"""Validate the MikroTik onboarding flow and final local hotspot integrations.
 
-The one-run command imports in the foreground so RouterOS errors remain visible.
-Voucher QR routing is intentionally left to the final business-QR guard; this
-script must never rewrite a printed QR to a gateway IP. Captive detection and
-returning access are deterministic:
-- exact automatic RADIUS ``login-by=mac`` is removed;
-- trusted post-login ``mac-cookie`` reconnect is enabled;
-- clients use the MikroTik gateway as their only DNS server;
-- arofi.net is allowed before authentication so packages load;
-- idle, keepalive and local session logout timers are disabled.
+The provisioning generator preserves the owner management port, so the one-run
+command imports in the foreground. Foreground import keeps RouterOS failures
+visible. Voucher QR codes are finalized here as router-local login URLs because
+an unauthenticated hotspot customer cannot depend on public internet access.
+
+This pass also makes captive detection deterministic:
+- normal phones never wait on RouterOS MAC authentication;
+- hotspot clients use the MikroTik gateway as their only DNS server;
+- arofi.net is always allowed before authentication so packages can load;
+- idle and keepalive logout are permanently disabled on every user profile.
 """
 
 from pathlib import Path
-import re
 import runpy
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 PORTAL_SERVICE = ROOT / "apps/api/src/modules/portal/portal.service.ts"
 ADMIN = ROOT / "apps/admin-web/src/components/RoutersManager.tsx"
-BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
+VOUCHERS_SERVICE = ROOT / "apps/api/src/modules/vouchers/vouchers.service.ts"
+VOUCHERS_MANAGER = ROOT / "apps/admin-web/src/components/VouchersManager.tsx"
+VOUCHER_QR_ROUTING = ROOT / "apps/api/src/modules/vouchers/voucher-qr-routing.initializer.ts"
 
 BACKGROUND_SENTINEL = "AROFi installation continues in background"
 FOREGROUND_IMPORT_MARKERS = (
@@ -31,130 +34,197 @@ LOCAL_LOGIN_MARKERS = (
     "loginUrl: loginUrl || process.env.HOTSPOT_LOGIN_URL || 'http://10.55.0.1/login'",
     "const reconnectLoginUrl = requestedLoginUrl",
 )
-FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
-FINAL_PROFILE = (
-    "shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d "
-    "idle-timeout=none keepalive-timeout=none session-timeout=0s"
-)
 
 
-def validate_foreground_install() -> None:
-    text = MIKROTIK.read_text(encoding="utf-8")
+def replace_once(path: Path, old: str, new: str, label: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if new in text:
+        return
+    count = text.count(old)
+    if count != 1:
+        raise RuntimeError(
+            f"{path.relative_to(ROOT)}: expected one {label} match, found {count}."
+        )
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def patch_mikrotik(text: str) -> str:
     if BACKGROUND_SENTINEL in text:
         raise RuntimeError(
-            "Hidden MikroTik background import is still present; keep the import foreground."
+            "Hidden MikroTik background import is still present; keep the import "
+            "foreground so RouterOS failures remain visible."
         )
+
     if not any(marker in text for marker in FOREGROUND_IMPORT_MARKERS):
-        raise RuntimeError("MikroTik foreground import command is missing.")
+        raise RuntimeError(
+            "MikroTik foreground import command is missing from buildOneRunCommand."
+        )
+
+    return text
 
 
-def validate_portal_reconnect() -> None:
-    text = PORTAL_SERVICE.read_text(encoding="utf-8")
+def patch_portal_service(text: str) -> str:
     if not any(marker in text for marker in LOCAL_LOGIN_MARKERS):
         raise RuntimeError(
-            "Portal reconnect payload no longer preserves the router-provided local login URL."
+            "Portal reconnect payload no longer preserves the router-provided "
+            "local hotspot login URL."
         )
+
+    return text
+
+
+def patch_admin(text: str) -> str:
+    # UI wording has changed several times. It must not make production builds
+    # depend on one exact sentence, so this compatibility step is intentionally
+    # non-mutating.
+    return text
 
 
 def patch_deterministic_captive_flow() -> None:
+    # MAC auth delays captive detection on ordinary phones because RouterOS first
+    # attempts RADIUS authentication with the phone MAC. Smart-TV credentials are
+    # still submitted explicitly by the portal, so normal hotspot login should be
+    # cookie/http-pap only.
+    replace_once(
+        MIKROTIK,
+        "login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password",
+        "login-by=cookie,http-pap",
+        "non-blocking captive login modes",
+    )
+
+    # The client must use the MikroTik DNS proxy. Supplying public resolvers in
+    # DHCP lets Windows/Android bypass the router DNS path and makes captive
+    # detection inconsistent. The router itself still resolves upstream through
+    # 1.1.1.1 and 8.8.8.8.
+    replace_once(
+        MIKROTIK,
+        "`/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,",
+        "`/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,",
+        "gateway-only hotspot DHCP DNS",
+    )
+
+    # Do not rely on a saved per-router host list for the core AROFi API. The
+    # local login page always calls arofi.net to load packages, redeem vouchers,
+    # and poll payments before the customer is authenticated.
+    replace_once(
+        MIKROTIK,
+        """      ...this.buildWalledGarden(input.portalHosts ?? []),
+      // Also allow the raw HTTP-fallback IP by address so captive-portal
+""",
+        """      ...this.buildWalledGarden(input.portalHosts ?? []),
+      `/ip hotspot walled-garden remove [find comment=\"AROFi core portal\"]`,
+      `/ip hotspot walled-garden add dst-host=\"arofi.net\" action=allow comment=\"AROFi core portal\"`,
+      // Also allow the raw HTTP-fallback IP by address so captive-portal
+""",
+        "core AROFi pre-auth walled garden",
+    )
+
+    # Apply the permanent no-idle policy directly in the generated script. The
+    # later compatibility patch accepts these already-final values and validates
+    # them again, so build order remains idempotent.
+    replace_once(
+        MIKROTIK,
+        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
+""",
+        """      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none }`,
+""",
+        "permanent no-idle hotspot policy",
+    )
+
     text = MIKROTIK.read_text(encoding="utf-8")
-
-    # Replace every generated HotSpot profile login mode with the exact policy.
-    # ``mac-cookie`` is trusted after successful login; the exact ``mac`` token
-    # and mac-auth-mode are forbidden because they delay the first portal.
-    text, login_count = re.subn(
-        r"login-by=[^\s`\"]+(?:\s+mac-auth-mode=mac-as-username-and-password)?",
-        FINAL_LOGIN_BY,
-        text,
-    )
-    text = text.replace(" mac-auth-mode=mac-as-username-and-password", "")
-    if login_count < 1:
-        raise RuntimeError("MikroTik HotSpot login-by command is missing.")
-    text = text.replace(
-        f"{FINAL_LOGIN_BY} split-user-domain=",
-        f"{FINAL_LOGIN_BY} http-cookie-lifetime=30d split-user-domain=",
-    )
-
-    # Client DNS must pass through the gateway so business.wifi and captive
-    # detection cannot be bypassed by public resolvers advertised through DHCP.
-    text = re.sub(
-        r"dns-server=\$\{gatewayIp\}(?:,1\.1\.1\.1,8\.8\.8\.8|,8\.8\.8\.8,1\.1\.1\.1)",
-        "dns-server=${gatewayIp}",
-        text,
-    )
-
-    # Core AROFi API must load before authentication.
-    if "AROFi core portal" not in text:
-        marker = "      ...this.buildWalledGarden(input.portalHosts ?? []),\n"
-        if marker not in text:
-            raise RuntimeError("Core AROFi walled-garden insertion point is missing.")
-        text = text.replace(
-            marker,
-            marker
-            + '      `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,\n'
-            + '      `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,\n',
-            1,
-        )
-
-    # Canonicalize both default and all-profile commands. Stop before the source
-    # template backtick so TypeScript syntax cannot be consumed by the regex.
-    profile_pattern = re.compile(
-        r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=[^\s`,]+"
-        r"(?:\s+idle-timeout=[^\s`,]+)?"
-        r"(?:\s+keepalive-timeout=[^\s`,]+)?"
-        r"(?:\s+session-timeout=[^\s`,]+)?"
-        r"(?=[^`\r\n]*`)"
-    )
-    text, profile_count = profile_pattern.subn(FINAL_PROFILE, text)
-    if profile_count < 2:
-        raise RuntimeError(
-            "Expected default and all-profile MikroTik persistence commands; "
-            f"normalized only {profile_count}."
-        )
-
-    MIKROTIK.write_text(text, encoding="utf-8")
-
-    final = MIKROTIK.read_text(encoding="utf-8")
-    normalized = final.replace('\\"', '"')
+    # TypeScript template literals may contain either `"` or `\"` depending on
+    # which guarded patch inserted the RouterOS command. They produce the same
+    # command at runtime. Normalize only for semantic validation so harmless
+    # source escaping can never fail a production build again.
+    normalized = text.replace('\\"', '"')
     required = (
-        FINAL_LOGIN_BY,
-        "http-cookie-lifetime=30d",
+        "login-by=cookie,http-pap",
         "dns-server=${gatewayIp}`",
         'dst-host="arofi.net" action=allow comment="AROFi core portal"',
-        FINAL_PROFILE,
+        "mac-cookie-timeout=365d idle-timeout=none keepalive-timeout=none",
     )
     for marker in required:
         if marker not in normalized:
             raise RuntimeError(f"Deterministic captive-flow marker missing: {marker}")
 
-    login_values = re.findall(r"login-by=([^\s`\"']+)", normalized)
-    for value in login_values:
-        if "mac" in {part.strip().lower() for part in value.split(",")}:
-            raise RuntimeError(
-                f"Blocking automatic MAC authentication remains in login-by={value}"
-            )
-    if re.search(r"mac-auth-mode\s*=", normalized, flags=re.IGNORECASE):
-        raise RuntimeError("mac-auth-mode remains in the provisioning generator")
+    if "login-by=mac," in normalized:
+        raise RuntimeError("Blocking MAC authentication remains in the provisioning generator")
     if "dns-server=${gatewayIp},1.1.1.1,8.8.8.8" in normalized:
-        raise RuntimeError("HotSpot DHCP still advertises public DNS directly")
-    for forbidden in ("idle-timeout=31d", "keepalive-timeout=30d", "mac-cookie-timeout=365d"):
-        if forbidden in normalized:
-            raise RuntimeError(f"Obsolete HotSpot timeout remains: {forbidden}")
+        raise RuntimeError("Hotspot DHCP still advertises public DNS servers directly to clients")
 
 
-def validate_qr_guard() -> None:
-    if not BUSINESS_QR_GUARD.exists():
-        raise RuntimeError(
-            "Business voucher QR guard is missing; gateway-IP QR rewrites are forbidden."
-        )
-    guard = BUSINESS_QR_GUARD.read_text(encoding="utf-8")
-    for marker in (
-        "http://<business>.wifi/login?voucher=<CODE>",
-        "VOUCHER_QR_LOCAL_LOGIN_URL",
-        "http://10.55.0.1/login?voucher=",
-    ):
-        if marker not in guard:
-            raise RuntimeError(f"Business voucher QR guard marker missing: {marker}")
+def patch_voucher_qr_local_login() -> None:
+    replace_once(
+        VOUCHERS_MANAGER,
+        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
+  if (dnsName) {
+    return `http://${dnsName}/login?voucher=${encodeURIComponent(code)}`
+  }
+  // Fallback
+  const base =
+    process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
+    'https://arofi.net/portal'
+  const normalized = base.replace(/\/$/, '')
+  const separator = normalized.includes('?') ? '&' : '?'
+  return `${normalized}${separator}voucher=${encodeURIComponent(code)}`
+}
+""",
+        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
+  void dnsName
+  const base =
+    process.env.NEXT_PUBLIC_VOUCHER_QR_LOCAL_LOGIN_URL ||
+    'http://10.55.0.1/login'
+  const normalized = base.replace(/\/$/, '')
+  const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
+  return `${loginBase}?voucher=${encodeURIComponent(code.trim().toUpperCase())}`
+}
+""",
+        "Admin voucher QR local-login helper",
+    )
+
+    replace_once(
+        VOUCHERS_SERVICE,
+        """  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
+    const baseUrl = hotspotDomain
+      ? `http://${hotspotDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/login`
+      : this.getVoucherQrBaseUrl()
+    const separator = baseUrl.includes('?') ? '&' : '?'
+    return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
+  }
+""",
+        """  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
+    void hotspotDomain
+    const configuredBase = (
+      process.env.VOUCHER_QR_LOCAL_LOGIN_URL ??
+      'http://10.55.0.1/login'
+    ).trim()
+    const withProtocol = /^https?:\/\//i.test(configuredBase)
+      ? configuredBase
+      : `http://${configuredBase}`
+    const normalized = withProtocol.replace(/\/$/, '')
+    const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
+    return `${loginBase}?voucher=${encodeURIComponent(voucherCode.trim().toUpperCase())}`
+  }
+""",
+        "API voucher QR local-login helper",
+    )
+
+    routing_text = VOUCHER_QR_ROUTING.read_text(encoding="utf-8")
+    manager_text = VOUCHERS_MANAGER.read_text(encoding="utf-8")
+    service_text = VOUCHERS_SERVICE.read_text(encoding="utf-8")
+
+    for marker in ("VOUCHER_QR_LOCAL_LOGIN_URL", "http://10.55.0.1/login"):
+        if marker not in routing_text or marker not in service_text:
+            raise RuntimeError(f"Server voucher QR local-login marker missing: {marker}")
+
+    for marker in ("NEXT_PUBLIC_VOUCHER_QR_LOCAL_LOGIN_URL", "http://10.55.0.1/login"):
+        if marker not in manager_text:
+            raise RuntimeError(f"Admin voucher QR local-login marker missing: {marker}")
+
+    if "NEXT_PUBLIC_VOUCHER_QR_BASE_URL" in manager_text:
+        raise RuntimeError("Admin voucher QR still accepts the obsolete public QR base URL")
 
 
 def run_required_patch(filename: str) -> None:
@@ -165,21 +235,28 @@ def run_required_patch(filename: str) -> None:
 
 
 def main() -> None:
-    for path in (MIKROTIK, PORTAL_SERVICE, ADMIN):
+    for path, patcher in (
+        (MIKROTIK, patch_mikrotik),
+        (PORTAL_SERVICE, patch_portal_service),
+        (ADMIN, patch_admin),
+    ):
         if not path.exists():
             raise RuntimeError(f"Required source file missing: {path.relative_to(ROOT)}")
 
-    validate_foreground_install()
-    validate_portal_reconnect()
-    validate_qr_guard()
+        original = path.read_text(encoding="utf-8")
+        updated = patcher(original)
+        if updated != original:
+            path.write_text(updated, encoding="utf-8")
+
     run_required_patch("refresh_mikrotik_portal_assets.py")
     run_required_patch("fix_sstp_remote_target.py")
     run_required_patch("fix_router_hardware_detection.py")
     patch_deterministic_captive_flow()
+    patch_voucher_qr_local_login()
 
     print(
-        "MikroTik foreground installer, trusted returning-device reconnect, no-idle active-bundle policy, "
-        "pre-auth packages, business QR guard, SSTP target and hardware detection verified."
+        "MikroTik foreground installer, immediate captive detection, pre-auth package access, "
+        "permanent no-idle policy, local voucher QR routing, SSTP target, and hardware detection verified."
     )
 
 

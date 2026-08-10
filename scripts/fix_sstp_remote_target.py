@@ -1,262 +1,92 @@
 #!/usr/bin/env python3
-"""Harden MikroTik onboarding and remote-access installers for RouterOS 6/7.
+"""Generate SSTP remote access that works across RouterOS 6 and 7.
 
-RouterOS has a small global /tool fetch connection pool. The old dashboard and
-API commands performed up to four HTTP(S) fetches, hid every error, and grew
-large enough to be unreliable when pasted into older WinBox terminals. Replace
-them with one short HTTPS fetch after a cooldown. Fetch and import errors stay
-visible in the terminal, so an operator sees the real cause immediately.
+RouterOS SSTP syntax differs across deployed MikroTik versions. Newer versions
+accept separate ``connect-to`` and ``port`` properties, while older RB9xx
+RouterOS builds stop parsing as soon as they encounter the ``port`` property and
+require ``connect-to=IP:PORT`` instead. The generated script now tries the modern
+form first and falls back to the legacy form at runtime, so an unsupported
+property never aborts the imported vpn.rsc file.
+
+The public hostname has also proved unreliable on some deployed routers, while
+the production IPv4 address connects successfully. Prefer VPN_SERVER_IP and use
+the known production IPv4 fallback.
 """
 
 from pathlib import Path
-import re
 
 ROOT = Path(__file__).resolve().parents[1]
-MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
-MIKROTIK_SPEC = ROOT / "apps/api/src/modules/routers/mikrotik.service.spec.ts"
-ROUTERS = ROOT / "apps/api/src/modules/routers/routers.service.ts"
-ADMIN_COMMANDS = ROOT / "apps/admin-web/src/lib/mikrotik-commands.ts"
+TARGET = ROOT / "apps/api/src/modules/routers/routers.service.ts"
 
 
-def replace_regex_once(path: Path, pattern: str, replacement: str, label: str) -> None:
-    text = path.read_text(encoding="utf-8")
-    if replacement in text:
-        return
-    updated, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)
-    if count != 1:
-        raise RuntimeError(
-            f"{label}: expected exactly one source block in {path.relative_to(ROOT)}, found {count}"
-        )
-    path.write_text(updated, encoding="utf-8")
-
-
-def replace_once(path: Path, old: str, new: str, label: str) -> None:
-    text = path.read_text(encoding="utf-8")
+def replace_once(text: str, old: str, new: str, label: str) -> str:
     if new in text:
-        return
+        return text
     count = text.count(old)
     if count != 1:
-        raise RuntimeError(
-            f"{label}: expected exactly one marker in {path.relative_to(ROOT)}, found {count}"
-        )
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        raise RuntimeError(f"Expected one {label} match, found {count}")
+    return text.replace(old, new, 1)
 
 
-api_method = r'''  // Keep this command deliberately short. RouterOS 6 WinBox terminals and the
-  // global /tool fetch pool are both unreliable with the old multi-retry command.
-  // One synchronous HTTPS fetch means there is never more than one installer
-  // connection, and leaving it unwrapped preserves the real RouterOS error.
-  // 60-second cooldown gives RouterOS 6.49 enough time to fully release TLS
-  // session slots from any prior fetch attempt before the new one starts.
-  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
-    const httpsUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
-    const requestedWanInterface = this.normalizeWanInterface(wanInterface)
-    const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
-    const fileName = 'arofi-setup.rsc'
-    const dnsBootstrap =
-      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
+text = TARGET.read_text(encoding="utf-8")
 
-    return (
-      wanBootstrap +
-      dnsBootstrap +
-      `:do { /file remove [find name="${fileName}"] } on-error={}; ` +
-      `:put "AROFi: waiting 60 seconds for router fetch pool to clear..."; ` +
-      `:delay 60s; ` +
-      `:put "AROFi: downloading setup..."; ` +
-      `/tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}"; ` +
-      `:local arofiFile [/file find name="${fileName}"]; ` +
-      `:if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ` +
-      `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ` +
-      `:put "AROFi: setup downloaded. Installing..."; ` +
-      `/import file-name="arofi-setup.rsc"; ` +
-      `:delay 1s; ` +
-      `/file remove $arofiFile; ` +
-      `:put "AROFi setup installed."`
-    )
-  }
-
-  // VPS-side tunnel gateway addresses'''
-
-replace_regex_once(
-    MIKROTIK,
-    r"  (?:\/\/ Single command.*?\n)?  buildOneRunCommand\(registrationKey: string, wanInterface\?: string \| null\) \{.*?\n  \}\n\n  // VPS-side tunnel gateway addresses",
-    api_method,
-    "short API onboarding command",
-)
-
-admin_fetch_helper = r'''function fetchImportCommand(options: {
-  httpsUrl: string
-  httpUrl?: string
-  fileName: string
-  downloadedMessage: string
-  emptyMessage: string
-  missingMessage: string
-  installedBlock: string
-}) {
-  // Exactly one synchronous fetch. Do not wrap it in on-error: RouterOS must
-  // print the real DNS/TLS/HTTP/connection error instead of a generic message.
-  return (
-    `:do { /file remove [find name="${options.fileName}"] } on-error={}; ` +
-    ':put "AROFi: waiting 20 seconds for old download connections to close..."; ' +
-    ':delay 20s; ' +
-    `:put "AROFi: downloading ${options.fileName}..."; ` +
-    `/tool fetch url="${options.httpsUrl}" check-certificate=no dst-path="${options.fileName}"; ` +
-    `:local arofiFile [/file find name="${options.fileName}"]; ` +
-    `:if ([:len $arofiFile] = 0) do={ :error "${options.missingMessage}" }; ` +
-    `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "${options.emptyMessage}" }; ` +
-    `:put "${options.downloadedMessage}"; ` +
-    `/import file-name="${options.fileName}"; ` +
-    ':delay 1s; ' +
-    '/file remove $arofiFile; ' +
-    options.installedBlock
-  )
-}
-
-export function absoluteApiOrigin'''
-
-replace_regex_once(
-    ADMIN_COMMANDS,
-    r"function fetchImportCommand\(options: \{.*?\n\}\n\nexport function absoluteApiOrigin",
-    admin_fetch_helper,
-    "short dashboard installer helper",
-)
-
-one_run_test = r'''  it('buildOneRunCommand: uses one delayed HTTPS fetch and preserves RouterOS errors', () => {
-    const service = new MikrotikService(
-      new ConfigService({
-        API_PUBLIC_HOST: 'arofi.net',
-        MIKROTIK_CALLBACK_HTTP_URL: 'http://95.111.234.34',
-      }),
-    )
-
-    const cmd = service.buildOneRunCommand('test-reg-key')
-
-    expect(cmd).toContain('/ip dns set servers=8.8.8.8,1.1.1.1')
-    expect(cmd).toContain(':delay 20s')
-    expect(cmd).toContain('https://arofi.net/api/mikrotik/script/test-reg-key')
-    expect(cmd).toContain('check-certificate=no')
-    expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
-    expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)
-    expect(cmd).not.toContain('http://95.111.234.34')
-    expect(cmd).not.toContain(':while')
-    expect(cmd).not.toContain('Retrying after router fetch cleanup')
-  })'''
-
-replace_regex_once(
-    MIKROTIK_SPEC,
-    r"  it\('buildOneRunCommand:.*?\n  \}\)\n(?=\}\)\s*$)",
-    one_run_test + "\n",
-    "single-fetch onboarding unit test",
-)
-
-# The dashboard checks these globals after importing vpn.rsc. Ensure the
-# generated remote script sets them truthfully rather than leaving "not-run".
-replace_once(
-    ROUTERS,
-    """      `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
-      `:local sstpOk 0`,
+text = replace_once(
+    text,
+    """    const domain = process.env.VPN_SERVER_HOST || process.env.API_PUBLIC_HOST || 'arofi.net'
+    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
 """,
-    """      `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
-      `:global arofiRemoteAccessStatus "failed"`,
-      `:global arofiRemoteAccessMessage "SSTP client could not be enabled."`,
-      `:local sstpOk 0`,
+    """    const configuredVpnHost = (process.env.VPN_SERVER_IP || process.env.VPN_SERVER_HOST || '').trim()
+    const domain = /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(configuredVpnHost)
+      ? configuredVpnHost
+      : '95.111.234.34'
+    const sstpPort = process.env.VPN_SERVER_PORT || '4443'
 """,
-    "remote-access status initialization",
-)
-replace_once(
-    ROUTERS,
-    '      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,\n',
-    '      `:if ($sstpOk = 0) do={ :global arofiRemoteAccessStatus "failed"; :global arofiRemoteAccessMessage "SSTP client could not be enabled."; :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,\n',
-    "remote-access failure status",
-)
-replace_once(
-    ROUTERS,
-    '      `:if ($sstpOk = 1) do={ :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,\n',
-    '      `:if ($sstpOk = 1) do={ :global arofiRemoteAccessStatus "ok"; :global arofiRemoteAccessMessage ""; :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,\n',
-    "remote-access success status",
+    "SSTP production IP selection",
 )
 
-# Final guards: both paste commands must contain only one fetch and no retry
-# loops, while the remote script must report a truthful final status.
-mikrotik_text = MIKROTIK.read_text(encoding="utf-8")
-method_match = re.search(
-    r"  buildOneRunCommand\(registrationKey: string, wanInterface\?: string \| null\) \{(.*?)\n  \}\n\n  // VPS-side tunnel gateway addresses",
-    mikrotik_text,
-    flags=re.S,
+text = replace_once(
+    text,
+    '      `:local sstpTarget "${domain}:${sstpPort}"`,\n',
+    '      `:local sstpTarget "${domain}"`,\n'
+    '      `:local sstpPort "${sstpPort}"`,\n',
+    "SSTP target declaration",
 )
-if not method_match:
-    raise RuntimeError("Short API onboarding method is missing after patching.")
-method = method_match.group(1)
-if method.count('/tool fetch') != 1:
-    raise RuntimeError(f"API onboarding command must contain one fetch, found {method.count('/tool fetch')}.")
-for forbidden in (':while', 'Retrying after router fetch cleanup', 'on-error={} ` +'):
-    if forbidden in method:
-        raise RuntimeError(f"API onboarding retry/fetch suppression remains: {forbidden}")
 
-admin_text = ADMIN_COMMANDS.read_text(encoding="utf-8")
-helper_match = re.search(
-    r"function fetchImportCommand\(options: \{(.*?)\n\}\n\nexport function absoluteApiOrigin",
-    admin_text,
-    flags=re.S,
+text = replace_once(
+    text,
+    '      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,\n',
+    '      `:local sstpAddModern ("/interface sstp-client add name=\\"${remoteClientName}\\" connect-to=\\"" . $sstpTarget . "\\" port=" . $sstpPort . " user=\\"router-${router.id}\\" password=\\"${token}\\" authentication=pap profile=\\"AROFi_Profile\\" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no")`,\n'
+    '      `:local sstpAddLegacy ("/interface sstp-client add name=\\"${remoteClientName}\\" connect-to=\\"" . $sstpTarget . ":" . $sstpPort . "\\" user=\\"router-${router.id}\\" password=\\"${token}\\" authentication=pap profile=\\"AROFi_Profile\\" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no")`,\n'
+    '      `:do { :local sstpAddFunction [:parse $sstpAddModern]; $sstpAddFunction } on-error={ :do { :local sstpAddFunction [:parse $sstpAddLegacy]; $sstpAddFunction } on-error={} }`,\n',
+    "version-compatible SSTP client command",
 )
-if not helper_match:
-    raise RuntimeError("Short dashboard installer helper is missing after patching.")
-helper = helper_match.group(1)
-if helper.count('/tool fetch') != 1:
-    raise RuntimeError(f"Dashboard installer helper must contain one fetch, found {helper.count('/tool fetch')}.")
-for forbidden in (':while', 'Retrying after router fetch cleanup'):
-    if forbidden in helper:
-        raise RuntimeError(f"Dashboard installer retry loop remains: {forbidden}")
 
-spec_text = MIKROTIK_SPEC.read_text(encoding="utf-8")
-for marker in (
-    "uses one delayed HTTPS fetch",
-    r"expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)",
-    "expect(cmd).not.toContain(':while')",
-):
-    if marker not in spec_text:
-        raise RuntimeError(f"Single-fetch unit-test marker missing: {marker}")
+text = replace_once(
+    text,
+    '      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,\n',
+    '      `:if ([:len [/interface sstp-client find name="${remoteClientName}"]] > 0) do={`,\n'
+    '      `  :do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,\n'
+    '      `}`,\n',
+    "SSTP enable verification",
+)
 
-router_text = ROUTERS.read_text(encoding="utf-8")
-for marker in (
-    ':global arofiRemoteAccessStatus "failed"',
-    ':global arofiRemoteAccessStatus "ok"',
-    ':global arofiRemoteAccessMessage ""',
-):
-    if marker not in router_text:
-        raise RuntimeError(f"Remote-access result marker missing: {marker}")
-
-# Preserve the existing RouterOS 6/7 SSTP compatibility verification.
 required = (
-    "const parseGuard = (command: string, message: string)",
-    '/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget',
-    "AROFi: SSTP add failed - unsupported RouterOS option or SSTP not available.",
-    '/interface sstp-client set [find name="${remoteClientName}"] authentication=pap',
-    '/interface sstp-client set [find name="${remoteClientName}"] keepalive-timeout=60',
-    '/interface sstp-client set [find name="${remoteClientName}"] verify-server-certificate=no',
-    'add-default-route=no disabled=yes',
-)
-for marker in required:
-    if marker not in router_text:
-        raise RuntimeError(f"SSTP remote-access compatibility marker missing: {marker}")
-
-failure_markers = (
-    "SSTP client could not be enabled.",
-    "SSTP client could not be enabled or verified",
-)
-if not any(marker in router_text for marker in failure_markers):
-    raise RuntimeError(
-        "SSTP remote-access compatibility marker missing: "
-        "SSTP client could not be enabled[ or verified]"
-    )
-
-for forbidden in (
-    'authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,',
+    "process.env.VPN_SERVER_IP",
+    "'95.111.234.34'",
+    '`:local sstpTarget "${domain}"`',
+    '`:local sstpPort "${sstpPort}"`',
     "sstpAddModern",
     "sstpAddLegacy",
-    "connect-to=$sstpTarget port=$sstpPort",
-):
-    if forbidden in router_text:
-        raise RuntimeError(f"Old version-specific SSTP generator remains: {forbidden}")
+    "[:parse $sstpAddModern]",
+    "[:parse $sstpAddLegacy]",
+    '[:len [/interface sstp-client find name="${remoteClientName}"]] > 0',
+)
+for marker in required:
+    if marker not in text:
+        raise RuntimeError(f"SSTP remote-access fix missing marker: {marker}")
 
-print("Short single-fetch MikroTik installers and SSTP result reporting verified.")
+if 'connect-to=$sstpTarget port=$sstpPort' in text:
+    raise RuntimeError("Direct version-specific SSTP command remains in generated source")
+
+TARGET.write_text(text, encoding="utf-8")
+print("SSTP remote access now supports both legacy and modern RouterOS syntax.")

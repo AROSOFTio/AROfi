@@ -29,7 +29,6 @@ type ProvisioningInput = {
   portalBaseUrl?: string | null
   dnsName?: string | null
   remoteClientName?: string | null
-  wanInterface?: string | null
 }
 
 @Injectable()
@@ -135,36 +134,55 @@ export class MikrotikService {
     }
   }
 
-  // Keep this command deliberately short. RouterOS 6 WinBox terminals and the
-  // global /tool fetch pool are both unreliable with the old multi-retry command.
-  // One synchronous HTTPS fetch means there is never more than one installer
-  // connection, and leaving it unwrapped preserves the real RouterOS error.
-  // 60-second cooldown gives RouterOS 6.49 enough time to fully release TLS
-  // session slots from any prior fetch attempt before the new one starts.
-  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
-    const httpsUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
-    const requestedWanInterface = this.normalizeWanInterface(wanInterface)
-    const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
-    const fileName = 'arofi-setup.rsc'
+  // Single command the operator pastes into WinBox Terminal. Built server-side
+  // so it always uses the real public API host (API_PUBLIC_HOST) instead of a
+  // domain hardcoded in the frontend.
+  buildOneRunCommand(registrationKey: string) {
+    const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    const fallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    // Many self-onboarded routers (static WAN IP, factory reset) have no DNS
+    // servers configured AND have a wrong system clock (clock resets to epoch
+    // after power loss). Bootstrap DNS and sync NTP first so TLS handshakes
+    // succeed — a wrong clock makes every HTTPS fetch fail even with
+    // check-certificate=no on some RouterOS builds.
     const dnsBootstrap =
-      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
-
+      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
+      // RouterOS validates ALL command parameters at PARSE TIME for the outer block,
+      // so "servers=" (v7-only) kills the command on v6, and "primary-ntp=" (v6-only)
+      // kills it on v7 — both BEFORE on-error can catch anything. [:parse "..."]
+      // defers each command string to runtime compilation, converting the unknown-
+      // parameter error into a catchable runtime error instead of a fatal parse error.
+      ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
+      'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
+      ':delay 2s; '
+    // Retry loop: up to 3 rounds with a 5-second wait between rounds.
+    // Strategy: try plain HTTP fallback FIRST (no TLS, always works when TCP
+    // port 80 is open) and HTTPS second. On fresh/rebooted routers the clock
+    // may still be off enough to kill the TLS handshake, so HTTP is the most
+    // reliable first attempt. :while exits early once a download succeeds.
     return (
-      wanBootstrap +
       dnsBootstrap +
-      `:do { /file remove [find name="${fileName}"] } on-error={}; ` +
-      `:put "AROFi: waiting 60 seconds for router fetch pool to clear..."; ` +
-      `:delay 60s; ` +
-      `:put "AROFi: downloading setup..."; ` +
-      `/tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}"; ` +
-      `:local arofiFile [/file find name="${fileName}"]; ` +
-      `:if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ` +
-      `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ` +
-      `:put "AROFi: setup downloaded. Installing..."; ` +
-      `/import file-name="arofi-setup.rsc"; ` +
-      `:delay 1s; ` +
-      `/file remove $arofiFile; ` +
-      `:put "AROFi setup installed."`
+      ':local arofiOk 0; :local attempts 0; ' +
+      ':while ($attempts < 3) do={ ' +
+        ':set attempts ($attempts + 1); ' +
+        ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
+        // 1st attempt within each round: plain HTTP (no TLS risk)
+        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
+        // 2nd attempt within each round: HTTPS (if HTTP failed, e.g. port 80 blocked)
+        ':if ($arofiOk = 0) do={ ' +
+          ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
+        '}; ' +
+        ':if ($arofiOk = 1) do={ :set attempts 3 } else={ ' +
+          ':if ($attempts < 3) do={ :put "Retrying..."; :delay 5s } ' +
+        '} ' +
+      '}; ' +
+      ':if ($arofiOk = 0) do={ ' +
+        ':put "ERROR: AROFi server unreachable after 3 attempts."; ' +
+        ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) AND HTTPS (port 443). 3) System clock correct (check /system clock). 4) Re-paste when WAN is stable." ' +
+      '} else={ ' +
+        ':local f [/file find name="arofi-setup.rsc"]; :if ([:len $f]>0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Re-paste when WAN is stable." } ' +
+      '}'
     )
   }
 
@@ -226,11 +244,10 @@ export class MikrotikService {
 
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
-    const portalAssetVersion = Date.now().toString(36)
-    const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
-    const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
-    const statusHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
-    const fallbackStatusHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
+    const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
+    const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
+    const statusHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}`
+    const fallbackStatusHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}`
     const heartbeatUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl, remoteClientName)
@@ -313,7 +330,7 @@ export class MikrotikService {
       ``,
       `# 3. HotSpot profile bound to AROFi RADIUS`,
       `:if ([:len [/ip hotspot profile find name="${profileName}"]] = 0) do={ /ip hotspot profile add name="${profileName}" }`,
-      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
+      `/ip hotspot profile set [find name="${profileName}"] use-radius=yes radius-accounting=yes radius-interim-update=1m html-directory=hotspot login-by=mac,cookie,http-pap mac-auth-mode=mac-as-username-and-password split-user-domain=no radius-location-id="${this.escape(registrationKey)}" radius-location-name="${this.escape(registrationKey)}"${input.dnsName ? ` dns-name="${this.escape(input.dnsName)}"` : ''}`,
       // keepalive-timeout=2m (MikroTik's own default) force-disconnected
       // customers for mere inactivity: phones/laptops stop answering the
       // HotSpot's ARP-based keepalive probe within 1-2 minutes of the screen
@@ -328,8 +345,8 @@ export class MikrotikService {
       // 30 days), while still bounded (not an unbounded/infinite value that
       // could behave unpredictably), so idle time is never the reason a
       // customer gets disconnected.
-      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s`,
-      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s }`,
+      `/ip hotspot user profile set [find default=yes] shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d`,
+      `:foreach up in=[/ip hotspot user profile find] do={ /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=1d keepalive-timeout=30d }`,
       `# Remove HotSpot bypass bindings so every device must authenticate through AROFi`,
       `:do { /ip hotspot ip-binding remove [find type=bypassed] } on-error={}`,
       // dns-name on the profile only controls which name the HotSpot itself answers
@@ -340,8 +357,7 @@ export class MikrotikService {
       // hotspot, which has no reason to already know about "<tenant>.wifi".
       ...(input.dnsName ? [
         `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
-        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway"`,
-        `:do { /ip dns cache flush } on-error={}`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
       ] : []),
     ]
 
@@ -349,8 +365,6 @@ export class MikrotikService {
       ``,
       `# 4. Walled garden so the portal + payment pages load before login`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
-      `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,
-      `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,
       // Also allow the raw HTTP-fallback IP by address so captive-portal
       // mini-browsers can reach the API even when HTTPS or hostname DNS fails.
       ...this.buildWalledGardenIp(this.resolveHttpCallbackBaseUrl()),
@@ -416,7 +430,7 @@ export class MikrotikService {
       `/ip pool remove [find name=arofi-pool]`,
       `/ip pool add name=arofi-pool ranges=${poolRange}`,
       `/ip dhcp-server network remove [find address="${subnet}"]`,
-      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,
+      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
@@ -550,9 +564,10 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
-    // 5s heartbeat: fast enough for dashboard live status without hammering
-    // small RouterOS devices or the API during busy hotspot sessions.
-    const intervalSeconds = 5
+    // 1s heartbeat: router-side /ip hotspot active is the fastest source of
+    // truth for "who is online right now", especially when accounting stop
+    // rows arrive before the router has fully removed a client.
+    const intervalSeconds = 1
     const source =
       `:local arofiActiveUsers 0; ` +
       `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={}; ` +
@@ -574,14 +589,6 @@ export class MikrotikService {
     return [
       `:delay 3s`,
       `:local nasIp ""`,
-      `:local arofiModel ""`,
-      `:local arofiSerial ""`,
-      `:local arofiVersion ""`,
-      `:do { :set arofiModel [/system routerboard get model] } on-error={}`,
-      `:if ($arofiModel = "") do={ :do { :set arofiModel [/system resource get board-name] } on-error={} }`,
-      `:do { :set arofiSerial [/system routerboard get serial-number] } on-error={}`,
-      `:do { :set arofiVersion [/system resource get version] } on-error={}`,
-      `:local arofiHeaders ("X-AROFi-Model:" . $arofiModel . ",X-AROFi-Serial:" . $arofiSerial . ",X-AROFi-Version:" . $arofiVersion)`,
       ...this.buildWanDetectionScript('cbWanIface', remoteClientName),
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
@@ -590,11 +597,11 @@ export class MikrotikService {
       `  }`,
       `} on-error={}`,
       `:do {`,
-      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" http-header-field=$arofiHeaders check-certificate=no keep-result=no`,
+      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" check-certificate=no mode=https keep-result=no`,
       `  :put "AROFi provisioning callback sent (NAS IP: $nasIp)."`,
       `} on-error={`,
       `  :do {`,
-      `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" http-header-field=$arofiHeaders mode=http keep-result=no`,
+      `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" mode=http keep-result=no`,
       `    :put "AROFi provisioning callback sent by HTTP fallback (NAS IP: $nasIp)."`,
       `  } on-error={`,
       `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
@@ -632,12 +639,10 @@ export class MikrotikService {
       // Ensure the hotspot/ directory exists — /tool fetch does not create parent
       // directories on RouterOS v6, causing a silent write failure and 404.
       `:do { /file add name="hotspot" type=directory } on-error={}`,
-      `:do { /file remove [find name="hotspot/login.html"] } on-error={}`,
-      `:do { /file remove [find name="hotspot/status.html"] } on-error={}`,
       `:local arofiHtmlOk 0`,
       `:local arofiStatusOk 0`,
       `:do {`,
-      `  /tool fetch url="${loginHtmlUrl}" check-certificate=no dst-path="hotspot/login.html"`,
+      `  /tool fetch url="${loginHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/login.html"`,
       `  :if ([:len [/file find name="hotspot/login.html"]] > 0) do={`,
       `    :put "AROFi HotSpot login.html installed."`,
       `    :set arofiHtmlOk 1`,
@@ -661,7 +666,7 @@ export class MikrotikService {
       // manual tap on some captive-portal webviews. Our version meta-refreshes +
       // JS-redirects immediately so the customer never has to touch anything.
       `:do {`,
-      `  /tool fetch url="${statusHtmlUrl}" check-certificate=no dst-path="hotspot/status.html"`,
+      `  /tool fetch url="${statusHtmlUrl}" check-certificate=no mode=https dst-path="hotspot/status.html"`,
       `  :if ([:len [/file find name="hotspot/status.html"]] > 0) do={`,
       `    :put "AROFi HotSpot status.html installed."`,
       `    :set arofiStatusOk 1`,
@@ -700,16 +705,10 @@ export class MikrotikService {
     // MikroTik replaces $(mac), $(ip), $(link-login-only), $(link-orig), $(server-name)
     // before sending this HTML to the device.
     return `
-$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
-$(if http-header == "Pragma")no-cache$(endif)
-$(if http-header == "Expires")0$(endif)
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AROFi Hotspot</title>
   <style>
@@ -1191,16 +1190,10 @@ $(if http-header == "Expires")0$(endif)
   // Meta-refresh covers webviews that block JS; the script covers the rest.
   buildStatusHtml() {
     return `
-$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
-$(if http-header == "Pragma")no-cache$(endif)
-$(if http-header == "Expires")0$(endif)
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
 </head>
 <body>
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:40px 16px;color:#0f172a">

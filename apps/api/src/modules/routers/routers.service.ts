@@ -23,7 +23,6 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
-import { buildTenantHotspotDomain } from '../../common/tenant-hotspot-domain'
 import { RealtimeEventsService } from '../events/realtime-events.service'
 import { MailService } from '../mail/mail.service'
 import { SmsService } from '../sms/sms.service'
@@ -156,11 +155,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Sync all existing router VPN credentials to RADIUS database. In split
-    // deployments this belongs to the worker/proxy process, not the HTTP API.
-    if (process.env.ROUTER_RADIUS_SYNC_ON_START_ENABLED !== 'false') {
-      void this.syncAllRouterVpnCredentialsToRadius()
-    }
+    // Sync all existing router VPN credentials to RADIUS database
+    void this.syncAllRouterVpnCredentialsToRadius()
 
     // Start router alert checking loop if alerts are enabled. Runs every 5s
     // so OFFLINE/ONLINE transitions reach the dashboard (via the realtime
@@ -1583,7 +1579,24 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
-    return buildTenantHotspotDomain(tenant?.name)
+    // The tenant Wi-Fi hostname is a local captive-portal name, never the
+    // platform's public domain or a stored marketing/domain label.
+    const rawName = (tenant?.name || 'arofi')
+      .replace(/^arofi(?:\s+wifi)?(?:\s+tenant)?[\s:_-]*/i, '')
+      .trim()
+    const label = this.buildTenantWifiLabel(rawName || 'arofi')
+    return `${label}.wifi`
+  }
+
+  private buildTenantWifiLabel(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/\.wifi$/, '')
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 40) || 'arofi'
   }
 
   private getRouterNasCandidates(router: {
@@ -2227,16 +2240,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     // strings are plain ASCII on purpose — RouterOS's parser rejects em-dashes
     // and other non-ASCII punctuation inside an imported .rsc with a cryptic
     // "expected end of command".
-    const parseGuard = (command: string, message: string) => {
-      const escaped = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$')
-      return `:do { :local arofiCmd [:parse "${escaped}"]; $arofiCmd } on-error={ :put "${message}" }`
-    }
-
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
-      `:global arofiRemoteAccessStatus "failed"`,
-      `:global arofiRemoteAccessMessage "SSTP client could not be enabled."`,
       `:local sstpOk 0`,
       `:local sstpTarget "${domain}:${sstpPort}"`,
       `:do { /interface sstp-client disable [find name="${remoteClientName}"] } on-error={}`,
@@ -2256,24 +2262,9 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // tunnel only needs to exist for WinBox/API reachability — it must
       // never touch hotspot/RADIUS/firewall config on its own. Re-running the
       // provisioning script is now only ever a deliberate operator action.
-      `:do { /ppp profile add name="AROFi_Profile" } on-error={}`,
-      parseGuard(
-        `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" profile="AROFi_Profile" add-default-route=no disabled=yes`,
-        'AROFi: SSTP add failed - unsupported RouterOS option or SSTP not available.',
-      ),
-      parseGuard(
-        `/interface sstp-client set [find name="${remoteClientName}"] authentication=pap`,
-        'AROFi: SSTP authentication option skipped.',
-      ),
-      parseGuard(
-        `/interface sstp-client set [find name="${remoteClientName}"] keepalive-timeout=60`,
-        'AROFi: SSTP keepalive option skipped.',
-      ),
-      parseGuard(
-        `/interface sstp-client set [find name="${remoteClientName}"] verify-server-certificate=no`,
-        'AROFi: SSTP certificate verification option skipped.',
-      ),
-      `:do { /interface sstp-client set [find name="${remoteClientName}"] disabled=no; :set sstpOk 1 } on-error={}`,
+      `/ppp profile add name="AROFi_Profile"`,
+      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,
+      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,
       // The SSTP tunnel interface must NOT be added to the router's "LAN"
       // interface list. It served no purpose here — WinBox/API remote access
       // connects over the tunnel's own PPP-assigned IP directly, never via
@@ -2283,8 +2274,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // traffic, this silently gave devices a path to the internet that
       // bypassed the hotspot/RADIUS gate entirely — customers online with no
       // voucher or payment. Remote access still works fully without it.
-      `:if ($sstpOk = 0) do={ :global arofiRemoteAccessStatus "failed"; :global arofiRemoteAccessMessage "SSTP client could not be enabled."; :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
-      `:if ($sstpOk = 1) do={ :global arofiRemoteAccessStatus "ok"; :global arofiRemoteAccessMessage ""; :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
+      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
+      `:if ($sstpOk = 1) do={ :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
     ].join('\n')
   }
 
