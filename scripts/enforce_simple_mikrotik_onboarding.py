@@ -3,7 +3,9 @@
 
 The final operator-facing command must stay compatible with RouterOS 6 and 7,
 use one HTTPS download, import in the foreground, preserve selected-WAN setup,
-and never reintroduce retry loops or artificial 20-second cooldowns.
+and never reintroduce retry loops or artificial 20-second cooldowns. The unit
+test is normalized at the same final stage so CI verifies the same contract that
+Coolify actually builds.
 """
 
 from __future__ import annotations
@@ -13,11 +15,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
+SPEC = ROOT / "apps/api/src/modules/routers/mikrotik.service.spec.ts"
 
 
 def main() -> None:
-    if not MIKROTIK.exists():
-        raise RuntimeError("MikroTik service source is missing")
+    if not MIKROTIK.exists() or not SPEC.exists():
+        raise RuntimeError("MikroTik service source or unit test is missing")
 
     text = MIKROTIK.read_text(encoding="utf-8")
 
@@ -112,9 +115,55 @@ def main() -> None:
             raise RuntimeError(f"Single-fetch RouterOS 6/7 onboarding marker missing: {marker}")
 
     MIKROTIK.write_text(updated, encoding="utf-8")
+
+    spec = SPEC.read_text(encoding="utf-8")
+    test_pattern = re.compile(
+        r"  it\('buildOneRunCommand:.*?\n  \}\)\n(?=\}\)\s*$)",
+        flags=re.S,
+    )
+    test_replacement = r'''  it('buildOneRunCommand: supports RouterOS 6/7 with one HTTPS fetch and no retry loop', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        API_PUBLIC_HOST: 'arofi.net',
+        MIKROTIK_CALLBACK_HTTP_URL: 'http://95.111.234.34',
+      }),
+    )
+
+    const cmd = service.buildOneRunCommand('test-reg-key')
+
+    expect(cmd).toContain('[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]')
+    expect(cmd).toContain('primary-ntp=162.159.200.1')
+    expect(cmd).toContain('https://arofi.net/api/mikrotik/script/test-reg-key')
+    expect(cmd).toContain('check-certificate=no')
+    expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)
+    expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
+    expect(cmd).not.toContain('http://95.111.234.34')
+    expect(cmd).not.toContain(':while')
+    expect(cmd).not.toContain('Retrying...')
+    expect(cmd).not.toContain('waiting 20 seconds')
+    expect(cmd).not.toContain(':delay 20s')
+  })
+'''
+    spec, spec_count = test_pattern.subn(test_replacement, spec, count=1)
+    if spec_count != 1:
+        raise RuntimeError(
+            f"Expected exactly one buildOneRunCommand unit test, found {spec_count}."
+        )
+
+    for marker in (
+        "supports RouterOS 6/7 with one HTTPS fetch and no retry loop",
+        "expect(cmd.match(/\\/tool fetch/g)).toHaveLength(1)",
+        "expect(cmd).not.toContain(':while')",
+        "expect(cmd).not.toContain('waiting 20 seconds')",
+    ):
+        if marker not in spec:
+            raise RuntimeError(f"RouterOS 6/7 onboarding unit-test marker missing: {marker}")
+
+    SPEC.write_text(spec, encoding="utf-8")
+
     print(
         "MikroTik onboarding verified: RouterOS 6/7 bootstrap, one HTTPS fetch, "
-        "foreground import, no retry loop and no 20-second cooldown."
+        "foreground import, no retry loop and no 20-second cooldown; unit test aligned."
     )
 
 
