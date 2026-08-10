@@ -3,7 +3,7 @@ import { RouterConnectionMode } from '@prisma/client'
 import { MikrotikService } from './mikrotik.service'
 
 describe('MikrotikService', () => {
-  it('builds a RouterOS provisioning script with radius settings', () => {
+  it('builds a RouterOS provisioning script with persistent active-bundle settings', () => {
     const service = new MikrotikService(
       new ConfigService({
         RADIUS_PUBLIC_HOST: 'radius.example.com',
@@ -34,8 +34,13 @@ describe('MikrotikService', () => {
     expect(script).toContain('shared-users=1')
     expect(script).toContain('radius-accounting=yes')
     expect(script).toContain('radius-interim-update=1m')
-    expect(script).toContain('login-by=mac,cookie,http-pap')
-    expect(script).toContain('mac-auth-mode=mac-as-username-and-password')
+    expect(script).toContain('login-by=cookie,mac-cookie,http-pap')
+    expect(script).toContain('http-cookie-lifetime=30d')
+    expect(script).not.toContain('mac-auth-mode=')
+    expect(script).toContain('add-mac-cookie=yes mac-cookie-timeout=30d')
+    expect(script).toContain('idle-timeout=none keepalive-timeout=none session-timeout=0s')
+    expect(script).not.toContain('idle-timeout=31d')
+    expect(script).not.toContain('keepalive-timeout=30d')
     expect(script).toContain('/ip hotspot ip-binding remove [find type=bypassed]')
     expect(script).toContain('keep-result=no')
     expect(script).toContain('arofiHeartbeatUrl')
@@ -49,14 +54,12 @@ describe('MikrotikService', () => {
     expect(heartbeatScriptLine).toContain('activeUsers=\\$arofiActiveUsers')
     expect(heartbeatScriptLine).toContain('activeMacs=\\$arofiActiveMacs')
     expect(heartbeatScriptLine).toContain('get \\$a mac-address')
-    expect(script).toContain('interval=1s on-event="arofi-heartbeat"')
+    expect(script).toContain('interval=5s on-event="arofi-heartbeat"')
     expect(script).toContain('/api/mikrotik/provisioned/')
     expect(script).toContain('/api/mikrotik/login-html/')
     expect(script).toContain('dst-path="hotspot/login.html"')
-    // Default mode builds an isolated customer hotspot, never touching the LAN.
     expect(script).toContain('/ip hotspot add name="arofi-hotspot" interface=arofi-hotspot')
 
-    // Safety guarantees: never change admin credentials, never rebuild WAN/LAN.
     expect(script).not.toContain('/user set [find name=')
     expect(script).not.toContain('password=')
     expect(script).not.toContain('/interface bridge port remove [find interface=ether1]')
@@ -90,9 +93,6 @@ describe('MikrotikService', () => {
     expect(script).toContain('AROFi provisioning callback sent')
     expect(script).toContain('/api/mikrotik/login-html/fresh-router-token')
     expect(script).toContain('dst-path="hotspot/login.html"')
-    // Radio commands are deferred through [:parse] so a missing menu on the
-    // wrong RouterOS version is a catchable runtime error, not a fatal compile
-    // error. The inner quotes are therefore escaped inside the parse string.
     expect(script).toContain('[:parse ')
     expect(script).toContain('/interface wifi find name=\\"wifi1\\"')
     expect(script).toContain('security.authentication-types=\\"\\"')
@@ -108,7 +108,6 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    // WAN detection must try multiple methods and error if not found (no silent broken NAT)
     expect(script).toContain(':foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes]')
     expect(script).toContain('PPPoE WAN scan skipped')
     expect(script).toContain('LTE WAN scan skipped')
@@ -116,7 +115,6 @@ describe('MikrotikService', () => {
     expect(script).toContain('AROFi: WAN interface not detected')
     expect(script).toContain('/ip hotspot add name="ARO SpeedX" interface=arofi-hotspot')
 
-    // The KEY safety guarantees that prevent the lockout we hit before.
     expect(script).not.toContain('password="KnownPassword123"')
     expect(script).not.toContain('/interface bridge port remove [find interface=ether1]')
     expect(script).not.toContain('/ip address remove [find address="192.168')
@@ -237,28 +235,19 @@ describe('MikrotikService', () => {
 
     const cmd = service.buildOneRunCommand('test-reg-key')
 
-    // NTP sync must appear before the fetch loop.
-    // RouterOS v6 rejects "servers=" at PARSE TIME, so the command must be wrapped
-    // in [:parse "..."] to defer to runtime, with a v6 "primary-ntp=" fallback.
     expect(cmd).toContain('[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]')
     expect(cmd).toContain('primary-ntp=162.159.200.1')
 
-    // Plain HTTP (fallback) URL must appear BEFORE the HTTPS URL in the string
     const httpIdx = cmd.indexOf('http://95.111.234.34')
     const httpsIdx = cmd.indexOf('https://arofi.net')
     expect(httpIdx).toBeGreaterThan(-1)
     expect(httpsIdx).toBeGreaterThan(-1)
     expect(httpIdx).toBeLessThan(httpsIdx)
 
-    // Both URLs must include the registration key
     expect(cmd).toContain('/api/mikrotik/script/test-reg-key')
-
-    // Retry loop, success flag, and import step must all be present
     expect(cmd).toContain(':while ($attempts < 3)')
     expect(cmd).toContain(':set arofiOk 1')
     expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
-
-    // Error message must include port 80 and /system clock hints
     expect(cmd).toContain('port 80')
     expect(cmd).toContain('/system clock')
   })

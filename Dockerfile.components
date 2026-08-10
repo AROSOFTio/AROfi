@@ -18,28 +18,14 @@ COPY apps/portal-web/package.json ./apps/portal-web/package.json
 COPY packages/config-typescript/package.json ./packages/config-typescript/package.json
 
 RUN --mount=type=cache,target=/root/.npm \
-    --mount=type=cache,target=/root/.cache \
-    attempt=1; \
-    until NODE_ENV=development npm_config_jobs=1 npm_config_fetch_retries=5 \
-      npm_config_fetch_retry_mintimeout=5000 npm_config_fetch_retry_maxtimeout=60000 \
-      npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
-        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
-        attempt=$((attempt + 1)); \
-        rm -rf node_modules \
-          apps/api/node_modules \
-          apps/admin-web/node_modules \
-          apps/portal-web/node_modules \
-          packages/config-typescript/node_modules; \
-        sleep 10; \
-    done
+    NODE_ENV=development npm_config_jobs=1 npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
 FROM dependencies AS patched-source
 COPY . .
 RUN chmod +x scripts/run_with_heartbeat.sh
 
 # Keep the production patch and captive-portal guard pipeline identical for
-# every component image. The persistence normalizer MUST run before the router
-# lifecycle validator because that validator requires session-timeout=0s.
+# every component image. The guards deliberately reject automatic MAC login.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
@@ -58,9 +44,9 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
     && python3 scripts/apply_mikrotik_background_install.py \
-    && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_router_presence_and_access_lifecycle.py \
     && python3 scripts/stabilize_router_status_hysteresis.py \
+    && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
     && python3 scripts/finalize_gateway_compile.py \
@@ -79,22 +65,16 @@ RUN export NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' \
     && export CI=1 \
     && sh scripts/run_with_heartbeat.sh "AROFi API build" npm run build --workspace=arofi-api
 
-# The production API dependencies are intentionally installed only after the
-# full API build succeeds. Without this dependency BuildKit runs two npm
-# installs at once, which exhausts the small deployment host and can abort the
-# build session before Nest has a chance to finish.
-RUN touch /tmp/api-build-complete
-
 FROM patched-source AS admin-build
 RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=768 --max-semi-space-size=8' \
+    export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' \
     && export NEXT_CPU_LIMIT=1 \
     && export CI=1 \
     && sh scripts/run_with_heartbeat.sh "AROFi Admin build" npm run build --workspace=arofi-admin
 
 FROM patched-source AS portal-build
 RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
-    export NODE_OPTIONS='--max-old-space-size=384 --max-semi-space-size=4' \
+    export NODE_OPTIONS='--max-old-space-size=512 --max-semi-space-size=8' \
     && export NEXT_CPU_LIMIT=1 \
     && export CI=1 \
     && sh scripts/run_with_heartbeat.sh "AROFi Portal build" npm run build --workspace=arofi-portal
@@ -103,22 +83,11 @@ FROM node:20-alpine AS api-runtime
 WORKDIR /usr/src/app
 RUN apk add --no-cache openssl libc6-compat freeradius-utils
 
-# Keep this before the production dependency install to serialize the two
-# memory- and I/O-heavy npm phases in an API-only Coolify deployment.
-COPY --from=api-build /tmp/api-build-complete /tmp/api-build-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
-    --mount=type=cache,target=/root/.cache \
-    cd apps/api || exit 1; \
-    attempt=1; \
-    until env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 npm_config_fetch_retries=5 \
-      npm_config_fetch_retry_mintimeout=5000 npm_config_fetch_retry_maxtimeout=60000 \
-      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
-        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
-        attempt=$((attempt + 1)); \
-        rm -rf node_modules; \
-        sleep 10; \
-    done
+    cd apps/api \
+    && env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 \
+      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
 
 COPY --from=api-build /usr/src/app/apps/api/dist ./apps/api/dist
 COPY --from=api-build /usr/src/app/apps/api/prisma ./apps/api/prisma

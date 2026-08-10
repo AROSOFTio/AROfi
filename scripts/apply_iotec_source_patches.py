@@ -122,7 +122,6 @@ replace_once(
     """    const gatewayResponse = await this.paymentRouterService
       .resolveCollection(payment.network, payment.provider)
       .getPaymentStatus(referenceId)""",
-    sentinel=".resolveCollection(payment.network, payment.provider)",
 )
 replace_once(
     payments,

@@ -1,5 +1,4 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
-import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -20,7 +19,6 @@ export class RoutersController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.routersRead)
-  @RedisCache({ namespace: 'routers:overview', ttlSeconds: 6 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -28,7 +26,6 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
-  @InvalidateRedisCache('routers:overview')
   @Post('groups')
   createGroup(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateRouterGroupDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -39,7 +36,6 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
-  @InvalidateRedisCache('routers:overview')
   @Post()
   createRouter(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateRouterDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -57,7 +53,6 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
-  @InvalidateRedisCache('routers:overview')
   @Post(':routerId/health-check')
   runHealthCheck(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
@@ -142,7 +137,6 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
-  @InvalidateRedisCache('routers:overview')
   @Patch(':routerId')
   updateRouter(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -154,7 +148,6 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
-  @InvalidateRedisCache('routers:overview')
   @Delete(':routerId')
   deleteRouter(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
