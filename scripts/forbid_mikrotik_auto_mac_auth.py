@@ -108,6 +108,7 @@ def main() -> None:
     finalizer = FINALIZER.read_text(encoding="utf-8")
     for marker, message in (
         ("guard_active_bundle_disconnects.py", "active-bundle disconnect guard"),
+        ("enforce_simple_mikrotik_onboarding.py", "RouterOS 6/7 single-HTTPS onboarding guard"),
         ("verify_router_captive_invariants.py", "captive invariants"),
         ("forbid_mikrotik_auto_mac_auth.py", "session guard"),
     ):
@@ -129,8 +130,9 @@ def main() -> None:
             fail(f"trusted returning-device policy missing from {path.relative_to(ROOT)}")
 
     print(
-        "AROFI_NO_AUTOMATIC_MAC_AUTH verified: exact MAC auth is absent, trusted "
-        "mac-cookie reconnect is required, active-bundle timers are disabled, and guards are installed."
+        "AROFI_NO_AUTOMATIC_MAC_AUTH verified: automatic login-by=mac is absent, "
+        "trusted post-login mac-cookie reconnect remains, RouterOS 6/7 onboarding guard "
+        "is locked, and captive/session policy is intact."
     )
 
 
