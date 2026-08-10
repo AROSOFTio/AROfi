@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Apply final compile-only normalization and production invariant checks.
+"""Apply final compile normalization and production invariant checks.
 
 This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
-gateway patches, validates the final ioTec OAuth/diagnostics output, then runs
-the MikroTik captive-flow verifier and permanent automatic-MAC-auth guard.
+gateway patches, validates the final ioTec OAuth/diagnostics output, restores
+the business-specific voucher QR route, installs the active-bundle disconnect
+guard, then verifies the MikroTik captive/session policy.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -21,6 +22,8 @@ ROUTER = ROOT / "apps/api/src/modules/payments/payment-router.service.ts"
 PAYMENTS = ROOT / "apps/api/src/modules/payments/payments.service.ts"
 IOTEC = ROOT / "apps/api/src/modules/payments/iotec-pay.service.ts"
 SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
+BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
+ACTIVE_BUNDLE_GUARD = ROOT / "scripts/guard_active_bundle_disconnects.py"
 CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
 MAC_AUTH_GUARD = ROOT / "scripts/forbid_mikrotik_auto_mac_auth.py"
 
@@ -85,6 +88,18 @@ def validate_iotec_final_state() -> None:
             raise RuntimeError(f"Final ioTec Admin diagnostics marker missing: {marker}")
 
 
+def enforce_business_qr() -> None:
+    if not BUSINESS_QR_GUARD.exists():
+        raise RuntimeError("Business voucher QR guard is missing")
+    runpy.run_path(str(BUSINESS_QR_GUARD), run_name="__main__")
+
+
+def install_active_bundle_guard() -> None:
+    if not ACTIVE_BUNDLE_GUARD.exists():
+        raise RuntimeError("Active-bundle disconnect guard is missing")
+    runpy.run_path(str(ACTIVE_BUNDLE_GUARD), run_name="__main__")
+
+
 def verify_captive_flow_last() -> None:
     if not CAPTIVE_VERIFY.exists():
         raise RuntimeError("Final MikroTik captive-flow verifier is missing")
@@ -104,11 +119,13 @@ def main() -> None:
     normalize_router()
     normalize_payments()
     validate_iotec_final_state()
+    enforce_business_qr()
+    install_active_bundle_guard()
     verify_captive_flow_last()
     enforce_no_automatic_mac_auth_last()
     print(
-        "Final payment gateway, ioTec diagnostics, captive-flow state, and "
-        "permanent no-automatic-MAC-auth policy verified."
+        "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
+        "disconnect guard, captive-flow state, and no-automatic-MAC-auth policy verified."
     )
 
 
