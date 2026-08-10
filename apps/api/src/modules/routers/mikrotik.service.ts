@@ -158,7 +158,7 @@ export class MikrotikService {
       `:if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ` +
       `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ` +
       `:put "AROFi: setup downloaded. Installing..."; ` +
-      `/import file-name="${fileName}"; ` +
+      `/import file-name="arofi-setup.rsc"; ` +
       `:delay 1s; ` +
       `/file remove $arofiFile; ` +
       `:put "AROFi setup installed."`
@@ -223,10 +223,11 @@ export class MikrotikService {
 
     const callbackUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
     const fallbackCallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/provisioned/${this.escape(registrationKey)}`
-    const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
-    const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}`
-    const statusHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}`
-    const fallbackStatusHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}`
+    const portalAssetVersion = Date.now().toString(36)
+    const loginHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
+    const fallbackLoginHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/login-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
+    const statusHtmlUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
+    const fallbackStatusHtmlUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/status-html/${this.escape(registrationKey)}?v=${portalAssetVersion}`
     const heartbeatUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const fallbackHeartbeatUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/heartbeat/${this.escape(registrationKey)}`
     const callbackScript = this.buildProvisioningCallbackScript(callbackUrl, fallbackCallbackUrl, remoteClientName)
@@ -570,6 +571,14 @@ export class MikrotikService {
     return [
       `:delay 3s`,
       `:local nasIp ""`,
+      `:local arofiModel ""`,
+      `:local arofiSerial ""`,
+      `:local arofiVersion ""`,
+      `:do { :set arofiModel [/system routerboard get model] } on-error={}`,
+      `:if ($arofiModel = "") do={ :do { :set arofiModel [/system resource get board-name] } on-error={} }`,
+      `:do { :set arofiSerial [/system routerboard get serial-number] } on-error={}`,
+      `:do { :set arofiVersion [/system resource get version] } on-error={}`,
+      `:local arofiHeaders ("X-AROFi-Model:" . $arofiModel . ",X-AROFi-Serial:" . $arofiSerial . ",X-AROFi-Version:" . $arofiVersion)`,
       ...this.buildWanDetectionScript('cbWanIface', remoteClientName),
       `:do {`,
       `  :if ($cbWanIface != "") do={`,
@@ -578,11 +587,11 @@ export class MikrotikService {
       `  }`,
       `} on-error={}`,
       `:do {`,
-      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" check-certificate=no keep-result=no`,
+      `  /tool fetch url="${callbackUrl}?nasIp=$nasIp" http-header-field=$arofiHeaders check-certificate=no keep-result=no`,
       `  :put "AROFi provisioning callback sent (NAS IP: $nasIp)."`,
       `} on-error={`,
       `  :do {`,
-      `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" mode=http keep-result=no`,
+      `    /tool fetch url="${fallbackCallbackUrl}?nasIp=$nasIp" http-header-field=$arofiHeaders mode=http keep-result=no`,
       `    :put "AROFi provisioning callback sent by HTTP fallback (NAS IP: $nasIp)."`,
       `  } on-error={`,
       `    :put "Warning: AROFi provisioning callback failed. Check WAN internet, DNS, HTTPS, and VPS port 4012."`,
@@ -620,6 +629,8 @@ export class MikrotikService {
       // Ensure the hotspot/ directory exists — /tool fetch does not create parent
       // directories on RouterOS v6, causing a silent write failure and 404.
       `:do { /file add name="hotspot" type=directory } on-error={}`,
+      `:do { /file remove [find name="hotspot/login.html"] } on-error={}`,
+      `:do { /file remove [find name="hotspot/status.html"] } on-error={}`,
       `:local arofiHtmlOk 0`,
       `:local arofiStatusOk 0`,
       `:do {`,
@@ -686,10 +697,16 @@ export class MikrotikService {
     // MikroTik replaces $(mac), $(ip), $(link-login-only), $(link-orig), $(server-name)
     // before sending this HTML to the device.
     return `
+$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
+$(if http-header == "Pragma")no-cache$(endif)
+$(if http-header == "Expires")0$(endif)
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AROFi Hotspot</title>
   <style>
@@ -1171,10 +1188,16 @@ export class MikrotikService {
   // Meta-refresh covers webviews that block JS; the script covers the rest.
   buildStatusHtml() {
     return `
+$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
+$(if http-header == "Pragma")no-cache$(endif)
+$(if http-header == "Expires")0$(endif)
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 </head>
 <body>
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:40px 16px;color:#0f172a">

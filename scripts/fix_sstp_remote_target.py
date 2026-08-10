@@ -66,7 +66,7 @@ api_method = r'''  // Keep this command deliberately short. RouterOS 6 WinBox te
       `:if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ` +
       `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ` +
       `:put "AROFi: setup downloaded. Installing..."; ` +
-      `/import file-name="${fileName}"; ` +
+      `/import file-name="arofi-setup.rsc"; ` +
       `:delay 1s; ` +
       `/file remove $arofiFile; ` +
       `:put "AROFi setup installed."`
