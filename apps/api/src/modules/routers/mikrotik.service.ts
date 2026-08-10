@@ -29,6 +29,7 @@ type ProvisioningInput = {
   portalBaseUrl?: string | null
   dnsName?: string | null
   remoteClientName?: string | null
+  wanInterface?: string | null
 }
 
 @Injectable()
