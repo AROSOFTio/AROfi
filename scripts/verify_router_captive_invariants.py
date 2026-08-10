@@ -119,7 +119,6 @@ def main() -> None:
         "returning activation auto reconnect": "var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;",
         "short redirect loop guard": "(Date.now()-_lastAuto)<2500",
         "direct RouterOS POST": "f.method='post';f.action=target;f.style.display='none'",
-        "immediate form submission": "document.body.appendChild(f);f.submit();}",
         "native login destination": "rc.loginUrl||lo||'http://10.55.0.1/login'",
         "no idle/keepalive logout": "idle-timeout=none keepalive-timeout=none session-timeout=0s",
     }
@@ -128,6 +127,20 @@ def main() -> None:
         *[label for label, marker in required_mikrotik.items() if marker not in final],
         *[label for label, marker in required_flow.items() if marker not in flow],
     ]
+
+    # The stable 713e3f7 flow intentionally hides the document synchronously
+    # between appending the native form and submitting it. That is still an
+    # immediate top-level POST: there is no timer, iframe, promise or redirect
+    # between appendChild() and submit(). The old literal check required those
+    # calls to be adjacent and falsely rejected the exact stable router source.
+    immediate_submit = re.search(
+        r"document\.body\.appendChild\(f\);\s*"
+        r"(?:document\.documentElement\.style\.visibility\s*=\s*['\"]hidden['\"];\s*)?"
+        r"f\.submit\(\);\s*}",
+        flow,
+    )
+    if not immediate_submit:
+        missing.append("immediate form submission")
 
     login_values = re.findall(r"login-by=([^\s`\"']+)", final)
     blocking_mac_values = [
