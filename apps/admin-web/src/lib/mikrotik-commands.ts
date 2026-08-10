@@ -19,20 +19,22 @@ function fetchImportCommand(options: {
   missingMessage: string
   installedBlock: string
 }) {
-  const httpUrl = options.httpUrl || options.httpsUrl.replace(/^https:\/\//i, 'http://')
+  // Exactly one synchronous fetch. Do not wrap it in on-error: RouterOS must
+  // print the real DNS/TLS/HTTP/connection error instead of a generic message.
   return (
     `:do { /file remove [find name="${options.fileName}"] } on-error={}; ` +
-    ':local arofiOk 0; :local arofiTry 0; ' +
-    ':while (($arofiOk = 0) && ($arofiTry < 2)) do={ ' +
-      ':set arofiTry ($arofiTry + 1); ' +
-      `:do { /tool fetch url="${httpUrl}" dst-path="${options.fileName}"; :delay 6s; :local f [/file find name="${options.fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
-      ':if ($arofiOk = 0) do={ ' +
-        `:do { /file remove [find name="${options.fileName}"] } on-error={}; ` +
-        `:do { /tool fetch url="${options.httpsUrl}" check-certificate=no dst-path="${options.fileName}"; :delay 6s; :local f [/file find name="${options.fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
-      '}; ' +
-      ':if (($arofiOk = 0) && ($arofiTry < 2)) do={ :put "Retrying after router fetch cleanup..."; :delay 10s } ' +
-    '}; ' +
-    `:local f [/file find name="${options.fileName}"]; :if (($arofiOk = 1) && ([:len $f] > 0)) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "${options.downloadedMessage}"; :delay 2s; /import file-name="${options.fileName}"; :delay 1s; /file remove "${options.fileName}"; ${options.installedBlock} } else={ :put "${options.emptyMessage}"; /file remove $f } } else={ :put "${options.missingMessage}" }`
+    ':put "AROFi: waiting 20 seconds for old download connections to close..."; ' +
+    ':delay 20s; ' +
+    `:put "AROFi: downloading ${options.fileName}..."; ` +
+    `/tool fetch url="${options.httpsUrl}" check-certificate=no dst-path="${options.fileName}"; ` +
+    `:local arofiFile [/file find name="${options.fileName}"]; ` +
+    `:if ([:len $arofiFile] = 0) do={ :error "${options.missingMessage}" }; ` +
+    `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "${options.emptyMessage}" }; ` +
+    `:put "${options.downloadedMessage}"; ` +
+    `/import file-name="${options.fileName}"; ` +
+    ':delay 1s; ' +
+    '/file remove $arofiFile; ' +
+    options.installedBlock
   )
 }
 

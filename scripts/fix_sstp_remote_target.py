@@ -20,6 +20,8 @@ ADMIN_COMMANDS = ROOT / "apps/admin-web/src/lib/mikrotik-commands.ts"
 
 def replace_regex_once(path: Path, pattern: str, replacement: str, label: str) -> None:
     text = path.read_text(encoding="utf-8")
+    if replacement in text:
+        return
     updated, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)
     if count != 1:
         raise RuntimeError(

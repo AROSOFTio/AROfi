@@ -23,6 +23,7 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { buildTenantHotspotDomain } from '../../common/tenant-hotspot-domain'
 import { RealtimeEventsService } from '../events/realtime-events.service'
 import { MailService } from '../mail/mail.service'
 import { SmsService } from '../sms/sms.service'
@@ -1582,24 +1583,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
-    // The tenant Wi-Fi hostname is a local captive-portal name, never the
-    // platform's public domain or a stored marketing/domain label.
-    const rawName = (tenant?.name || 'arofi')
-      .replace(/^arofi(?:\s+wifi)?(?:\s+tenant)?[\s:_-]*/i, '')
-      .trim()
-    const label = this.buildTenantWifiLabel(rawName || 'arofi')
-    return `${label}.wifi`
-  }
-
-  private buildTenantWifiLabel(value: string) {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/\/.*$/, '')
-      .replace(/\.wifi$/, '')
-      .replace(/[^a-z0-9]+/g, '')
-      .slice(0, 40) || 'arofi'
+    return buildTenantHotspotDomain(tenant?.name)
   }
 
   private getRouterNasCandidates(router: {
@@ -2251,6 +2235,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return [
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
+      `:global arofiRemoteAccessStatus "failed"`,
+      `:global arofiRemoteAccessMessage "SSTP client could not be enabled."`,
       `:local sstpOk 0`,
       `:local sstpTarget "${domain}:${sstpPort}"`,
       `:do { /interface sstp-client disable [find name="${remoteClientName}"] } on-error={}`,
@@ -2297,8 +2283,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // traffic, this silently gave devices a path to the internet that
       // bypassed the hotspot/RADIUS gate entirely — customers online with no
       // voucher or payment. Remote access still works fully without it.
-      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
-      `:if ($sstpOk = 1) do={ :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
+      `:if ($sstpOk = 0) do={ :global arofiRemoteAccessStatus "failed"; :global arofiRemoteAccessMessage "SSTP client could not be enabled."; :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
+      `:if ($sstpOk = 1) do={ :global arofiRemoteAccessStatus "ok"; :global arofiRemoteAccessMessage ""; :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
     ].join('\n')
   }
 

@@ -134,57 +134,34 @@ export class MikrotikService {
     }
   }
 
-  // Single command the operator pastes into WinBox Terminal. Built server-side
-  // so it always uses the real public API host (API_PUBLIC_HOST) instead of a
-  // domain hardcoded in the frontend.
-  buildOneRunCommand(registrationKey: string) {
-    const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
-    const fallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
-    // Many self-onboarded routers (static WAN IP, factory reset) have no DNS
-    // servers configured AND have a wrong system clock (clock resets to epoch
-    // after power loss). Bootstrap DNS and sync NTP first so TLS handshakes
-    // succeed — a wrong clock makes every HTTPS fetch fail even with
-    // check-certificate=no on some RouterOS builds.
+  // Keep this command deliberately short. RouterOS 6 WinBox terminals and the
+  // global /tool fetch pool are both unreliable with the old multi-retry command.
+  // One synchronous HTTPS fetch means there is never more than one installer
+  // connection, and leaving it unwrapped preserves the real RouterOS error.
+  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
+    const httpsUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    const requestedWanInterface = this.normalizeWanInterface(wanInterface)
+    const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
+    const fileName = 'arofi-setup.rsc'
     const dnsBootstrap =
-      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
-      // RouterOS validates ALL command parameters at PARSE TIME for the outer block,
-      // so "servers=" (v7-only) kills the command on v6, and "primary-ntp=" (v6-only)
-      // kills it on v7 — both BEFORE on-error can catch anything. [:parse "..."]
-      // defers each command string to runtime compilation, converting the unknown-
-      // parameter error into a catchable runtime error instead of a fatal parse error.
-      ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
-      'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
-      ':delay 2s; '
-    // Retry loop: two rounds with a longer cleanup delay between rounds.
-    // Strategy: try plain HTTP fallback FIRST (no TLS, always works when TCP
-    // port 80 is open) and HTTPS second. On fresh/rebooted routers the clock
-    // may still be off enough to kill the TLS handshake, so HTTP is the most
-    // reliable first attempt. RouterOS also has a small global fetch connection
-    // pool; repeated fast failed fetches can trigger "maximum connection count
-    // reached", especially on v6.49. Keep attempts low and wait before retry.
+      ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; '
+
     return (
+      wanBootstrap +
       dnsBootstrap +
-      ':local arofiOk 0; :local attempts 0; ' +
-      ':while (($arofiOk = 0) && ($attempts < 2)) do={ ' +
-        ':set attempts ($attempts + 1); ' +
-        ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-        // 1st attempt within each round: plain HTTP (no TLS risk)
-        `:do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc"; :delay 6s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
-        // 2nd attempt within each round: HTTPS (if HTTP failed, e.g. port 80 blocked)
-        ':if ($arofiOk = 0) do={ ' +
-          ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 6s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
-        '}; ' +
-        ':if ($arofiOk = 0) do={ ' +
-          ':if ($attempts < 2) do={ :put "Retrying after router fetch cleanup..."; :delay 10s } ' +
-        '} ' +
-      '}; ' +
-      ':if ($arofiOk = 0) do={ ' +
-        ':put "ERROR: AROFi server unreachable after 2 attempts."; ' +
-        ':put "Check: 1) WAN internet works (ping 8.8.8.8). 2) Firewall allows HTTP (port 80) or HTTPS (port 443). 3) Wait 30 seconds if RouterOS says maximum connection count reached. 4) Re-paste once when WAN is stable." ' +
-      '} else={ ' +
-        ':local f [/file find name="arofi-setup.rsc"]; :if ([:len $f]>0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Re-paste when WAN is stable." } ' +
-      '}'
+      `:do { /file remove [find name="${fileName}"] } on-error={}; ` +
+      `:put "AROFi: waiting 20 seconds for old download connections to close..."; ` +
+      `:delay 20s; ` +
+      `:put "AROFi: downloading setup..."; ` +
+      `/tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}"; ` +
+      `:local arofiFile [/file find name="${fileName}"]; ` +
+      `:if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ` +
+      `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ` +
+      `:put "AROFi: setup downloaded. Installing..."; ` +
+      `/import file-name="${fileName}"; ` +
+      `:delay 1s; ` +
+      `/file remove $arofiFile; ` +
+      `:put "AROFi setup installed."`
     )
   }
 
@@ -359,7 +336,8 @@ export class MikrotikService {
       // hotspot, which has no reason to already know about "<tenant>.wifi".
       ...(input.dnsName ? [
         `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
-        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway"`,
+        `:do { /ip dns cache flush } on-error={}`,
       ] : []),
     ]
 
@@ -367,6 +345,8 @@ export class MikrotikService {
       ``,
       `# 4. Walled garden so the portal + payment pages load before login`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
+      `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,
+      `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,
       // Also allow the raw HTTP-fallback IP by address so captive-portal
       // mini-browsers can reach the API even when HTTPS or hostname DNS fails.
       ...this.buildWalledGardenIp(this.resolveHttpCallbackBaseUrl()),
@@ -432,7 +412,7 @@ export class MikrotikService {
       `/ip pool remove [find name=arofi-pool]`,
       `/ip pool add name=arofi-pool ranges=${poolRange}`,
       `/ip dhcp-server network remove [find address="${subnet}"]`,
-      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
+      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,

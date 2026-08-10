@@ -225,7 +225,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('/ip dns static add name="tenantname.wifi" address=10.55.0.1')
   })
 
-  it('buildOneRunCommand: tries plain HTTP fallback FIRST, then HTTPS, and includes NTP sync', () => {
+  it('buildOneRunCommand: uses one delayed HTTPS fetch and preserves RouterOS errors', () => {
     const service = new MikrotikService(
       new ConfigService({
         API_PUBLIC_HOST: 'arofi.net',
@@ -235,20 +235,14 @@ describe('MikrotikService', () => {
 
     const cmd = service.buildOneRunCommand('test-reg-key')
 
-    expect(cmd).toContain('[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]')
-    expect(cmd).toContain('primary-ntp=162.159.200.1')
-
-    const httpIdx = cmd.indexOf('http://95.111.234.34')
-    const httpsIdx = cmd.indexOf('https://arofi.net')
-    expect(httpIdx).toBeGreaterThan(-1)
-    expect(httpsIdx).toBeGreaterThan(-1)
-    expect(httpIdx).toBeLessThan(httpsIdx)
-
-    expect(cmd).toContain('/api/mikrotik/script/test-reg-key')
-    expect(cmd).toContain(':while (($arofiOk = 0) && ($attempts < 2))')
-    expect(cmd).toContain(':set arofiOk 1')
+    expect(cmd).toContain('/ip dns set servers=8.8.8.8,1.1.1.1')
+    expect(cmd).toContain(':delay 20s')
+    expect(cmd).toContain('https://arofi.net/api/mikrotik/script/test-reg-key')
+    expect(cmd).toContain('check-certificate=no')
     expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
-    expect(cmd).toContain('port 80')
-    expect(cmd).toContain('maximum connection count reached')
+    expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)
+    expect(cmd).not.toContain('http://95.111.234.34')
+    expect(cmd).not.toContain(':while')
+    expect(cmd).not.toContain('Retrying after router fetch cleanup')
   })
 })
