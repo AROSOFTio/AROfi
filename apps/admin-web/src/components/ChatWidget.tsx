@@ -153,27 +153,19 @@ export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
           </div>
         </div>
       ) : (
-        <div
+        <button
+          type="button"
           className="chat-bubble ai-chat-bubble"
           onClick={() => setIsOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              setIsOpen(true)
-            }
-          }}
-          role="button"
-          tabIndex={0}
           aria-label="Open AROFi AI Support"
         >
-          <div className="ai-bubble-content">
-            <Sparkles size={22} className="chat-bubble-ai-icon" aria-hidden="true" />
-            <span className="ai-bubble-label">AI Support</span>
-          </div>
-          <MessageSquareCode size={15} className="chat-bubble-sparkle-badge" aria-hidden="true" />
-        </div>
+          <Sparkles size={18} className="chat-bubble-ai-icon" aria-hidden="true" />
+          <span className="ai-bubble-label">AI Support</span>
+          <MessageSquareCode size={16} className="chat-bubble-badge-icon" aria-hidden="true" />
+        </button>
       )}
     </div>
   )
 }
+
 

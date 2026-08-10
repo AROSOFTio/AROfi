@@ -8083,66 +8083,73 @@ html[data-theme="dark"] .sic-metric {
   }
 }
 
-/* AI Support floating button */
-.chat-bubble {
-  position: relative;
-  display: flex;
+/* AI Support Floating Action Widget */
+.arofi-chat-widget {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+}
+
+.chat-bubble.ai-chat-bubble {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px 10px 14px;
+  gap: 10px;
+  padding: 12px 22px 12px 18px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: #fff;
+  background: #1d4ed8;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.5), 0 4px 10px rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  animation: aiBubblePulse 3s ease-in-out infinite;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: aiWidgetPulse 3s ease-in-out infinite;
 }
-.chat-bubble:hover {
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+
+.chat-bubble.ai-chat-bubble:hover {
+  background: #2563eb;
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 14px 30px -4px rgba(37, 99, 235, 0.6), 0 6px 14px rgba(0, 0, 0, 0.15);
 }
-.ai-bubble-content {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
+
 .chat-bubble-ai-icon {
-  color: #fbbf24;
+  color: #f59e0b;
+  flex-shrink: 0;
   animation: sparkRotate 4s linear infinite;
 }
+
 .ai-bubble-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   color: #ffffff;
+  white-space: nowrap;
 }
-.chat-bubble-sparkle-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #10b981;
-  color: #ffffff;
-  border-radius: 999px;
-  padding: 3px;
-  width: 20px;
-  height: 20px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+
+.chat-bubble-badge-icon {
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+  margin-left: 2px;
 }
+
 @keyframes sparkRotate {
   0% { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(180deg) scale(1.15); }
+  50% { transform: rotate(180deg) scale(1.18); }
   100% { transform: rotate(360deg) scale(1); }
 }
-@keyframes aiBubblePulse {
-  0%, 100% { box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35); }
-  50% { box-shadow: 0 6px 22px rgba(124, 58, 237, 0.55); }
+
+@keyframes aiWidgetPulse {
+  0%, 100% { box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.5), 0 4px 10px rgba(0, 0, 0, 0.1); }
+  50% { box-shadow: 0 14px 32px -2px rgba(29, 78, 216, 0.7), 0 6px 14px rgba(0, 0, 0, 0.2); }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .chat-bubble,
+  .chat-bubble.ai-chat-bubble,
   .chat-bubble-ai-icon {
     animation: none !important;
   }
 }
+
 
 
