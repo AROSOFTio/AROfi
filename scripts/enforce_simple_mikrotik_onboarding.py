@@ -28,7 +28,10 @@ def main() -> None:
     )
 
     replacement = r'''  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
-    const httpsBase = this.resolveApiBaseUrl().replace(/^http:\/\//i, 'https://')
+    const resolvedBase = this.resolveApiBaseUrl()
+    const httpsBase = resolvedBase.startsWith('http://')
+      ? 'https://' + resolvedBase.slice(7)
+      : resolvedBase
     const url = `${httpsBase}/api/mikrotik/script/${this.escape(registrationKey)}`
     const requestedWanInterface = this.normalizeWanInterface(wanInterface)
     const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
@@ -54,7 +57,7 @@ def main() -> None:
     )
   }
 
-  // VPS-side tunnel gateway addresses'''.replace(r"\\/", r"\/")
+  // VPS-side tunnel gateway addresses'''
 
     updated, count = pattern.subn(replacement, text, count=1)
     if count != 1:
@@ -94,7 +97,8 @@ def main() -> None:
 
     required = (
         'wanBootstrap +',
-        "replace(/^http:\/\//i, 'https://')",
+        "resolvedBase.startsWith('http://')",
+        "'https://' + resolvedBase.slice(7)",
         '/ip dns set servers=8.8.8.8,1.1.1.1',
         '[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]',
         '[:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]',
