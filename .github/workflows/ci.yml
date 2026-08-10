@@ -34,6 +34,9 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      # IMPORTANT: Keep this in the same order as Dockerfile.components. This is
+      # the exact production source state Coolify compiles, so branch CI catches
+      # patch interactions before they can reach main or a production build.
       - name: Apply guarded production source patches
         run: |
           python3 scripts/apply_iotec_source_patches.py
@@ -54,7 +57,13 @@ jobs:
           python3 scripts/apply_router_wan_port_support.py
           python3 scripts/sanitize_mikrotik_command_output.py
           python3 scripts/apply_mikrotik_background_install.py
+          python3 scripts/enforce_no_idle_bundle_logout.py
+          python3 scripts/fix_router_presence_and_access_lifecycle.py
+          python3 scripts/stabilize_router_status_hysteresis.py
+          python3 scripts/fix_iotec_live_gateway_diagnostics.py
+          python3 scripts/fix_iotec_oauth_compatibility.py
           python3 scripts/finalize_gateway_compile.py
+          python3 scripts/verify_router_captive_invariants.py
           python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
       - name: Generate Prisma Client
