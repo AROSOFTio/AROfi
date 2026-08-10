@@ -25,7 +25,11 @@ RUN --mount=type=cache,target=/root/.npm \
       npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
         if [ "$attempt" -ge 3 ]; then exit 1; fi; \
         attempt=$((attempt + 1)); \
-        rm -rf node_modules; \
+        rm -rf node_modules \
+          apps/api/node_modules \
+          apps/admin-web/node_modules \
+          apps/portal-web/node_modules \
+          packages/config-typescript/node_modules; \
         sleep 10; \
     done
 
