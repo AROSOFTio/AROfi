@@ -42,11 +42,10 @@ project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project
 old_container_ids=$(docker ps -q \
   --filter "label=com.docker.compose.project=$project" \
   --filter "label=com.docker.compose.service=$component")
-set -- $old_container_ids
-if [ "$#" -ne 1 ]; then
-  echo "Expected exactly one live $component container in Compose project $project." >&2
-  exit 1
+if [ -z "$old_container_ids" ]; then
+  old_container_ids=$project_container
 fi
+set -- $old_container_ids
 old_container=$1
 
 compose_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$old_container")
