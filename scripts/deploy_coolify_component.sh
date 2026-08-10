@@ -42,17 +42,23 @@ project=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project
 old_container_ids=$(docker ps -q \
   --filter "label=com.docker.compose.project=$project" \
   --filter "label=com.docker.compose.service=$component")
-set -- $old_container_ids
-if [ "$#" -ne 1 ]; then
-  echo "Expected exactly one live $component container in Compose project $project." >&2
-  exit 1
+if [ -z "$old_container_ids" ]; then
+  old_container_ids=$project_container
 fi
+set -- $old_container_ids
 old_container=$1
 
 compose_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$old_container")
 environment_file=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' "$old_container")
 previous_image=$(docker inspect -f '{{ .Config.Image }}' "$old_container")
 live_networks=$(docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$old_container")
+
+case "$component" in
+  api) network_aliases="api arofi-api-v2" ;;
+  admin) network_aliases="admin arofi-admin-v2" ;;
+  portal) network_aliases="portal arofi-portal-v2" ;;
+  nginx) network_aliases="nginx arofi-nginx-v2" ;;
+esac
 
 if [ ! -f "$compose_file" ]; then
   compose_file="$PWD/docker-compose.yaml"
@@ -112,8 +118,12 @@ attach_live_networks() {
     if docker inspect -f '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$replacement_container" | grep -Fxq "$network"; then
       continue
     fi
+    alias_args=
+    for alias in $network_aliases; do
+      alias_args="$alias_args --alias $alias"
+    done
     echo "[fast-deploy] Attaching $component to existing network $network."
-    docker network connect --alias "$component" "$network" "$replacement_container"
+    docker network connect $alias_args "$network" "$replacement_container"
   done
 }
 

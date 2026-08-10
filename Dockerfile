@@ -16,6 +16,8 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY . .
 RUN chmod +x scripts/run_with_heartbeat.sh
 
+# The persistence normalizer must run before the router lifecycle validator.
+# The validator requires session-timeout=0s, which the normalizer installs.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
@@ -34,9 +36,9 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
     && python3 scripts/apply_mikrotik_background_install.py \
+    && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_router_presence_and_access_lifecycle.py \
     && python3 scripts/stabilize_router_status_hysteresis.py \
-    && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
     && python3 scripts/finalize_gateway_compile.py \
@@ -93,14 +95,25 @@ RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
 COPY scripts/run_with_heartbeat.sh /usr/local/bin/run-with-heartbeat
 RUN chmod +x /usr/local/bin/run-with-heartbeat
+# BuildKit previously started this install beside the builder dependency
+# install. Make it wait for the builder to prevent CPU/swap exhaustion on the
+# production host during a full deployment.
+COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY apps/api/package.json ./apps/api/package.json
 RUN --mount=type=cache,target=/root/.npm \
-    cd apps/api && \
-    /usr/local/bin/run-with-heartbeat "API runtime dependency install" \
-      env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 \
-      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    --mount=type=cache,target=/root/.cache \
+    cd apps/api || exit 1; \
+    attempt=1; \
+    until /usr/local/bin/run-with-heartbeat "API runtime dependency install (attempt $attempt)" \
+      env NODE_OPTIONS='--max-old-space-size=256' npm_config_jobs=1 npm_config_fetch_retries=5 \
+      npm_config_fetch_retry_mintimeout=5000 npm_config_fetch_retry_maxtimeout=60000 \
+      npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --prefer-offline; do \
+        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+        attempt=$((attempt + 1)); \
+        rm -rf node_modules; \
+        sleep 10; \
+    done
 
-COPY --from=builder /runtime/builder-complete /tmp/builder-complete
 COPY --from=builder --chown=arofi:nodejs /usr/src/app/apps/api/dist ./apps/api/dist
 COPY --from=builder /usr/src/app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /usr/src/app/node_modules/.prisma ./apps/api/node_modules/.prisma
