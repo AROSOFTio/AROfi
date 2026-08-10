@@ -1,8 +1,38 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const require = createRequire(import.meta.url)
+
+function ensureSingleRxjsCopy() {
+  const apiNodeModules = path.join(root, 'apps/api/node_modules')
+  const nestedRxjs = path.join(apiNodeModules, 'rxjs')
+  const rootRxjs = path.join(root, 'node_modules/rxjs')
+
+  if (!fs.existsSync(rootRxjs)) {
+    throw new Error('Root RxJS installation is missing; cannot build the API safely.')
+  }
+
+  // npm workspaces can occasionally leave a second physical RxJS copy under
+  // apps/api/node_modules after a retried install. Nest types then come from
+  // the root copy while application imports come from the nested copy. RxJS
+  // classes contain protected members, so TypeScript treats those two copies
+  // as incompatible even when their versions are otherwise compatible.
+  if (fs.existsSync(nestedRxjs)) {
+    fs.rmSync(nestedRxjs, { recursive: true, force: true })
+    console.log('Removed duplicate apps/api RxJS copy before API compilation')
+  }
+
+  const apiResolvedRxjs = require.resolve('rxjs', { paths: [path.join(root, 'apps/api')] })
+  const rootResolvedRxjs = require.resolve('rxjs', { paths: [root] })
+  if (apiResolvedRxjs !== rootResolvedRxjs) {
+    throw new Error(
+      `RxJS dedupe failed: API resolves ${apiResolvedRxjs}, root resolves ${rootResolvedRxjs}`,
+    )
+  }
+}
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8')
@@ -173,5 +203,6 @@ function patchPaymentsService() {
   write(relativePath, source)
 }
 
+ensureSingleRxjsCopy()
 patchPaymentsService()
 console.log('Redis portal catalog optimization applied')
