@@ -5,7 +5,8 @@ This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
 gateway patches, validates the final ioTec OAuth/diagnostics output, restores
 the business-specific voucher QR route, installs the active-bundle disconnect
-guard, then verifies the MikroTik captive/session policy.
+guard, locks the operator-facing MikroTik onboarding command, then verifies the
+MikroTik captive/session and no-automatic-MAC-auth policies.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -24,6 +25,7 @@ IOTEC = ROOT / "apps/api/src/modules/payments/iotec-pay.service.ts"
 SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
 BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
 ACTIVE_BUNDLE_GUARD = ROOT / "scripts/guard_active_bundle_disconnects.py"
+SIMPLE_ONBOARDING_GUARD = ROOT / "scripts/enforce_simple_mikrotik_onboarding.py"
 CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
 MAC_AUTH_GUARD = ROOT / "scripts/forbid_mikrotik_auto_mac_auth.py"
 
@@ -100,6 +102,12 @@ def install_active_bundle_guard() -> None:
     runpy.run_path(str(ACTIVE_BUNDLE_GUARD), run_name="__main__")
 
 
+def lock_simple_mikrotik_onboarding() -> None:
+    if not SIMPLE_ONBOARDING_GUARD.exists():
+        raise RuntimeError("Single-fetch MikroTik onboarding guard is missing")
+    runpy.run_path(str(SIMPLE_ONBOARDING_GUARD), run_name="__main__")
+
+
 def verify_captive_flow_last() -> None:
     if not CAPTIVE_VERIFY.exists():
         raise RuntimeError("Final MikroTik captive-flow verifier is missing")
@@ -121,11 +129,13 @@ def main() -> None:
     validate_iotec_final_state()
     enforce_business_qr()
     install_active_bundle_guard()
+    lock_simple_mikrotik_onboarding()
     verify_captive_flow_last()
     enforce_no_automatic_mac_auth_last()
     print(
         "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
-        "disconnect guard, captive-flow state, and no-automatic-MAC-auth policy verified."
+        "disconnect guard, RouterOS 6/7 single-HTTPS onboarding, captive-flow state, "
+        "and no-automatic-MAC-auth policy verified."
     )
 
 
