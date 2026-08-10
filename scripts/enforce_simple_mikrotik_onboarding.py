@@ -54,7 +54,7 @@ def main() -> None:
     )
   }
 
-  // VPS-side tunnel gateway addresses'''
+  // VPS-side tunnel gateway addresses'''.replace(r"\\/", r"\/")
 
     updated, count = pattern.subn(replacement, text, count=1)
     if count != 1:
@@ -94,7 +94,7 @@ def main() -> None:
 
     required = (
         'wanBootstrap +',
-        "replace(/^http:\\/\\//i, 'https://')",
+        "replace(/^http:\/\//i, 'https://')",
         '/ip dns set servers=8.8.8.8,1.1.1.1',
         '[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]',
         '[:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]',
