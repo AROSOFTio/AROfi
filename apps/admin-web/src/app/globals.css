@@ -8083,66 +8083,66 @@ html[data-theme="dark"] .sic-metric {
   }
 }
 
-/* Human-support floating button: replaces the old Aria/logo bubble. */
+/* AI Support floating button */
 .chat-bubble {
-  overflow: visible;
-  background: linear-gradient(135deg, var(--brand), #0ea5e9);
-  animation: supportBubbleBreathe 2.4s ease-in-out infinite;
-}
-.chat-bubble::after {
-  content: "Support";
-  position: absolute;
-  right: 62px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 6px 10px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px 10px 14px;
   border-radius: 999px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-1);
-  font-size: 11px;
-  font-weight: 800;
-  box-shadow: var(--shadow-sm);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .16s ease, transform .16s ease;
-}
-.chat-bubble:hover::after,
-.chat-bubble:focus-visible::after {
-  opacity: 1;
-  transform: translateY(-50%) translateX(-2px);
-}
-.chat-bubble-support-icon {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
   color: #fff;
-  animation: supportIconShake 1.9s ease-in-out infinite;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  animation: aiBubblePulse 3s ease-in-out infinite;
 }
-.chat-bubble-message-icon {
+.chat-bubble:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+}
+.ai-bubble-content {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.chat-bubble-ai-icon {
+  color: #fbbf24;
+  animation: sparkRotate 4s linear infinite;
+}
+.ai-bubble-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+}
+.chat-bubble-sparkle-badge {
   position: absolute;
-  right: -3px;
-  top: -3px;
-  padding: 3px;
-  width: 23px;
-  height: 23px;
+  top: -4px;
+  right: -4px;
+  background: #10b981;
+  color: #ffffff;
   border-radius: 999px;
-  color: var(--brand);
-  background: #fff;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, .22);
+  padding: 3px;
+  width: 20px;
+  height: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
-@keyframes supportBubbleBreathe {
-  0%, 100% { box-shadow: 0 4px 12px var(--arofi-theme-accent-border), 0 0 0 0 rgba(37, 99, 235, .28); }
-  50% { box-shadow: 0 8px 24px var(--arofi-theme-accent-border), 0 0 0 9px rgba(37, 99, 235, 0); }
+@keyframes sparkRotate {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.15); }
+  100% { transform: rotate(360deg) scale(1); }
 }
-@keyframes supportIconShake {
-  0%, 72%, 100% { transform: rotate(0deg); }
-  76% { transform: rotate(-10deg); }
-  80% { transform: rotate(9deg); }
-  84% { transform: rotate(-7deg); }
-  88% { transform: rotate(5deg); }
+@keyframes aiBubblePulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35); }
+  50% { box-shadow: 0 6px 22px rgba(124, 58, 237, 0.55); }
 }
 @media (prefers-reduced-motion: reduce) {
   .chat-bubble,
-  .chat-bubble-support-icon {
+  .chat-bubble-ai-icon {
     animation: none !important;
   }
 }
+
 
