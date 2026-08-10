@@ -143,7 +143,7 @@ def main() -> None:
     expect(cmd).not.toContain('waiting 20 seconds')
     expect(cmd).not.toContain(':delay 20s')
   })
-'''
+'''.replace(r'/\\/tool fetch/g', r'/\/tool fetch/g')
     spec, spec_count = test_pattern.subn(test_replacement, spec, count=1)
     if spec_count != 1:
         raise RuntimeError(
