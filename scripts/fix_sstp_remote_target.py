@@ -42,16 +42,14 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-api_method = r'''  // HTTP-first fetch: RouterOS 6.49 HTTPS connections linger in the TLS session
-  // pool for up to 60 s after close, causing "maximum connection count reached"
-  // even after a 20 s delay. Plain HTTP releases immediately. We try HTTP first
-  // and fall back to HTTPS only if the file is missing or empty.
+api_method = r'''  // Keep this command deliberately short. RouterOS 6 WinBox terminals and the
+  // global /tool fetch pool are both unreliable with the old multi-retry command.
+  // One synchronous HTTPS fetch means there is never more than one installer
+  // connection, and leaving it unwrapped preserves the real RouterOS error.
+  // 60-second cooldown gives RouterOS 6.49 enough time to fully release TLS
+  // session slots from any prior fetch attempt before the new one starts.
   buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
-    const apiBase = this.resolveApiBaseUrl()
-    const httpsUrl = `${apiBase}/api/mikrotik/script/${this.escape(registrationKey)}`
-    // HTTP variant: same path, scheme forced to http so ROS 6 fetch pool is not
-    // consumed by a TLS handshake.
-    const httpUrl = httpsUrl.replace(/^https:\/\//, 'http://')
+    const httpsUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
     const requestedWanInterface = this.normalizeWanInterface(wanInterface)
     const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
     const fileName = 'arofi-setup.rsc'
@@ -62,12 +60,10 @@ api_method = r'''  // HTTP-first fetch: RouterOS 6.49 HTTPS connections linger i
       wanBootstrap +
       dnsBootstrap +
       `:do { /file remove [find name="${fileName}"] } on-error={}; ` +
-      `:put "AROFi: downloading setup (http)..."; ` +
-      `:do { /tool fetch url="${httpUrl}" mode=http dst-path="${fileName}" } on-error={ ` +
-        `:put "AROFi: http failed, retrying https in 30s..."; ` +
-        `:delay 30s; ` +
-        `/tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}" ` +
-      `}; ` +
+      `:put "AROFi: waiting 60 seconds for router fetch pool to clear..."; ` +
+      `:delay 60s; ` +
+      `:put "AROFi: downloading setup..."; ` +
+      `/tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}"; ` +
       `:local arofiFile [/file find name="${fileName}"]; ` +
       `:if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ` +
       `:if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ` +
