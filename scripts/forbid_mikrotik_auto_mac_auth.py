@@ -75,11 +75,22 @@ def main() -> None:
         "idle-timeout=none keepalive-timeout=none session-timeout=0s",
         "var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;",
         "f.method='post';f.action=target;f.style.display='none'",
-        "document.body.appendChild(f);f.submit();}",
     )
     for marker in required_flow_markers:
         if marker not in flow:
             fail(f"runtime captive-flow protection missing marker: {marker}")
+
+    # The stable 713e3f7 captive flow hides the document synchronously between
+    # appendChild() and submit(). That is still an immediate native POST and must
+    # not be rejected merely because the two calls are not textually adjacent.
+    immediate_submit = re.search(
+        r"document\.body\.appendChild\(f\);\s*"
+        r"(?:document\.documentElement\.style\.visibility\s*=\s*['\"]hidden['\"];\s*)?"
+        r"f\.submit\(\);\s*}",
+        flow,
+    )
+    if not immediate_submit:
+        fail("runtime captive-flow protection missing immediate native form submission")
 
     # Do not reject the literal mac-auth-mode text in FLOW: it intentionally
     # appears inside the removal regex. Final generated RouterOS commands above
