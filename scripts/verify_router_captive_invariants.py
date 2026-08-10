@@ -24,6 +24,25 @@ FINAL_PERSISTENCE = (
     "idle-timeout=none keepalive-timeout=none session-timeout=0s"
 )
 
+# These values are embedded in TypeScript template literals. Keep the source
+# delimiters out of the match so normalization can never swallow a closing
+# backtick/comma and turn the generated RouterOS command into TypeScript code.
+ROUTEROS_VALUE = r"[^\s`,}]+"
+
+
+def assert_persistence_command_integrity(source: str) -> None:
+    lines = [line for line in source.splitlines() if FINAL_PERSISTENCE in line]
+    if len(lines) < 2:
+        raise RuntimeError(
+            "MikroTik build rejected: expected both persistence commands after normalization."
+        )
+
+    damaged = [line for line in lines if "`" not in line.split(FINAL_PERSISTENCE, 1)[1]]
+    if damaged:
+        raise RuntimeError(
+            "MikroTik build rejected: persistence normalization damaged a TypeScript template-literal delimiter."
+        )
+
 
 def main() -> None:
     text = MIKROTIK.read_text(encoding="utf-8")
@@ -45,12 +64,13 @@ def main() -> None:
         text,
     )
 
-    # Restore the exact persistence values used by the proven flow.
+    # Restore the exact persistence values used by the proven flow. The value
+    # matcher deliberately stops before TypeScript's closing backtick/comma.
     persistence_pattern = re.compile(
-        r"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout=\S+"
-        r"(?:\s+idle-timeout=\S+)?"
-        r"(?:\s+keepalive-timeout=\S+)?"
-        r"(?:\s+session-timeout=\S+)?"
+        rf"shared-users=1\s+add-mac-cookie=yes\s+mac-cookie-timeout={ROUTEROS_VALUE}"
+        rf"(?:\s+idle-timeout={ROUTEROS_VALUE})?"
+        rf"(?:\s+keepalive-timeout={ROUTEROS_VALUE})?"
+        rf"(?:\s+session-timeout={ROUTEROS_VALUE})?"
     )
     text, persistence_count = persistence_pattern.subn(FINAL_PERSISTENCE, text)
     if persistence_count < 2:
@@ -90,6 +110,7 @@ def main() -> None:
     MIKROTIK.write_text(text, encoding="utf-8")
 
     final = MIKROTIK.read_text(encoding="utf-8")
+    assert_persistence_command_integrity(final)
     flow = CAPTIVE_FLOW.read_text(encoding="utf-8")
 
     required_mikrotik = {
