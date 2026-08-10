@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
 const URL_LINE = /^https?:\/\/[^\s]+$/i
+const BOOK_SUBTITLE = 'Step-by-step setup and operations book'
 
 export default function DocsEnhancer() {
   const pathname = usePathname()
@@ -13,7 +14,7 @@ export default function DocsEnhancer() {
 
     function enhance() {
       const subtitle = document.querySelector<HTMLElement>('.book-brand small')
-      if (subtitle) subtitle.textContent = 'Step-by-step setup and operations book'
+      if (subtitle && subtitle.textContent !== BOOK_SUBTITLE) subtitle.textContent = BOOK_SUBTITLE
 
       document.querySelectorAll<HTMLElement>('.book-code pre').forEach((pre) => {
         if (pre.dataset.linkified === 'true') return
