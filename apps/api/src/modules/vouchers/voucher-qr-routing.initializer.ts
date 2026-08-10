@@ -1,5 +1,4 @@
 import { Injectable, OnModuleInit } from '@nestjs/common'
-import { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'
 import { VouchersService } from './vouchers.service'
 
 type VoucherQrUrlBuilder = {
@@ -7,13 +6,13 @@ type VoucherQrUrlBuilder = {
 }
 
 /**
- * Keeps printed voucher QR codes on the exact MikroTik-local business hostname:
+ * Keeps printed voucher QR codes on the MikroTik-local login URL. Customers
+ * scan after joining the hotspot Wi-Fi, so the QR must not depend on public
+ * internet access before the captive portal has authenticated them.
  *
- *   http://<business>.wifi/login?voucher=<CODE>
- *
- * The hostname is the same value installed as the router HotSpot dns-name and
- * static DNS record. It intentionally works after the customer joins that
- * venue's Wi-Fi and never falls back to a hard-coded gateway IP.
+ * VouchersService owns the PDF renderer and its URL helper is currently private.
+ * This initializer applies the routing policy to the service instance without
+ * duplicating the large PDF-rendering implementation.
  */
 @Injectable()
 export class VoucherQrRoutingInitializer implements OnModuleInit {
@@ -23,7 +22,17 @@ export class VoucherQrRoutingInitializer implements OnModuleInit {
     const service = this.vouchersService as unknown as VoucherQrUrlBuilder
 
     service.buildVoucherPortalUrl = (voucherCode: string, hotspotDomain?: string) => {
-      return buildVoucherHotspotUrl(voucherCode, hotspotDomain)
+      void hotspotDomain
+      const configuredBase = (
+        process.env.VOUCHER_QR_LOCAL_LOGIN_URL ??
+        'http://10.55.0.1/login'
+      ).trim()
+      const withProtocol = /^https?:\/\//i.test(configuredBase)
+        ? configuredBase
+        : `http://${configuredBase}`
+      const normalized = withProtocol.replace(/\/$/, '')
+      const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
+      return `${loginBase}?voucher=${encodeURIComponent(voucherCode.trim().toUpperCase())}`
     }
   }
 }
