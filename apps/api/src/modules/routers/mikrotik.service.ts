@@ -167,14 +167,14 @@ export class MikrotikService {
         ':set attempts ($attempts + 1); ' +
         ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
         // 1st attempt within each round: plain HTTP (no TLS risk)
-        `:do { /tool fetch url="${fallbackUrl}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
+        `:do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
         // 2nd attempt within each round: HTTPS (if HTTP failed, e.g. port 80 blocked)
         ':if ($arofiOk = 0) do={ ' +
           ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
         '}; ' +
         ':if ($arofiOk = 1) do={ :set attempts 3 } else={ ' +
-          ':if ($attempts < 3) do={ :put "Retrying..."; :delay 5s } ' +
+          ':if ($attempts < 3) do={ :put "Retrying AROFi setup download..."; :delay 5s } ' +
         '} ' +
       '}; ' +
       ':if ($arofiOk = 0) do={ ' +
@@ -1306,10 +1306,13 @@ export class MikrotikService {
     }
 
     const host =
+      this.configService.get<string>('MIKROTIK_CALLBACK_PUBLIC_IP') ||
+      this.configService.get<string>('VPS_PUBLIC_IP') ||
+      this.configService.get<string>('SERVER_PUBLIC_IP') ||
       this.configService.get<string>('API_PUBLIC_HOST') ||
       this.configService.get<string>('PORTAL_PUBLIC_HOST') ||
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
-      'arofi.net'
+      '95.111.234.34'
 
     // Strip scheme and any port suffix — use plain HTTP port 80 which is
     // publicly accessible via the Coolify/Traefik reverse proxy layer.

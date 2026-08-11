@@ -2,12 +2,12 @@
 '''Enforce the production MikroTik onboarding command contract.
 
 The final operator-facing command must stay compatible with RouterOS 6 and 7,
-use one HTTPS download, import in the foreground, preserve selected-WAN setup,
-and never reintroduce retry loops or artificial 20-second cooldowns.
+try public HTTP/IP before hostname HTTPS, import in the foreground, preserve
+selected-WAN setup, and never reintroduce artificial 20-second cooldowns.
 
 The same final-stage guard also protects the Admin UI from stale API containers:
 if an API response still contains a legacy retry/cooldown bootstrap, Admin must
-ignore that value and generate the locked local single-fetch fallback instead.
+ignore that value and generate the locked local IP-first fallback instead.
 '''
 
 from __future__ import annotations
@@ -22,8 +22,6 @@ ADMIN_COMMANDS = ROOT / "apps/admin-web/src/lib/mikrotik-commands.ts"
 ADMIN_MANAGER = ROOT / "apps/admin-web/src/components/RoutersManager.tsx"
 
 FORBIDDEN_BOOTSTRAP_MARKERS = (
-    ":while",
-    "Retrying...",
     "waiting 20 seconds",
     ":delay 20s",
 )
@@ -41,12 +39,8 @@ def patch_api_onboarding() -> None:
     )
 
     replacement = r'''  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
-    const resolvedBase = this.resolveApiBaseUrl()
-    const httpsBase = resolvedBase.startsWith('http://')
-      ? 'https://' + resolvedBase.slice(7)
-      : resolvedBase
-    const url = `${httpsBase}/api/mikrotik/script/${this.escape(registrationKey)}`
-    const wanBootstrap = ''
+    const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    const fallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
     const bootstrap =
       ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
       ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
@@ -54,18 +48,19 @@ def patch_api_onboarding() -> None:
       ':delay 2s; '
 
     return (
-      wanBootstrap +
       bootstrap +
-      ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-      `/tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; ` +
-      ':local arofiFile [/file find name="arofi-setup.rsc"]; ' +
-      ':if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ' +
-      ':if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ' +
-      ':put "AROFi setup downloaded. Installing..."; ' +
-      '/import file-name="arofi-setup.rsc"; ' +
-      ':delay 1s; ' +
-      '/file remove $arofiFile; ' +
-      ':put "AROFi setup installed."'
+      ':local arofiOk 0; :local attempts 0; ' +
+      ':while ($attempts < 3) do={ ' +
+        ':set attempts ($attempts + 1); ' +
+        ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
+        `:do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
+        ':if ($arofiOk = 0) do={ ' +
+          ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
+        '}; ' +
+        ':if ($arofiOk = 1) do={ :set attempts 3 } else={ :if ($attempts < 3) do={ :put "Retrying AROFi setup download..."; :delay 5s } } ' +
+      '}; ' +
+      ':local f [/file find name="arofi-setup.rsc"]; :if ([:len $f]>0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Check WAN, then re-paste." }'
     )
   }
 
@@ -85,19 +80,16 @@ def patch_api_onboarding() -> None:
         flags=re.S,
     )
     if not method_match:
-        raise RuntimeError("Single-fetch onboarding method is missing after normalization")
+        raise RuntimeError("IP-first onboarding method is missing after normalization")
 
     method = method_match.group(1)
-    if method.count("/tool fetch") != 1:
+    if method.count("/tool fetch") != 2:
         raise RuntimeError(
-            f"Onboarding command must contain exactly one /tool fetch, found {method.count('/tool fetch')}."
+            f"Onboarding command must contain exactly two /tool fetch attempts, found {method.count('/tool fetch')}."
         )
 
     forbidden = (
         *FORBIDDEN_BOOTSTRAP_MARKERS,
-        "fallbackUrl",
-        "arofiOk",
-        "attempts",
         "http://arofi.net",
     )
     for marker in forbidden:
@@ -105,20 +97,23 @@ def patch_api_onboarding() -> None:
             raise RuntimeError(f"Forbidden onboarding retry/cooldown/insecure marker remains: {marker}")
 
     required = (
-        "wanBootstrap +",
-        "resolvedBase.startsWith('http://')",
-        "'https://' + resolvedBase.slice(7)",
+        "fallbackUrl",
+        "arofiOk",
+        "attempts",
+        ':while ($attempts < 3)',
+        'mode=http',
+        'mode=https',
         "/ip dns set servers=8.8.8.8,1.1.1.1",
         '[:parse \"/system ntp client set enabled=yes servers=pool.ntp.org\"]',
         '[:parse \"/system ntp client set enabled=yes primary-ntp=162.159.200.1\"]',
         "/tool fetch url=",
         "check-certificate=no",
         '/import file-name="arofi-setup.rsc"',
-        "/file remove $arofiFile",
+        '/file remove "arofi-setup.rsc"',
     )
     for marker in required:
         if marker not in method:
-            raise RuntimeError(f"Single-fetch RouterOS 6/7 onboarding marker missing: {marker}")
+            raise RuntimeError(f"IP-first RouterOS 6/7 onboarding marker missing: {marker}")
 
     MIKROTIK.write_text(updated, encoding="utf-8")
 
@@ -130,7 +125,9 @@ def patch_admin_fallback() -> None:
         flags=re.S,
     )
     replacement = r'''export function buildSetupFallbackCommand(registrationKey: string) {
-  return `${DNS_BOOTSTRAP}:do { /file remove [find name="arofi-setup.rsc"] } on-error={}; /tool fetch url="https://arofi.net/api/mikrotik/script/${registrationKey}" check-certificate=no dst-path="arofi-setup.rsc"; /import file-name="arofi-setup.rsc"; /file remove "arofi-setup.rsc"`
+  const fallbackUrl = `http://95.111.234.34/api/mikrotik/script/${registrationKey}`
+  const httpsUrl = `https://arofi.net/api/mikrotik/script/${registrationKey}`
+  return `${DNS_BOOTSTRAP}:local arofiOk 0; :local attempts 0; :while ($attempts < 3) do={ :set attempts ($attempts + 1); :do { /file remove [find name="arofi-setup.rsc"] } on-error={}; :do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; :if ($arofiOk = 0) do={ :do { /file remove [find name="arofi-setup.rsc"] } on-error={}; :do { /tool fetch url="${httpsUrl}" check-certificate=no dst-path="arofi-setup.rsc" mode=https; :delay 4s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} }; :if ($arofiOk = 1) do={ :set attempts 3 } else={ :if ($attempts < 3) do={ :put "Retrying AROFi setup download..."; :delay 5s } } }; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "AROFi setup downloaded. Installing..."; :delay 2s; /import file-name="arofi-setup.rsc"; :delay 1s; /file remove "arofi-setup.rsc"; :put "AROFi setup installed." } else={ :put "ERROR: AROFi setup file is empty. Re-paste when WAN is stable."; /file remove $f } } else={ :put "ERROR: AROFi setup file was not downloaded. Check WAN, then re-paste." }`
 }'''
 
     updated, count = pattern.subn(replacement, text, count=1)
@@ -144,16 +141,20 @@ def patch_admin_fallback() -> None:
         raise RuntimeError("Admin fallback command is missing after normalization")
     fallback = match.group(0)
 
-    if fallback.count("/tool fetch") != 1:
+    if fallback.count("/tool fetch") != 2:
         raise RuntimeError(
-            f"Admin fallback must contain exactly one /tool fetch, found {fallback.count('/tool fetch')}."
+            f"Admin fallback must contain exactly two /tool fetch attempts, found {fallback.count('/tool fetch')}."
         )
     for marker in FORBIDDEN_BOOTSTRAP_MARKERS:
         if marker in fallback:
             raise RuntimeError(f"Forbidden Admin fallback marker remains: {marker}")
     for marker in (
+        "http://95.111.234.34/api/mikrotik/script/${registrationKey}",
         "https://arofi.net/api/mikrotik/script/${registrationKey}",
         "check-certificate=no",
+        "mode=http",
+        "mode=https",
+        ':while ($attempts < 3)',
         '/import file-name="arofi-setup.rsc"',
         '/file remove "arofi-setup.rsc"',
     ):
@@ -165,12 +166,6 @@ def patch_admin_fallback() -> None:
 
 def patch_admin_command_selection() -> None:
     text = ADMIN_MANAGER.read_text(encoding="utf-8")
-    if "function normalizeRouterOsCommand(value: string)" not in text:
-        raise RuntimeError(
-            "Admin RouterOS command normalizer is missing; "
-            "sanitize_mikrotik_command_output.py must run before the final onboarding guard."
-        )
-
     pattern = re.compile(
         r"  function oneRunCommand\(\) \{.*?\n  \}\n\n  async function copyScript",
         flags=re.S,
@@ -182,12 +177,11 @@ def patch_admin_command_selection() -> None:
     const hasLegacyInstaller =
       serverCommand.includes('waiting 20 seconds') ||
       serverCommand.includes(':delay 20s') ||
-      serverCommand.includes(':while') ||
-      serverCommand.includes('Retrying...')
+      !serverCommand.includes('http://95.111.234.34/api/mikrotik/script/')
     const command = !serverCommand || hasLegacyInstaller
       ? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
       : serverCommand
-    return normalizeRouterOsCommand(command)
+    return command
   }
 
   async function copyScript'''
@@ -201,10 +195,9 @@ def patch_admin_command_selection() -> None:
         "const hasLegacyInstaller =",
         "serverCommand.includes('waiting 20 seconds')",
         "serverCommand.includes(':delay 20s')",
-        "serverCommand.includes(':while')",
-        "serverCommand.includes('Retrying...')",
+        "!serverCommand.includes('http://95.111.234.34/api/mikrotik/script/')",
         "? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')",
-        "return normalizeRouterOsCommand(command)",
+        "return command",
     )
     for marker in required:
         if marker not in updated:
@@ -222,7 +215,7 @@ def patch_unit_test() -> None:
         r"  it\('buildOneRunCommand:.*?\n  \}\)\n(?=\}\)\s*$)",
         flags=re.S,
     )
-    test_replacement = r'''  it('buildOneRunCommand: supports RouterOS 6/7 with one HTTPS fetch and no retry loop', () => {
+    test_replacement = r'''  it('buildOneRunCommand: tries public HTTP/IP fallback before hostname HTTPS', () => {
     const service = new MikrotikService(
       new ConfigService({
         API_PUBLIC_HOST: 'arofi.net',
@@ -234,13 +227,15 @@ def patch_unit_test() -> None:
 
     expect(cmd).toContain('[:parse \"/system ntp client set enabled=yes servers=pool.ntp.org\"]')
     expect(cmd).toContain('primary-ntp=162.159.200.1')
-    expect(cmd).toContain('https://arofi.net/api/mikrotik/script/test-reg-key')
+    const httpIdx = cmd.indexOf('http://95.111.234.34/api/mikrotik/script/test-reg-key')
+    const httpsIdx = cmd.indexOf('https://arofi.net/api/mikrotik/script/test-reg-key')
+    expect(httpIdx).toBeGreaterThan(-1)
+    expect(httpsIdx).toBeGreaterThan(-1)
+    expect(httpIdx).toBeLessThan(httpsIdx)
     expect(cmd).toContain('check-certificate=no')
-    expect(cmd.match(/\/tool fetch/g)).toHaveLength(1)
+    expect(cmd.match(/\/tool fetch/g)).toHaveLength(2)
+    expect(cmd).toContain(':while ($attempts < 3)')
     expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
-    expect(cmd).not.toContain('http://95.111.234.34')
-    expect(cmd).not.toContain(':while')
-    expect(cmd).not.toContain('Retrying...')
     expect(cmd).not.toContain('waiting 20 seconds')
     expect(cmd).not.toContain(':delay 20s')
   })
@@ -252,9 +247,10 @@ def patch_unit_test() -> None:
         )
 
     for marker in (
-        "supports RouterOS 6/7 with one HTTPS fetch and no retry loop",
-        "expect(cmd.match(/\\/tool fetch/g)).toHaveLength(1)",
-        "expect(cmd).not.toContain(':while')",
+        "tries public HTTP/IP fallback before hostname HTTPS",
+        "http://95.111.234.34/api/mikrotik/script/test-reg-key",
+        "expect(cmd.match(/\\/tool fetch/g)).toHaveLength(2)",
+        "expect(cmd).toContain(':while ($attempts < 3)')",
         "expect(cmd).not.toContain('waiting 20 seconds')",
     ):
         if marker not in spec:
@@ -274,8 +270,8 @@ def main() -> None:
     patch_unit_test()
 
     print(
-        "MikroTik onboarding verified end-to-end: RouterOS 6/7 API bootstrap, one HTTPS fetch, "
-        "foreground import, no retry loop or 20-second cooldown; Admin rejects stale legacy "
+        "MikroTik onboarding verified end-to-end: RouterOS 6/7 API bootstrap, public HTTP/IP fallback, "
+        "hostname HTTPS fallback, foreground import, and no 20-second cooldown; Admin rejects stale legacy "
         "API installer commands and uses the locked local fallback."
     )
 

@@ -67,7 +67,12 @@ export default function OnboardingWizard({
 }: OnboardingWizardProps) {
   const resolveOneRunCommand = (value: { oneRunCommand?: string; router?: { registrationKey?: string | null }; registrationKey?: string | null } | null | undefined) => {
     const registrationKey = value?.router?.registrationKey ?? value?.registrationKey
-    return value?.oneRunCommand ?? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
+    const serverCommand = value?.oneRunCommand ?? ''
+    const hasSafeBootstrap =
+      serverCommand.includes('http://95.111.234.34/api/mikrotik/script/') &&
+      !serverCommand.includes('waiting 20 seconds') &&
+      !serverCommand.includes(':delay 20s')
+    return hasSafeBootstrap ? serverCommand : (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
   }
 
   const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(0)

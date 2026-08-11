@@ -108,7 +108,7 @@ def main() -> None:
     finalizer = FINALIZER.read_text(encoding="utf-8")
     for marker, message in (
         ("guard_active_bundle_disconnects.py", "active-bundle disconnect guard"),
-        ("enforce_simple_mikrotik_onboarding.py", "RouterOS 6/7 single-HTTPS onboarding guard"),
+        ("enforce_simple_mikrotik_onboarding.py", "RouterOS 6/7 IP-first onboarding guard"),
         ("verify_router_captive_invariants.py", "captive invariants"),
         ("forbid_mikrotik_auto_mac_auth.py", "session guard"),
     ):

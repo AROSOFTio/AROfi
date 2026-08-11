@@ -104,7 +104,7 @@ def install_active_bundle_guard() -> None:
 
 def lock_simple_mikrotik_onboarding() -> None:
     if not SIMPLE_ONBOARDING_GUARD.exists():
-        raise RuntimeError("Single-fetch MikroTik onboarding guard is missing")
+        raise RuntimeError("IP-first MikroTik onboarding guard is missing")
     runpy.run_path(str(SIMPLE_ONBOARDING_GUARD), run_name="__main__")
 
 
@@ -134,7 +134,7 @@ def main() -> None:
     enforce_no_automatic_mac_auth_last()
     print(
         "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
-        "disconnect guard, RouterOS 6/7 single-HTTPS onboarding, captive-flow state, "
+        "disconnect guard, RouterOS 6/7 IP-first onboarding, captive-flow state, "
         "and no-automatic-MAC-auth policy verified."
     )
 

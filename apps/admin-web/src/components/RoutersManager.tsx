@@ -447,7 +447,12 @@ export default function RoutersManager() {
   function oneRunCommand() {
     if (!selectedSetup) return ''
     const registrationKey = selectedSetup.router.registrationKey
-    return selectedSetup.oneRunCommand ?? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
+    const serverCommand = selectedSetup.oneRunCommand ?? ''
+    const hasSafeBootstrap =
+      serverCommand.includes('http://95.111.234.34/api/mikrotik/script/') &&
+      !serverCommand.includes('waiting 20 seconds') &&
+      !serverCommand.includes(':delay 20s')
+    return hasSafeBootstrap ? serverCommand : (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
   }
 
   async function copyScript() {
