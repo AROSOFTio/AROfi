@@ -44,31 +44,52 @@ text = replace_once(
     "SSTP production IP selection",
 )
 
-text = replace_once(
-    text,
-    '      `:local sstpTarget "${domain}:${sstpPort}"`,\n',
+target_declaration = (
     '      `:local sstpTarget "${domain}"`,\n'
-    '      `:local sstpPort "${sstpPort}"`,\n',
-    "SSTP target declaration",
+    '      `:local sstpPort "${sstpPort}"`,\n'
 )
+if target_declaration not in text:
+    legacy_target_declaration = '      `:local sstpTarget "${domain}:${sstpPort}"`,\n'
+    direct_host_declaration = (
+        '      `:local sstpHost "${domain}"`,\n'
+        '      `:local sstpPort "${sstpPort}"`,\n'
+    )
+    if legacy_target_declaration in text:
+        text = text.replace(legacy_target_declaration, target_declaration, 1)
+    elif direct_host_declaration in text:
+        text = text.replace(direct_host_declaration, target_declaration, 1)
+    else:
+        raise RuntimeError("Expected one SSTP target declaration match, found 0")
 
-text = replace_once(
-    text,
-    '      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,\n',
+version_compatible_sstp_add = (
     '      `:local sstpAddModern ("/interface sstp-client add name=\\"${remoteClientName}\\" connect-to=\\"" . $sstpTarget . "\\" port=" . $sstpPort . " user=\\"router-${router.id}\\" password=\\"${token}\\" authentication=pap profile=\\"AROFi_Profile\\" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no")`,\n'
     '      `:local sstpAddLegacy ("/interface sstp-client add name=\\"${remoteClientName}\\" connect-to=\\"" . $sstpTarget . ":" . $sstpPort . "\\" user=\\"router-${router.id}\\" password=\\"${token}\\" authentication=pap profile=\\"AROFi_Profile\\" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no")`,\n'
-    '      `:do { :local sstpAddFunction [:parse $sstpAddModern]; $sstpAddFunction } on-error={ :do { :local sstpAddFunction [:parse $sstpAddLegacy]; $sstpAddFunction } on-error={} }`,\n',
-    "version-compatible SSTP client command",
+    '      `:do { :local sstpAddFunction [:parse $sstpAddModern]; $sstpAddFunction } on-error={ :do { :local sstpAddFunction [:parse $sstpAddLegacy]; $sstpAddFunction } on-error={} }`,\n'
 )
+if version_compatible_sstp_add not in text:
+    old_direct_add = '      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,\n'
+    new_direct_add = '      `:do { /interface sstp-client add name="${remoteClientName}" connect-to=$sstpHost port=$sstpPort user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no } on-error={ :put "ERROR: SSTP client could not be created. Check RouterOS SSTP package/support and WAN." }`,\n'
+    if old_direct_add in text:
+        text = text.replace(old_direct_add, version_compatible_sstp_add, 1)
+    elif new_direct_add in text:
+        text = text.replace(new_direct_add, version_compatible_sstp_add, 1)
+    else:
+        raise RuntimeError("Expected one version-compatible SSTP client command match, found 0")
 
-text = replace_once(
-    text,
-    '      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,\n',
+sstp_enable_verification = (
     '      `:if ([:len [/interface sstp-client find name="${remoteClientName}"]] > 0) do={`,\n'
     '      `  :do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,\n'
-    '      `}`,\n',
-    "SSTP enable verification",
+    '      `}`,\n'
 )
+if sstp_enable_verification not in text:
+    old_enable = '      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,\n'
+    new_enable = '      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :delay 2s; :if ([:len [/interface sstp-client find name="${remoteClientName}" disabled=no]] > 0) do={ :set sstpOk 1 } } on-error={ :put "ERROR: SSTP client could not be enabled." }`,\n'
+    if old_enable in text:
+        text = text.replace(old_enable, sstp_enable_verification, 1)
+    elif new_enable in text:
+        text = text.replace(new_enable, sstp_enable_verification, 1)
+    else:
+        raise RuntimeError("Expected one SSTP enable verification match, found 0")
 
 required = (
     "process.env.VPN_SERVER_IP",
@@ -85,7 +106,7 @@ for marker in required:
     if marker not in text:
         raise RuntimeError(f"SSTP remote-access fix missing marker: {marker}")
 
-if 'connect-to=$sstpTarget port=$sstpPort' in text:
+if 'connect-to=$sstpTarget port=$sstpPort' in text or 'connect-to=$sstpHost port=$sstpPort' in text:
     raise RuntimeError("Direct version-specific SSTP command remains in generated source")
 
 TARGET.write_text(text, encoding="utf-8")
