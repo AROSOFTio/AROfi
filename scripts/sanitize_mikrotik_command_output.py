@@ -8,6 +8,7 @@ as a firewall move destination because that row can be a built-in rule.
 """
 
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,27 +47,29 @@ def patch_admin(text: str) -> str:
 """
         text = replace_once(text, marker, helper, "RouterOS command normalizer")
 
-    old_function = """  function oneRunCommand() {
-    if (!selectedSetup) return ''
-    const registrationKey = selectedSetup.router.registrationKey
-    return selectedSetup.oneRunCommand ?? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
-  }
-"""
     new_function = """  function oneRunCommand() {
     if (!selectedSetup) return ''
     const registrationKey = selectedSetup.router.registrationKey
-    const command = selectedSetup.oneRunCommand
-      ?? (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
+    const serverCommand = selectedSetup.oneRunCommand ?? ''
+    const hasSafeBootstrap =
+      serverCommand.includes('http://95.111.234.34/api/mikrotik/script/') &&
+      !serverCommand.includes('waiting 20 seconds') &&
+      !serverCommand.includes(':delay 20s')
+    const command = hasSafeBootstrap ? serverCommand : (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
     return normalizeRouterOsCommand(command)
   }
 """
 
     if "return normalizeRouterOsCommand(command)" not in text:
-        text = replace_once(text, old_function, new_function, "one-run command normalization")
+        pattern = re.compile(r"  function oneRunCommand\(\) \{.*?\n  \}\n\n  async function copyScript", re.S)
+        text, count = pattern.subn(new_function + "\n  async function copyScript", text, count=1)
+        if count != 1:
+            raise RuntimeError(f"one-run command normalization: expected exactly one target, found {count}")
 
     required = [
         "function normalizeRouterOsCommand(value: string)",
         r".replace(/\\:/g, ':')",
+        "http://95.111.234.34/api/mikrotik/script/",
         "return normalizeRouterOsCommand(command)",
     ]
     for sentinel in required:
