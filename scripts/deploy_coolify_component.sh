@@ -79,9 +79,10 @@ needs_generated_environment=0
 if [ ! -f "$environment_file" ]; then
   needs_generated_environment=1
 elif ! grep -q '^POSTGRES_PASSWORD=' "$environment_file" || \
-     ! grep -q '^JWT_SECRET=' "$environment_file" || \
-     ! grep -q '^RADIUS_SHARED_SECRET=' "$environment_file" || \
-     ! grep -q '^ROUTER_CREDENTIAL_SECRET=' "$environment_file"; then
+     ! grep -q '^JWT_SECRET=.\+' "$environment_file" || \
+     ! grep -q '^RADIUS_SHARED_SECRET=.\+' "$environment_file" || \
+     ! grep -q '^ROUTER_CREDENTIAL_SECRET=.\+' "$environment_file" || \
+     ! grep -q '^POSTGRES_PASSWORD=.\+' "$environment_file"; then
   needs_generated_environment=1
 fi
 
