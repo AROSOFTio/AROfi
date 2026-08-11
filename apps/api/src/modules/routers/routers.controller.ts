@@ -5,6 +5,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { UpdateRouterDto } from './dto/update-router.dto'
@@ -19,6 +20,7 @@ export class RoutersController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.routersRead)
+  @RedisCache({ namespace: 'routers:overview', ttlSeconds: 8 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -26,6 +28,7 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview')
   @Post('groups')
   createGroup(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateRouterGroupDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -36,6 +39,7 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview', 'hotspots:overview')
   @Post()
   createRouter(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateRouterDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -74,6 +78,7 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview')
   @Post(':routerId/remote-access/open')
   openRemotePort(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
@@ -81,6 +86,7 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview')
   @Post(':routerId/remote-access/close')
   closeRemotePort(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
@@ -137,6 +143,7 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview')
   @Patch(':routerId')
   updateRouter(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -148,6 +155,7 @@ export class RoutersController {
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview', 'hotspots:overview')
   @Delete(':routerId')
   deleteRouter(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)

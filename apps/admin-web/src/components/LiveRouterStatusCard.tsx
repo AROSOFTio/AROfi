@@ -34,7 +34,6 @@ export default function LiveRouterStatusCard({ initialRouters }: { initialRouter
   // Primary update path: router/session realtime events. The interval is a
   // fallback only — 10s instead of the old hammering 2s poll.
   useRealtimeRefresh(() => void refetch(), [
-    'router.heartbeat',
     'router.online',
     'router.stale',
     'router.offline',
@@ -43,7 +42,7 @@ export default function LiveRouterStatusCard({ initialRouters }: { initialRouter
   ])
 
   useEffect(() => {
-    const interval = window.setInterval(() => void refetch(), 10_000)
+    const interval = window.setInterval(() => void refetch(), 60_000)
     return () => window.clearInterval(interval)
   }, [])
 

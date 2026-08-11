@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { BillingService } from './billing.service'
 import type { BillingReportFilters } from './billing.service'
 import { AdjustWalletDto } from './dto/adjust-wallet.dto'
@@ -20,6 +21,7 @@ export class BillingController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.billingRead)
+  @RedisCache({ namespace: 'billing:overview', ttlSeconds: 8 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -27,6 +29,7 @@ export class BillingController {
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
+  @RedisCache({ namespace: 'billing:sales', ttlSeconds: 12 })
   @Get('sales')
   getSales(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -43,6 +46,7 @@ export class BillingController {
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
+  @RedisCache({ namespace: 'billing:transactions', ttlSeconds: 8 })
   @Get('transactions')
   getTransactions(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string, @Query() query?: BillingReportFilters) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -80,6 +84,7 @@ export class BillingController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('billing:overview', 'billing:sales', 'billing:transactions')
   @Post('mobile-money-sales')
   recordMobileMoneySale(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RecordMobileMoneySaleDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -90,6 +95,7 @@ export class BillingController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('billing:overview', 'billing:sales', 'billing:transactions')
   @Post('wallet-adjustments')
   adjustWallet(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: AdjustWalletDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)

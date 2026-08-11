@@ -37,8 +37,8 @@ export const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, {
     routerLimit: 'Unlimited Routers',
     features: [
       'Everything in Starter',
-      'Lower mobile money fees',
-      'Zero voucher commission',
+      '4% gateway fee',
+      'Free voucher sales',
       'Custom branding',
       '100 SMS/month included',
       'Buy extra SMS at UGX 40 each',

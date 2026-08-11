@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Headphones } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
+import RouterOnboardingNudge from './RouterOnboardingNudge'
 import Sidebar from './Sidebar'
 import { SESSION_RECOVERY_ATTEMPT_KEY } from './SessionRecoveryGate'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
@@ -27,6 +28,7 @@ type DashboardShellProps = {
 
 export default function DashboardShell({ children, initials, session, workspaceTitle }: DashboardShellProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -50,6 +52,18 @@ export default function DashboardShell({ children, initials, session, workspaceT
     }, ACCESS_TOKEN_REFRESH_INTERVAL_MS)
     return () => window.clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    const routes = isVendorWorkspace(session.user)
+      ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access']
+      : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions']
+    const id = window.setTimeout(() => {
+      for (const route of routes) {
+        router.prefetch(route)
+      }
+    }, 600)
+    return () => window.clearTimeout(id)
+  }, [router, session.user])
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
@@ -153,6 +167,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
           </div>
         </header>
         <WorkspaceRouteGuard user={session.user}>
+          <RouterOnboardingNudge enabled={isVendorWorkspace(session.user)} />
           <div className="content">{children}</div>
         </WorkspaceRouteGuard>
         <FeedbackPrompt enabled={isVendorWorkspace(session.user)} />

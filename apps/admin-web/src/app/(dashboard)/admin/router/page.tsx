@@ -41,7 +41,6 @@ export default function RouterObservabilityPage() {
   // session accounting, disconnects) — refreshes within ~0.5s of a change.
   // The interval below is only the fallback when the stream is unavailable.
   useRealtimeRefresh(() => void loadRouters(), [
-    'router.heartbeat',
     'router.online',
     'router.stale',
     'router.offline',
@@ -54,7 +53,7 @@ export default function RouterObservabilityPage() {
 
   useEffect(() => {
     void loadRouters()
-    const interval = setInterval(() => { void loadRouters() }, 15_000)
+    const interval = setInterval(() => { void loadRouters() }, 60_000)
     return () => clearInterval(interval)
   }, [])
 
@@ -190,7 +189,7 @@ export default function RouterObservabilityPage() {
       <div className="card">
         <div className="card-header">
           <span className="card-title">All Routers</span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Refreshes every 15s</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Live updates, quiet fallback every 60s</span>
         </div>
         <div className="table-wrap">
           <table>

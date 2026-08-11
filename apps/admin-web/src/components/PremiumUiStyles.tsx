@@ -28,6 +28,104 @@ export default function PremiumUiStyles() {
         padding: 18px 20px;
       }
 
+      .router-nudge {
+        position: sticky;
+        top: 10px;
+        z-index: 80;
+        margin: 12px 16px 0;
+        padding: 12px 42px 12px 14px;
+        border: 1px solid rgba(36, 99, 235, 0.22);
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(239, 246, 255, 0.97), rgba(236, 253, 243, 0.97));
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .router-nudge-head {
+        display: grid;
+        gap: 3px;
+      }
+
+      .router-nudge-head span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--brand);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .router-nudge-head strong {
+        color: var(--text-1);
+        font-size: 14px;
+      }
+
+      .router-nudge-steps {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .router-nudge-steps a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.88);
+        color: var(--text-1);
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .router-nudge-steps a:first-child {
+        background: var(--brand);
+        color: #fff;
+        border-color: var(--brand);
+      }
+
+      .router-nudge-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 24px;
+        height: 24px;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--text-3);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+
+      @media (max-width: 760px) {
+        .router-nudge {
+          position: relative;
+          top: auto;
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .router-nudge-steps {
+          display: grid;
+          width: 100%;
+          grid-template-columns: 1fr;
+        }
+
+        .router-nudge-steps a {
+          justify-content: center;
+        }
+      }
+
       .page-header {
         margin-bottom: 14px;
       }

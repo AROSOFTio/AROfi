@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
@@ -23,6 +24,7 @@ export class VouchersController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.vouchersRead)
+  @RedisCache({ namespace: 'vouchers:overview', ttlSeconds: 10 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -30,6 +32,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersRead)
+  @RedisCache({ namespace: 'vouchers:templates', ttlSeconds: 60 })
   @Get('templates')
   getTemplates(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -37,6 +40,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
+  @InvalidateRedisCache('vouchers:overview', 'vouchers:templates')
   @Post('templates')
   createTemplate(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateVoucherTemplateDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -47,6 +51,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
+  @InvalidateRedisCache('vouchers:overview', 'vouchers:templates')
   @Patch('templates/:templateId')
   updateTemplate(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -58,6 +63,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
+  @InvalidateRedisCache('vouchers:overview')
   @Post('batches')
   createBatch(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateVoucherBatchDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
@@ -126,6 +132,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
+  @InvalidateRedisCache('vouchers:overview', 'billing:overview', 'billing:sales', 'billing:transactions')
   @Post('redeem')
   async redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
     const tenantId = this.accessScope.resolveTenantScope(user)
@@ -135,6 +142,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
+  @InvalidateRedisCache('vouchers:overview')
   @Delete('batches/:batchId')
   deleteBatch(@CurrentUser() user: AuthenticatedAdminUser, @Param('batchId') batchId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
@@ -142,6 +150,7 @@ export class VouchersController {
   }
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
+  @InvalidateRedisCache('vouchers:overview')
   @Delete(':voucherId')
   deleteVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Param('voucherId') voucherId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)

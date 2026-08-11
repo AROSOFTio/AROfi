@@ -143,7 +143,6 @@ export default function SettingsRoutersPage() {
   // Primary update path: realtime router/session events flip the
   // online/offline dot within ~0.5s. The 20s interval is only a fallback.
   useRealtimeRefresh(() => void loadData(true), [
-    'router.heartbeat',
     'router.online',
     'router.stale',
     'router.offline',
@@ -153,7 +152,7 @@ export default function SettingsRoutersPage() {
 
   useEffect(() => {
     loadData()
-    const timer = setInterval(() => { void loadData(true) }, 20_000)
+    const timer = setInterval(() => { void loadData(true) }, 60_000)
     return () => clearInterval(timer)
   }, [])
 

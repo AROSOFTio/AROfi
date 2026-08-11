@@ -52,7 +52,7 @@ What AROFi does:
 
 Pricing (2 public plans, no contract, cancel anytime):
 - Starter — free forever, 0 UGX/month. Unlimited routers/hotspots, MTN MoMo & Airtel collection, voucher sales, wallets, Cloud WinBox tunnels and AROFi branding. Gateway fee applies only on successful payments; no sales, no charge.
-- Pro — UGX 20,000/month. Everything in Starter plus custom branding, lower mobile money fees, 0% voucher fee, 30-day analytics history and priority support.
+- Pro — UGX 20,000/month. Everything in Starter plus custom branding, 4% payment gateway processing fee, free voucher sales, 30-day analytics history and priority support.
 Always describe the mobile money percentage as the payment gateway's processing fee, not a charge AROFi keeps — AROFi's own cut is the monthly plan price (or nothing, on Starter).
 
 Common troubleshooting you can help with (give practical steps, then point to the relevant /docs article for full detail):
