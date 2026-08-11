@@ -2244,7 +2244,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       `# AROFi Remote Access WinBox Tunnel Setup`,
       `# Generated dynamically for ${this.sanitizeRouterOsComment(router.name)}`,
       `:local sstpOk 0`,
-      `:local sstpTarget "${domain}:${sstpPort}"`,
+      `:local sstpHost "${domain}"`,
+      `:local sstpPort "${sstpPort}"`,
       `:do { /interface sstp-client disable [find name="${remoteClientName}"] } on-error={}`,
       `:do { /interface sstp-client remove [find name="${remoteClientName}"] } on-error={}`,
       `:do { /ppp profile remove [find name="AROFi_Profile"] } on-error={}`,
@@ -2263,8 +2264,8 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // never touch hotspot/RADIUS/firewall config on its own. Re-running the
       // provisioning script is now only ever a deliberate operator action.
       `/ppp profile add name="AROFi_Profile"`,
-      `/interface sstp-client add name="${remoteClientName}" connect-to=$sstpTarget user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no`,
-      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :set sstpOk 1 } on-error={}`,
+      `:do { /interface sstp-client add name="${remoteClientName}" connect-to=$sstpHost port=$sstpPort user="router-${router.id}" password="${token}" authentication=pap profile="AROFi_Profile" add-default-route=no disabled=yes keepalive-timeout=60 verify-server-certificate=no } on-error={ :put "ERROR: SSTP client could not be created. Check RouterOS SSTP package/support and WAN." }`,
+      `:do { /interface sstp-client enable [find name="${remoteClientName}"]; :delay 2s; :if ([:len [/interface sstp-client find name="${remoteClientName}" disabled=no]] > 0) do={ :set sstpOk 1 } } on-error={ :put "ERROR: SSTP client could not be enabled." }`,
       // The SSTP tunnel interface must NOT be added to the router's "LAN"
       // interface list. It served no purpose here — WinBox/API remote access
       // connects over the tunnel's own PPP-assigned IP directly, never via
@@ -2274,7 +2275,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       // traffic, this silently gave devices a path to the internet that
       // bypassed the hotspot/RADIUS gate entirely — customers online with no
       // voucher or payment. Remote access still works fully without it.
-      `:if ($sstpOk = 0) do={ :put "ERROR: SSTP client could not be enabled."; :put "If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command." }`,
+      `:if ($sstpOk = 0) do={ :put "ERROR: AROFi Remote Access was NOT installed."; :put "RouterOS 6 should support SSTP directly. If this is RouterOS 7 device-mode, run this then press RESET within 5 minutes:"; :put "/system device-mode update mode=enterprise"; :put "After reboot, re-run the remote access install command."; :error "AROFi remote access failed" }`,
       `:if ($sstpOk = 1) do={ :log info "AROFi Remote Access configured."; :put "AROFi Remote Access configured." }`,
     ].join('\n')
   }

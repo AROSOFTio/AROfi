@@ -906,8 +906,8 @@ export class MikrotikService {
   </div>
 
   <script>
-    var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}",CONNECTED="${connectedUrl}";
-    var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"";
+    var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
+    var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"",orig="$(link-orig)"||"";
     var pkgs=[],selId=null,selTv=false;
     // Try HTTPS API first; if the captive-portal mini-browser blocks it (clock
     // wrong, cert issue, CORS), retry the same path over plain HTTP fallback IP.
@@ -916,13 +916,6 @@ export class MikrotikService {
     window.onload=function(){
       var search=window.location.search;
       var v='';
-
-      var _up=new URLSearchParams(search);
-      if(_up.get('connected')==='1'){
-        document.getElementById('loading').style.display='none';
-        document.getElementById('content').style.display='block';
-        return;
-      }
 
       // Do not auto-submit MikroTik credentials into the hotspot login page here.
       // That path bypasses the AROFi payment/voucher portal and makes the user
@@ -945,7 +938,7 @@ export class MikrotikService {
       if(vm&&vm[1])v=vm[1];
       if(v){
         document.getElementById('vcode').value=v.toUpperCase();
-        setTimeout(login, 200);
+        login();
       }
 
       load();
@@ -1169,7 +1162,8 @@ export class MikrotikService {
       });
     }
 
-    function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}
+    function finishTarget(){var o=orig||'';if(o&&o.indexOf('$(')!==0&&!/\\.wifi(?:\\/|$)/i.test(o)&&!/\\/login(?:[/?]|$)/i.test(o))return o;var ua=navigator.userAgent||'';if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';return 'http://connectivitycheck.gstatic.com/generate_204';}
+    function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}closePay();closeMsg();var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',finishTarget());add('popup','false');document.body.appendChild(f);document.documentElement.style.visibility='hidden';f.submit();}
     function closeMsg(){document.getElementById('msgOverlay').classList.remove('on');}
     function sst(m,t){var s=document.getElementById('st');var o=document.getElementById('msgOverlay');var b=document.getElementById('msgBox');var x=document.getElementById('msgText');if(m){if(s){s.style.display='none';s.textContent='';}b.className='message-box '+(t||'info');x.textContent=m;o.classList.add('on');}else{if(s)s.style.display='none';o.classList.remove('on');}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}
