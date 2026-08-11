@@ -32,8 +32,10 @@ FORBIDDEN_BOOTSTRAP_MARKERS = (
 def patch_api_onboarding() -> None:
     text = MIKROTIK.read_text(encoding="utf-8")
 
+    # Accept both the legacy bde9ceb signature (no wanInterface) and the
+    # newer WAN-aware signature so the guard works after any revert.
     pattern = re.compile(
-        r"  buildOneRunCommand\(registrationKey: string, wanInterface\?: string \| null\) \{.*?\n"
+        r"  buildOneRunCommand\(registrationKey: string(?:, wanInterface\?: string \| null)?\) \{.*?\n"
         r"  \}\n\n  // VPS-side tunnel gateway addresses",
         flags=re.S,
     )
@@ -44,8 +46,7 @@ def patch_api_onboarding() -> None:
       ? 'https://' + resolvedBase.slice(7)
       : resolvedBase
     const url = `${httpsBase}/api/mikrotik/script/${this.escape(registrationKey)}`
-    const requestedWanInterface = this.normalizeWanInterface(wanInterface)
-    const wanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
+    const wanBootstrap = ''
     const bootstrap =
       ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
       ':do { :local n [:parse \"/system ntp client set enabled=yes servers=pool.ntp.org\"]; $n } ' +
@@ -78,7 +79,7 @@ def patch_api_onboarding() -> None:
         )
 
     method_match = re.search(
-        r"  buildOneRunCommand\(registrationKey: string, wanInterface\?: string \| null\) \{(.*?)\n"
+        r"  buildOneRunCommand\(registrationKey: string(?:, wanInterface\?: string \| null)?\) \{(.*?)\n"
         r"  \}\n\n  // VPS-side tunnel gateway addresses",
         updated,
         flags=re.S,
