@@ -88,14 +88,32 @@ fi
 
 if [ "$needs_generated_environment" -eq 1 ]; then
   generated_environment_file=$(mktemp /tmp/arofi-component-environment-XXXXXX.env)
-  docker ps -q --filter "label=com.docker.compose.project=$project" | while read -r container_id; do
-    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id"
-  done | awk -F= '
-    NF == 0 { next }
-    {
-      key = $1
-      value = substr($0, length(key) + 2)
-      if (!(key in seen) || (seen[key] == "" && value != "")) {
+  api_container_id=$(docker ps -q --filter "label=coolify.applicationId=11" | head -n 1)
+  if [ -n "$api_container_id" ]; then
+    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$api_container_id" | awk -F= '
+      NF == 0 { next }
+      {
+        key = $1
+        value = substr($0, length(key) + 2)
+        if (!(key in seen) || (seen[key] == "" && value != "")) {
+          seen[key] = value
+        }
+      }
+      END {
+        for (key in seen) {
+          print key "=" seen[key]
+        }
+      }
+    ' > "$generated_environment_file"
+  else
+    docker ps -q --filter "label=com.docker.compose.project=$project" | while read -r container_id; do
+      docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id"
+    done | awk -F= '
+      NF == 0 { next }
+      {
+        key = $1
+        value = substr($0, length(key) + 2)
+        if (!(key in seen) || (seen[key] == "" && value != "")) {
         seen[key] = value
       }
     }
@@ -104,7 +122,8 @@ if [ "$needs_generated_environment" -eq 1 ]; then
         print key "=" seen[key]
       }
     }
-  ' > "$generated_environment_file"
+    ' > "$generated_environment_file"
+  fi
   environment_file=$generated_environment_file
   echo "[fast-deploy] Reconstructed the Compose environment from the running services."
 fi
