@@ -44,7 +44,12 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/finalize_gateway_compile.py \
     && python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
-RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
+RUN attempt=1; \
+    until npx prisma generate --schema=apps/api/prisma/schema.prisma; do \
+      if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+      attempt=$((attempt + 1)); \
+      sleep 10; \
+    done
 
 ENV TURBO_TELEMETRY_DISABLED=1
 ENV NEXT_TELEMETRY_DISABLED=1
