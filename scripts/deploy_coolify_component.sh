@@ -79,7 +79,21 @@ if [ ! -f "$environment_file" ]; then
   generated_environment_file=$(mktemp /tmp/arofi-component-environment-XXXXXX.env)
   docker ps -q --filter "label=com.docker.compose.project=$project" | while read -r container_id; do
     docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id"
-  done | awk -F= '!seen[$1]++ { print }' > "$generated_environment_file"
+  done | awk -F= '
+    NF == 0 { next }
+    {
+      key = $1
+      value = substr($0, length(key) + 2)
+      if (!(key in seen) || (seen[key] == "" && value != "")) {
+        seen[key] = value
+      }
+    }
+    END {
+      for (key in seen) {
+        print key "=" seen[key]
+      }
+    }
+  ' > "$generated_environment_file"
   environment_file=$generated_environment_file
   echo "[fast-deploy] Reconstructed the Compose environment from the running services."
 fi
