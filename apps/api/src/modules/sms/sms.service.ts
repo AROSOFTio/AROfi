@@ -252,7 +252,7 @@ export class SmsService {
     return this.getWalletStatus(tenantId)
   }
 
-  async sendBusinessSms(input: { tenantId: string; title: string; message: string; phoneNumbers: string[]; templateKey?: string }) {
+  async sendBusinessSms(input: { tenantId: string; title: string; message: string; phoneNumbers: string[]; templateKey?: string; requirePaidPlan?: boolean }) {
     const text = `AROFi: ${input.title}\n${input.message}`.slice(0, 480)
     const results = await Promise.all(
       input.phoneNumbers.map((to) =>
@@ -261,6 +261,7 @@ export class SmsService {
           to,
           body: text,
           templateKey: input.templateKey ?? 'business_notification',
+          requirePaidPlan: input.requirePaidPlan ?? false,
         }),
       ),
     )

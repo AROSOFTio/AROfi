@@ -49,23 +49,23 @@ def patch_api_onboarding() -> None:
     const wanBootstrap = ''
     const bootstrap =
       ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
-      ':do { :local n [:parse \"/system ntp client set enabled=yes servers=pool.ntp.org\"]; $n } ' +
-      'on-error={ :do { :local n [:parse \"/system ntp client set enabled=yes primary-ntp=162.159.200.1\"]; $n } on-error={} }; ' +
+      ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
+      'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
       ':delay 2s; '
 
     return (
       wanBootstrap +
       bootstrap +
-      ':do { /file remove [find name=\"arofi-setup.rsc\"] } on-error={}; ' +
-      `/tool fetch url=\"${url}\" check-certificate=no dst-path=\"arofi-setup.rsc\"; ` +
-      ':local arofiFile [/file find name=\"arofi-setup.rsc\"]; ' +
-      ':if ([:len $arofiFile] = 0) do={ :error \"AROFi: setup file was not created.\" }; ' +
-      ':if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error \"AROFi: setup file is empty.\" }; ' +
-      ':put \"AROFi setup downloaded. Installing...\"; ' +
-      '/import file-name=\"arofi-setup.rsc\"; ' +
+      ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
+      `/tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc"; ` +
+      ':local arofiFile [/file find name="arofi-setup.rsc"]; ' +
+      ':if ([:len $arofiFile] = 0) do={ :error "AROFi: setup file was not created." }; ' +
+      ':if ([/file get $arofiFile size] = 0) do={ /file remove $arofiFile; :error "AROFi: setup file is empty." }; ' +
+      ':put "AROFi setup downloaded. Installing..."; ' +
+      '/import file-name="arofi-setup.rsc"; ' +
       ':delay 1s; ' +
       '/file remove $arofiFile; ' +
-      ':put \"AROFi setup installed.\"'
+      ':put "AROFi setup installed."'
     )
   }
 

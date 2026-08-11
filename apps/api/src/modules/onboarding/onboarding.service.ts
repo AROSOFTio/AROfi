@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma.service'
 import { AuthService } from '../auth/auth.module'
 import { RoleCatalogService } from '../auth/role-catalog.service'
 import { MailService } from '../mail/mail.service'
+import { SmsService } from '../sms/sms.service'
 import { RegisterTenantDto } from './dto/register-tenant.dto'
 
 const DEFAULT_FEATURE_LIMITS = [
@@ -98,6 +99,7 @@ export class OnboardingService {
     private readonly authService: AuthService,
     private readonly roleCatalogService: RoleCatalogService,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
   ) {}
 
   async completeOnboarding(tenantId: string) {
@@ -386,6 +388,25 @@ export class OnboardingService {
           <li>Complete the Compliance section so our team can verify your business — AROFi is built for authorised, compliant operators.</li>
         </ol>
         <p>Need help? Reply to this email, message us on WhatsApp (+256 787 726 388), or ask Aria — the assistant in the corner of your dashboard.</p>`,
+    })
+
+    // Immediate SMS alert to platform admin (0787726388) on new signup
+    const adminNotifyPhone = process.env.ADMIN_NOTIFY_PHONE || '0787726388'
+    const registrationSms = `AROFi New Registration!\nBusiness: ${tenantName}\nOwner: ${firstName} ${lastName}\nPhone: ${supportPhone}\nEmail: ${email}\nDomain: ${domain}\nType: ${accountType}`.slice(0, 480)
+    void this.smsService.sendText({
+      to: adminNotifyPhone,
+      body: registrationSms,
+      requirePaidPlan: false,
+      templateKey: 'admin_signup_alert',
+    })
+
+    // Welcome SMS to business owner's support phone
+    const welcomeSms = `Welcome to AROFi, ${firstName}! Your business workspace '${tenantName}' is ready. Log in at https://arofi.net to set up your router.`
+    void this.smsService.sendText({
+      to: supportPhone,
+      body: welcomeSms,
+      requirePaidPlan: false,
+      templateKey: 'welcome_tenant',
     })
 
     return {
