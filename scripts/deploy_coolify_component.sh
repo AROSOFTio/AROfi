@@ -75,7 +75,17 @@ override_file=$(mktemp /tmp/arofi-component-override-XXXXXX.yml)
 generated_environment_file=
 trap 'rm -f "$override_file" "$generated_environment_file"' EXIT HUP INT TERM
 
+needs_generated_environment=0
 if [ ! -f "$environment_file" ]; then
+  needs_generated_environment=1
+elif ! grep -q '^POSTGRES_PASSWORD=' "$environment_file" || \
+     ! grep -q '^JWT_SECRET=' "$environment_file" || \
+     ! grep -q '^RADIUS_SHARED_SECRET=' "$environment_file" || \
+     ! grep -q '^ROUTER_CREDENTIAL_SECRET=' "$environment_file"; then
+  needs_generated_environment=1
+fi
+
+if [ "$needs_generated_environment" -eq 1 ]; then
   generated_environment_file=$(mktemp /tmp/arofi-component-environment-XXXXXX.env)
   docker ps -q --filter "label=com.docker.compose.project=$project" | while read -r container_id; do
     docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id"
