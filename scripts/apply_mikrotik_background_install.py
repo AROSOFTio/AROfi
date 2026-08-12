@@ -2,7 +2,7 @@
 """Validate MikroTik onboarding and apply the final captive/session policy.
 
 The one-run command imports in the foreground so RouterOS errors remain visible.
-Voucher QR codes use the local hotspot login URL. Captive detection and returning
+Voucher QR codes use the tenant hotspot .wifi login URL. Captive detection and returning
 access are deterministic:
 - exact automatic RADIUS ``login-by=mac`` is removed;
 - trusted post-login ``mac-cookie`` reconnect is enabled;
@@ -156,75 +156,7 @@ def patch_deterministic_captive_flow() -> None:
 
 
 def patch_voucher_qr_local_login() -> None:
-    replace_once(
-        VOUCHERS_MANAGER,
-        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
-  if (dnsName) {
-    return `http://${dnsName}/login?voucher=${encodeURIComponent(code)}`
-  }
-  // Fallback
-  const base =
-    process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
-    'https://arofi.net/portal'
-  const normalized = base.replace(/\/$/, '')
-  const separator = normalized.includes('?') ? '&' : '?'
-  return `${normalized}${separator}voucher=${encodeURIComponent(code)}`
-}
-""",
-        """function getVoucherQrPortalUrl(code: string, dnsName?: string) {
-  void dnsName
-  const base =
-    process.env.NEXT_PUBLIC_VOUCHER_QR_LOCAL_LOGIN_URL ||
-    'http://10.55.0.1/login'
-  const normalized = base.replace(/\/$/, '')
-  const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
-  return `${loginBase}?voucher=${encodeURIComponent(code.trim().toUpperCase())}`
-}
-""",
-        "Admin voucher QR local-login helper",
-    )
-
-    replace_once(
-        VOUCHERS_SERVICE,
-        """  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
-    const baseUrl = hotspotDomain
-      ? `http://${hotspotDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/login`
-      : this.getVoucherQrBaseUrl()
-    const separator = baseUrl.includes('?') ? '&' : '?'
-    return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
-  }
-""",
-        """  private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
-    void hotspotDomain
-    const configuredBase = (
-      process.env.VOUCHER_QR_LOCAL_LOGIN_URL ??
-      'http://10.55.0.1/login'
-    ).trim()
-    const withProtocol = /^https?:\/\//i.test(configuredBase)
-      ? configuredBase
-      : `http://${configuredBase}`
-    const normalized = withProtocol.replace(/\/$/, '')
-    const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
-    return `${loginBase}?voucher=${encodeURIComponent(voucherCode.trim().toUpperCase())}`
-  }
-""",
-        "API voucher QR local-login helper",
-    )
-
-    routing_text = VOUCHER_QR_ROUTING.read_text(encoding="utf-8")
-    manager_text = VOUCHERS_MANAGER.read_text(encoding="utf-8")
-    service_text = VOUCHERS_SERVICE.read_text(encoding="utf-8")
-
-    for marker in ("VOUCHER_QR_LOCAL_LOGIN_URL", "http://10.55.0.1/login"):
-        if marker not in routing_text or marker not in service_text:
-            raise RuntimeError(f"Server voucher QR local-login marker missing: {marker}")
-
-    for marker in ("NEXT_PUBLIC_VOUCHER_QR_LOCAL_LOGIN_URL", "http://10.55.0.1/login"):
-        if marker not in manager_text:
-            raise RuntimeError(f"Admin voucher QR local-login marker missing: {marker}")
-
-    if "NEXT_PUBLIC_VOUCHER_QR_BASE_URL" in manager_text:
-        raise RuntimeError("Admin voucher QR still accepts the obsolete public QR base URL")
+    run_required_patch("enforce_business_voucher_qr.py")
 
 
 def run_required_patch(filename: str) -> None:
@@ -249,7 +181,7 @@ def main() -> None:
 
     print(
         "MikroTik foreground installer, trusted returning-device reconnect, no-idle active-bundle policy, "
-        "pre-auth packages, local voucher QR, SSTP target and hardware detection verified."
+        "pre-auth packages, business .wifi voucher QR, SSTP target and hardware detection verified."
     )
 
 
