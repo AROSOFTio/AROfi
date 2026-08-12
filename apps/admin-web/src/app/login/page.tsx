@@ -40,6 +40,7 @@ export default function LoginPage() {
   const [resendCountdown, setResendCountdown] = useState(0)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
   const nextPath = resolveNextPath()
+  const shouldAutoRedirectExistingSession = false
 
   useEffect(() => {
     let isMounted = true
@@ -51,7 +52,7 @@ export default function LoginPage() {
           cache: 'no-store',
         })
 
-        if (isMounted && response.ok) {
+        if (shouldAutoRedirectExistingSession && isMounted && response.ok) {
           window.location.href = nextPath
         }
       } catch {
@@ -64,7 +65,7 @@ export default function LoginPage() {
     return () => {
       isMounted = false
     }
-  }, [apiBaseUrl, nextPath])
+  }, [apiBaseUrl, nextPath, shouldAutoRedirectExistingSession])
 
   useEffect(() => {
     if (!resendAvailableAt) {
