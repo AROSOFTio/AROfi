@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;800&display=swap');
 @import '../styles/aapanel-tokens.css';
 
 @tailwind base;
@@ -9,6 +10,10 @@
 ═══════════════════════════════════════════════ */
 :root,
 [data-theme="light"] {
+  --app-font-sans: "Source Sans Pro", var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --aa-font-family: var(--app-font-sans);
+  --aa-font-family-legacy: var(--app-font-sans);
+
   /* bg-app is the content canvas, bg-card is what floats on top of it — they
      used to be the same #ffffff, which meant every "card" had zero visible
      contrast against the page (no border-radius/depth was perceptible no
@@ -156,12 +161,13 @@
 html { -webkit-font-smoothing: antialiased; }
 
 body {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--app-font-sans);
   background: var(--bg-app);
   color: var(--text-1);
   font-size: 14px;
-  line-height: 1.55;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  line-height: 22.4px;
+  letter-spacing: 0;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -965,6 +971,15 @@ body.mobile-nav-locked { overflow: hidden; }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  position: sticky;
+  top: 12px;
+  z-index: 80;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-app) 90%, white);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px);
 }
 
 .home-brand {
@@ -3272,7 +3287,7 @@ form .stats-grid > .form-group { margin-bottom: 0; }
   .home-pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-why { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .home-nav-links { display: none; }
+  .home-nav-links { display: flex; }
   .home-contact-card { grid-template-columns: 1fr; }
   .page-title { font-size: 24px; }
   .page-subtitle { font-size: 14px; }
@@ -4876,12 +4891,12 @@ html[data-theme="dark"][data-accent-theme] {
 }
 
 :root[data-accent-theme="green"] {
-  --arofi-theme-accent: #20a53a;
-  --arofi-theme-accent-hover: #16822c;
-  --arofi-theme-accent-soft: #e8f7ec;
-  --arofi-theme-accent-soft-2: #f3fbf5;
-  --arofi-theme-accent-border: #b9e8c4;
-  --arofi-theme-accent-text: #16822c;
+  --arofi-theme-accent: #2C963F;
+  --arofi-theme-accent-hover: #22723B;
+  --arofi-theme-accent-soft: #eaf7ed;
+  --arofi-theme-accent-soft-2: #f5fbf6;
+  --arofi-theme-accent-border: #b8dfc0;
+  --arofi-theme-accent-text: #22723B;
   --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
 }
 
@@ -4907,12 +4922,12 @@ html[data-theme="dark"][data-accent-theme] {
 }
 
 :root[data-theme="dark"][data-accent-theme="green"] {
-  --arofi-theme-accent: #25c348;
-  --arofi-theme-accent-hover: #5ee377;
-  --arofi-theme-accent-soft: rgba(37, 195, 72, 0.14);
-  --arofi-theme-accent-soft-2: rgba(37, 195, 72, 0.09);
-  --arofi-theme-accent-border: rgba(37, 195, 72, 0.34);
-  --arofi-theme-accent-text: #76e28b;
+  --arofi-theme-accent: #2C963F;
+  --arofi-theme-accent-hover: #43b958;
+  --arofi-theme-accent-soft: rgba(44, 150, 63, 0.16);
+  --arofi-theme-accent-soft-2: rgba(44, 150, 63, 0.10);
+  --arofi-theme-accent-border: rgba(44, 150, 63, 0.36);
+  --arofi-theme-accent-text: #8bd99a;
   --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
 }
 
@@ -5571,15 +5586,15 @@ html[data-theme="light"][data-accent-theme="blue"] {
 }
 
 html[data-theme="light"][data-accent-theme="green"] {
-  --arofi-theme-accent: #208a37;
-  --arofi-theme-accent-hover: #176c2a;
+  --arofi-theme-accent: #2C963F;
+  --arofi-theme-accent-hover: #22723B;
   --arofi-theme-accent-soft: #eaf7ed;
   --arofi-theme-accent-soft-2: #f3faf5;
   --arofi-theme-accent-border: #adddb8;
-  --arofi-theme-accent-text: #176c2a;
+  --arofi-theme-accent-text: #22723B;
   --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
-  --primary: 132 62% 33%;
-  --ring: 132 62% 33%;
+  --primary: 131 55% 38%;
+  --ring: 131 55% 38%;
 }
 
 html[data-theme="light"][data-accent-theme="gold"] {
@@ -5607,15 +5622,15 @@ html[data-theme="dark"][data-accent-theme="blue"] {
 }
 
 html[data-theme="dark"][data-accent-theme="green"] {
-  --arofi-theme-accent: #3bd260;
-  --arofi-theme-accent-hover: #72e58d;
-  --arofi-theme-accent-soft: rgba(59, 210, 96, 0.16);
-  --arofi-theme-accent-soft-2: rgba(59, 210, 96, 0.10);
-  --arofi-theme-accent-border: rgba(59, 210, 96, 0.38);
-  --arofi-theme-accent-text: #8aeba1;
+  --arofi-theme-accent: #2C963F;
+  --arofi-theme-accent-hover: #43b958;
+  --arofi-theme-accent-soft: rgba(44, 150, 63, 0.16);
+  --arofi-theme-accent-soft-2: rgba(44, 150, 63, 0.10);
+  --arofi-theme-accent-border: rgba(44, 150, 63, 0.38);
+  --arofi-theme-accent-text: #8bd99a;
   --arofi-logo-filter: hue-rotate(79deg) saturate(1.18);
-  --primary: 134 62% 53%;
-  --ring: 134 62% 53%;
+  --primary: 131 55% 38%;
+  --ring: 131 55% 38%;
 }
 
 html[data-theme="dark"][data-accent-theme="gold"] {
@@ -5947,11 +5962,12 @@ html[data-theme][data-accent-theme] .sale-redeemed {
   margin-bottom: 14px;
 }
 
-/* The AI launcher is the AROFi mark itself, without a colored plate or badge. */
-.chat-bubble,
-.chat-bubble:hover,
-html[data-theme][data-accent-theme] .chat-bubble,
-html[data-theme][data-accent-theme] .chat-bubble:hover {
+/* Legacy logo-only launcher; keep it for any old markup, but not the current
+   human support launcher. */
+.chat-bubble:not(.ai-chat-bubble),
+.chat-bubble:not(.ai-chat-bubble):hover,
+html[data-theme][data-accent-theme] .chat-bubble:not(.ai-chat-bubble),
+html[data-theme][data-accent-theme] .chat-bubble:not(.ai-chat-bubble):hover {
   width: 60px;
   height: 60px;
   padding: 0;
@@ -7318,11 +7334,12 @@ textarea.form-input {
   border-color: var(--border-soft) !important;
 }
 
-/* Readability authority: the previous admin scale used Geist at many 12-13px
-   sizes, which looked too thin and small in the SaaS console. Use the newer
-   Windows/Office-style UI face first and bring core app text up slightly. */
+/* Readability authority: match the support console typography across public
+   pages and dashboards while preserving each user's selected accent theme. */
 :root {
-  --app-font-sans: Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --app-font-sans: "Source Sans Pro", var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --aa-font-family: var(--app-font-sans);
+  --aa-font-family-legacy: var(--app-font-sans);
   --sidebar-width: 232px;
   --aa-expanded-sidebar-width: 232px;
   --aa-mobile-drawer-width: 260px;
@@ -7331,8 +7348,10 @@ textarea.form-input {
 html,
 body {
   font-family: var(--app-font-sans) !important;
-  font-size: 15px;
-  letter-spacing: -0.006em;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22.4px;
+  letter-spacing: 0;
   text-rendering: optimizeLegibility;
 }
 
@@ -8023,9 +8042,11 @@ html[data-theme="dark"] .sic-metric {
   }
   .home-nav {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 1fr;
     align-items: center;
-    gap: 10px 12px;
+    gap: 10px;
+    top: 8px;
+    padding: 10px;
   }
   .home-brand img {
     width: 38px;
@@ -8034,19 +8055,29 @@ html[data-theme="dark"] .sic-metric {
   .home-brand-text {
     font-size: 19px;
   }
+  .home-nav-links {
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    gap: 14px;
+    padding: 2px 0 5px;
+    white-space: nowrap;
+  }
+  .home-nav-links::-webkit-scrollbar {
+    display: none;
+  }
   .home-actions {
-    justify-self: end;
+    justify-self: stretch;
     display: grid;
-    grid-template-columns: auto auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 7px;
   }
   .home-actions .btn {
     min-height: 38px;
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-  .home-actions .btn-primary {
-    grid-column: 1 / -1;
+    padding: 8px 9px;
+    font-size: 12.5px;
+    justify-content: center;
   }
   .home-hero {
     margin-top: 42px !important;
@@ -8067,11 +8098,7 @@ html[data-theme="dark"] .sic-metric {
   }
 }
 @media (max-width: 430px) {
-  .home-nav {
-    grid-template-columns: 1fr;
-  }
   .home-actions {
-    justify-self: stretch;
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
@@ -8095,12 +8122,12 @@ html[data-theme="dark"] .sic-metric {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 22px 12px 18px;
+  padding: 10px 18px 10px 10px;
   border-radius: 999px;
-  background: #1d4ed8;
+  background: var(--arofi-theme-accent, #2563eb);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.5), 0 4px 10px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--arofi-theme-accent, #2563eb) 55%, transparent), 0 6px 18px rgba(15, 23, 42, 0.18);
   cursor: pointer;
   outline: none;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -8108,13 +8135,35 @@ html[data-theme="dark"] .sic-metric {
 }
 
 .chat-bubble.ai-chat-bubble:hover {
-  background: #2563eb;
+  background: var(--arofi-theme-accent-hover, #1d4ed8);
   transform: translateY(-3px) scale(1.04);
-  box-shadow: 0 14px 30px -4px rgba(37, 99, 235, 0.6), 0 6px 14px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 42px -10px color-mix(in srgb, var(--arofi-theme-accent, #2563eb) 65%, transparent), 0 8px 20px rgba(15, 23, 42, 0.22);
 }
 
-.chat-bubble-ai-icon {
-  color: #f59e0b;
+.chat-agent-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--arofi-theme-accent, #2563eb);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18), 0 8px 18px rgba(15, 23, 42, 0.18);
+  flex: 0 0 auto;
+}
+
+.chat-agent-ai-mark {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 19px;
+  height: 19px;
+  padding: 3px;
+  border-radius: 50%;
+  background: #2C963F;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px #ffffff;
   flex-shrink: 0;
   animation: sparkRotate 4s linear infinite;
 }
@@ -8140,13 +8189,13 @@ html[data-theme="dark"] .sic-metric {
 }
 
 @keyframes aiWidgetPulse {
-  0%, 100% { box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.5), 0 4px 10px rgba(0, 0, 0, 0.1); }
-  50% { box-shadow: 0 14px 32px -2px rgba(29, 78, 216, 0.7), 0 6px 14px rgba(0, 0, 0, 0.2); }
+  0%, 100% { box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--arofi-theme-accent, #2563eb) 55%, transparent), 0 6px 18px rgba(15, 23, 42, 0.18); }
+  50% { box-shadow: 0 20px 44px -8px color-mix(in srgb, var(--arofi-theme-accent, #2563eb) 70%, transparent), 0 8px 22px rgba(15, 23, 42, 0.24); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-bubble.ai-chat-bubble,
-  .chat-bubble-ai-icon {
+  .chat-agent-ai-mark {
     animation: none !important;
   }
 }

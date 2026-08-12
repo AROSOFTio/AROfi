@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Bot, Sparkles, MessageSquareCode } from 'lucide-react'
+import { ArrowRight, Bot, Headphones, Sparkles } from 'lucide-react'
 
 interface SuggestedLink {
   label: string
@@ -159,9 +159,12 @@ export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
           onClick={() => setIsOpen(true)}
           aria-label="Open AROFi AI Support"
         >
-          <Sparkles size={18} className="chat-bubble-ai-icon" aria-hidden="true" />
-          <span className="ai-bubble-label">AI Support</span>
-          <MessageSquareCode size={16} className="chat-bubble-badge-icon" aria-hidden="true" />
+          <span className="chat-agent-avatar" aria-hidden="true">
+            <Headphones size={22} />
+            <Sparkles size={12} className="chat-agent-ai-mark" />
+          </span>
+          <span className="ai-bubble-label">Human Support</span>
+          <Bot size={15} className="chat-bubble-badge-icon" aria-hidden="true" />
         </button>
       )}
     </div>

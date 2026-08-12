@@ -6,7 +6,7 @@ type AccentTheme = 'blue' | 'green' | 'gold'
 
 const accentThemes: Array<{ key: AccentTheme; label: string; description: string; swatch: string }> = [
   { key: 'blue', label: 'Blue', description: 'Blue buttons, links, navigation, and logo.', swatch: '#2563eb' },
-  { key: 'green', label: 'Green', description: 'Green buttons, links, navigation, and logo.', swatch: '#20a53a' },
+  { key: 'green', label: 'Green', description: 'Green buttons, links, navigation, and logo.', swatch: '#2C963F' },
   { key: 'gold', label: 'Gold', description: 'Warm premium gold accents for buttons and navigation.', swatch: '#b7791f' },
 ]
 
