@@ -1,5 +1,5 @@
-const CACHE_NAME = 'arofi-admin-v4-brand'
-const APP_SHELL = ['/', '/dashboard', '/login', '/brand/arofi-logo-blue.svg', '/brand/arofi-mark-blue.svg', '/brand/arofi-favicon-v2.svg', '/manifest.webmanifest']
+const CACHE_NAME = 'arofi-admin-v5-assets'
+const APP_SHELL = ['/brand/arofi-logo-blue.svg', '/brand/arofi-mark-blue.svg', '/brand/arofi-favicon-v2.svg', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).catch(() => undefined))
@@ -20,7 +20,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   const url = new URL(request.url)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/_next/')) {
+  if (
+    url.pathname === '/' ||
+    url.pathname === '/login' ||
+    url.pathname === '/dashboard' ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/')
+  ) {
     return
   }
 
