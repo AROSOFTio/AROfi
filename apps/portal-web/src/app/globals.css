@@ -24,6 +24,20 @@
   --ring: 219 97% 53%;
   --radius: 0.75rem;
   --brand: #2563EB;
+  --arofi-portal-logo: url('/portal/brand/arofi-logo-blue.svg');
+  --arofi-portal-mark: url('/portal/brand/arofi-mark-blue.svg');
+}
+
+:root[data-accent-theme='green'] {
+  --brand: #2C963F;
+  --arofi-portal-logo: url('/portal/brand/arofi-logo-green.svg');
+  --arofi-portal-mark: url('/portal/brand/arofi-mark-green.svg');
+}
+
+:root[data-accent-theme='gold'] {
+  --brand: #d59a24;
+  --arofi-portal-logo: url('/portal/brand/arofi-logo-gold.svg');
+  --arofi-portal-mark: url('/portal/brand/arofi-mark-gold.svg');
 }
 
 body {
@@ -52,7 +66,7 @@ div:has(> img[src="/logo.png"].h-10) {
   border: 0 !important;
   border-radius: 0 !important;
   background-color: transparent !important;
-  background-image: url('/portal/brand/arofi-logo-blue.svg') !important;
+  background-image: var(--arofi-portal-logo) !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
   background-size: contain !important;

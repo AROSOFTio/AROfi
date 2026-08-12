@@ -10,6 +10,22 @@ const FAVICON = '/portal/brand/arofi-favicon-v2.svg'
 const MARK = '/portal/brand/arofi-mark-blue.svg'
 const LOGO = '/portal/brand/arofi-logo-blue.svg'
 
+async function getPublicDefaultAccentTheme() {
+  try {
+    const apiBase = process.env.API_SERVER_URL || 'http://api:3000/api'
+    const response = await fetch(`${apiBase}/system/public-settings`, {
+      next: { revalidate: 60 },
+    })
+    if (!response.ok) return 'blue'
+    const settings = await response.json() as { publicDefaultAccentTheme?: string }
+    return ['blue', 'green', 'gold'].includes(settings.publicDefaultAccentTheme ?? '')
+      ? settings.publicDefaultAccentTheme
+      : 'blue'
+  } catch {
+    return 'blue'
+  }
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://arofi.net'),
   title: TITLE,
@@ -77,13 +93,14 @@ export const viewport: Viewport = {
   themeColor: '#ffffff',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const publicDefaultAccentTheme = await getPublicDefaultAccentTheme()
   return (
-    <html lang="en">
+    <html lang="en" data-accent-theme={publicDefaultAccentTheme}>
       <head>
         <link rel="icon" href={FAVICON} type="image/svg+xml" />
         <link rel="shortcut icon" href={FAVICON} type="image/svg+xml" />

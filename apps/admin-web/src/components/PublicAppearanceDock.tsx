@@ -197,7 +197,7 @@ export default function PublicAppearanceDock() {
         .home-brand { min-width: 112px !important; display:flex !important; align-items:center !important; }
         .home-brand::before { display:none !important; content:none !important; }
         .home-brand img {
-          content: url('/brand/arofi-logo-blue.svg') !important;
+          content: var(--arofi-logo) !important;
           opacity: 1 !important;
           display:block !important;
           width: 108px !important;
@@ -256,13 +256,13 @@ export default function PublicAppearanceDock() {
           cursor:pointer;
         }
         .public-mode-dock button:hover { color:var(--text-1);background:var(--bg-hover); }
-        .public-mode-dock button[aria-pressed='true'] { color:#2563eb;background:#eff6ff; }
-        :root[data-theme='dark'] .public-mode-dock button[aria-pressed='true'] { color:#60a5fa;background:rgba(59,130,246,.14); }
+        .public-mode-dock button[aria-pressed='true'] { color:var(--arofi-accent);background:var(--arofi-accent-soft); }
+        :root[data-theme='dark'] .public-mode-dock button[aria-pressed='true'] { color:var(--arofi-accent);background:var(--arofi-accent-soft); }
 
         .book-brand { position:relative;min-width:184px; }
         .book-brand::before { display:none !important;content:none !important; }
         .book-brand img {
-          content:url('/brand/arofi-logo-blue.svg') !important;
+          content:var(--arofi-logo) !important;
           opacity:1 !important;
           width:82px !important;
           height:34px !important;
@@ -287,7 +287,7 @@ export default function PublicAppearanceDock() {
 
         /* Remove the obsolete shield logo from sign-in and Aria. */
         .login-logo {
-          content:url('/brand/arofi-logo-blue.svg') !important;
+          content:var(--arofi-logo) !important;
           width:150px !important;
           height:58px !important;
           object-fit:contain !important;
@@ -306,7 +306,7 @@ export default function PublicAppearanceDock() {
           box-shadow:none !important;
         }
         .chat-bubble-logo {
-          content:url('/brand/arofi-mark-blue.svg') !important;
+          content:var(--arofi-mark) !important;
           width:56px !important;
           height:50px !important;
           object-fit:contain !important;

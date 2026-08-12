@@ -12,19 +12,13 @@ export default function Template({ children }: { children: ReactNode }) {
           return values;
         }, {});
         var mode = null;
-        var accent = null;
         try {
           mode = localStorage.getItem('arofi-theme');
-          accent = localStorage.getItem('arofi-accent-theme');
         } catch (storageError) {}
         mode = mode || cookies['arofi-theme'];
-        accent = accent || cookies['arofi-accent-theme'];
         if (mode === 'light' || mode === 'dark') {
           document.documentElement.setAttribute('data-theme', mode);
           document.documentElement.style.colorScheme = mode;
-        }
-        if (accent === 'blue' || accent === 'green' || accent === 'gold') {
-          document.documentElement.setAttribute('data-accent-theme', accent);
         }
       } catch (error) {}
     })();

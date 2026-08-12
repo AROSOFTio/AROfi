@@ -213,16 +213,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         var accent = null;
         try {
           mode = localStorage.getItem('arofi-theme');
-          accent = localStorage.getItem('arofi-accent-theme');
         } catch (storageError) {}
         mode = mode || cookies['arofi-theme'];
-        accent = accent || cookies['arofi-accent-theme'];
         if (mode !== 'dark' && mode !== 'light') {
           mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
-        if (accent !== 'green' && accent !== 'gold' && accent !== 'blue') {
-          accent = publicDefaultAccentTheme;
-        }
+        // The public colour is controlled by the SaaS Admin. Do not let an
+        // old per-browser dashboard preference keep arofi.net on a stale
+        // accent after the platform default changes.
+        accent = publicDefaultAccentTheme;
         document.documentElement.setAttribute('data-theme', mode);
         document.documentElement.setAttribute('data-accent-theme', accent);
       } catch (error) {
