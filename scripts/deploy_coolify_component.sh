@@ -33,6 +33,15 @@ esac
 project_container_ids=$(docker ps -q --filter "label=coolify.applicationId=$application_id")
 set -- $project_container_ids
 if [ "$#" -lt 1 ]; then
+  case "$component" in
+    api) project_container_ids=$(docker ps -q --filter "name=arofi-api-v2-20260809" | head -n 1) ;;
+    admin) project_container_ids=$(docker ps -q --filter "name=arofi-admin-v2-20260809" | head -n 1) ;;
+    portal) project_container_ids=$(docker ps -q --filter "name=arofi-portal-v2-20260809" | head -n 1) ;;
+    nginx) project_container_ids=$(docker ps -q --filter "name=arofi-nginx-v2-20260809" | head -n 1) ;;
+  esac
+  set -- $project_container_ids
+fi
+if [ "$#" -lt 1 ]; then
   echo "Could not find a live container for Coolify application $application_id." >&2
   exit 1
 fi
@@ -89,6 +98,9 @@ fi
 if [ "$needs_generated_environment" -eq 1 ]; then
   generated_environment_file=$(mktemp /tmp/arofi-component-environment-XXXXXX.env)
   api_container_id=$(docker ps -q --filter "label=coolify.applicationId=11" | head -n 1)
+  if [ -z "$api_container_id" ]; then
+    api_container_id=$(docker ps -q --filter "name=arofi-api-v2-20260809" | head -n 1)
+  fi
   if [ -n "$api_container_id" ]; then
     docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$api_container_id" | awk -F= '
       NF == 0 { next }
@@ -203,6 +215,10 @@ reload_nginx() {
     --filter "label=com.docker.compose.project=$project" \
     --filter "label=com.docker.compose.service=nginx")
   set -- $nginx_ids
+  if [ "$#" -ne 1 ]; then
+    nginx_ids=$(docker ps -q --filter "name=arofi-nginx-v2-20260809")
+    set -- $nginx_ids
+  fi
   if [ "$#" -ne 1 ]; then
     echo "Could not find the live Nginx container to refresh upstream DNS." >&2
     return 1
