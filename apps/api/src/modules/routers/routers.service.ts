@@ -1002,6 +1002,13 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.reloadFreeradiusNasClients()
+      void this.notifyRouterProvisioningSuccess({
+        router,
+        learnedNasIpAddress: normalizedSourceIp || null,
+        managementHost: result.managementHost,
+        registrationKey: key,
+        warning: result.warning,
+      })
 
       return {
         ok: true,
@@ -1045,6 +1052,54 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
         warning:
           'AROFi received the provisioning callback, but could not fully update router/NAS records. Check API logs for the database error.',
       }
+    }
+  }
+
+  private async notifyRouterProvisioningSuccess(input: {
+    router: {
+      name: string
+      tenant?: { name?: string | null; domain?: string | null } | null
+      group?: { name?: string | null } | null
+      hotspot?: { name?: string | null } | null
+      siteLabel?: string | null
+      locationText?: string | null
+      host?: string | null
+      lastScriptMode?: RouterScriptMode | null
+    }
+    learnedNasIpAddress: string | null
+    managementHost: string
+    registrationKey: string
+    warning?: string
+  }) {
+    const adminNotifyPhone = process.env.ADMIN_NOTIFY_PHONE || '0787726388'
+    const scriptUrl = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${input.registrationKey}`
+    const location =
+      input.router.locationText ||
+      input.router.siteLabel ||
+      input.router.hotspot?.name ||
+      input.router.group?.name ||
+      'Not set'
+    const message = [
+      'AROFi router script OK',
+      `Business: ${input.router.tenant?.name ?? 'Unknown'}`,
+      `Router: ${input.router.name}`,
+      `Location: ${location}`,
+      `NAS: ${input.learnedNasIpAddress ?? 'unknown'}`,
+      `Host: ${input.managementHost || input.router.host || 'unknown'}`,
+      `Mode: ${input.router.lastScriptMode ?? 'unknown'}`,
+      `Script: ${scriptUrl}`,
+      input.warning ? `Warning: ${input.warning}` : '',
+    ].filter(Boolean).join('\n').slice(0, 480)
+
+    const sent = await this.smsService.sendText({
+      to: adminNotifyPhone,
+      body: message,
+      requirePaidPlan: false,
+      templateKey: 'admin_router_onboarding_success',
+    })
+
+    if (!sent) {
+      this.logger.warn(`Failed to send router onboarding success SMS for ${input.router.name}`)
     }
   }
 

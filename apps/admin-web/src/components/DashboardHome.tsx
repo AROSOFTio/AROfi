@@ -9,6 +9,7 @@ import {
   PlatformWithdrawalsResponse,
 } from '@/lib/admin-types'
 import ComplianceBanner from '@/components/ComplianceBanner'
+import VendorOnboardingTour from '@/components/VendorOnboardingTour'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate, formatMegabytes, getStatusBadgeClass } from '@/lib/format'
 import { isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
@@ -563,6 +564,9 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
   const recentTransactions = billing?.recentTransactions ?? []
   const activeSessions = sessions?.activeSessions ?? []
   const routerItems = routers?.routers ?? []
+  const packageItems = packages?.items ?? []
+  const voucherBatches = vouchers?.batches ?? []
+  const initialRouter = routerItems[0] ?? null
   const now = range.to
   const dateRange = `${formatShortDate(range.from)} - ${formatShortDate(range.to)}`
   const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((router) => router.liveState === 'LIVE').length
@@ -582,6 +586,14 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
   return (
     <div className="tenant-dashboard">
       <DashboardAutoRefresh />
+      {session && (
+        <VendorOnboardingTour
+          session={session}
+          initialRouter={initialRouter}
+          initialHasPackage={packageItems.length > 0}
+          initialHasVouchers={voucherBatches.length > 0}
+        />
+      )}
       <div className="dashboard-header dashboard-header-compact">
         <h1 className="page-title">Dashboard</h1>
         <div className="quick-menu">

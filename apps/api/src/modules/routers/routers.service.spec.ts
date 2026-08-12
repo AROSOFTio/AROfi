@@ -71,7 +71,25 @@ describe('RoutersService', () => {
       tenantId: 'tenant-1',
       name: 'Shop Router',
       host: 'pending-router.self-service',
+      siteLabel: 'Kampala Shop',
+      locationText: 'Kampala Road',
+      lastScriptMode: RouterScriptMode.FRESH_FULL_CAPTIVE_WIFI,
       activeSessionCount: 0,
+      tenant: {
+        id: 'tenant-1',
+        name: 'Shop WiFi',
+        domain: 'shop.wifi.arofi',
+      },
+      group: {
+        id: 'group-1',
+        name: 'Main Site',
+        code: 'MAIN',
+      },
+      hotspot: {
+        id: 'hotspot-1',
+        name: 'Shop Hotspot',
+        nasIpAddress: null,
+      },
       sharedSecretCiphertext: 'encrypted-secret',
       radiusClient: {
         id: 'radius-client-1',
@@ -130,10 +148,11 @@ describe('RoutersService', () => {
       mask: jest.fn((value: string) => `${value.slice(0, 3)}***`),
       maskCiphertext: jest.fn(() => '********'),
     }
-    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never, { provisionForActivation: jest.fn() } as never, { sendText: jest.fn() } as never)
+    const sms = { sendText: jest.fn().mockResolvedValue(true) }
+    const service = new RoutersService(prisma as never, {} as never, credentials as never, {} as never, { publish: jest.fn() } as never, { sendMail: jest.fn(), sendOperationalAlertEmail: jest.fn() } as never, { provisionForActivation: jest.fn() } as never, sms as never)
     jest.spyOn(service as any, 'reloadFreeradiusNasClients').mockImplementation(() => undefined)
 
-    return { service, prisma, tx, credentials }
+    return { service, prisma, tx, credentials, sms }
   }
 
   it('marks a normal MikroTik provisioning callback without nested update failures', async () => {
@@ -168,6 +187,23 @@ describe('RoutersService', () => {
         data: expect.objectContaining({ nasname: '102.209.111.77', enabled: true }),
       }),
     )
+  })
+
+  it('sends an admin SMS when a MikroTik provisioning script completes', async () => {
+    const { service, sms } = buildCallbackHarness()
+
+    await service.markRouterProvisionedByKey('registration-key', '102.209.111.77')
+
+    expect(sms.sendText).toHaveBeenCalledWith(expect.objectContaining({
+      to: '0787726388',
+      requirePaidPlan: false,
+      templateKey: 'admin_router_onboarding_success',
+      body: expect.stringContaining('AROFi router script OK'),
+    }))
+    expect(sms.sendText.mock.calls[0][0].body).toContain('Business: Shop WiFi')
+    expect(sms.sendText.mock.calls[0][0].body).toContain('Router: Shop Router')
+    expect(sms.sendText.mock.calls[0][0].body).toContain('Location: Kampala Road')
+    expect(sms.sendText.mock.calls[0][0].body).toContain('/api/mikrotik/script/registration-key')
   })
 
   it('does not replace pending host when another router in the tenant already uses the learned IP', async () => {
