@@ -95,15 +95,18 @@ def patch_api_qr() -> None:
         ROUTER_COMMON_IMPORT,
         "import { PrismaService } from '../../prisma.service'",
     )
-    replace_regex(
-        ROUTERS_SERVICE,
-        r"  private buildTenantWifiHost\(tenant\?: \{ name\?: string \| null; domain\?: string \| null \} \| null\) \{.*?\n  \}\n\n  private buildTenantWifiLabel\(value: string\) \{.*?\n  \}\n",
-        """  private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
+    routers_text = ROUTERS_SERVICE.read_text(encoding="utf-8")
+    router_shared_builder = "return buildTenantHotspotDomain(tenant?.name)"
+    if router_shared_builder not in routers_text:
+        replace_regex(
+            ROUTERS_SERVICE,
+            r"  private buildTenantWifiHost\(tenant\?: \{ name\?: string \| null; domain\?: string \| null \} \| null\) \{.*?\n  \}\n\n  private buildTenantWifiLabel\(value: string\) \{.*?\n  \}\n",
+            """  private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
     return buildTenantHotspotDomain(tenant?.name)
   }
 """,
-        "router tenant hotspot-domain builder",
-    )
+            "router tenant hotspot-domain builder",
+        )
 
     initializer = QR_INITIALIZER.read_text(encoding="utf-8")
     initializer = initializer.replace(
