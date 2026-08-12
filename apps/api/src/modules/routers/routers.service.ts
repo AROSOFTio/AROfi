@@ -2089,6 +2089,18 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
     return Array.from(new Set([...configured, ...envHosts]))
   }
 
+  private resolveApiBaseUrl() {
+    const configured =
+      process.env.API_BASE_URL ||
+      process.env.APP_BASE_URL ||
+      process.env.API_PUBLIC_HOST ||
+      'https://arofi.net'
+    const withProtocol = /^https?:\/\//i.test(configured)
+      ? configured
+      : `https://${configured}`
+    return withProtocol.replace(/\/$/, '')
+  }
+
   async getRemoteAccess(routerId: string, tenantId?: string) {
     const router = await this.prisma.router.findUnique({
       where: { id: routerId },

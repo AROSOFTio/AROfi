@@ -109,10 +109,11 @@ def patch_api_qr() -> None:
         )
 
     initializer = QR_INITIALIZER.read_text(encoding="utf-8")
-    initializer = initializer.replace(
-        "import { VouchersService } from './vouchers.service'",
-        "import { VouchersService } from './vouchers.service'\nimport { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'",
-    )
+    if "import { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'" not in initializer:
+        initializer = initializer.replace(
+            "import { VouchersService } from './vouchers.service'",
+            "import { VouchersService } from './vouchers.service'\nimport { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'",
+        )
     initializer, count = re.subn(
         r"    service\.buildVoucherPortalUrl = \(voucherCode: string, hotspotDomain\?: string\) => \{.*?\n    \}\n",
         """    service.buildVoucherPortalUrl = (voucherCode: string, hotspotDomain?: string) => {
