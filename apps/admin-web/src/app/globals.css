@@ -8200,5 +8200,135 @@ html[data-theme="dark"] .sic-metric {
   }
 }
 
+/* Final theme authority: strong selected states, no gradients, readable buttons. */
+html[data-theme][data-accent-theme] {
+  --aa-selected-nav-bg: var(--arofi-theme-accent);
+  --aa-selected-nav-text: #ffffff;
+  --aa-sidebar-active-bg: var(--arofi-theme-accent);
+  --aa-sidebar-active-text: #ffffff;
+}
+
+html[data-theme][data-accent-theme] .btn-primary,
+html[data-theme][data-accent-theme] .primary-button,
+html[data-theme][data-accent-theme] .chat-btn-primary,
+html[data-theme][data-accent-theme] .topbar-ai-support {
+  background: var(--arofi-theme-accent) !important;
+  background-image: none !important;
+  border-color: var(--arofi-theme-accent) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html[data-theme][data-accent-theme] .btn-primary:hover,
+html[data-theme][data-accent-theme] .primary-button:hover,
+html[data-theme][data-accent-theme] .chat-btn-primary:hover,
+html[data-theme][data-accent-theme] .topbar-ai-support:hover {
+  background: var(--arofi-theme-accent-hover) !important;
+  border-color: var(--arofi-theme-accent-hover) !important;
+  color: #ffffff !important;
+  filter: none !important;
+}
+
+html[data-theme][data-accent-theme] .btn-primary *,
+html[data-theme][data-accent-theme] .primary-button *,
+html[data-theme][data-accent-theme] .chat-btn-primary *,
+html[data-theme][data-accent-theme] .topbar-ai-support * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+html[data-theme][data-accent-theme] .sidebar-workspace,
+html[data-theme][data-accent-theme] .workspace-card,
+html[data-theme][data-accent-theme] .sidebar-group-toggle.active,
+html[data-theme][data-accent-theme] .nav-item.active {
+  background: var(--arofi-theme-accent) !important;
+  background-image: none !important;
+  border-color: var(--arofi-theme-accent) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme][data-accent-theme] .sidebar-group-toggle.active *,
+html[data-theme][data-accent-theme] .nav-item.active *,
+html[data-theme][data-accent-theme] .sidebar-group-toggle.active svg,
+html[data-theme][data-accent-theme] .nav-item.active svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  opacity: 1 !important;
+}
+
+html[data-theme][data-accent-theme] .badge-success,
+html[data-theme][data-accent-theme] .mini-badge.blue,
+html[data-theme][data-accent-theme] .mini-badge.green {
+  background: var(--arofi-theme-accent) !important;
+  background-image: none !important;
+  border-color: var(--arofi-theme-accent) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme][data-accent-theme] .badge-success *,
+html[data-theme][data-accent-theme] .mini-badge.blue *,
+html[data-theme][data-accent-theme] .mini-badge.green * {
+  color: #ffffff !important;
+}
+
+html[data-theme][data-accent-theme] .wallet-showcase-card {
+  background: var(--arofi-theme-accent) !important;
+  background-image: none !important;
+  border-color: var(--arofi-theme-accent) !important;
+  color: #ffffff !important;
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--arofi-theme-accent) 22%, transparent) !important;
+}
+
+html[data-theme][data-accent-theme] .wallet-showcase-card::before,
+html[data-theme][data-accent-theme] .wallet-showcase-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+html[data-theme][data-accent-theme] .wallet-showcase-card *,
+html[data-theme][data-accent-theme] .wallet-showcase-card svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.login-page {
+  background: var(--bg-app) !important;
+  background-image: none !important;
+}
+
+.home-nav {
+  top: 0 !important;
+  margin-top: 0 !important;
+  background-image: none !important;
+}
+
+.home-shell .btn-primary,
+.home-cta .btn-primary,
+.home-actions .btn-primary {
+  color: #ffffff !important;
+  background-image: none !important;
+}
+
+@media (max-width: 760px) {
+  .home-shell {
+    padding-top: 0 !important;
+  }
+
+  .home-nav {
+    top: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+
+  .login-page {
+    align-items: flex-start !important;
+    padding-top: 0 !important;
+  }
+
+  .login-card {
+    margin-top: 0 !important;
+  }
+}
+
 
 

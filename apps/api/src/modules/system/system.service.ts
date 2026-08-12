@@ -119,6 +119,7 @@ export class SystemService {
     if (dto.supportPhone !== undefined) data.supportPhone = this.nullableTrim(dto.supportPhone)
     if (dto.supportEmail !== undefined) data.supportEmail = this.nullableTrim(dto.supportEmail)
     if (dto.supportUrl !== undefined) data.supportUrl = this.nullableTrim(dto.supportUrl)
+    if (dto.publicDefaultAccentTheme !== undefined) data.publicDefaultAccentTheme = this.sanitizeAccentTheme(dto.publicDefaultAccentTheme)
     if (dto.voucherTemplateDefaultStyle !== undefined) data.voucherTemplateDefaultStyle = dto.voucherTemplateDefaultStyle.trim()
     if (dto.auditLoggingEnabled !== undefined) data.auditLoggingEnabled = dto.auditLoggingEnabled
 
@@ -208,6 +209,18 @@ export class SystemService {
     })
 
     return { globalRates, tenants: tenantRates }
+  }
+
+  async getPublicSettings() {
+    const settings = await this.prisma.platformSetting.upsert({
+      where: { id: PLATFORM_SETTINGS_ID },
+      update: {},
+      create: { id: PLATFORM_SETTINGS_ID },
+    })
+
+    return {
+      publicDefaultAccentTheme: this.sanitizeAccentTheme(settings.publicDefaultAccentTheme ?? 'blue'),
+    }
   }
 
   async getTenantSettings(tenantId: string) {
@@ -1030,6 +1043,7 @@ export class SystemService {
     supportPhone: string | null
     supportEmail: string | null
     supportUrl: string | null
+    publicDefaultAccentTheme?: string | null
     voucherTemplateDefaultStyle: string
     auditLoggingEnabled: boolean
     updatedAt: Date
@@ -1044,7 +1058,16 @@ export class SystemService {
       enterpriseMobileMoneyFeePercent: this.bpsToPercent(settings.enterpriseMobileMoneyFeeBps),
       enterpriseVoucherFeePercent: this.bpsToPercent(settings.enterpriseVoucherFeeBps),
       withdrawalFeePercent: this.bpsToPercent(settings.withdrawalFeeBps),
+      publicDefaultAccentTheme: this.sanitizeAccentTheme(settings.publicDefaultAccentTheme ?? 'blue'),
     }
+  }
+
+  private sanitizeAccentTheme(value: string) {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'blue' || normalized === 'green' || normalized === 'gold') {
+      return normalized
+    }
+    throw new BadRequestException('publicDefaultAccentTheme must be blue, green, or gold')
   }
 
   private percentToBps(value: number, field: string) {

@@ -91,21 +91,21 @@ export default function PublicAppearanceDock() {
           --ring: 221 83% 53%;
         }
         :root[data-accent-theme='green'] {
-          --arofi-accent: #059669;
-          --arofi-accent-strong: #047857;
-          --arofi-accent-soft: rgba(5, 150, 105, .11);
-          --arofi-accent-line: rgba(5, 150, 105, .28);
+          --arofi-accent: #2C963F;
+          --arofi-accent-strong: #22723B;
+          --arofi-accent-soft: rgba(44, 150, 63, .11);
+          --arofi-accent-line: rgba(44, 150, 63, .28);
           --arofi-logo: url('/brand/arofi-logo-green.svg');
           --arofi-mark: url('/brand/arofi-mark-green.svg');
-          --green: #059669;
-          --green-dark: #047857;
-          --green-light: #ecfdf5;
-          --green-mid: #a7f3d0;
-          --green-soft: #d1fae5;
-          --brand: #059669;
-          --brand-2: #047857;
-          --primary: 160 84% 39%;
-          --ring: 160 84% 39%;
+          --green: #2C963F;
+          --green-dark: #22723B;
+          --green-light: #eaf7ed;
+          --green-mid: #adddb8;
+          --green-soft: #f3faf5;
+          --brand: #2C963F;
+          --brand-2: #22723B;
+          --primary: 130 55% 38%;
+          --ring: 130 55% 38%;
         }
         :root[data-accent-theme='gold'] {
           --arofi-accent: #d59a24;
@@ -176,8 +176,8 @@ export default function PublicAppearanceDock() {
           --green-light:rgba(59,130,246,.14);--green-mid:rgba(96,165,250,.30);--green-soft:rgba(59,130,246,.10);--brand:#60a5fa;--brand-2:#3b82f6;
         }
         :root[data-theme='dark'][data-accent-theme='green'] {
-          --arofi-accent:#34d399;--arofi-accent-strong:#10b981;--green:#34d399;--green-dark:#6ee7b7;
-          --green-light:rgba(16,185,129,.14);--green-mid:rgba(52,211,153,.30);--green-soft:rgba(16,185,129,.10);--brand:#34d399;--brand-2:#10b981;
+          --arofi-accent:#2C963F;--arofi-accent-strong:#22723B;--green:#2C963F;--green-dark:#8bd99a;
+          --green-light:rgba(44,150,63,.16);--green-mid:rgba(44,150,63,.36);--green-soft:rgba(44,150,63,.10);--brand:#2C963F;--brand-2:#22723B;
         }
         :root[data-theme='dark'][data-accent-theme='gold'] {
           --arofi-accent:#f2bd58;--arofi-accent-strong:#d59a24;--green:#f2bd58;--green-dark:#f7cf7b;
@@ -187,20 +187,6 @@ export default function PublicAppearanceDock() {
         body { background: var(--bg-app) !important; color: var(--text-1); }
         :root[data-theme='dark'] body { background-image: none !important; }
 
-        /* Public pages are always AROFi blue. Accent selection remains dashboard-only. */
-        .home-shell, .docs-book-shell {
-          --arofi-accent: #2563eb;
-          --arofi-accent-strong: #1d4ed8;
-          --arofi-accent-soft: rgba(37,99,235,.11);
-          --arofi-accent-line: rgba(37,99,235,.28);
-        }
-        :root[data-theme='dark'] .home-shell,
-        :root[data-theme='dark'] .docs-book-shell {
-          --arofi-accent: #60a5fa;
-          --arofi-accent-strong: #3b82f6;
-          --arofi-accent-soft: rgba(59,130,246,.14);
-          --arofi-accent-line: rgba(96,165,250,.30);
-        }
         .home-shell { background: var(--bg-app) !important; color: var(--text-1) !important; }
         .home-nav {
           background: color-mix(in srgb, var(--bg-card) 94%, transparent) !important;

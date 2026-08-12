@@ -234,6 +234,10 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsString()
+  publicDefaultAccentTheme?: string
+
+  @IsOptional()
+  @IsString()
   voucherTemplateDefaultStyle?: string
 
   @IsOptional()

@@ -182,9 +182,27 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+async function getPublicDefaultAccentTheme() {
+  try {
+    const apiBase = process.env.API_SERVER_URL || 'http://api:3000/api'
+    const response = await fetch(`${apiBase}/system/public-settings`, {
+      next: { revalidate: 60 },
+    })
+    if (!response.ok) return 'blue'
+    const settings = await response.json() as { publicDefaultAccentTheme?: string }
+    return ['blue', 'green', 'gold'].includes(settings.publicDefaultAccentTheme ?? '')
+      ? settings.publicDefaultAccentTheme
+      : 'blue'
+  } catch {
+    return 'blue'
+  }
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const publicDefaultAccentTheme = await getPublicDefaultAccentTheme()
   const themeScript = `
     (function () {
+      var publicDefaultAccentTheme = ${JSON.stringify(publicDefaultAccentTheme)};
       try {
         var cookies = document.cookie.split('; ').reduce(function (values, item) {
           var parts = item.split('=');
@@ -202,14 +220,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         if (mode !== 'dark' && mode !== 'light') {
           mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
-        if (accent !== 'green' && accent !== 'white' && accent !== 'blue') {
-          accent = 'blue';
+        if (accent !== 'green' && accent !== 'gold' && accent !== 'blue') {
+          accent = publicDefaultAccentTheme;
         }
         document.documentElement.setAttribute('data-theme', mode);
         document.documentElement.setAttribute('data-accent-theme', accent);
       } catch (error) {
         document.documentElement.setAttribute('data-theme', 'light');
-        document.documentElement.setAttribute('data-accent-theme', 'blue');
+        document.documentElement.setAttribute('data-accent-theme', publicDefaultAccentTheme);
       }
     })();
   `

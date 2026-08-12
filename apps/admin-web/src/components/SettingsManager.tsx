@@ -64,6 +64,7 @@ type PlatformSettings = {
   supportPhone?: string | null
   supportEmail?: string | null
   supportUrl?: string | null
+  publicDefaultAccentTheme: string
   voucherTemplateDefaultStyle: string
   auditLoggingEnabled: boolean
 }
@@ -237,6 +238,7 @@ const optionLabels: Record<string, string> = {
   custom: 'Custom hex code',
 }
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
+const publicAccentOptions = ['blue', 'green', 'gold']
 
 export default function SettingsManager({
   user,
@@ -595,6 +597,7 @@ export default function SettingsManager({
           supportPhone: stringValue(form, 'supportPhone'),
           supportEmail: stringValue(form, 'supportEmail'),
           supportUrl: stringValue(form, 'supportUrl'),
+          publicDefaultAccentTheme: stringValue(form, 'publicDefaultAccentTheme'),
         })
       }
       const saved = await clientPatchApi<PlatformSettings>('/system/settings', payload)
@@ -835,6 +838,7 @@ export default function SettingsManager({
                   <Input name="supportPhone" label="Platform Support Phone" defaultValue={platformForm.supportPhone ?? ''} />
                   <Input name="supportEmail" label="Platform Support Email" defaultValue={platformForm.supportEmail ?? ''} />
                   <Input name="supportUrl" label="Platform Support URL" defaultValue={platformForm.supportUrl ?? ''} />
+                  <Select name="publicDefaultAccentTheme" label="Public Website Default Color" defaultValue={platformForm.publicDefaultAccentTheme ?? 'blue'} options={publicAccentOptions} />
                 </>
               )}
             </div>

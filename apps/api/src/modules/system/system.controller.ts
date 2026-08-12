@@ -17,6 +17,16 @@ import { UpdateSupportTicketDto } from './dto/update-support-ticket.dto'
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto'
 import { SystemService } from './system.service'
 
+@Controller('system')
+export class PublicSystemController {
+  constructor(private readonly systemService: SystemService) {}
+
+  @Get('public-settings')
+  getPublicSettings() {
+    return this.systemService.getPublicSettings()
+  }
+}
+
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('system')
 export class SystemController {
