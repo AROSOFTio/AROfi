@@ -35,6 +35,7 @@ type CreateNotificationResponse = {
     inbox: { businesses: number }
     email: DeliveryChannel
     whatsapp: DeliveryChannel
+    sms: DeliveryChannel
   }
 }
 
@@ -114,12 +115,14 @@ export default function SendNotificationPanel() {
         await clientUploadApi(`/notifications/${notification.id}/attachments`, formData)
       }
 
-      const { inbox, email, whatsapp } = notification.delivery
-      const deliveryMessage = `Dashboard: ${inbox.businesses}/${inbox.businesses} businesses. Email: ${email.delivered}/${email.attempted} contacts (${email.businesses}/${inbox.businesses} businesses covered). WhatsApp: ${whatsapp.delivered}/${whatsapp.attempted} contacts (${whatsapp.businesses}/${inbox.businesses} businesses covered).`
+      const { inbox, email, whatsapp, sms } = notification.delivery
+      const deliveryMessage = `Dashboard: ${inbox.businesses}/${inbox.businesses} businesses. Email: ${email.delivered}/${email.attempted} contacts (${email.businesses}/${inbox.businesses} businesses covered). SMS: ${sms.delivered}/${sms.attempted} contacts (${sms.businesses}/${inbox.businesses} businesses covered). WhatsApp: ${whatsapp.delivered}/${whatsapp.attempted} contacts (${whatsapp.businesses}/${inbox.businesses} businesses covered).`
       const hasDeliveryProblem =
         email.failed > 0 ||
+        sms.failed > 0 ||
         whatsapp.failed > 0 ||
         email.businesses < inbox.businesses ||
+        sms.businesses < inbox.businesses ||
         whatsapp.businesses < inbox.businesses
 
       if (hasDeliveryProblem) {
@@ -206,7 +209,7 @@ export default function SendNotificationPanel() {
           </div>
 
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-            Delivery uses each business&apos;s saved contact email, active account emails, and saved WhatsApp phone number. Duplicate contacts receive one copy.
+            Delivery uses each business&apos;s saved contact email, active account emails, saved SMS number, and saved WhatsApp phone number. Duplicate contacts receive one copy.
           </p>
 
           {error && <p style={{ color: 'var(--danger-fg)', fontSize: 13, margin: 0 }}>{error}</p>}
