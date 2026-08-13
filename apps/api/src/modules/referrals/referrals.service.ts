@@ -209,7 +209,7 @@ export class ReferralsService {
       profile.tenantId
         ? this.prisma.tenantPayoutNumber.findMany({
             where: { tenantId: profile.tenantId, status: PayoutNumberStatus.VERIFIED, verifiedAt: { not: null } },
-            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+            orderBy: { createdAt: 'asc' },
             take: 2,
             select: { id: true, network: true, normalizedPhone: true, label: true, isPrimary: true },
           })
@@ -396,12 +396,12 @@ export class ReferralsService {
       if (!secretOk) throw new BadRequestException('Invalid withdrawal secret PIN')
       const verifiedPayoutNumbers = await tx.tenantPayoutNumber.findMany({
         where: { tenantId, status: PayoutNumberStatus.VERIFIED, verifiedAt: { not: null } },
-        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        orderBy: { createdAt: 'asc' },
       })
       if (verifiedPayoutNumbers.length === 0) throw new NotFoundException('Registered verified payout number not found')
       const payoutNumber = dto.payoutNumberId
         ? verifiedPayoutNumbers.find((number) => number.id === dto.payoutNumberId)
-        : verifiedPayoutNumbers[0]
+        : null
       if (!payoutNumber) {
         throw new BadRequestException('Referral withdrawals can only go to one of your registered verified payout numbers')
       }

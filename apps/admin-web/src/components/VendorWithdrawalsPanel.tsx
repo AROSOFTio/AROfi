@@ -103,8 +103,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   const [customTo, setCustomTo] = useState('')
 
   const verifiedNumbers = profile?.numbers.filter((item) => item.status === 'VERIFIED') ?? []
-  const primaryNumber = verifiedNumbers.find((item) => item.isPrimary) ?? verifiedNumbers[0] ?? null
-  const selectedNumber = verifiedNumbers.find((item) => item.id === selectedPayoutNumberId) ?? primaryNumber
+  const selectedNumber = verifiedNumbers.find((item) => item.id === selectedPayoutNumberId) ?? verifiedNumbers[0] ?? null
   const mtnNumbers = profile?.numbers.filter((item) => item.network === 'MTN') ?? []
   const airtelNumbers = profile?.numbers.filter((item) => item.network === 'AIRTEL') ?? []
   const availableUgx = profile?.metrics?.availableBalanceUgx ?? profile?.wallet?.balanceUgx ?? 0
@@ -144,11 +143,9 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   const pendingChange = profile.changeRequests.find((item) =>
     ['PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_APPROVAL'].includes(item.status),
   )
-  const selectedIsPrimary = Boolean(selectedNumber && primaryNumber && selectedNumber.id === primaryNumber.id)
-  const canWithdraw = profile.profile.secretConfigured && Boolean(primaryNumber) && !pendingChange
+  const canWithdraw = profile.profile.secretConfigured && Boolean(selectedNumber) && !pendingChange
   const canSubmitWithdrawal =
     canWithdraw &&
-    selectedIsPrimary &&
     withdrawalMath.amountUgx > 0 &&
     !withdrawalMath.exceedsBalance &&
     !withdrawalMath.belowMinimum &&
@@ -237,10 +234,6 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
       setModalError('Select a verified payout number before withdrawing.')
       return
     }
-    if (!selectedIsPrimary) {
-      setModalError('Withdrawals currently go only to the primary verified payout number.')
-      return
-    }
     if (withdrawalMath.belowMinimum) {
       setModalError(`Minimum withdrawal is ${formatCurrency(minimumPayoutUgx)}.`)
       return
@@ -316,7 +309,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         </div>
         <div className="withdraw-card-body">
           {!canWithdraw && (
-            <p className="field-hint">{withdrawBlockedReason(profile, primaryNumber, pendingChange)}</p>
+            <p className="field-hint">{withdrawBlockedReason(profile, selectedNumber, pendingChange)}</p>
           )}
           <div className="payout-columns">
             <PayoutColumn network="MTN" numbers={mtnNumbers} selectedId={selectedNumber?.id} onSelect={setSelectedPayoutNumberId} />
@@ -401,7 +394,6 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         verifiedNumbers={verifiedNumbers}
         selectedNumber={selectedNumber}
         onSelectNumber={setSelectedPayoutNumberId}
-        selectedIsPrimary={selectedIsPrimary}
         secretConfigured={profile.profile.secretConfigured}
         secretKey={secretKey}
         onSecretKey={setSecretKey}
@@ -412,7 +404,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         acceptedTerms={acceptedTerms}
         onAcceptedTerms={setAcceptedTerms}
         canSubmit={canSubmitWithdrawal}
-        blockedReason={!canWithdraw ? withdrawBlockedReason(profile, primaryNumber, pendingChange) : ''}
+        blockedReason={!canWithdraw ? withdrawBlockedReason(profile, selectedNumber, pendingChange) : ''}
       />
 
       <SetupModal
@@ -445,7 +437,6 @@ function WithdrawModal({
   verifiedNumbers,
   selectedNumber,
   onSelectNumber,
-  selectedIsPrimary,
   secretConfigured,
   secretKey,
   onSecretKey,
@@ -471,7 +462,6 @@ function WithdrawModal({
   verifiedNumbers: PayoutNumber[]
   selectedNumber: PayoutNumber | null
   onSelectNumber: (id: string) => void
-  selectedIsPrimary: boolean
   secretConfigured: boolean
   secretKey: string
   onSecretKey: (value: string) => void
@@ -522,15 +512,11 @@ function WithdrawModal({
                 >
                   <NetworkMark network={number.network} />
                   <span className="destination-phone">{formatPhone(number.normalizedPhone)}</span>
-                  {number.isPrimary && <span className="mini-badge blue">Default</span>}
                   <Check size={18} className="destination-check" />
                 </button>
               )
             })}
           </div>
-          {selectedNumber && !selectedIsPrimary && (
-            <p className="field-hint danger">Withdrawals currently go only to the primary verified number.</p>
-          )}
         </div>
 
         <label className="form-group">
@@ -746,9 +732,8 @@ function PayoutColumn({
             disabled={!verified}
           >
             <span>{formatPhone(number.normalizedPhone)}</span>
-            {number.isPrimary && <span className="mini-badge blue">Default</span>}
             <span className={`mini-badge ${verified ? 'green' : 'amber'}`}>{verified ? 'Approved' : humanize(number.status)}</span>
-            {number.isPrimary ? <Star size={16} className="primary-star" /> : <MoreVertical size={16} className="muted-icon" />}
+            <MoreVertical size={16} className="muted-icon" />
           </button>
         )
       })}
@@ -842,11 +827,11 @@ function humanize(status: string) {
 
 function withdrawBlockedReason(
   profile: PayoutProfile,
-  primaryNumber: PayoutNumber | null,
+  selectedNumber: PayoutNumber | null,
   pendingChange: PayoutProfile['changeRequests'][number] | undefined,
 ) {
   if (!profile.profile.secretConfigured) return 'Set a withdrawal secret code before withdrawing.'
-  if (!primaryNumber) return 'Register a verified primary payout number before withdrawing.'
+  if (!selectedNumber) return 'Register a verified payout number before withdrawing.'
   if (pendingChange) return 'A payout number change is pending; withdrawals are blocked.'
   return ''
 }

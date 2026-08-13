@@ -24,7 +24,7 @@ export class TenantsService {
         },
         tenantSettings: true,
         payoutNumbers: {
-          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+          orderBy: { createdAt: 'desc' },
           take: 5,
         },
         payoutNumberChangeRequests: {

@@ -452,10 +452,10 @@ async function PlatformDashboard() {
           </div>
           <div style={{ display: 'grid', gap: 9, fontSize: 13 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-2)' }}>Primary payout number</span>
+              <span style={{ color: 'var(--text-2)' }}>Verified payout numbers</span>
               <span style={{ fontWeight: 600 }}>
-                {payoutProfile?.numbers?.find((n: any) => n.isPrimary && n.status === 'VERIFIED')
-                  ? `${payoutProfile.numbers.find((n: any) => n.isPrimary && n.status === 'VERIFIED').network} line`
+                {payoutProfile?.numbers?.filter((n: any) => n.status === 'VERIFIED').length
+                  ? `${payoutProfile.numbers.filter((n: any) => n.status === 'VERIFIED').length} registered`
                   : <span style={{ color: 'var(--danger-fg)' }}>Not set</span>}
               </span>
             </div>
@@ -579,7 +579,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
   // Wallet helper calculations
   const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []
-  const primaryNumber = verifiedNumbers.find((item: any) => item.isPrimary) ?? verifiedNumbers[0] ?? null
+  const selectedPayoutNumber = verifiedNumbers[0] ?? null
   const availableUgx = payoutProfile?.wallet?.balanceUgx ?? billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0
   const minimumPayoutUgx = payoutProfile?.rules?.minimumPayoutUgx ?? 0
 
@@ -706,7 +706,7 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
             </div>
             <div>
               <span>Payout</span>
-              <strong>{primaryNumber ? `${primaryNumber.network} Line` : 'Not set'}</strong>
+              <strong>{verifiedNumbers.length ? `${verifiedNumbers.length} registered` : 'Not set'}</strong>
             </div>
           </div>
         </div>
@@ -721,9 +721,9 @@ async function VendorDashboard({ session, searchParams }: { session: AdminSessio
 
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
-                <span style={{ color: 'var(--text-2)' }}>Primary payout number</span>
+                <span style={{ color: 'var(--text-2)' }}>Payout numbers</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-1)', fontFamily: 'monospace' }}>
-                  {primaryNumber ? `${primaryNumber.network} - ${primaryNumber.normalizedPhone}` : <span style={{ color: '#ef4444' }}>Not set</span>}
+                  {selectedPayoutNumber ? `${verifiedNumbers.length} verified — choose on withdrawal` : <span style={{ color: '#ef4444' }}>Not set</span>}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>

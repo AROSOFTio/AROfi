@@ -179,7 +179,7 @@ export class WalletsService {
       }),
       this.prisma.tenantPayoutNumber.findMany({
         where: { tenantId },
-        orderBy: [{ isPrimary: 'desc' }, { status: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
       }),
       this.prisma.tenantPayoutNumberChangeRequest.findMany({
         where: { tenantId },
@@ -366,7 +366,9 @@ export class WalletsService {
           label: dto.label?.trim(),
           ownerName: dto.ownerName?.trim(),
           status,
-          isPrimary: status === PayoutNumberStatus.VERIFIED && hasVerified === 0,
+          // Each approved payout number is equally eligible. The withdrawal
+          // request explicitly selects the destination.
+          isPrimary: false,
           verifiedAt: status === PayoutNumberStatus.VERIFIED ? new Date() : null,
         },
       })
@@ -486,7 +488,7 @@ export class WalletsService {
         status: PayoutNumberStatus.VERIFIED,
         verifiedAt: { not: null },
       },
-      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      orderBy: { createdAt: 'asc' },
     })
 
     if (verifiedPayoutNumbers.length === 0) {
@@ -495,7 +497,7 @@ export class WalletsService {
 
     const payoutNumber = dto.payoutNumberId
       ? verifiedPayoutNumbers.find((number) => number.id === dto.payoutNumberId)
-      : verifiedPayoutNumbers[0]
+      : null
 
     if (!payoutNumber) {
       throw new BadRequestException('Withdrawals can only go to one of your registered verified payout numbers')
@@ -828,19 +830,13 @@ export class WalletsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const hasPrimary = await tx.tenantPayoutNumber.count({
-        where: { tenantId: number.tenantId, isPrimary: true, status: PayoutNumberStatus.VERIFIED },
-      })
-      if (!hasPrimary) {
-        await tx.tenantPayoutNumber.updateMany({ where: { tenantId: number.tenantId, isPrimary: true }, data: { isPrimary: false } })
-      }
       const updated = await tx.tenantPayoutNumber.update({
         where: { id: number.id },
         data: {
           status: PayoutNumberStatus.VERIFIED,
           verifiedAt: new Date(),
           approvedByUserId: actorUserId,
-          isPrimary: hasPrimary === 0,
+          isPrimary: false,
         },
         include: { tenant: { select: { id: true, name: true, domain: true } } },
       })
@@ -850,7 +846,7 @@ export class WalletsService {
         action: 'payout.number.approved',
         entity: 'TenantPayoutNumber',
         entityId: number.id,
-        details: { normalizedPhone: number.normalizedPhone, network: number.network, isPrimary: updated.isPrimary },
+        details: { normalizedPhone: number.normalizedPhone, network: number.network },
         client: tx,
       })
       return updated
@@ -961,11 +957,6 @@ export class WalletsService {
           where: { id: request.existingPayoutNumberId, tenantId: request.tenantId },
           data: { status: PayoutNumberStatus.DISABLED, isPrimary: false, changedAt: new Date() },
         })
-      } else {
-        await tx.tenantPayoutNumber.updateMany({
-          where: { tenantId: request.tenantId, isPrimary: true },
-          data: { isPrimary: false },
-        })
       }
 
       const payoutNumber = await tx.tenantPayoutNumber.upsert({
@@ -979,7 +970,7 @@ export class WalletsService {
           network: request.requestedNetwork,
           phone: request.requestedPhone,
           status: PayoutNumberStatus.VERIFIED,
-          isPrimary: true,
+          isPrimary: false,
           verifiedAt: new Date(),
           changedAt: new Date(),
           approvedByUserId: actorUserId,
@@ -990,7 +981,7 @@ export class WalletsService {
           phone: request.requestedPhone,
           normalizedPhone: request.requestedNormalizedPhone,
           status: PayoutNumberStatus.VERIFIED,
-          isPrimary: true,
+          isPrimary: false,
           verifiedAt: new Date(),
           changedAt: new Date(),
           approvedByUserId: actorUserId,

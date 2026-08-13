@@ -96,7 +96,7 @@ export function ReferralWithdrawalPanel({ availableBalanceUgx, payoutNumbers }: 
             <select className="form-input" value={payoutNumberId} onChange={(event) => setPayoutNumberId(event.target.value)} required>
               {payoutNumbers.map((number) => (
                 <option key={number.id} value={number.id}>
-                  {number.label ? `${number.label} - ` : ''}{number.network} {number.normalizedPhone}{number.isPrimary ? ' - Primary' : ''}
+                  {number.label ? `${number.label} - ` : ''}{number.network} {number.normalizedPhone}
                 </option>
               ))}
             </select>

@@ -341,7 +341,6 @@ function TenantCard({ tenant, busy, onActivate, onSuspend, onFraudHold, onReleas
                 {number.network} {number.normalizedPhone}
               </a>
               {number.ownerName && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{number.ownerName}</span>}
-              {number.isPrimary && <span className="badge badge-info">primary</span>}
               <span className={getStatusBadgeClass(number.status)}>{number.status.toLowerCase().replace(/_/g, ' ')}</span>
             </div>
           ))}

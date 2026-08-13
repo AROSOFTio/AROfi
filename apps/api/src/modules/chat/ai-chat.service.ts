@@ -59,7 +59,7 @@ Common troubleshooting you can help with (give practical steps, then point to th
 - Router shows offline: check the router has internet access and power, confirm the RouterOS API/WinBox service is enabled, then re-run the setup command from the dashboard. Full guide: /docs (see "Router onboarding step-by-step").
 - Can't reach a router remotely / need WinBox from outside the site: AROFi provides a secure VPN/SSTP tunnel — no port forwarding needed. Guide: /docs ("Remote WinBox Access (SSTP VPN)").
 - A payment didn't go through: ask the customer to confirm they approved the MTN/Airtel prompt on their phone and have sufficient balance; failed payments are not charged. If it still shows pending after a few minutes, direct them to Support.
-- Withdrawal is delayed or blocked: withdrawals need a verified primary payout number and the withdrawal secret code; large or unusual withdrawals may need manual review — direct them to Support for a specific case.
+- Withdrawal is delayed or blocked: withdrawals need a verified registered payout number chosen for that withdrawal and the withdrawal secret code; large or unusual withdrawals may need manual review — direct them to Support for a specific case.
 - Forgot password / can't log in: use the "Forgot password" link on the sign-in page, or contact Support to help recover the account.
 - Customers can tether/share the paid connection: MikroTik hotspot sharing can be blocked — guide: /docs ("Block Hotspot Sharing/Tethering on MikroTik RouterOS").
 
