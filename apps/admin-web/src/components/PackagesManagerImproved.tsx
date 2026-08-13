@@ -42,6 +42,12 @@ function optionalInt(value: string) {
   return value.trim() && Number.isFinite(parsed) ? parsed : undefined
 }
 
+function packageCodePart(value: string, fallback: string) {
+  const words = value.trim().split(/[^a-zA-Z0-9]+/).filter(Boolean)
+  const initials = words.map((word) => word[0]).join('')
+  return (initials || value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4) || fallback).toUpperCase().slice(0, 6)
+}
+
 function searchText(item: PackageItem) {
   return `${item.name} ${item.code} ${item.description ?? ''}`.toLowerCase()
 }
@@ -126,6 +132,7 @@ export default function PackagesManagerImproved() {
   )
 
   function createPackage() {
+    const selectedTenant = tenants.find((tenant) => tenant.id === (form.tenantId || tenants[0]?.id))
     setEditing(null)
     setKind(view === 'multi' ? 'MULTI' : view === 'tv' ? 'TV' : 'INTERNET')
     setForm({
@@ -134,7 +141,7 @@ export default function PackagesManagerImproved() {
       deviceLimit: view === 'multi' ? '2' : '1',
       durationMinutes: view === 'tv' ? '1440' : '60',
       name: view === 'multi' ? 'Family Package' : view === 'tv' ? 'Smart TV Package' : '',
-      code: view === 'multi' ? 'FAMILY' : view === 'tv' ? 'TV-DAILY' : '',
+      code: view === 'multi' ? `${packageCodePart(selectedTenant?.name ?? '', 'BIZ')}-FP` : view === 'tv' ? `${packageCodePart(selectedTenant?.name ?? '', 'BIZ')}-TV` : '',
       downloadSpeedKbps: view === 'tv' ? '8192' : '',
       uploadSpeedKbps: view === 'tv' ? '2048' : '',
     })
@@ -415,12 +422,12 @@ export default function PackagesManagerImproved() {
               <div className="package-form-grid">
                 <div className="form-group package-form-full">
                   <label className="form-label">Business</label>
-                  <select className="form-input" value={form.tenantId} onChange={(event) => setForm((current) => ({ ...current, tenantId: event.target.value }))} disabled={Boolean(editing)}>
+                  <select className="form-input" value={form.tenantId} onChange={(event) => setForm((current) => ({ ...current, tenantId: event.target.value, code: !editing && !current.code ? `${packageCodePart(tenants.find((tenant) => tenant.id === event.target.value)?.name ?? '', 'BIZ')}-${packageCodePart(current.name, 'PLAN')}` : current.code }))} disabled={Boolean(editing)}>
                     <option value="">Select business</option>
                     {tenants.map((tenant) => <option value={tenant.id} key={tenant.id}>{tenant.name}</option>)}
                   </select>
                 </div>
-                <div className="form-group"><label className="form-label">Name</label><input className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></div>
+                <div className="form-group"><label className="form-label">Name</label><input className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} onBlur={() => setForm((current) => current.code ? current : { ...current, code: `${packageCodePart(tenants.find((tenant) => tenant.id === current.tenantId)?.name ?? '', 'BIZ')}-${packageCodePart(current.name, 'PLAN')}` })} required /></div>
                 <div className="form-group"><label className="form-label">Code</label><input className="form-input" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} disabled={Boolean(editing)} required /></div>
                 <div className="form-group"><label className="form-label">Price (UGX)</label><input className="form-input" type="number" min={0} value={form.priceUgx} onChange={(event) => setForm((current) => ({ ...current, priceUgx: event.target.value }))} required /></div>
                 <div className="form-group"><label className="form-label">Duration (minutes)</label><input className="form-input" type="number" min={1} value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))} required /></div>

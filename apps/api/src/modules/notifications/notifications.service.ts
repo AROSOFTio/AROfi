@@ -20,9 +20,13 @@ export class NotificationsService {
   ) {}
 
   async listForUser(userId: string, tenantId?: string | null) {
+    const tenant = tenantId ? await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { createdAt: true } }) : null
     const notifications = await this.prisma.notification.findMany({
       where: {
-        OR: [{ audience: NotificationAudience.ALL_BUSINESSES }, ...(tenantId ? [{ tenantId }] : [])],
+        OR: [
+          ...(tenant ? [{ audience: NotificationAudience.ALL_BUSINESSES, createdAt: { gte: tenant.createdAt } }] : []),
+          ...(tenantId ? [{ tenantId }] : []),
+        ],
       },
       include: {
         attachments: { select: { id: true, fileName: true, mimeType: true, fileSize: true } },
@@ -64,9 +68,13 @@ export class NotificationsService {
   }
 
   async markAllRead(userId: string, tenantId?: string | null) {
+    const tenant = tenantId ? await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { createdAt: true } }) : null
     const notifications = await this.prisma.notification.findMany({
       where: {
-        OR: [{ audience: NotificationAudience.ALL_BUSINESSES }, ...(tenantId ? [{ tenantId }] : [])],
+        OR: [
+          ...(tenant ? [{ audience: NotificationAudience.ALL_BUSINESSES, createdAt: { gte: tenant.createdAt } }] : []),
+          ...(tenantId ? [{ tenantId }] : []),
+        ],
       },
       select: { id: true },
     })
@@ -283,7 +291,11 @@ export class NotificationsService {
     if (!notification) {
       throw new NotFoundException('Notification not found')
     }
-    if (notification.audience === NotificationAudience.SINGLE_BUSINESS && notification.tenantId !== tenantId) {
+    const tenant = tenantId ? await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { createdAt: true } }) : null
+    const visible = notification.audience === NotificationAudience.SINGLE_BUSINESS
+      ? notification.tenantId === tenantId
+      : Boolean(tenant && notification.createdAt >= tenant.createdAt)
+    if (!visible) {
       throw new ForbiddenException('You do not have access to this notification')
     }
     return notification
