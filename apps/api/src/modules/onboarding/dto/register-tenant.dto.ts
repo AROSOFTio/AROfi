@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsPhoneNumber, IsString, Matches, MaxLength, MinLength } from 'class-validator'
+import { Equals, IsBoolean, IsEmail, IsIn, IsOptional, IsPhoneNumber, IsString, Matches, MaxLength, MinLength } from 'class-validator'
 
 export class RegisterTenantDto {
   @IsOptional()
@@ -64,4 +64,8 @@ export class RegisterTenantDto {
   @MinLength(8)
   @MaxLength(120)
   password!: string
+
+  @IsBoolean()
+  @Equals(true, { message: 'You must accept the Terms of Service and Privacy Policy.' })
+  acceptedTermsAndPrivacy!: boolean
 }

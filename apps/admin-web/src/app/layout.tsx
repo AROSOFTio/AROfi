@@ -4,6 +4,7 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt'
 import DeferredChatWidget from '@/components/DeferredChatWidget'
+import CookieConsent from '@/components/CookieConsent'
 
 const SITE_URL = 'https://arofi.net'
 const SITE_NAME = 'AROFi by AROSOFT'
@@ -351,6 +352,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         {children}
+        <CookieConsent />
         <PwaInstallPrompt appName="AROFi Admin" />
         <DeferredChatWidget />
       </body>

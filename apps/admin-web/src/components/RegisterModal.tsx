@@ -77,6 +77,7 @@ export function RegisterModal({
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [legalAccepted, setLegalAccepted] = useState(false)
   const [success, setSuccess] = useState<TenantRegistrationResponse | null>(null)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
   const googleSignupUrl = process.env.NEXT_PUBLIC_GOOGLE_SIGNUP_URL ?? ''
@@ -139,6 +140,10 @@ export function RegisterModal({
       setError('Passwords do not match.')
       return
     }
+    if (!legalAccepted) {
+      setError('Please accept the Terms of Service and acknowledge the Privacy Policy to create your workspace.')
+      return
+    }
 
     setLoading(true)
 
@@ -157,6 +162,7 @@ export function RegisterModal({
           email: formState.email.trim(),
           phoneNumber: formState.phoneNumber,
           password: formState.password,
+          acceptedTermsAndPrivacy: true,
         }),
       })
 
@@ -423,6 +429,10 @@ export function RegisterModal({
               <div className="stats-grid">
                 <Field label="Password" type="password" value={formState.password} onChange={(value) => setFormState((previous) => ({ ...previous, password: value }))} required />
                 <Field label="Confirm Password" type="password" value={formState.confirmPassword} onChange={(value) => setFormState((previous) => ({ ...previous, confirmPassword: value }))} required />
+                <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 0 2px', color: 'var(--text-secondary)', fontSize: 12.5, lineHeight: 1.5, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--arofi-theme-accent)' }} />
+                  <span>I agree to the <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Terms of Service</a> and acknowledge the <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Privacy Policy</a>.</span>
+                </label>
               </div>
             )}
             {error && <p style={{ color: 'var(--danger-fg)', fontSize: 13, marginBottom: 12 }}>{error}</p>}

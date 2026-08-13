@@ -322,6 +322,11 @@ export class OnboardingService {
               domain,
               autoApproved: true,
               source: 'self-service',
+              legalConsent: {
+                acceptedAt: new Date().toISOString(),
+                termsVersion: '2026-07-08',
+                privacyVersion: '2026-07-08',
+              },
             },
           },
           {
