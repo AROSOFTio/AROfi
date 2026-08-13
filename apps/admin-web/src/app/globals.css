@@ -8340,5 +8340,219 @@ html[data-theme][data-accent-theme] .wallet-showcase-card svg {
   }
 }
 
+/* Public landing polish: compact hero actions, icon-only support, and mobile drawer nav. */
+.home-menu-button {
+  display: none;
+}
+
+.home-hero-copy {
+  max-width: 620px;
+}
+
+.home-hero-copy h1 {
+  max-width: 560px !important;
+}
+
+.home-hero-copy p {
+  max-width: 540px !important;
+}
+
+.home-cta {
+  max-width: 430px;
+}
+
+.arofi-chat-widget {
+  right: max(22px, env(safe-area-inset-right)) !important;
+  bottom: calc(116px + env(safe-area-inset-bottom)) !important;
+}
+
+.chat-bubble.ai-chat-bubble {
+  width: 54px !important;
+  height: 54px !important;
+  padding: 0 !important;
+  justify-content: center;
+  gap: 0;
+}
+
+.chat-bubble.ai-chat-bubble .chat-agent-avatar {
+  width: 42px;
+  height: 42px;
+}
+
+.chat-bubble-badge-icon {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 20px;
+  height: 20px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--arofi-theme-accent, #2563eb);
+  box-shadow: 0 0 0 2px var(--arofi-theme-accent, #2563eb);
+}
+
+@media (min-width: 761px) {
+  .home-nav-links,
+  .home-actions {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  body.home-nav-locked {
+    overflow: hidden;
+  }
+
+  .home-shell {
+    padding: 0 !important;
+  }
+
+  .home-nav {
+    position: sticky;
+    grid-template-columns: auto 44px !important;
+    width: 100%;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 10px 12px !important;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0 !important;
+    gap: 8px !important;
+  }
+
+  .home-brand {
+    justify-self: start;
+  }
+
+  .home-menu-button {
+    display: inline-grid;
+    place-items: center;
+    justify-self: end;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-card);
+    color: var(--text-1);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  }
+
+  .home-menu-button:active {
+    transform: scale(0.96);
+  }
+
+  .home-nav-links,
+  .home-actions {
+    position: fixed !important;
+    left: 0;
+    right: 0;
+    display: grid !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    background: color-mix(in srgb, var(--bg-card) 96%, transparent);
+    backdrop-filter: blur(18px);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 79;
+    box-sizing: border-box;
+  }
+
+  .home-nav-links {
+    top: 63px;
+    grid-template-columns: 1fr;
+    gap: 0 !important;
+    border-top: 1px solid var(--border);
+    padding-top: 10px !important;
+  }
+
+  .home-nav-links a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-1);
+  }
+
+  .home-actions {
+    top: 337px;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    padding-top: 12px !important;
+    padding-bottom: 14px !important;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.14);
+  }
+
+  .home-nav.home-nav-open .home-nav-links,
+  .home-nav.home-nav-open .home-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .home-hero {
+    width: 100%;
+    max-width: none !important;
+    margin: 34px 0 26px !important;
+    padding: 0 14px;
+    box-sizing: border-box;
+  }
+
+  .home-hero-copy,
+  .home-hero-copy h1,
+  .home-hero-copy p,
+  .home-cta {
+    max-width: 100% !important;
+  }
+
+  .home-hero-copy h1 {
+    font-size: clamp(34px, 12vw, 48px) !important;
+    line-height: 1.02 !important;
+  }
+
+  .home-cta {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .home-cta .btn-primary {
+    grid-column: auto !important;
+  }
+
+  .home-cta .btn {
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .cookie-consent {
+    left: 12px !important;
+    right: 82px !important;
+    bottom: calc(14px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+  }
+
+  .arofi-chat-widget {
+    right: calc(14px + env(safe-area-inset-right)) !important;
+    bottom: calc(18px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .chat-window {
+    right: 0 !important;
+    width: min(340px, calc(100vw - 28px)) !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-cta {
+    grid-template-columns: 1fr !important;
+  }
+}
 
 

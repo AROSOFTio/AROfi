@@ -163,7 +163,6 @@ export default function ChatWidget({ initiallyOpen = false }: ChatWidgetProps) {
             <Headphones size={22} />
             <Sparkles size={12} className="chat-agent-ai-mark" />
           </span>
-          <span className="ai-bubble-label">Human Support</span>
           <Bot size={15} className="chat-bubble-badge-icon" aria-hidden="true" />
         </button>
       )}

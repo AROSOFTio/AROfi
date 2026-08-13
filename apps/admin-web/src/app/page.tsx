@@ -11,6 +11,7 @@ import {
   Clock,
   Layers,
   Mail,
+  Menu,
   MapPin,
   Phone,
   QrCode,
@@ -23,6 +24,7 @@ import {
   Tv,
   Users,
   Wifi,
+  X,
   Zap,
 } from 'lucide-react'
 import { RegisterModal } from '@/components/RegisterModal'
@@ -198,6 +200,7 @@ export default function RootPage() {
   const [feedIndex, setFeedIndex] = useState(0)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [stats, setStats] = useState<PublicStats | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   const revenue = useCountUp(demoBaseStats.revenueUgx + (stats?.salesTodayUgx ?? 0))
   const sessions = useCountUp(demoBaseStats.activeSessions + (stats?.activeSessions ?? 0))
@@ -233,6 +236,13 @@ export default function RootPage() {
     const id = setInterval(() => setFeedIndex((i) => (i + 1) % demoFeed.length), 2200)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    document.body.classList.toggle('home-nav-locked', mobileNavOpen)
+    return () => document.body.classList.remove('home-nav-locked')
+  }, [mobileNavOpen])
+
+  const closeMobileNav = () => setMobileNavOpen(false)
 
   const faqJsonLd = {
     '@context': 'https://schema.org',
@@ -282,24 +292,33 @@ export default function RootPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(contactJsonLd) }} />
-      <nav className="home-nav" aria-label="Primary">
+      <nav className={`home-nav ${mobileNavOpen ? 'home-nav-open' : ''}`} aria-label="Primary">
         {/* Logo only — hide text when logo is present */}
         <div className="home-brand">
           <img src="/logo.png" alt="AROFi" />
           <span className="home-brand-text" aria-hidden="true">AROFi</span>
         </div>
+        <button
+          type="button"
+          className="home-menu-button"
+          aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          {mobileNavOpen ? <X size={22} /> : <Menu size={23} />}
+        </button>
         <div className="home-nav-links">
-          <a href="#features">Features</a>
-          {SHOW_PRICING && <a href="#pricing">Pricing</a>}
-          <Link href="/referral-program">Referral</Link>
-          <a href="#faq">FAQ</a>
-          <a href="#contact">Contact</a>
-          <Link href="/blog">Blog</Link>
+          <a href="#features" onClick={closeMobileNav}>Features</a>
+          {SHOW_PRICING && <a href="#pricing" onClick={closeMobileNav}>Pricing</a>}
+          <Link href="/referral-program" onClick={closeMobileNav}>Referral</Link>
+          <a href="#faq" onClick={closeMobileNav}>FAQ</a>
+          <a href="#contact" onClick={closeMobileNav}>Contact</a>
+          <Link href="/blog" onClick={closeMobileNav}>Blog</Link>
         </div>
         <div className="home-actions">
-          <Link href="/docs" className="btn btn-ghost">Docs</Link>
-          <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
-          <button type="button" className="btn btn-primary" onClick={() => openRegister('FREE')}>Register Free</button>
+          <Link href="/docs" className="btn btn-ghost" onClick={closeMobileNav}>Docs</Link>
+          <a href={getAppLoginUrl()} className="btn btn-ghost" onClick={closeMobileNav}>Sign In</a>
+          <button type="button" className="btn btn-primary" onClick={() => { closeMobileNav(); openRegister('FREE') }}>Register Free</button>
         </div>
       </nav>
 
@@ -309,8 +328,8 @@ export default function RootPage() {
           <h1>Run your WiFi<br />like a business.</h1>
           <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, simple setup, free to start.</p>
           <div className="home-cta">
-            <button type="button" className="btn btn-primary" onClick={() => openRegister('FREE')}>Create Your WiFi Business</button>
-            <Link href="/docs" className="btn btn-ghost">Documentation</Link>
+            <button type="button" className="btn btn-primary" onClick={() => openRegister('FREE')}>Start Free</button>
+            <Link href="/docs" className="btn btn-ghost">Docs</Link>
             <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
           </div>
           <div className="home-trust">
