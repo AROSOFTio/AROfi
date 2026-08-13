@@ -1,16 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
-
-type Mode = 'light' | 'dark'
 
 const MODE_KEY = 'arofi-theme'
 
 export default function PublicAppearanceDock() {
   const pathname = usePathname()
-  const [mode, setMode] = useState<Mode>('light')
-  const [mounted, setMounted] = useState(false)
 
   const visible = useMemo(() => {
     if (!pathname) return false
@@ -33,16 +29,14 @@ export default function PublicAppearanceDock() {
       // Cookie persistence remains available when local storage is restricted.
     }
     saved ||= cookies[MODE_KEY] ?? null
-    const nextMode: Mode = saved === 'dark' || saved === 'light'
+    const nextMode = saved === 'dark' || saved === 'light'
       ? saved
       : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 
-    setMode(nextMode)
     applyMode(nextMode)
-    setMounted(true)
   }, [])
 
-  function applyMode(nextMode: Mode) {
+  function applyMode(nextMode: 'light' | 'dark') {
     document.documentElement.setAttribute('data-theme', nextMode)
     document.documentElement.style.colorScheme = nextMode
     try {
@@ -53,23 +47,9 @@ export default function PublicAppearanceDock() {
     document.cookie = `${MODE_KEY}=${nextMode}; Max-Age=31536000; Path=/; SameSite=Lax`
   }
 
-  function chooseMode(nextMode: Mode) {
-    setMode(nextMode)
-    applyMode(nextMode)
-  }
-
   return (
     <>
-      {visible && mounted ? (
-        <aside className="public-mode-dock" aria-label="Website appearance">
-          <button type="button" aria-label="Light mode" title="Light mode" aria-pressed={mode === 'light'} onClick={() => chooseMode('light')}>
-            <SunIcon />
-          </button>
-          <button type="button" aria-label="Dark mode" title="Dark mode" aria-pressed={mode === 'dark'} onClick={() => chooseMode('dark')}>
-            <MoonIcon />
-          </button>
-        </aside>
-      ) : null}
+      {visible ? null : null}
 
       <style jsx global>{`
         :root,
@@ -229,36 +209,6 @@ export default function PublicAppearanceDock() {
         .home-shell .btn-ghost { background:var(--bg-card) !important;color:var(--text-1) !important;border-color:var(--border) !important; }
         .home-nav a,.home-section-head p,.home-feature p,.home-why-card p,.home-faq-item p { color:var(--text-2) !important; }
 
-        .public-mode-dock {
-          position:fixed;
-          z-index:250;
-          top:76px;
-          right:18px;
-          display:flex;
-          align-items:center;
-          gap:3px;
-          padding:3px;
-          background:var(--bg-card);
-          border:1px solid var(--border);
-          border-radius:10px;
-          box-shadow:var(--shadow-sm);
-        }
-        .public-mode-dock button {
-          width:32px;
-          height:32px;
-          display:grid;
-          place-items:center;
-          padding:0;
-          border:0;
-          border-radius:7px;
-          background:transparent;
-          color:var(--text-3);
-          cursor:pointer;
-        }
-        .public-mode-dock button:hover { color:var(--text-1);background:var(--bg-hover); }
-        .public-mode-dock button[aria-pressed='true'] { color:var(--arofi-accent);background:var(--arofi-accent-soft); }
-        :root[data-theme='dark'] .public-mode-dock button[aria-pressed='true'] { color:var(--arofi-accent);background:var(--arofi-accent-soft); }
-
         .book-brand { position:relative;min-width:184px; }
         .book-brand::before { display:none !important;content:none !important; }
         .book-brand img {
@@ -296,40 +246,11 @@ export default function PublicAppearanceDock() {
           background:transparent !important;
           box-shadow:none !important;
         }
-        .chat-bubble {
-          width:58px !important;
-          height:58px !important;
-          padding:0 !important;
-          border:0 !important;
-          border-radius:0 !important;
-          background:transparent !important;
-          box-shadow:none !important;
-        }
-        .chat-bubble-logo {
-          content:var(--arofi-mark) !important;
-          width:56px !important;
-          height:50px !important;
-          object-fit:contain !important;
-          border:0 !important;
-          border-radius:0 !important;
-          background:transparent !important;
-          box-shadow:none !important;
-        }
-
         @media (max-width:760px) {
-          .public-mode-dock { top:auto;right:12px;bottom:12px; }
           .home-brand { min-width:92px !important; }
           .home-brand img { width:92px !important;height:38px !important; }
         }
       `}</style>
     </>
   )
-}
-
-function SunIcon() {
-  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
-}
-
-function MoonIcon() {
-  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 15.1A8.4 8.4 0 0 1 8.9 3.2a8.5 8.5 0 1 0 11.9 11.9Z"/></svg>
 }

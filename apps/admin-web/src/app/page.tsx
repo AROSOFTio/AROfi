@@ -19,6 +19,8 @@ import {
   Router,
   ShieldCheck,
   Sparkles,
+  Moon,
+  Sun,
   Ticket,
   Timer,
   Tv,
@@ -49,7 +51,7 @@ const features = [
   { icon: Tv, title: 'Smart TV Access', text: 'Sell TV packages by wireless MAC address so a Smart TV can connect even when it cannot open a portal.' },
   { icon: QrCode, title: 'QR Code Scan & Connect', text: 'Guests scan a QR code to connect and pay — no typing WiFi passwords.' },
   { icon: Clock, title: '24/7 Support', text: 'Real people on chat, WhatsApp, phone and email — every day, all day.' },
-  { icon: Sparkles, title: 'Instant AI Support', text: 'Ask Aria about setup, routers, payments, or account issues from the website or dashboard.' },
+  { icon: Sparkles, title: 'Instant assistant support', text: 'Ask Aria about setup, routers, payments, or account issues from the website or dashboard.' },
   { icon: Bell, title: 'SMS Alerts', text: 'Notify operators and customers about key events such as outages, compensation, payments, and account updates.' },
   { icon: Layers, title: 'Multi-Device Bundles', text: 'Sell packages that cover several devices per customer on one payment.' },
   { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated business workspaces, and secret-key protected withdrawals.' },
@@ -176,6 +178,18 @@ const realScreenshots = [
 
 type PublicStats = { salesTodayUgx: number; activeSessions: number; liveRouters: number; routers: number }
 type SignupPlan = 'FREE' | 'PRO'
+type ModeTheme = 'light' | 'dark'
+type BlogPostSummary = {
+  id: string
+  slug: string
+  title: string
+  excerpt?: string | null
+  publishedAt?: string | null
+  coverImageId?: string | null
+  tags?: string[]
+  viewCount?: number
+}
+type BlogPostListResponse = { items: BlogPostSummary[]; total: number }
 
 function useCountUp(target: number, durationMs = 1400) {
   const [value, setValue] = useState(0)
@@ -201,6 +215,8 @@ export default function RootPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [stats, setStats] = useState<PublicStats | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [mode, setMode] = useState<ModeTheme>('light')
+  const [blogPosts, setBlogPosts] = useState<BlogPostSummary[]>([])
 
   const revenue = useCountUp(demoBaseStats.revenueUgx + (stats?.salesTodayUgx ?? 0))
   const sessions = useCountUp(demoBaseStats.activeSessions + (stats?.activeSessions ?? 0))
@@ -213,6 +229,53 @@ export default function RootPage() {
       .then((value) => value && setStats(value))
       .catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/blog/posts?page=1&pageSize=3`, { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((value: BlogPostListResponse | null) => setBlogPosts(value?.items ?? []))
+      .catch(() => setBlogPosts([]))
+  }, [])
+
+  useEffect(() => {
+    const cookies = document.cookie.split('; ').reduce<Record<string, string>>((values, item) => {
+      const [key, ...parts] = item.split('=')
+      values[key] = parts.join('=')
+      return values
+    }, {})
+
+    let saved: string | null = null
+    try {
+      saved = localStorage.getItem('arofi-theme')
+    } catch {
+      // Cookie persistence remains available when local storage is restricted.
+    }
+
+    const nextMode: ModeTheme = saved === 'dark' || saved === 'light'
+      ? saved
+      : cookies['arofi-theme'] === 'dark' || cookies['arofi-theme'] === 'light'
+        ? cookies['arofi-theme'] as ModeTheme
+        : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+
+    setMode(nextMode)
+    applyMode(nextMode)
+  }, [])
+
+  function applyMode(nextMode: ModeTheme) {
+    document.documentElement.setAttribute('data-theme', nextMode)
+    document.documentElement.style.colorScheme = nextMode
+    try {
+      localStorage.setItem('arofi-theme', nextMode)
+    } catch {
+      // Cookie persistence below is the fallback.
+    }
+    document.cookie = `arofi-theme=${nextMode}; Max-Age=31536000; Path=/; SameSite=Lax`
+  }
+
+  function chooseMode(nextMode: ModeTheme) {
+    setMode(nextMode)
+    applyMode(nextMode)
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -316,6 +379,16 @@ export default function RootPage() {
           <Link href="/blog" onClick={closeMobileNav}>Blog</Link>
         </div>
         <div className="home-actions">
+          <div className="home-mode-toggle" role="group" aria-label="Website appearance">
+            <button type="button" aria-pressed={mode === 'light'} onClick={() => chooseMode('light')}>
+              <Sun size={15} />
+              <span>Light</span>
+            </button>
+            <button type="button" aria-pressed={mode === 'dark'} onClick={() => chooseMode('dark')}>
+              <Moon size={15} />
+              <span>Dark</span>
+            </button>
+          </div>
           <Link href="/docs" className="btn btn-ghost" onClick={closeMobileNav}>Docs</Link>
           <a href={getAppLoginUrl()} className="btn btn-ghost" onClick={closeMobileNav}>Sign In</a>
           <button type="button" className="btn btn-primary" onClick={() => { closeMobileNav(); openRegister('FREE') }}>Register Free</button>
@@ -511,6 +584,45 @@ export default function RootPage() {
         </section>
       )}
 
+      {blogPosts.length > 0 && (
+        <section className="home-section home-blog-strip" id="blog-highlights" aria-labelledby="blog-highlights-title">
+          <Reveal>
+            <div className="home-section-head">
+              <div className="home-kicker"><Sparkles size={15} /> Latest Guides</div>
+              <h2 id="blog-highlights-title">From the AROFi blog.</h2>
+              <p>Short practical posts for operators setting up routers, payments, vouchers and customer support.</p>
+            </div>
+          </Reveal>
+          <div className="home-blog-grid">
+            {blogPosts.map((post, i) => (
+              <Reveal key={post.id} as="article" delay={i * 70} className="home-blog-card">
+                <Link href={`/${post.slug}`} className="home-blog-card-link">
+                  {post.coverImageId && (
+                    <img
+                      src={`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/blog/images/${post.coverImageId}`}
+                      alt=""
+                      className="home-blog-cover"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="home-blog-body">
+                    {(post.tags ?? []).length > 0 && <span className="home-blog-tag">{post.tags?.[0]}</span>}
+                    <h3>{post.title}</h3>
+                    {post.excerpt && <p>{post.excerpt}</p>}
+                    <span className="home-blog-meta">
+                      {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' }) : 'AROFi guide'}
+                    </span>
+                  </div>
+                </Link>
+              </Reveal>
+            ))}
+          </div>
+          <div className="home-blog-more">
+            <Link href="/blog" className="btn btn-ghost">Read all posts</Link>
+          </div>
+        </section>
+      )}
+
       <section className="home-section home-faq" id="faq" aria-labelledby="faq-title">
         <Reveal>
           <div className="home-section-head">
@@ -577,7 +689,7 @@ export default function RootPage() {
 
       <SiteFooter />
 
-      {/* SEO-only content — hidden from visual users, fully indexed by crawlers & AI agents */}
+      {/* SEO-only content — hidden from visual users and available to crawlers */}
       <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>
         <h2>Best WiFi Hotspot Billing Software in Uganda</h2>
         <p>AROFi is Uganda&apos;s leading cloud-based WiFi hotspot billing and management platform built by AROSOFT Innovations Ltd, headquartered in Kampala. Designed for MikroTik router operators, ISPs, cyber cafés, hotels, schools, and community networks across Uganda and East Africa.</p>
