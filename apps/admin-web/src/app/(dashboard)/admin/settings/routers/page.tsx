@@ -1261,7 +1261,7 @@ export default function SettingsRoutersPage() {
                   <div style={{ padding: 10, background: 'var(--bg-muted, #f8fafc)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                     <strong style={{ color: 'var(--text-primary)' }}>Run first:</strong> Open WinBox, open Terminal, paste this command, press Enter, and wait until it finishes.
                   </div>
-                  <a href="/docs/getting-started#run-onboarding-script" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <a href="/docs/winbox-desktop" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <PlayCircle size={14} /> Video: onboarding script
                   </a>
                 </div>
@@ -1298,7 +1298,7 @@ export default function SettingsRoutersPage() {
                   <div style={{ padding: 10, background: 'var(--bg-muted, #f8fafc)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                     <strong style={{ color: 'var(--text-primary)' }}>Run second:</strong> Paste after onboarding completes. The router row should then show remote address and test results.
                   </div>
-                  <a href="/docs/getting-started#run-remote-access-script" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <a href="/docs/remote-access-script" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <PlayCircle size={14} /> Video: remote access script
                   </a>
                 </div>

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { fetchPublicApi } from '@/lib/api'
+import { arofiBook } from '@/content/arofi-book'
 
 const SITE_URL = 'https://arofi.net'
 
@@ -44,6 +45,12 @@ const staticPages: MetadataRoute.Sitemap = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let postEntries: MetadataRoute.Sitemap = []
+  const docsEntries: MetadataRoute.Sitemap = arofiBook.map((page, index) => ({
+    url: `${SITE_URL}/docs/${page.slug}`,
+    changeFrequency: 'monthly' as const,
+    priority: index === 0 ? 0.9 : 0.82,
+    lastModified: new Date('2026-08-14'),
+  }))
 
   try {
     const posts = await fetchPublicApi<Array<{ slug: string; updatedAt: string }>>(
@@ -61,5 +68,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Keep the static sitemap available when the API is unavailable during build.
   }
 
-  return [...staticPages, ...postEntries]
+  return [...staticPages, ...docsEntries, ...postEntries]
 }

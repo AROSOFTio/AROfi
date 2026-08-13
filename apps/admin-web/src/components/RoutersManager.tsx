@@ -815,8 +815,8 @@ export default function RoutersManager() {
                 <span className={selectedSetup.router.accountingSeen ? 'badge badge-success' : 'badge badge-warning'}>{selectedSetup.router.accountingSeen ? 'Traffic seen' : 'No traffic yet'}</span>
               </div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12.5 }}>
-                <a href="/docs/getting-started#run-onboarding-script" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Video: run onboarding script</a>
-                <a href="/docs/getting-started#run-remote-access-script" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Video: run remote access script</a>
+                <a href="/docs/winbox-desktop" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Video: run onboarding script</a>
+                <a href="/docs/remote-access-script" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--arofi-theme-accent-text)', fontWeight: 700 }}>Video: run remote access script</a>
               </div>
             </div>
           </div>

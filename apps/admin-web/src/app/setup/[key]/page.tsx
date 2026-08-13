@@ -77,7 +77,7 @@ export default async function MobileSetupPage({ params }: { params: Promise<{ ke
 
         <div className="mt-10 border-t border-slate-200 pt-6 text-center text-xs text-slate-400">
           Prefer a laptop?{' '}
-          <Link href="/docs/getting-started" className="font-semibold text-blue-600 underline">
+          <Link href="/docs/start-here" className="font-semibold text-blue-600 underline">
             See the WinBox guide
           </Link>
         </div>

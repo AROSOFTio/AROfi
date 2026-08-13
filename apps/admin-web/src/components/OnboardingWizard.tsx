@@ -1021,7 +1021,7 @@ export default function OnboardingWizard({
                   <li>Click <strong>New Terminal</strong>, right-click and choose <strong>Paste</strong>, then press <strong>Enter</strong>.</li>
                   <li>Wait 10-15 seconds — the script applies the setup automatically.</li>
                 </ol>
-                <a href="/docs/getting-started" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: 'var(--arofi-theme-accent-text)' }}>
+                <a href="/docs/start-here" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: 'var(--arofi-theme-accent-text)' }}>
                   Read the full setup guide →
                 </a>
               </details>
