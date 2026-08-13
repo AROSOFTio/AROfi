@@ -20,7 +20,10 @@ export default function VendorOnboardingTour({
   const [complete, setComplete] = useState(false)
   const initialHasRouter = Boolean(initialRouter)
 
-  if (complete || (initialHasRouter && initialHasPackage && initialHasVouchers)) {
+  // Router onboarding ends after the customer has the scripts needed to
+  // connect their MikroTik. Packages and vouchers are optional Sell Internet
+  // tasks, never prerequisites for leaving the dashboard tour.
+  if (complete || (initialHasRouter && (initialRouter?.provisioningCallbackReceived || initialRouter?.onboardingStatus === 'VERIFIED_ONLINE'))) {
     return null
   }
 

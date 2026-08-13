@@ -14,9 +14,7 @@ import {
   CheckCircle, 
   Info,
   BookOpen,
-  Wifi,
-  Package,
-  Ticket
+  Wifi
 } from 'lucide-react'
 import { clientFetchApi, clientPostApi } from '@/lib/client-api'
 import { buildSetupFallbackCommand } from '@/lib/mikrotik-commands'
@@ -75,7 +73,9 @@ export default function OnboardingWizard({
     return hasSafeBootstrap ? serverCommand : (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
   }
 
-  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(0)
+  // Legacy package/voucher screens remain in this component for backwards
+  // compatibility, but the router tour only ever enters steps 1 and 2.
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -144,60 +144,22 @@ export default function OnboardingWizard({
     if (initialRouter && !initialRouter.provisioningCallbackReceived && initialRouter.onboardingStatus !== 'VERIFIED_ONLINE') {
       return 2
     }
-    if (!initialHasPackage) {
-      return 3
-    }
-    if (!initialHasVouchers) {
-      return 4
-    }
     return null
   }
 
-  // Load persisted plan selection before the router/package/voucher setup flow.
+  // The dashboard tour is intentionally router-only. Plans, packages and
+  // vouchers remain optional tools under Sell Internet.
   useEffect(() => {
-    let cancelled = false
-
-    async function loadSubscription() {
-      try {
-        const [plans, status] = await Promise.all([
-          clientFetchApi<SubscriptionPlan[]>('/subscription/plans'),
-          clientFetchApi<SubscriptionStatus>('/subscription/status'),
-        ])
-        if (cancelled) return
-        setSubscriptionPlans(plans.filter((plan) => plan.key === 'FREE' || plan.key === 'PRO'))
-        setSubscriptionStatus(status)
-
-        const setupStep = resolveSetupStep()
-        if (setupStep === null) {
-          onComplete()
-          return
-        }
-
-        if (!initialHasRouter && status.planSelectionConfirmed && status.selectedPlan === 'FREE' && status.subscriptionStatus === 'ACTIVE') {
-          setCurrentStep(1)
-        } else if (initialHasRouter) {
-          setCurrentStep(setupStep)
-        } else {
-          setCurrentStep(0)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Unable to load subscription plans')
-          setCurrentStep(0)
-        }
-      }
+    const setupStep = resolveSetupStep()
+    if (setupStep === null) {
+      onComplete()
+      return
     }
-
-    loadSubscription()
-
-    return () => {
-      cancelled = true
-    }
+    setCurrentStep(setupStep)
   }, [])
 
   // Determine initial step based on progress
   useEffect(() => {
-    if (currentStep === 0) return
     if (!initialHasRouter) {
       setCurrentStep(1)
     } else if (initialRouter && !initialRouter.provisioningCallbackReceived && initialRouter.onboardingStatus !== 'VERIFIED_ONLINE') {
@@ -206,14 +168,6 @@ export default function OnboardingWizard({
       setCurrentStep(2)
       setStepTwoEnteredAt(Date.now())
       setPollingActive(true)
-    } else if (!initialHasPackage) {
-      setRegisteredRouter(initialRouter)
-      setSetupCommand(resolveOneRunCommand(initialRouter))
-      setCurrentStep(3)
-    } else if (!initialHasVouchers) {
-      setRegisteredRouter(initialRouter)
-      setSetupCommand(resolveOneRunCommand(initialRouter))
-      setCurrentStep(4)
     } else {
       // Completed, close wizard
       onComplete()
@@ -380,7 +334,7 @@ export default function OnboardingWizard({
     setPollingActive(false)
     setSuccess(null)
     setError(null)
-    setCurrentStep(3)
+    onComplete()
   }
 
   // Manual check connection
@@ -558,7 +512,7 @@ export default function OnboardingWizard({
           <div>
             <strong style={{ color: 'var(--text-1)', fontSize: 14 }}>WiFi Hotspot Setup Incomplete</strong>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '2px 0 0', lineHeight: 1.4 }}>
-              Register your MikroTik router, configure an internet plan, and generate vouchers to start selling access.
+              Register your MikroTik router and run its setup script. Packages and vouchers are available later under Sell Internet.
             </p>
           </div>
         </div>
@@ -670,24 +624,21 @@ export default function OnboardingWizard({
           </div>
           <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 6, letterSpacing: '-0.02em', color: '#fff' }}>Get Your Hotspot Billing Live</h2>
           <p style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 4, lineHeight: 1.4 }}>
-            Choose your plan, then connect your router, package, and vouchers.
+            Register your router, then run the generated setup script.
           </p>
         </div>
 
         {/* Steps Progress Bar */}
         <div className="onboarding-progress" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-muted)',
           flexShrink: 0
         }}>
           {[
-            { step: 0, icon: <CheckCircle size={14} />, label: 'Plan' },
             { step: 1, icon: <Wifi size={14} />, label: 'Register' },
-            { step: 2, icon: <Cpu size={14} />, label: 'Connect' },
-            { step: 3, icon: <Package size={14} />, label: 'Package' },
-            { step: 4, icon: <Ticket size={14} />, label: 'Vouchers' }
+            { step: 2, icon: <Cpu size={14} />, label: 'Run script' }
           ].map((item) => {
             const completed = isCompleted(item.step)
             const active = isActive(item.step)
