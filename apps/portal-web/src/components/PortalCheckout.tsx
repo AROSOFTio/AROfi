@@ -81,6 +81,20 @@ function formatMacInput(value: string) {
     ?.join(':') ?? ''
 }
 
+function cleanPortalDisplayName(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) return ''
+  if (/^arofi\s+hotspot(?:\s+access)?$/i.test(trimmed)) return ''
+  if (/^arofi\s+portal$/i.test(trimmed)) return ''
+  return trimmed
+}
+
+function domainToBusinessName(value?: string | null) {
+  const label = value?.split('.')[0]?.replace(/[-_]+/g, ' ').trim()
+  if (!label) return ''
+  return label.replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
 function isMultiDevicePackage(pkg?: PortalPackage | null) {
   return (pkg?.deviceLimit ?? 1) > 1
 }
@@ -456,6 +470,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
   const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
   const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))
+  const portalDisplayName =
+    cleanPortalDisplayName(activeActivation?.hotspot?.name) ||
+    cleanPortalDisplayName(portalSession?.activeActivation?.hotspot?.name) ||
+    cleanPortalDisplayName(portalSession?.activeSession?.hotspot?.name) ||
+    cleanPortalDisplayName(context?.tenant.name) ||
+    cleanPortalDisplayName(portalSession?.tenant.name) ||
+    domainToBusinessName(context?.tenant.domain || hotspotParams.tenantDomain || portalSession?.tenant.domain) ||
+    'WiFi Portal'
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -1391,7 +1413,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               <div>
                 <p className={`text-xs uppercase tracking-[0.22em] ${portalStyle.support}`}>AROFi Customer Portal</p>
                 <h1 className="mt-2 text-2xl font-semibold text-slate-950 sm:text-3xl">
-                  {context?.tenant.name ?? 'AROFi Hotspot Access'}
+                  {portalDisplayName}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                   Buy packages, redeem vouchers, sign in with your phone number, and monitor your hotspot session from one mobile-friendly experience.
@@ -1477,7 +1499,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 <img src={context?.tenant.logoUrl || '/logo.png'} alt="AROFi" className="h-10 w-auto" />
               </div>
               <h1 className={`text-sm font-semibold tracking-wider opacity-60 uppercase mt-1 ${portalStyle.title}`}>
-                {context?.tenant.name ?? 'AROFi Hotspot'}
+                {portalDisplayName}
               </h1>
               {(hotspotParams.clientIp || hotspotParams.macAddress) && (
                 <div className={`mt-2 text-xs font-medium tracking-wide opacity-80 ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-600'}`}>
