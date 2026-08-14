@@ -8,6 +8,7 @@ import { AuthService } from '../auth/auth.module'
 import { RoleCatalogService } from '../auth/role-catalog.service'
 import { MailService } from '../mail/mail.service'
 import { SmsService } from '../sms/sms.service'
+import { normalizeSmsNotificationTemplates, renderSmsTemplate } from '../sms/sms-template-settings'
 import { RegisterTenantDto } from './dto/register-tenant.dto'
 
 const DEFAULT_FEATURE_LIMITS = [
@@ -177,7 +178,7 @@ export class OnboardingService {
         where: { id: 'global' },
         update: {},
         create: { id: 'global' },
-        select: { referralProgramEnabled: true, resellerRegistrationEnabled: true },
+        select: { referralProgramEnabled: true, resellerRegistrationEnabled: true, smsNotificationTemplates: true },
       }),
       referralCode
         ? this.prisma.referralProfile.findUnique({
@@ -395,24 +396,39 @@ export class OnboardingService {
         <p>Need help? Reply to this email, message us on WhatsApp (+256 787 726 388), or ask Aria — the assistant in the corner of your dashboard.</p>`,
     })
 
-    // Immediate SMS alert to platform admin (0787726388) on new signup
-    const adminNotifyPhone = process.env.ADMIN_NOTIFY_PHONE || '0787726388'
-    const registrationSms = `AROFi New Registration!\nBusiness: ${tenantName}\nOwner: ${firstName} ${lastName}\nPhone: ${supportPhone}\nEmail: ${email}\nDomain: ${domain}\nType: ${accountType}`.slice(0, 480)
-    void this.smsService.sendText({
-      to: adminNotifyPhone,
-      body: registrationSms,
-      requirePaidPlan: false,
-      templateKey: 'admin_signup_alert',
-    })
+    const smsTemplates = normalizeSmsNotificationTemplates(platformSettings.smsNotificationTemplates)
+    const smsVariables = {
+      tenantName,
+      firstName,
+      lastName,
+      ownerName: `${firstName} ${lastName}`.trim(),
+      supportPhone,
+      email,
+      domain,
+      accountType,
+    }
 
-    // Welcome SMS to business owner's support phone
-    const welcomeSms = `Welcome to AROFi, ${firstName}! Your business workspace '${tenantName}' is ready. Log in at https://arofi.net to set up your router.`
-    void this.smsService.sendText({
-      to: supportPhone,
-      body: welcomeSms,
-      requirePaidPlan: false,
-      templateKey: 'welcome_tenant',
-    })
+    // Immediate SMS alert to platform admin on new signup.
+    const adminNotifyPhone = process.env.ADMIN_NOTIFY_PHONE || '0787726388'
+    if (smsTemplates.adminSignupAlert.enabled) {
+      const registrationSms = renderSmsTemplate(smsTemplates.adminSignupAlert.body, smsVariables)
+      void this.smsService.sendText({
+        to: adminNotifyPhone,
+        body: registrationSms,
+        requirePaidPlan: false,
+        templateKey: 'admin_signup_alert',
+      })
+    }
+
+    if (smsTemplates.welcomeTenant.enabled) {
+      const welcomeSms = renderSmsTemplate(smsTemplates.welcomeTenant.body, smsVariables)
+      void this.smsService.sendText({
+        to: supportPhone,
+        body: welcomeSms,
+        requirePaidPlan: false,
+        templateKey: 'welcome_tenant',
+      })
+    }
 
     return {
       ...session,

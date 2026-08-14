@@ -17,6 +17,7 @@ import { randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { MailService } from '../mail/mail.service'
+import { normalizeSmsNotificationTemplates } from '../sms/sms-template-settings'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import type { AuthenticatedAdminUser } from '../auth/auth.module'
 import { AddSupportTicketMessageDto } from './dto/add-support-ticket-message.dto'
@@ -119,6 +120,9 @@ export class SystemService {
     if (dto.supportPhone !== undefined) data.supportPhone = this.nullableTrim(dto.supportPhone)
     if (dto.supportEmail !== undefined) data.supportEmail = this.nullableTrim(dto.supportEmail)
     if (dto.supportUrl !== undefined) data.supportUrl = this.nullableTrim(dto.supportUrl)
+    if (dto.smsNotificationTemplates !== undefined) {
+      data.smsNotificationTemplates = normalizeSmsNotificationTemplates(dto.smsNotificationTemplates) as Prisma.InputJsonValue
+    }
     if (dto.publicDefaultAccentTheme !== undefined) data.publicDefaultAccentTheme = this.sanitizeAccentTheme(dto.publicDefaultAccentTheme)
     if (dto.voucherTemplateDefaultStyle !== undefined) data.voucherTemplateDefaultStyle = dto.voucherTemplateDefaultStyle.trim()
     if (dto.auditLoggingEnabled !== undefined) data.auditLoggingEnabled = dto.auditLoggingEnabled
@@ -1043,6 +1047,7 @@ export class SystemService {
     supportPhone: string | null
     supportEmail: string | null
     supportUrl: string | null
+    smsNotificationTemplates?: Prisma.JsonValue | null
     publicDefaultAccentTheme?: string | null
     voucherTemplateDefaultStyle: string
     auditLoggingEnabled: boolean
@@ -1058,6 +1063,7 @@ export class SystemService {
       enterpriseMobileMoneyFeePercent: this.bpsToPercent(settings.enterpriseMobileMoneyFeeBps),
       enterpriseVoucherFeePercent: this.bpsToPercent(settings.enterpriseVoucherFeeBps),
       withdrawalFeePercent: this.bpsToPercent(settings.withdrawalFeeBps),
+      smsNotificationTemplates: normalizeSmsNotificationTemplates(settings.smsNotificationTemplates),
       publicDefaultAccentTheme: this.sanitizeAccentTheme(settings.publicDefaultAccentTheme ?? 'blue'),
     }
   }

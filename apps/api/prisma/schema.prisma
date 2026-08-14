@@ -608,6 +608,7 @@ model PlatformSetting {
   supportPhone               String?
   supportEmail               String?
   supportUrl                 String?
+  smsNotificationTemplates   Json?
   publicDefaultAccentTheme   String   @default("blue")
   voucherTemplateDefaultStyle String  @default("signal")
   auditLoggingEnabled        Boolean  @default(true)

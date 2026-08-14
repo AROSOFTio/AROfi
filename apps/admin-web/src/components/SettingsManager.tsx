@@ -64,9 +64,21 @@ type PlatformSettings = {
   supportPhone?: string | null
   supportEmail?: string | null
   supportUrl?: string | null
+  smsNotificationTemplates?: SmsNotificationTemplates
   publicDefaultAccentTheme: string
   voucherTemplateDefaultStyle: string
   auditLoggingEnabled: boolean
+}
+
+type SmsTemplateConfig = {
+  enabled: boolean
+  body: string
+}
+
+type SmsNotificationTemplates = {
+  welcomeTenant: SmsTemplateConfig
+  adminSignupAlert: SmsTemplateConfig
+  adminRouterOnboardingSuccess: SmsTemplateConfig
 }
 
 type TenantSettings = {
@@ -198,7 +210,7 @@ function planPriceLabel(plan: SubscriptionPlanCatalogItem) {
   return `${formatCurrency(plan.amountUgx)} / ${plan.durationDays ?? 30} days`
 }
 
-const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'Password', 'Security', 'Subscription Plan'] as const
+const tabs = ['Business Profile', 'Appearance', 'Payment & Fees', 'Withdrawals', 'Router & Portal', 'Voucher Printing', 'SMS Messages', 'Password', 'Security', 'Subscription Plan'] as const
 const tabLabels: Record<(typeof tabs)[number], string> = {
   'Business Profile': 'Business Info',
   Appearance: 'Appearance',
@@ -206,6 +218,7 @@ const tabLabels: Record<(typeof tabs)[number], string> = {
   Withdrawals: 'Withdrawals',
   'Router & Portal': 'Router & Portal',
   'Voucher Printing': 'Voucher Printing',
+  'SMS Messages': 'SMS Messages',
   Password: 'Password',
   Security: 'Account Safety',
   'Subscription Plan': 'My Plan',
@@ -217,6 +230,7 @@ const tabDescriptions: Record<(typeof tabs)[number], string> = {
   Withdrawals: 'Platform payout limits, review rules, and safety controls.',
   'Router & Portal': 'Router connection and customer portal defaults.',
   'Voucher Printing': 'Voucher print format and redemption defaults.',
+  'SMS Messages': 'Control the platform SMS texts sent to owners and AROFi admins.',
   Password: 'Change the password used to sign in.',
   Security: 'Protect your account, email, devices, and business terms.',
   'Subscription Plan': 'See or change the plan for this business.',
@@ -239,6 +253,20 @@ const optionLabels: Record<string, string> = {
 }
 const voucherTemplates = ['signal', 'wave', 'receipt', 'agent', 'thermal']
 const publicAccentOptions = ['blue', 'green', 'gold']
+const defaultSmsNotificationTemplates: SmsNotificationTemplates = {
+  welcomeTenant: {
+    enabled: false,
+    body: "Welcome to AROFi, {{firstName}}. Your business workspace '{{tenantName}}' is ready. Log in at https://arofi.net to set up your router.",
+  },
+  adminSignupAlert: {
+    enabled: true,
+    body: 'AROFi New Registration!\nBusiness: {{tenantName}}\nOwner: {{ownerName}}\nPhone: {{supportPhone}}\nEmail: {{email}}\nDomain: {{domain}}\nType: {{accountType}}',
+  },
+  adminRouterOnboardingSuccess: {
+    enabled: true,
+    body: 'AROFi router script OK\nBusiness: {{tenantName}}\nRouter: {{routerName}}\nLocation: {{location}}\nNAS: {{nasIp}}\nHost: {{host}}\nMode: {{mode}}\nScript: {{scriptUrl}}{{warningLine}}',
+  },
+}
 
 export default function SettingsManager({
   user,
@@ -587,6 +615,24 @@ export default function SettingsManager({
           voucherTemplateDefaultStyle: stringValue(form, 'voucherTemplateDefaultStyle'),
         })
       }
+      if (activeTab === 'SMS Messages') {
+        Object.assign(payload, {
+          smsNotificationTemplates: {
+            welcomeTenant: {
+              enabled: form.get('sms-welcomeTenant-enabled') === 'on',
+              body: stringValue(form, 'sms-welcomeTenant-body'),
+            },
+            adminSignupAlert: {
+              enabled: form.get('sms-adminSignupAlert-enabled') === 'on',
+              body: stringValue(form, 'sms-adminSignupAlert-body'),
+            },
+            adminRouterOnboardingSuccess: {
+              enabled: form.get('sms-adminRouterOnboardingSuccess-enabled') === 'on',
+              body: stringValue(form, 'sms-adminRouterOnboardingSuccess-body'),
+            },
+          },
+        })
+      }
       if (activeTab === 'Security') {
         Object.assign(payload, {
           auditLoggingEnabled: form.get('auditLoggingEnabled') === 'on',
@@ -826,6 +872,29 @@ export default function SettingsManager({
               )}
               {activeTab === 'Voucher Printing' && (
                 <Select name="voucherTemplateDefaultStyle" label="Default Voucher Style" defaultValue={platformForm.voucherTemplateDefaultStyle === 'signal-card' ? 'signal' : platformForm.voucherTemplateDefaultStyle} options={voucherTemplates} />
+              )}
+              {activeTab === 'SMS Messages' && (
+                <>
+                  <FormSubheading text="Available variables: {{tenantName}}, {{firstName}}, {{lastName}}, {{ownerName}}, {{supportPhone}}, {{email}}, {{domain}}, {{accountType}}, {{routerName}}, {{location}}, {{nasIp}}, {{host}}, {{mode}}, {{scriptUrl}}, {{warningLine}}" />
+                  <SmsTemplateEditor
+                    id="welcomeTenant"
+                    title="New business owner welcome SMS"
+                    description="Off by default so newly registered businesses do not receive the old welcome text unless you enable it."
+                    template={platformForm.smsNotificationTemplates?.welcomeTenant ?? defaultSmsNotificationTemplates.welcomeTenant}
+                  />
+                  <SmsTemplateEditor
+                    id="adminSignupAlert"
+                    title="SaaS Admin new registration alert"
+                    description="Sent to ADMIN_NOTIFY_PHONE when a new business registers."
+                    template={platformForm.smsNotificationTemplates?.adminSignupAlert ?? defaultSmsNotificationTemplates.adminSignupAlert}
+                  />
+                  <SmsTemplateEditor
+                    id="adminRouterOnboardingSuccess"
+                    title="SaaS Admin router script success alert"
+                    description="Sent to ADMIN_NOTIFY_PHONE after a MikroTik setup script reports success."
+                    template={platformForm.smsNotificationTemplates?.adminRouterOnboardingSuccess ?? defaultSmsNotificationTemplates.adminRouterOnboardingSuccess}
+                  />
+                </>
               )}
               {activeTab === 'Security' && (
                 <>
@@ -1356,6 +1425,30 @@ function Select({ name, label, defaultValue, options }: { name: string; label: s
         {options.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option.replace(/_/g, ' ')}</option>)}
       </select>
     </label>
+  )
+}
+
+function SmsTemplateEditor({ id, title, description, template }: { id: keyof SmsNotificationTemplates; title: string; description: string; template: SmsTemplateConfig }) {
+  return (
+    <div className="form-group" style={{ gridColumn: '1 / -1', border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: 'var(--surface-muted)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 10 }}>
+        <div>
+          <span className="form-label" style={{ marginBottom: 4 }}>{title}</span>
+          <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12, lineHeight: 1.45 }}>{description}</p>
+        </div>
+        <label className="check-card" style={{ margin: 0, whiteSpace: 'nowrap' }}>
+          <input type="checkbox" name={`sms-${id}-enabled`} defaultChecked={template.enabled} />
+          <span>Enabled</span>
+        </label>
+      </div>
+      <textarea
+        className="form-input"
+        name={`sms-${id}-body`}
+        defaultValue={template.body}
+        rows={5}
+        maxLength={1000}
+      />
+    </div>
   )
 }
 

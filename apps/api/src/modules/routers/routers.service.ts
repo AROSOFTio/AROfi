@@ -23,9 +23,11 @@ import {
 } from '@prisma/client'
 import { randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
+import { buildTenantHotspotDomain } from '../../common/tenant-hotspot-domain'
 import { RealtimeEventsService } from '../events/realtime-events.service'
 import { MailService } from '../mail/mail.service'
 import { SmsService } from '../sms/sms.service'
+import { normalizeSmsNotificationTemplates, renderSmsTemplate } from '../sms/sms-template-settings'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { resolveEffectiveSubscriptionTier } from '../subscription/subscription-plan.util'
 import { CreateRouterDto } from './dto/create-router.dto'
@@ -1083,17 +1085,27 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       input.router.hotspot?.name ||
       input.router.group?.name ||
       'Not set'
-    const message = [
-      'AROFi router script OK',
-      `Business: ${input.router.tenant?.name ?? 'Unknown'}`,
-      `Router: ${input.router.name}`,
-      `Location: ${location}`,
-      `NAS: ${input.learnedNasIpAddress ?? 'unknown'}`,
-      `Host: ${input.managementHost || input.router.host || 'unknown'}`,
-      `Mode: ${input.router.lastScriptMode ?? 'unknown'}`,
-      `Script: ${scriptUrl}`,
-      input.warning ? `Warning: ${input.warning}` : '',
-    ].filter(Boolean).join('\n').slice(0, 480)
+    const platformSettings = await this.prisma.platformSetting.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global' },
+      select: { smsNotificationTemplates: true },
+    })
+    const smsTemplates = normalizeSmsNotificationTemplates(platformSettings.smsNotificationTemplates)
+    if (!smsTemplates.adminRouterOnboardingSuccess.enabled) {
+      return
+    }
+    const message = renderSmsTemplate(smsTemplates.adminRouterOnboardingSuccess.body, {
+      tenantName: input.router.tenant?.name ?? 'Unknown',
+      routerName: input.router.name,
+      location,
+      nasIp: input.learnedNasIpAddress ?? 'unknown',
+      host: input.managementHost || input.router.host || 'unknown',
+      mode: input.router.lastScriptMode ?? 'unknown',
+      scriptUrl,
+      warning: input.warning ?? '',
+      warningLine: input.warning ? `\nWarning: ${input.warning}` : '',
+    })
 
     const sent = await this.smsService.sendText({
       to: adminNotifyPhone,
@@ -1638,24 +1650,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildTenantWifiHost(tenant?: { name?: string | null; domain?: string | null } | null) {
-    // The tenant Wi-Fi hostname is a local captive-portal name, never the
-    // platform's public domain or a stored marketing/domain label.
-    const rawName = (tenant?.name || 'arofi')
-      .replace(/^arofi(?:\s+wifi)?(?:\s+tenant)?[\s:_-]*/i, '')
-      .trim()
-    const label = this.buildTenantWifiLabel(rawName || 'arofi')
-    return `${label}.wifi`
-  }
-
-  private buildTenantWifiLabel(value: string) {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/\/.*$/, '')
-      .replace(/\.wifi$/, '')
-      .replace(/[^a-z0-9]+/g, '')
-      .slice(0, 40) || 'arofi'
+    return buildTenantHotspotDomain(tenant?.name)
   }
 
   private getRouterNasCandidates(router: {
