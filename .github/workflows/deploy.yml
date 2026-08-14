@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# Verification should not receive a write-capable GITHUB_TOKEN. Deployment is
+# handled separately by the production platform, so this job only needs read.
+permissions:
+  contents: read
+
 jobs:
   build-verify:
     name: Verify Builds Pass
