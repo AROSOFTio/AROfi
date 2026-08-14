@@ -82,7 +82,14 @@ function patchPaymentsService() {
     }
 
     const replacement = `  async getPortalContext(tenantDomain?: string, phoneNumber?: string, tenantId?: string) {
-    const tenant = await this.resolvePortalTenant(tenantDomain, tenantId)
+    const tenant = await this.redisCache.remember(
+      this.redisCache.buildKey('portal:tenant', {
+        tenantDomain: tenantDomain ?? null,
+        tenantId: tenantId ?? null,
+      }),
+      60,
+      () => this.resolvePortalTenant(tenantDomain, tenantId),
+    )
     const normalizedPhone = phoneNumber ? this.normalizePhoneNumber(phoneNumber) : null
     const phoneVariants = normalizedPhone
       ? Array.from(new Set([normalizedPhone, \`+\${normalizedPhone}\`, \`0\${normalizedPhone.slice(3)}\`]))
@@ -205,4 +212,4 @@ function patchPaymentsService() {
 
 ensureSingleRxjsCopy()
 patchPaymentsService()
-console.log('Redis portal catalog optimization applied')
+console.log('Redis portal tenant/catalog optimization applied')
