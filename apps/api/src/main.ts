@@ -65,12 +65,12 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ProductionOtpFailClosedInterceptor());
 
   // Query-string webhook secrets can leak into reverse-proxy/access logs, so
-  // the target state is to disable them. However, some payment providers do
-  // not document a custom callback-signature/header mechanism. Breaking those
-  // callbacks is more dangerous than a staged migration. Existing callbacks
-  // therefore remain accepted unless WEBHOOK_ALLOW_QUERY_SECRET is explicitly
-  // set to "false" after that provider has a verified alternative (signed
-  // callback or authenticated provider-status reconciliation).
+  // the long-term target is to disable them. Existing AROFi deployments and
+  // provider callback URLs may already rely on them, and older env files may
+  // contain WEBHOOK_ALLOW_QUERY_SECRET=false even though the old code ignored
+  // that flag. To avoid breaking live payment callbacks, rejection is controlled
+  // by a NEW explicit migration flag only. Set WEBHOOK_REJECT_QUERY_SECRET=true
+  // after each active provider has a verified signed/status-reconciled callback.
   app.use(
     (
       req: { originalUrl?: string; url?: string },
@@ -88,7 +88,7 @@ async function bootstrap() {
       if (
         webhookPath &&
         containsQuerySecret &&
-        process.env.WEBHOOK_ALLOW_QUERY_SECRET === 'false'
+        process.env.WEBHOOK_REJECT_QUERY_SECRET === 'true'
       ) {
         res.status(400).json({
           statusCode: 400,
