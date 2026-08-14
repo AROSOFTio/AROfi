@@ -64,13 +64,13 @@ async function bootstrap() {
   }));
   app.useGlobalInterceptors(new ProductionOtpFailClosedInterceptor());
 
-  // Query-string webhook secrets are retained only as an explicit migration
-  // compatibility mode. They can leak into reverse-proxy/access logs, so the
-  // normal production mode rejects them before the controller sees the URL.
-  // This does NOT alter provider routes or callback payloads. A deployment
-  // that still has a provider configured with ?secret= can temporarily set
-  // WEBHOOK_ALLOW_QUERY_SECRET=true while migrating that provider to a signed
-  // callback/header-supported configuration.
+  // Query-string webhook secrets can leak into reverse-proxy/access logs, so
+  // the target state is to disable them. However, some payment providers do
+  // not document a custom callback-signature/header mechanism. Breaking those
+  // callbacks is more dangerous than a staged migration. Existing callbacks
+  // therefore remain accepted unless WEBHOOK_ALLOW_QUERY_SECRET is explicitly
+  // set to "false" after that provider has a verified alternative (signed
+  // callback or authenticated provider-status reconciliation).
   app.use(
     (
       req: { originalUrl?: string; url?: string },
@@ -88,7 +88,7 @@ async function bootstrap() {
       if (
         webhookPath &&
         containsQuerySecret &&
-        process.env.WEBHOOK_ALLOW_QUERY_SECRET !== 'true'
+        process.env.WEBHOOK_ALLOW_QUERY_SECRET === 'false'
       ) {
         res.status(400).json({
           statusCode: 400,
