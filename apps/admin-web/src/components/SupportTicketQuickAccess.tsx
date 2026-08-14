@@ -61,12 +61,14 @@ export default function SupportTicketQuickAccess({ user }: { user: AdminSessionR
     return null
   }
 
-  const unreadCount = tickets.filter((ticket) => {
+  function isUnread(ticket: Ticket) {
     const incoming = latestIncoming(ticket)
     if (!incoming) return false
     const seenAt = seen[ticket.id]
     return !seenAt || new Date(incoming.createdAt).getTime() > new Date(seenAt).getTime()
-  }).length
+  }
+
+  const unreadCount = tickets.filter(isUnread).length
 
   function saveSeen(next: Record<string, string>) {
     setSeen(next)
@@ -97,7 +99,7 @@ export default function SupportTicketQuickAccess({ user }: { user: AdminSessionR
           {recent.length === 0 && <div style={{padding:22,textAlign:'center',fontSize:12,color:'var(--text-3)'}}>No tickets yet.</div>}
           {recent.map((ticket) => {
             const incoming = latestIncoming(ticket)
-            const unread = Boolean(incoming && (!seen[ticket.id] || new Date(incoming.createdAt) > new Date(seen[ticket.id])))
+            const unread = isUnread(ticket)
             return <button key={ticket.id} type="button" onClick={() => openTicket(ticket)} style={{ width:'100%', border:0, borderBottom:'1px solid var(--border)', background:unread?'rgba(37,99,235,.07)':'transparent', padding:'11px 13px', textAlign:'left', cursor:'pointer', color:'inherit' }}>
               <div style={{display:'flex',justifyContent:'space-between',gap:8}}><strong style={{fontSize:12.5,lineHeight:1.35}}>{ticket.subject}</strong>{unread && <span style={{width:8,height:8,borderRadius:4,background:'#2563eb',marginTop:4,flexShrink:0}}/>}</div>
               <div style={{fontSize:10.5,color:'var(--text-3)',marginTop:3}}>{ticket.tenant?.name ?? ticket.reference} · {ticket.status.toLowerCase().replace(/_/g,' ')}</div>
