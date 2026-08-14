@@ -1,7 +1,9 @@
 #!/bin/sh
 # Start the API without making docker compose wait on a cross-service health
-# dependency. The container itself waits for PostgreSQL, applies migrations,
-# then starts NestJS. restart: unless-stopped handles any later DB outage.
+# dependency. The container itself waits for PostgreSQL. By default it applies
+# Prisma migrations before starting NestJS; a secondary staging runtime that
+# shares the same database may set RUN_DB_MIGRATIONS=false so only the primary
+# staging server owns schema migration execution.
 set -eu
 
 cd /usr/src/app/apps/api
@@ -26,17 +28,21 @@ NODE
     sleep 2
   done
 
-  echo "[start-api] PostgreSQL is ready. Applying Prisma migrations..."
-  migration_attempt=0
-  until ./node_modules/.bin/prisma migrate deploy; do
-    migration_attempt=$((migration_attempt + 1))
-    if [ "$migration_attempt" -ge 5 ]; then
-      echo "[start-api] Prisma migrations failed after 5 attempts. Exiting instead of running an incompatible API."
-      exit 1
-    fi
-    echo "[start-api] Migration attempt $migration_attempt failed; retrying in 5 seconds..."
-    sleep 5
-  done
+  if [ "${RUN_DB_MIGRATIONS:-true}" = "true" ]; then
+    echo "[start-api] PostgreSQL is ready. Applying Prisma migrations..."
+    migration_attempt=0
+    until ./node_modules/.bin/prisma migrate deploy; do
+      migration_attempt=$((migration_attempt + 1))
+      if [ "$migration_attempt" -ge 5 ]; then
+        echo "[start-api] Prisma migrations failed after 5 attempts. Exiting instead of running an incompatible API."
+        exit 1
+      fi
+      echo "[start-api] Migration attempt $migration_attempt failed; retrying in 5 seconds..."
+      sleep 5
+    done
+  else
+    echo "[start-api] PostgreSQL is ready. RUN_DB_MIGRATIONS=false; skipping migrations in this secondary runtime."
+  fi
 fi
 
 if [ -f dist/main.js ]; then
