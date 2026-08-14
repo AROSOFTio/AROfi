@@ -6,6 +6,7 @@ import { Headphones } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
+import AgentSidebar from './AgentSidebar'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import RouterOnboardingNudge from './RouterOnboardingNudge'
@@ -31,6 +32,8 @@ export default function DashboardShell({ children, initials, session, workspaceT
   const router = useRouter()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const isAgent = session.user.role === 'VoucherAgent'
+  const vendorExperienceEnabled = isVendorWorkspace(session.user) && !isAgent
 
   useEffect(() => {
     setMenuOpen(false)
@@ -54,16 +57,18 @@ export default function DashboardShell({ children, initials, session, workspaceT
   }, [])
 
   useEffect(() => {
-    const routes = isVendorWorkspace(session.user)
-      ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access']
-      : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions']
+    const routes = isAgent
+      ? ['/dashboard', '/vouchers']
+      : isVendorWorkspace(session.user)
+        ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access']
+        : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions']
     const id = window.setTimeout(() => {
       for (const route of routes) {
         router.prefetch(route)
       }
     }, 600)
     return () => window.clearTimeout(id)
-  }, [router, session.user])
+  }, [router, session.user, isAgent])
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
@@ -73,7 +78,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
         aria-label="Close navigation menu"
         onClick={() => setMenuOpen(false)}
       />
-      <Sidebar user={session.user} />
+      {isAgent ? <AgentSidebar user={session.user} /> : <Sidebar user={session.user} />}
       <button
         type="button"
         className="mobile-nav-close"
@@ -96,7 +101,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
               <span />
               <span />
             </button>
-            <span className="topbar-title">{workspaceTitle}</span>
+            <span className="topbar-title">{isAgent ? `${session.user.tenantName ?? 'AROFi'} Agent` : workspaceTitle}</span>
           </div>
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
@@ -167,10 +172,10 @@ export default function DashboardShell({ children, initials, session, workspaceT
           </div>
         </header>
         <WorkspaceRouteGuard user={session.user}>
-          <RouterOnboardingNudge enabled={isVendorWorkspace(session.user)} />
+          <RouterOnboardingNudge enabled={vendorExperienceEnabled} />
           <div className="content">{children}</div>
         </WorkspaceRouteGuard>
-        <FeedbackPrompt enabled={isVendorWorkspace(session.user)} />
+        <FeedbackPrompt enabled={vendorExperienceEnabled} />
       </div>
     </div>
   )
