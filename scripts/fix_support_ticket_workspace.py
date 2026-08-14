@@ -265,3 +265,97 @@ if STAFF_MANAGER.exists():
         print('PlatformStaffManager now loads safely and reports API errors instead of crashing.')
     else:
         print('PlatformStaffManager resilient loading already applied.')
+
+# ---------------------------------------------------------------------------
+# Shared dashboard modal viewport safety.
+# Several historical mobile rules conflict: one caps a bottom-sheet modal at
+# 92dvh, while a later <=640px rule forces min-height:100dvh and max-height:none.
+# On real phones (browser chrome, notches, soft keyboard) that can push the card
+# beyond the visible canvas and make the Close control unreachable. Append one
+# final, deliberately high-specificity override so all dashboard modals remain
+# inside the visual viewport, scroll internally, and keep Close sticky.
+# ---------------------------------------------------------------------------
+GLOBAL_CSS = ROOT / 'apps/admin-web/src/app/globals.css'
+MODAL_SAFETY_MARKER = '/* AROFi mobile modal viewport safety — guarded build patch */'
+if GLOBAL_CSS.exists():
+    css = GLOBAL_CSS.read_text()
+    if MODAL_SAFETY_MARKER not in css:
+        css += '''
+
+/* AROFi mobile modal viewport safety — guarded build patch */
+@media (max-width: 768px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .modal-overlay {
+    box-sizing: border-box !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    padding: max(8px, env(safe-area-inset-top)) 0 0 !important;
+    align-items: end !important;
+    justify-items: stretch !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain;
+  }
+
+  .modal-card,
+  .modal-card.compact,
+  .modal-card.wide {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - 8px - env(safe-area-inset-top)) !important;
+    margin: 0 !important;
+    padding: 14px 14px max(18px, env(safe-area-inset-bottom)) !important;
+    border-radius: 18px 18px 0 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-close {
+    position: sticky !important;
+    top: 0 !important;
+    right: auto !important;
+    z-index: 30 !important;
+    display: block !important;
+    width: max-content !important;
+    min-height: 40px;
+    margin: 0 0 6px auto !important;
+    padding: 8px 12px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 9px !important;
+    background: var(--bg-card) !important;
+    color: var(--text-1) !important;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .modal-card form,
+  .modal-card label,
+  .modal-card fieldset,
+  .modal-card .form-input,
+  .modal-card input,
+  .modal-card select,
+  .modal-card textarea {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .modal-card select.form-input,
+  .modal-card input.form-input,
+  .modal-card textarea.form-input {
+    width: 100% !important;
+  }
+}
+'''
+        GLOBAL_CSS.write_text(css)
+        print('Mobile modal viewport safety override appended.')
+    else:
+        print('Mobile modal viewport safety override already applied.')
