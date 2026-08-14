@@ -85,7 +85,10 @@ export class PlatformStaffService {
       throw new BadRequestException('You cannot deactivate your own Developer Admin account')
     }
 
-    const data: Record<string, unknown> = {}
+    // The fields below are deliberately constrained by the DTO + role checks;
+    // `any` here keeps the incremental Prisma payload assignable while still
+    // preventing callers from passing arbitrary database fields.
+    const data: any = {}
     if (dto.firstName !== undefined) data.firstName = dto.firstName.trim()
     if (dto.lastName !== undefined) data.lastName = dto.lastName.trim()
     if (dto.email !== undefined) {
