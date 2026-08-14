@@ -9,6 +9,7 @@ import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache
 import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { UpdateRouterDto } from './dto/update-router.dto'
+import { RouterLifecycleService } from './router-lifecycle.service'
 import { RoutersService } from './routers.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -16,6 +17,7 @@ import { RoutersService } from './routers.service'
 export class RoutersController {
   constructor(
     private readonly routersService: RoutersService,
+    private readonly routerLifecycleService: RouterLifecycleService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -142,6 +144,29 @@ export class RoutersController {
     return this.routersService.enableAllRemotePorts(tenantId)
   }
 
+  @RequirePermissions(PERMISSIONS.routersRead)
+  @Get(':routerId/lifecycle')
+  getRouterLifecycle(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routerLifecycleService.getLifecycle(routerId, tenantId ?? undefined)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview', 'hotspots:overview')
+  @Post(':routerId/deactivate')
+  deactivateRouter(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routerLifecycleService.deactivateRouter(routerId, tenantId ?? undefined)
+  }
+
+  @RequirePermissions(PERMISSIONS.routersManage)
+  @InvalidateRedisCache('routers:overview', 'hotspots:overview')
+  @Post(':routerId/reactivate')
+  reactivateRouter(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.routerLifecycleService.reactivateRouter(routerId, tenantId ?? undefined)
+  }
+
   @RequirePermissions(PERMISSIONS.routersManage)
   @InvalidateRedisCache('routers:overview')
   @Patch(':routerId')
@@ -159,6 +184,6 @@ export class RoutersController {
   @Delete(':routerId')
   deleteRouter(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.routersService.deleteRouter(routerId, tenantId ?? undefined)
+    return this.routerLifecycleService.deleteRouter(routerId, tenantId ?? undefined)
   }
 }
