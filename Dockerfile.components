@@ -40,10 +40,10 @@ RUN chmod +x scripts/run_with_heartbeat.sh
 # Keep the production patch and captive-portal guard pipeline identical for
 # every component image. The persistence normalizer MUST run before the router
 # lifecycle validator because that validator requires session-timeout=0s.
-# Auth, financial, export and portal privacy hardening run after gateway
-# compilation and before the read-only router/captive invariant checks. They
-# are scoped to admin-auth, payment/wallet, CSV reporting and public portal
-# presentation source and never alter MikroTik/RADIUS provisioning.
+# Auth, financial, payment-surface, export and portal privacy hardening run
+# after gateway compilation and before the read-only router/captive invariant
+# checks. They are scoped to admin-auth, payment/wallet, CSV reporting and
+# public portal presentation source and never alter MikroTik/RADIUS provisioning.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
@@ -70,6 +70,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/finalize_gateway_compile.py \
     && python3 scripts/apply_auth_security_hardening.py \
     && python3 scripts/apply_financial_security_hardening.py \
+    && python3 scripts/apply_payment_surface_security_hardening.py \
     && python3 scripts/apply_export_security_hardening.py \
     && python3 scripts/apply_portal_security_hardening.py \
     && python3 scripts/verify_router_captive_invariants.py \
