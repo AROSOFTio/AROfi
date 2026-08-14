@@ -470,14 +470,6 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
   const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
   const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))
-  const portalDisplayName =
-    cleanPortalDisplayName(activeActivation?.hotspot?.name) ||
-    cleanPortalDisplayName(portalSession?.activeActivation?.hotspot?.name) ||
-    cleanPortalDisplayName(portalSession?.activeSession?.hotspot?.name) ||
-    cleanPortalDisplayName(context?.tenant.name) ||
-    cleanPortalDisplayName(portalSession?.tenant.name) ||
-    domainToBusinessName(context?.tenant.domain || hotspotParams.tenantDomain || portalSession?.tenant.domain) ||
-    'WiFi Portal'
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -1298,6 +1290,14 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   }
 
   const activeActivation = portalSession?.activeActivation ?? context?.activeActivation ?? null
+  const portalDisplayName =
+    cleanPortalDisplayName(activeActivation?.hotspot?.name) ||
+    cleanPortalDisplayName(portalSession?.activeActivation?.hotspot?.name) ||
+    cleanPortalDisplayName(portalSession?.activeSession?.hotspot?.name) ||
+    cleanPortalDisplayName(context?.tenant.name) ||
+    cleanPortalDisplayName(portalSession?.tenant.name) ||
+    domainToBusinessName(context?.tenant.domain || hotspotParams.tenantDomain || portalSession?.tenant.domain) ||
+    'WiFi Portal'
   const packages = context?.packages ?? []
   const availableNetworks = (context?.paymentNetworks?.length ? context.paymentNetworks : ['MTN']) as MobileMoneyNetwork[]
   const portalStyle = portalTemplateStyles[resolvePortalTemplate(context?.tenant.portalTemplate)]
