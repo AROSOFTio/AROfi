@@ -17,8 +17,21 @@ import {
   UpdateSupportFloorTicketDto,
 } from './dto/support-floor.dto'
 
-const PLATFORM_SUPPORT_ROLES = new Set(['SuperAdmin', 'Support', 'ReadOnlySupport', 'WifiAdmin'])
-const ASSIGNABLE_SUPPORT_ROLES = new Set(['SuperAdmin', 'Support', 'WifiAdmin'])
+const PLATFORM_SUPPORT_ROLES = new Set([
+  'SuperAdmin',
+  'Support',
+  'ReadOnlySupport',
+  'NetworkOperator',
+  'FinanceManager',
+  'WifiAdmin',
+])
+const ASSIGNABLE_SUPPORT_ROLES = new Set([
+  'SuperAdmin',
+  'Support',
+  'NetworkOperator',
+  'FinanceManager',
+  'WifiAdmin',
+])
 const FINAL_STATUSES = new Set<SupportTicketStatus>([SupportTicketStatus.RESOLVED, SupportTicketStatus.CLOSED])
 
 @Injectable()
