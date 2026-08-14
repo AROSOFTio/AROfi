@@ -8,6 +8,9 @@ next-env.d.ts
 .env
 .env.local
 .env.*.local
+.env.staging
+.env.desktop-staging
+.env.production
 .app.env
 dev.env
 market.env
