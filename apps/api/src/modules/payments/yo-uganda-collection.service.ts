@@ -49,12 +49,14 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
         headers: {
           'Content-Type': 'text/xml',
         },
+        // IMPORTANT: send the untouched authenticated XML to Yo! Uganda.
+        // Only diagnostic/storage copies are redacted below.
         body: xmlPayload,
       })
 
       const responseXml = await response.text()
       if (!response.ok) {
-        throw new ServiceUnavailableException(`Yo Uganda request failed with HTTP ${response.status}: ${responseXml}`)
+        throw new ServiceUnavailableException(`Yo Uganda request failed with HTTP ${response.status}: ${this.redactXmlCredentials(responseXml)}`)
       }
 
       const status = this.getXmlValue(responseXml, 'Status', 'status')
@@ -64,7 +66,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
       if (status.toUpperCase() !== 'OK') {
         const faultString = this.getXmlValue(responseXml, 'faultString')
         const errorMessage = this.getXmlValue(responseXml, 'ErrorMessage', 'error_message') || this.getXmlValue(responseXml, 'StatusMessage', 'status_message') || faultString || 'Unknown error'
-        this.logger.error(`Yo Uganda API Error. Raw XML: ${responseXml}`)
+        this.logger.error(`Yo Uganda API Error. Raw XML: ${this.redactXmlCredentials(responseXml)}`)
         throw new ServiceUnavailableException(`Yo Uganda API error: ${errorMessage}`)
       }
 
@@ -76,8 +78,10 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
         statusMessage: 'Payment request sent. Enter your Mobile Money PIN on your phone to approve.',
         amount: input.amountUgx.toString(),
         currencyCode: input.currency,
-        rawRequest: xmlPayload,
-        rawResponse: responseXml,
+        // Never persist APIUsername/APIPassword. The real outbound request above
+        // is unchanged; only the diagnostic copy stored by AROFi is sanitized.
+        rawRequest: this.redactXmlCredentials(xmlPayload),
+        rawResponse: this.redactXmlCredentials(responseXml),
       }
     } catch (error) {
       this.logger.error(`Failed to collect payment via Yo Uganda for ref ${input.externalReference}`, error instanceof Error ? error.stack : undefined)
@@ -123,7 +127,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
       if (status.toUpperCase() !== 'OK') {
         const faultString = this.getXmlValue(responseXml, 'faultString')
         const errorMessage = this.getXmlValue(responseXml, 'ErrorMessage', 'error_message') || this.getXmlValue(responseXml, 'StatusMessage', 'status_message') || faultString || 'Unknown error'
-        this.logger.error(`Yo Uganda status check API Error. Raw XML: ${responseXml}`)
+        this.logger.error(`Yo Uganda status check API Error. Raw XML: ${this.redactXmlCredentials(responseXml)}`)
         throw new ServiceUnavailableException(`Yo Uganda status check API error: ${errorMessage}`)
       }
 
@@ -136,7 +140,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
         amount,
         payerName: payerName || undefined,
         rawRequest: referenceId,
-        rawResponse: responseXml,
+        rawResponse: this.redactXmlCredentials(responseXml),
       }
     } catch (error) {
       this.logger.error(`Yo Uganda status check failed for reference ${referenceId}`, error instanceof Error ? error.stack : undefined)
@@ -160,7 +164,7 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
         transactionReference: providerReference,
         payerName: payerNames || undefined,
         rawRequest: '',
-        rawResponse: JSON.stringify(payload),
+        rawResponse: this.redactXmlCredentials(JSON.stringify(payload)),
       },
     }
   }
@@ -183,6 +187,14 @@ export class YoUgandaCollectionService implements PaymentCollectionProvider {
       throw new ServiceUnavailableException(`Yo Uganda configuration ${key} is missing`)
     }
     return value
+  }
+
+  private redactXmlCredentials(value: string) {
+    return value
+      .replace(/<APIUsername>[^<]*<\/APIUsername>/gi, '<APIUsername>[REDACTED]</APIUsername>')
+      .replace(/<APIPassword>[^<]*<\/APIPassword>/gi, '<APIPassword>[REDACTED]</APIPassword>')
+      .replace(/("APIUsername"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
+      .replace(/("APIPassword"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
   }
 
   private escapeXml(unsafe: string): string {
