@@ -50,8 +50,7 @@ class ProductionOtpFailClosedInterceptor implements NestInterceptor {
 async function bootstrap() {
   assertRequiredProductionConfig()
   // rawBody is required for HMAC verification of payment provider webhooks
-  // (payments.service.ensureWebhookSecret) — the signature is computed over
-  // the exact bytes the provider sent, not a re-serialization.
+  // where the provider supports signed callbacks.
   const app = await NestFactory.create(AppModule, { rawBody: true });
   // Behind Coolify's reverse proxy, req.ip otherwise resolves to the proxy's
   // own address for every request platform-wide, which collapses the global
@@ -64,6 +63,44 @@ async function bootstrap() {
     threshold: 1024,
   }));
   app.useGlobalInterceptors(new ProductionOtpFailClosedInterceptor());
+
+  // Query-string webhook secrets are retained only as an explicit migration
+  // compatibility mode. They can leak into reverse-proxy/access logs, so the
+  // normal production mode rejects them before the controller sees the URL.
+  // This does NOT alter provider routes or callback payloads. A deployment
+  // that still has a provider configured with ?secret= can temporarily set
+  // WEBHOOK_ALLOW_QUERY_SECRET=true while migrating that provider to a signed
+  // callback/header-supported configuration.
+  app.use(
+    (
+      req: { originalUrl?: string; url?: string },
+      res: {
+        status: (code: number) => { json: (body: Record<string, unknown>) => unknown };
+      },
+      next: () => void,
+    ) => {
+      const requestUrl = req.originalUrl ?? req.url ?? '';
+      const webhookPath =
+        requestUrl.startsWith('/api/payments/webhooks/') ||
+        requestUrl.startsWith('/api/wallets/webhooks/');
+      const containsQuerySecret = /(?:\?|&)secret=/i.test(requestUrl);
+
+      if (
+        webhookPath &&
+        containsQuerySecret &&
+        process.env.WEBHOOK_ALLOW_QUERY_SECRET !== 'true'
+      ) {
+        res.status(400).json({
+          statusCode: 400,
+          message: 'Webhook secrets in URL query strings are disabled',
+          error: 'Bad Request',
+        });
+        return;
+      }
+
+      next();
+    },
+  );
 
   // CSRF defense for cookie-authenticated admin writes. SameSite=Lax is useful,
   // but subdomains are still considered same-site; a compromised non-admin
@@ -170,7 +207,11 @@ const DEFAULT_TRUSTED_ADMIN_ORIGINS = new Set([
 ]);
 
 function configuredTrustedAdminOrigins() {
-  const configured = (process.env.CORS_ALLOWED_ORIGINS ?? '')
+  // New explicit variable wins when configured. CORS_ALLOWED_ORIGINS remains a
+  // backward-compatible fallback during deployment migration only.
+  const configuredValue =
+    process.env.CORS_ALLOWED_ADMIN_ORIGINS ?? process.env.CORS_ALLOWED_ORIGINS ?? '';
+  const configured = configuredValue
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
