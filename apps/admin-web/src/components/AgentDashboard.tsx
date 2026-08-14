@@ -1,4 +1,4 @@
-import { Banknote, Clock3, Coins, Ticket, Wallet } from 'lucide-react'
+import { Banknote, Coins, Ticket, Wallet } from 'lucide-react'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/format'
 import type { PackageCatalogResponse } from '@/lib/admin-types'
@@ -74,7 +74,7 @@ export default async function AgentDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 14 }} className="agent-dashboard-kpis">
         <AgentKpi icon={<Banknote size={19} />} label="Today's Sales" value={formatCurrency(data?.summary.todaySalesUgx ?? 0)} note="Cash + Mobile Money" />
         <AgentKpi icon={<Coins size={19} />} label="My Commission" value={formatCurrency(data?.summary.totalCommissionUgx ?? 0)} note={`Today ${formatCurrency(data?.summary.todayCommissionUgx ?? 0)}`} />
-        <AgentKpi icon={<Wallet size={19} />} label="Cash to Remit" value={formatCurrency(data?.summary.cashToRemitUgx ?? 0)} note={data?.agent.cashLimitUgx > 0 ? `Limit ${formatCurrency(data.agent.cashLimitUgx)}` : 'No cash ceiling set'} />
+        <AgentKpi icon={<Wallet size={19} />} label="Cash to Remit" value={formatCurrency(data?.summary.cashToRemitUgx ?? 0)} note={(data?.agent.cashLimitUgx ?? 0) > 0 ? `Limit ${formatCurrency(data?.agent.cashLimitUgx ?? 0)}` : 'No cash ceiling set'} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(280px, .65fr)', gap: 14, marginBottom: 14 }} className="agent-dashboard-sell-grid">
@@ -119,7 +119,7 @@ export default async function AgentDashboard() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Wallet size={17} /><strong>Cash Accountability</strong></div>
             <div style={{ marginTop: 10, display: 'grid', gap: 8, fontSize: 12.5 }}>
               <AccountRow label="Outstanding cash" value={formatCurrency(data?.summary.cashToRemitUgx ?? 0)} strong />
-              <AccountRow label="Cash limit" value={data?.agent.cashLimitUgx ? formatCurrency(data.agent.cashLimitUgx) : 'No limit'} />
+              <AccountRow label="Cash limit" value={(data?.agent.cashLimitUgx ?? 0) > 0 ? formatCurrency(data?.agent.cashLimitUgx ?? 0) : 'No limit'} />
               <AccountRow label="Remaining capacity" value={data?.summary.cashRemainingBeforeLimitUgx === null ? 'No limit' : formatCurrency(data?.summary.cashRemainingBeforeLimitUgx ?? 0)} />
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: 11.5, lineHeight: 1.45, margin: '11px 0 0' }}>The business owner records settlement after receiving your cash. Mobile Money sales never increase this amount.</p>
