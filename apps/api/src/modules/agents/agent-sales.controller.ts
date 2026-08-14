@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { CurrentUser } from '../auth/current-user.decorator'
@@ -20,11 +20,15 @@ export class AgentSalesPublicController {
 
   @Post('claims')
   createClaim(@Body() dto: CreateAgentActivationClaimDto) {
+    assertLocalHotspotLoginUrl(dto.loginUrl)
     return this.agentSales.createClaim(dto)
   }
 
   @Get('claims/status')
   getClaimStatus(@Query('token') token: string) {
+    if (!token || token.length < 32 || token.length > 128) {
+      throw new BadRequestException('A valid activation status token is required.')
+    }
     return this.agentSales.getClaimStatus(token)
   }
 }
@@ -96,5 +100,30 @@ export class AgentSalesController {
   ) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.agentSales.recordCashSettlement(scopedTenantId, dto)
+  }
+}
+
+function assertLocalHotspotLoginUrl(value: string) {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new BadRequestException('The router login address is invalid. Reopen the WiFi sign-in page and try again.')
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new BadRequestException('The router login address must use HTTP or HTTPS.')
+  }
+
+  const hostname = url.hostname.toLowerCase()
+  const isPrivateIpv4 =
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+  const isLocalHostname = hostname.endsWith('.wifi') || hostname.endsWith('.lan') || hostname.endsWith('.local')
+  const isRouterLoginPath = url.pathname === '/login' || url.pathname.endsWith('/login')
+
+  if ((!isPrivateIpv4 && !isLocalHostname) || !isRouterLoginPath) {
+    throw new BadRequestException('The activation request must point to this WiFi router’s local login page.')
   }
 }
