@@ -128,8 +128,10 @@ text = replace_once(
 )
 
 # ---------------------------------------------------------------------------
-# 2. Query-string webhook secret is migration-only at the service boundary too.
-#    main.ts blocks it by default; this protects direct/internal service calls.
+# 2. Query-string webhook secrets are a staged compatibility mode. They are
+#    accepted unless explicitly disabled after a provider-specific signed or
+#    status-reconciled callback path has been verified. This avoids breaking a
+#    live gateway that cannot send custom authorization headers.
 # ---------------------------------------------------------------------------
 old_assert = """  private assertWebhookSecret(
     envVarName: string,
@@ -149,7 +151,7 @@ new_assert = """  private assertWebhookSecret(
   ) {
     const headerSecret = headers['x-webhook-secret'] ?? headers['X-Webhook-Secret']
     const headerValue = Array.isArray(headerSecret) ? headerSecret[0] : headerSecret
-    const queryCompatibilityEnabled = process.env.WEBHOOK_ALLOW_QUERY_SECRET === 'true'
+    const queryCompatibilityEnabled = process.env.WEBHOOK_ALLOW_QUERY_SECRET !== 'false'
     const incomingSecret = headerValue ?? (queryCompatibilityEnabled ? payload.secret : undefined)
     this.ensureWebhookSecret(envVarName, incomingSecret)
   }
@@ -162,7 +164,7 @@ text = replace_once(
     "webhook query-secret gate",
 )
 
-# Yo disbursement uses a specialized handler; apply the same migration gate.
+# Yo disbursement uses a specialized handler; apply the same staged gate.
 old_yo_secret = """    const incomingSecret =
       payload.secret ?? headers['x-yo-webhook-secret'] ?? headers['X-Yo-Webhook-Secret'] ?? headers['x-webhook-secret']
     this.ensureWebhookSecret('YO_UGANDA_WEBHOOK_SECRET', Array.isArray(incomingSecret) ? incomingSecret[0] : incomingSecret)
@@ -171,7 +173,7 @@ new_yo_secret = """    const headerSecret =
       headers['x-yo-webhook-secret'] ?? headers['X-Yo-Webhook-Secret'] ?? headers['x-webhook-secret']
     const headerValue = Array.isArray(headerSecret) ? headerSecret[0] : headerSecret
     const incomingSecret = headerValue ??
-      (process.env.WEBHOOK_ALLOW_QUERY_SECRET === 'true' ? payload.secret : undefined)
+      (process.env.WEBHOOK_ALLOW_QUERY_SECRET !== 'false' ? payload.secret : undefined)
     this.ensureWebhookSecret('YO_UGANDA_WEBHOOK_SECRET', incomingSecret)
 """
 text = replace_once(
@@ -219,4 +221,4 @@ text = text.replace(
 )
 
 PAYMENTS.write_text(text)
-print("Financial security hardening applied: top-up idempotency, webhook secret gating, and log redaction.")
+print("Financial security hardening applied: top-up idempotency, staged webhook secret gating, and log redaction.")
