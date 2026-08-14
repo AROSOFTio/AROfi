@@ -31,6 +31,7 @@ type RouterLifecycle = {
 }
 
 export default function RouterSupportDock({ user }: { user: AdminSessionResponse['user'] }) {
+  const canReadRouters = user.permissions.includes('ALL') || user.permissions.includes('routers.read')
   const canManageRouters = user.permissions.includes('ALL') || user.permissions.includes('routers.manage')
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -75,7 +76,7 @@ export default function RouterSupportDock({ user }: { user: AdminSessionResponse
     return () => { cancelled = true }
   }, [open, selectedId])
 
-  if (!canManageRouters) return null
+  if (!canReadRouters) return null
 
   async function loadRouters(preferredId?: string) {
     setLoading(true)
@@ -102,7 +103,7 @@ export default function RouterSupportDock({ user }: { user: AdminSessionResponse
   }
 
   async function deactivate() {
-    if (!selectedRouter || busyAction) return
+    if (!canManageRouters || !selectedRouter || busyAction) return
     if (!window.confirm(`Deactivate ${selectedRouter.name}? AROFi will preserve its history and disable its NAS/RADIUS client.`)) return
     setBusyAction('deactivate')
     setNotice(null)
@@ -119,7 +120,7 @@ export default function RouterSupportDock({ user }: { user: AdminSessionResponse
   }
 
   async function reactivate() {
-    if (!selectedRouter || busyAction) return
+    if (!canManageRouters || !selectedRouter || busyAction) return
     setBusyAction('reactivate')
     setNotice(null)
     try {
@@ -135,7 +136,7 @@ export default function RouterSupportDock({ user }: { user: AdminSessionResponse
   }
 
   async function deleteRouter() {
-    if (!selectedRouter || !lifecycle?.canDelete || busyAction) return
+    if (!canManageRouters || !selectedRouter || !lifecycle?.canDelete || busyAction) return
     if (!window.confirm(`Permanently delete ${selectedRouter.name}? This is allowed only because AROFi found no protected customer or transaction history.`)) return
     setBusyAction('delete')
     setNotice(null)
@@ -163,7 +164,11 @@ export default function RouterSupportDock({ user }: { user: AdminSessionResponse
             <div className="router-support-head">
               <div>
                 <strong>Router Troubleshooting & Lifecycle</strong>
-                <span>{user.permissions.includes('ALL') ? 'Developer Admin: all businesses' : user.tenantName ?? 'Business workspace'}</span>
+                <span>
+                  {user.permissions.includes('ALL')
+                    ? 'Developer Admin: all businesses'
+                    : `${user.tenantName ?? 'Business workspace'}${canManageRouters ? '' : ' · read-only troubleshooting'}`}
+                </span>
               </div>
               <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)} aria-label="Close router tools"><X size={17} /></button>
             </div>
@@ -238,33 +243,37 @@ export default function RouterSupportDock({ user }: { user: AdminSessionResponse
                       ) : null}
                     </section>
 
-                    <div className="router-support-actions">
-                      {lifecycle?.lifecycleState === 'DEACTIVATED' ? (
-                        <button type="button" className="btn btn-primary" onClick={() => void reactivate()} disabled={Boolean(busyAction)}>
-                          <RotateCcw size={14} /> {busyAction === 'reactivate' ? 'Reactivating…' : 'Reactivate'}
+                    {canManageRouters ? (
+                      <div className="router-support-actions">
+                        {lifecycle?.lifecycleState === 'DEACTIVATED' ? (
+                          <button type="button" className="btn btn-primary" onClick={() => void reactivate()} disabled={Boolean(busyAction)}>
+                            <RotateCcw size={14} /> {busyAction === 'reactivate' ? 'Reactivating…' : 'Reactivate'}
+                          </button>
+                        ) : (
+                          <button type="button" className="btn btn-ghost" onClick={() => void deactivate()} disabled={Boolean(busyAction) || lifecycleLoading}>
+                            <Power size={14} /> {busyAction === 'deactivate' ? 'Deactivating…' : 'Deactivate & keep history'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => void deleteRouter()}
+                          disabled={Boolean(busyAction) || lifecycleLoading || !lifecycle?.canDelete}
+                          title={lifecycle?.canDelete ? 'Permanent delete' : 'History exists; deactivate instead'}
+                        >
+                          <Trash2 size={14} /> {busyAction === 'delete' ? 'Deleting…' : 'Delete permanently'}
                         </button>
-                      ) : (
-                        <button type="button" className="btn btn-ghost" onClick={() => void deactivate()} disabled={Boolean(busyAction) || lifecycleLoading}>
-                          <Power size={14} /> {busyAction === 'deactivate' ? 'Deactivating…' : 'Deactivate & keep history'}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-danger"
-                        onClick={() => void deleteRouter()}
-                        disabled={Boolean(busyAction) || lifecycleLoading || !lifecycle?.canDelete}
-                        title={lifecycle?.canDelete ? 'Permanent delete' : 'History exists; deactivate instead'}
-                      >
-                        <Trash2 size={14} /> {busyAction === 'delete' ? 'Deleting…' : 'Delete permanently'}
-                      </button>
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="router-support-readonly">You have read-only router access. Use these diagnostics to troubleshoot the ticket, then escalate lifecycle changes to a router administrator.</div>
+                    )}
                   </>
                 )}
               </main>
             </div>
           </div>
           <style>{`
-            .router-support-overlay{position:fixed;inset:0;background:rgba(15,23,42,.48);z-index:1500;display:flex;align-items:center;justify-content:center;padding:18px}.router-support-panel{width:min(1040px,100%);height:min(720px,92vh);background:var(--bg-card);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 80px rgba(15,23,42,.28);overflow:hidden;display:flex;flex-direction:column}.router-support-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border)}.router-support-head>div{display:grid;gap:3px}.router-support-head strong{font-size:15px}.router-support-head span{font-size:11.5px;color:var(--text-muted)}.router-support-body{display:grid;grid-template-columns:280px 1fr;min-height:0;flex:1}.router-support-list{border-right:1px solid var(--border);padding:12px;overflow:auto}.router-support-search{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:10px}.router-support-search input{border:0;outline:0;background:transparent;width:100%;color:var(--text-primary);font-size:12px}.router-support-router{display:grid;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:10px;cursor:pointer;color:var(--text-primary);gap:3px}.router-support-router:hover,.router-support-router.active{background:var(--bg-muted)}.router-support-router strong{font-size:12.5px}.router-support-router span,.router-support-muted{font-size:11.5px;color:var(--text-muted)}.router-support-detail{padding:18px;overflow:auto}.router-support-title-row{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.router-support-title-row h3{margin:0;font-size:19px}.router-support-title-row p{margin:4px 0 0;color:var(--text-muted);font-size:12px}.router-support-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:16px}.router-support-info{border:1px solid var(--border);border-radius:9px;padding:10px;display:grid;gap:4px}.router-support-info label{font-size:10.5px;text-transform:uppercase;color:var(--text-muted);font-weight:700}.router-support-info span{font-size:12.5px;word-break:break-word}.router-support-info span.good{color:var(--success-fg);font-weight:700}.router-support-info span.mono{font-family:monospace}.router-support-lifecycle{margin-top:16px;border-top:1px solid var(--border);padding-top:14px}.router-support-section-title{font-size:13px;font-weight:800;margin-bottom:9px}.router-support-history{display:flex;gap:8px;flex-wrap:wrap}.router-support-history span{font-size:11.5px;border:1px solid var(--border);border-radius:999px;padding:5px 8px}.router-support-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.router-support-notice{margin-top:12px;border-radius:8px;padding:9px 11px;font-size:12px}.router-support-notice.success{background:rgba(34,197,94,.08);color:var(--success-fg);border:1px solid rgba(34,197,94,.24)}.router-support-notice.error{background:rgba(239,68,68,.08);color:var(--danger-fg);border:1px solid rgba(239,68,68,.24)}.router-support-empty{height:100%;display:grid;place-items:center;color:var(--text-muted);font-size:13px}@media(max-width:720px){.router-support-overlay{padding:0}.router-support-panel{height:100vh;border-radius:0;border:0}.router-support-body{grid-template-columns:1fr}.router-support-list{border-right:0;border-bottom:1px solid var(--border);max-height:190px}.router-support-grid{grid-template-columns:1fr}.router-support-detail{padding:14px}}
+            .router-support-overlay{position:fixed;inset:0;background:rgba(15,23,42,.48);z-index:1500;display:flex;align-items:center;justify-content:center;padding:18px}.router-support-panel{width:min(1040px,100%);height:min(720px,92vh);background:var(--bg-card);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 80px rgba(15,23,42,.28);overflow:hidden;display:flex;flex-direction:column}.router-support-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border)}.router-support-head>div{display:grid;gap:3px}.router-support-head strong{font-size:15px}.router-support-head span{font-size:11.5px;color:var(--text-muted)}.router-support-body{display:grid;grid-template-columns:280px 1fr;min-height:0;flex:1}.router-support-list{border-right:1px solid var(--border);padding:12px;overflow:auto}.router-support-search{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:10px}.router-support-search input{border:0;outline:0;background:transparent;width:100%;color:var(--text-primary);font-size:12px}.router-support-router{display:grid;width:100%;text-align:left;border:0;background:transparent;border-radius:9px;padding:10px;cursor:pointer;color:var(--text-primary);gap:3px}.router-support-router:hover,.router-support-router.active{background:var(--bg-muted)}.router-support-router strong{font-size:12.5px}.router-support-router span,.router-support-muted{font-size:11.5px;color:var(--text-muted)}.router-support-detail{padding:18px;overflow:auto}.router-support-title-row{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.router-support-title-row h3{margin:0;font-size:19px}.router-support-title-row p{margin:4px 0 0;color:var(--text-muted);font-size:12px}.router-support-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:16px}.router-support-info{border:1px solid var(--border);border-radius:9px;padding:10px;display:grid;gap:4px}.router-support-info label{font-size:10.5px;text-transform:uppercase;color:var(--text-muted);font-weight:700}.router-support-info span{font-size:12.5px;word-break:break-word}.router-support-info span.good{color:var(--success-fg);font-weight:700}.router-support-info span.mono{font-family:monospace}.router-support-lifecycle{margin-top:16px;border-top:1px solid var(--border);padding-top:14px}.router-support-section-title{font-size:13px;font-weight:800;margin-bottom:9px}.router-support-history{display:flex;gap:8px;flex-wrap:wrap}.router-support-history span{font-size:11.5px;border:1px solid var(--border);border-radius:999px;padding:5px 8px}.router-support-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.router-support-notice{margin-top:12px;border-radius:8px;padding:9px 11px;font-size:12px}.router-support-notice.success{background:rgba(34,197,94,.08);color:var(--success-fg);border:1px solid rgba(34,197,94,.24)}.router-support-notice.error{background:rgba(239,68,68,.08);color:var(--danger-fg);border:1px solid rgba(239,68,68,.24)}.router-support-readonly{margin-top:18px;border:1px solid var(--border);background:var(--bg-muted);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--text-muted)}.router-support-empty{height:100%;display:grid;place-items:center;color:var(--text-muted);font-size:13px}@media(max-width:720px){.router-support-overlay{padding:0}.router-support-panel{height:100vh;border-radius:0;border:0}.router-support-body{grid-template-columns:1fr}.router-support-list{border-right:0;border-bottom:1px solid var(--border);max-height:190px}.router-support-grid{grid-template-columns:1fr}.router-support-detail{padding:14px}}
           `}</style>
         </div>
       )}
