@@ -8717,8 +8717,8 @@ html[data-theme][data-accent-theme] .wallet-showcase-card svg {
   .home-nav::before {
     content: "";
     position: fixed;
-    inset: 63px 0 0;
-    background: rgba(15, 23, 42, 0.34);
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -8737,17 +8737,34 @@ html[data-theme][data-accent-theme] .wallet-showcase-card svg {
     right: 0 !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
+    background: var(--bg-card) !important;
+    backdrop-filter: none !important;
   }
 
   .home-nav-links {
-    bottom: auto;
-    padding-bottom: 8px !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    min-height: 100vh;
+    min-height: 100dvh;
+    align-content: start;
+    padding-top: calc(72px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(190px + env(safe-area-inset-bottom)) !important;
+    border-left: 1px solid var(--border);
+    border-top: 0;
+    box-shadow: -22px 0 58px rgba(15, 23, 42, 0.22);
+    overflow-y: auto;
   }
 
   .home-actions {
-    top: 337px !important;
+    top: auto !important;
+    bottom: 0 !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     align-items: center;
+    padding-top: 12px !important;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom)) !important;
+    border-left: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.10);
   }
 
   .home-mode-toggle {
