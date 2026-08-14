@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { BookOpen } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import CompactDocumentationBook from '@/components/docs/CompactDocumentationBook'
-import SupportTicketWorkspace from '@/components/SupportTicketWorkspace'
+import SupportTicketWorkspace from '@/components/SupportTicketWorkspaceV2'
 
 export default function SupportPage() {
   const searchParams = useSearchParams()
