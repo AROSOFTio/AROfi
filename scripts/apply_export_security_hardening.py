@@ -49,7 +49,7 @@ add_import_once(
 )
 replace_once(
     payments,
-    "    const escape = (value: string | number) => `\\\"${String(value).replace(/\\\"/g, '\\\"\\\"')}\\\"`\n",
+    '''    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`\n''',
     "    const escape = escapeCsvCell\n",
     'payments CSV encoder',
 )
@@ -64,7 +64,7 @@ add_import_once(
 )
 replace_once(
     agents,
-    "    const escape = (value: string | number) => `\\\"${String(value).replace(/\\\"/g, '\\\"\\\"')}\\\"`\n",
+    '''    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`\n''',
     "    const escape = escapeCsvCell\n",
     'agent disbursement CSV encoder',
 )
@@ -79,7 +79,7 @@ add_import_once(
 )
 replace_once(
     metrics,
-    "      .map((row) => row.map((value) => `\\\"${String(value).replace(/\\\"/g, '\\\"\\\"')}\\\"`).join(','))\n",
+    '''      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))\n''',
     "      .map((row) => row.map(escapeCsvCell).join(','))\n",
     'agent voucher metrics CSV encoder',
 )
@@ -94,7 +94,7 @@ add_import_once(
 )
 replace_once(
     vouchers,
-    "        ].map((value) => `\\\"${String(value).replace(/\\\"/g, '\\\"\\\"')}\\\"`).join(','),\n",
+    '''        ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','),\n''',
     "        ].map(escapeCsvCell).join(','),\n",
     'voucher batch CSV encoder',
 )
