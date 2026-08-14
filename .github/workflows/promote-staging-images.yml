@@ -1,0 +1,62 @@
+name: Promote tested staging images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  verify-fast-forward-release:
+    name: Verify main matches tested staging commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require exact staging commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin staging
+          MAIN_SHA="$(git rev-parse HEAD)"
+          STAGING_SHA="$(git rev-parse origin/staging)"
+          if [ "$MAIN_SHA" != "$STAGING_SHA" ]; then
+            echo "Production promotion blocked."
+            echo "main=$MAIN_SHA"
+            echo "staging=$STAGING_SHA"
+            echo "AROFi production releases must fast-forward main to the exact staging commit that was tested."
+            exit 1
+          fi
+
+  promote:
+    name: Promote ${{ matrix.component }}
+    needs: verify-fast-forward-release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [api, admin, portal, nginx, freeradius, backup]
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Promote immutable tested image to stable
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/arosoftio/arofi-${{ matrix.component }}"
+          docker buildx imagetools inspect "$IMAGE:${GITHUB_SHA}"
+          docker buildx imagetools create \
+            --tag "$IMAGE:stable" \
+            "$IMAGE:${GITHUB_SHA}"
+          echo "Promoted $IMAGE:${GITHUB_SHA} -> $IMAGE:stable"
