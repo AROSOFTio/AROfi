@@ -25,6 +25,29 @@ BEGIN
   WHERE "responsePayload" IS NOT NULL
     AND "responsePayload"::text ~* '<API(User(name)?|Password)>';
 
+  -- Older webhook processing could store JSON.stringify(payload) inside the
+  -- responsePayload.rawResponse string. At JSONB text level those quotes are
+  -- escaped, so sanitize the decoded rawResponse field directly and put only
+  -- the redacted string back into the same key.
+  UPDATE "Payment"
+  SET "responsePayload" = jsonb_set(
+    "responsePayload",
+    '{rawResponse}',
+    to_jsonb(
+      regexp_replace(
+        "responsePayload"->>'rawResponse',
+        '("(secret|webhookSecret|webhook_secret|authorization)"\s*:\s*")[^"]*(")',
+        '\1[REDACTED]\3',
+        'gi'
+      )
+    ),
+    false
+  )
+  WHERE "responsePayload" IS NOT NULL
+    AND jsonb_typeof("responsePayload") = 'object'
+    AND jsonb_typeof("responsePayload"->'rawResponse') = 'string'
+    AND ("responsePayload"->>'rawResponse') ~* '"(secret|webhookSecret|webhook_secret|authorization)"\s*:';
+
   -- Subscription payment provider responses may use the same collection
   -- adapter, so clean them as well if historical rows contain raw XML.
   UPDATE "SubscriptionPayment"
@@ -42,6 +65,25 @@ BEGIN
   WHERE "responsePayload" IS NOT NULL
     AND "responsePayload"::text ~* '<API(User(name)?|Password)>';
 
+  UPDATE "SubscriptionPayment"
+  SET "responsePayload" = jsonb_set(
+    "responsePayload",
+    '{rawResponse}',
+    to_jsonb(
+      regexp_replace(
+        "responsePayload"->>'rawResponse',
+        '("(secret|webhookSecret|webhook_secret|authorization)"\s*:\s*")[^"]*(")',
+        '\1[REDACTED]\3',
+        'gi'
+      )
+    ),
+    false
+  )
+  WHERE "responsePayload" IS NOT NULL
+    AND jsonb_typeof("responsePayload") = 'object'
+    AND jsonb_typeof("responsePayload"->'rawResponse') = 'string'
+    AND ("responsePayload"->>'rawResponse') ~* '"(secret|webhookSecret|webhook_secret|authorization)"\s*:';
+
   -- Vendor payout metadata stores providerResponse, which historically could
   -- contain Yo! Uganda rawRequest with API credentials.
   UPDATE "Disbursement"
@@ -58,6 +100,18 @@ BEGIN
     )::jsonb
   WHERE "metadata" IS NOT NULL
     AND "metadata"::text ~* '<API(User(name)?|Password)>';
+
+  -- Yo! IPN metadata may also contain a copied secret from legacy controllers.
+  -- Replacing only JSON string values preserves the rest of the payout record.
+  UPDATE "Disbursement"
+  SET "metadata" = regexp_replace(
+    "metadata"::text,
+    '("(secret|webhookSecret|webhook_secret|authorization)"\s*:\s*")[^"]*(")',
+    '\1[REDACTED]\3',
+    'gi'
+  )::jsonb
+  WHERE "metadata" IS NOT NULL
+    AND "metadata"::text ~* '"(secret|webhookSecret|webhook_secret|authorization)"\s*:';
 
   -- Old webhook handlers sometimes merged ?secret= into the stored payload.
   -- Delete top-level authorization material while preserving business fields.
