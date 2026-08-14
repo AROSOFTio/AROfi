@@ -9,6 +9,12 @@ on:
       - main
   workflow_dispatch:
 
+# Default-deny GitHub token permissions. Build/test verification needs only
+# repository read access; it must never be able to modify contents, packages,
+# issues, PRs, deployments, or Actions settings.
+permissions:
+  contents: read
+
 jobs:
   build-verify:
     name: Verify Builds Pass
