@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { RadiusClientStatus, RouterStatus } from '@prisma/client'
+import { Prisma, RadiusClientStatus, RouterStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 import { RemoteProxyService } from './remote-proxy.service'
 
@@ -30,8 +30,8 @@ export class RouterLifecycleService {
         protectedActivityCount > 0
           ? 'This router has customer, access, or transaction-linked history. Deactivate it instead so AROFi keeps the audit trail.'
           : null,
-      radiusClientEnabled: router.radiusClient?.status !== RadiusClientStatus.DISABLED,
-      nasClientEnabled: router.nasClient?.enabled !== false,
+      radiusClientEnabled: Boolean(router.radiusClient && router.radiusClient.status !== RadiusClientStatus.DISABLED),
+      nasClientEnabled: Boolean(router.nasClient && router.nasClient.enabled !== false),
       remoteAccessEnabled: router.remoteAccessEnabled,
       remotePortOpen: router.isRemotePortOpen,
       createdAt: router.createdAt,
@@ -40,31 +40,58 @@ export class RouterLifecycleService {
 
   async deleteRouter(routerId: string, tenantId?: string) {
     const router = await this.findRouter(routerId, tenantId)
-    const lifecycle = await this.getLifecycle(router.id, tenantId)
 
-    if (!lifecycle.canDelete) {
-      throw new BadRequestException(
-        'This router already has customer/session/transaction history and cannot be permanently deleted. Deactivate it instead to preserve business and audit records.',
-      )
-    }
+    await this.prisma.$transaction(
+      async (tx) => {
+        // Re-resolve scope inside the delete transaction. This is the final,
+        // server-authoritative ownership check even if the UI is stale.
+        const lockedRouter = await tx.router.findFirst({
+          where: tenantId ? { id: router.id, tenantId } : { id: router.id },
+          select: { id: true },
+        })
+        if (!lockedRouter) {
+          throw new NotFoundException('Router not found')
+        }
 
-    await this.prisma.$transaction(async (tx) => {
-      // Diagnostic/bootstrap rows are safe to remove only after the protected
-      // customer-history check above has confirmed this is still a new router.
-      await tx.radiusEvent.deleteMany({ where: { routerId: router.id } })
-      await tx.routerHealthCheck.deleteMany({ where: { routerId: router.id } })
-      await tx.routerOutage.deleteMany({ where: { routerId: router.id } })
-      await tx.radiusClient.deleteMany({ where: { routerId: router.id } })
-      await tx.nasClient.deleteMany({ where: { routerId: router.id } })
+        // The eligibility check lives in the SAME serializable transaction as
+        // the delete. A new customer session/activation cannot safely race the
+        // decision and turn a history-bearing router into a hard delete.
+        const [activations, sessions, voucherRedemptions, compensations, radiusCredentials, disconnectionAttempts] =
+          await Promise.all([
+            tx.packageActivation.count({ where: { routerId: router.id } }),
+            tx.networkSession.count({ where: { routerId: router.id } }),
+            tx.voucherRedemption.count({ where: { routerId: router.id } }),
+            tx.routerCompensation.count({ where: { routerId: router.id } }),
+            tx.radiusCredential.count({ where: { routerId: router.id } }),
+            tx.disconnectionAttempt.count({ where: { routerId: router.id } }),
+          ])
 
-      // Remote SSTP credentials are stored in the FreeRADIUS compatibility
-      // tables without a Prisma relation to Router, so clean them explicitly.
-      const remoteUsername = `router-${router.id}`
-      await tx.radCheck.deleteMany({ where: { username: remoteUsername } })
-      await tx.radReply.deleteMany({ where: { username: remoteUsername } })
+        const protectedActivityCount =
+          activations + sessions + voucherRedemptions + compensations + radiusCredentials + disconnectionAttempts
+        if (protectedActivityCount > 0) {
+          throw new BadRequestException(
+            'This router already has customer/session/transaction history and cannot be permanently deleted. Deactivate it instead to preserve business and audit records.',
+          )
+        }
 
-      await tx.router.delete({ where: { id: router.id } })
-    })
+        // Diagnostic/bootstrap rows are safe to remove only after the protected
+        // customer-history check above has confirmed this is still a new router.
+        await tx.radiusEvent.deleteMany({ where: { routerId: router.id } })
+        await tx.routerHealthCheck.deleteMany({ where: { routerId: router.id } })
+        await tx.routerOutage.deleteMany({ where: { routerId: router.id } })
+        await tx.radiusClient.deleteMany({ where: { routerId: router.id } })
+        await tx.nasClient.deleteMany({ where: { routerId: router.id } })
+
+        // Remote SSTP credentials are stored in the FreeRADIUS compatibility
+        // tables without a Prisma relation to Router, so clean them explicitly.
+        const remoteUsername = `router-${router.id}`
+        await tx.radCheck.deleteMany({ where: { username: remoteUsername } })
+        await tx.radReply.deleteMany({ where: { username: remoteUsername } })
+
+        await tx.router.delete({ where: { id: router.id } })
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    )
 
     if (router.remotePort) {
       this.remoteProxyService.stopProxy(router.remotePort)
