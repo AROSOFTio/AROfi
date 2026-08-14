@@ -4,7 +4,7 @@
 This transform is intentionally scoped to:
 - public payment summaries returned by PaymentsService.getPortalContext;
 - portal customer-session payment presentation;
-- trusted-router checks around reconnect credential issuance; and
+- trusted-router checks around reconnect/voucher binding; and
 - the portal browser's local payment-token persistence/polling logic.
 
 It does NOT modify RADIUS, MikroTik provisioning, router connectivity,
@@ -13,6 +13,8 @@ CoA/disconnect, hotspot credential generation, or remote-access scripts.
 Security invariants:
 - phone-number lookup never receives payment status tokens or RADIUS secrets;
 - reconnect credentials require a validated router registration key/context;
+- voucher redemption is tenant-scoped whenever a router key validates, and an
+  untrusted direct/QR request cannot bind the activation to an arbitrary router;
 - the unguessable payment status token remains only on the browser that
   initiated the payment (or an explicit provider return URL);
 - full reconnect credentials continue to come from the token-protected payment
@@ -186,6 +188,49 @@ portal_service = replace_once(
     if (!accessToken) {
 """,
     'trusted router context for automatic returning-device credentials',
+)
+
+# When a router key validated, bind redemption to that tenant. When no trusted
+# router context exists (e.g. a QR scan opened directly), preserve bearer-voucher
+# redemption but do not trust/bind an arbitrary routerId supplied by the client.
+portal_service = replace_once(
+    portal_service,
+    """      result = await this.vouchersService.redeemVoucher({
+        code: this.normalizeVoucherCode(dto.code),
+        hotspotId: dto.hotspotId,
+        sessionReference: dto.sessionReference,
+        customerReference,
+        accessPhoneNumber: phoneNumber,
+        macAddress: dto.macAddress,
+        clientIp: dto.clientIp,
+        routerId: resolvedHotspot.routerId,
+        hotspotServerName: resolvedHotspot.hotspotServerName,
+        userAgent,
+      })
+""",
+    """      const trustedVoucherHotspot = resolvedHotspot as {
+        tenantId?: string
+        routerId?: string
+        hotspotServerName?: string
+      }
+      const resolvedTenantId = trustedVoucherHotspot.tenantId
+      result = await this.vouchersService.redeemVoucher(
+        {
+          code: this.normalizeVoucherCode(dto.code),
+          hotspotId: dto.hotspotId,
+          sessionReference: dto.sessionReference,
+          customerReference,
+          accessPhoneNumber: phoneNumber,
+          macAddress: dto.macAddress,
+          clientIp: dto.clientIp,
+          routerId: resolvedTenantId ? trustedVoucherHotspot.routerId : undefined,
+          hotspotServerName: resolvedTenantId ? trustedVoucherHotspot.hotspotServerName : undefined,
+          userAgent,
+        },
+        resolvedTenantId,
+      )
+""",
+    'tenant-bound portal voucher redemption',
 )
 
 portal_service = replace_once(
@@ -374,4 +419,4 @@ new_payment_created = """      const payment = body as PortalPayment
 portal = replace_once(portal, old_payment_created, new_payment_created, 'portal payment token persistence')
 
 PORTAL.write_text(portal)
-print('Portal security hardening applied: payment data minimized and reconnect requires trusted router context.')
+print('Portal security hardening applied: payment/voucher data minimized and reconnect requires trusted router context.')
