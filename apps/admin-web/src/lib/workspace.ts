@@ -12,7 +12,13 @@ const platformStaffRoles = new Set([
 ])
 
 export function isPlatformAdmin(user?: AdminUser | null) {
-  return user?.role === 'SuperAdmin' || user?.permissions.includes('ALL') || false
+  return Boolean(
+    user && (
+      user.role === 'SuperAdmin' ||
+      user.permissions.includes('ALL') ||
+      (!user.tenantId && platformStaffRoles.has(user.role))
+    )
+  )
 }
 
 export function isPlatformWorkspace(user?: AdminUser | null) {
