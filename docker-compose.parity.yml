@@ -1,0 +1,307 @@
+# AROFi release-parity stack.
+#
+# Purpose:
+#   - Desktop staging uses AROFI_IMAGE_TAG=staging.
+#   - dev.arofi.net uses AROFI_IMAGE_TAG=staging.
+#   - production arofi.net uses AROFI_IMAGE_TAG=stable.
+#
+# The application images are built once from the staging commit and promoted
+# by digest/tag to stable after main fast-forwards to that exact commit.
+# Environment-specific values (domains, database, host ports, worker ownership,
+# secrets) differ; the application/container images do not.
+
+name: arofi-release
+
+x-api-env: &api-env
+  NODE_ENV: production
+  PORT: "3000"
+
+  # External PostgreSQL / Supabase. Desktop + dev share the STAGING project.
+  # Production must use a separate production project with the same schema.
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+
+  REDIS_URL: redis://redis:6379
+  CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:-arofi}
+  CACHE_VERSION: ${CACHE_VERSION:-v1}
+  REDIS_CONNECT_TIMEOUT_MS: ${REDIS_CONNECT_TIMEOUT_MS:-1000}
+
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  PORTAL_TOKEN_SECRET: ${PORTAL_TOKEN_SECRET:?PORTAL_TOKEN_SECRET is required}
+  ROUTER_CREDENTIAL_SECRET: ${ROUTER_CREDENTIAL_SECRET:?ROUTER_CREDENTIAL_SECRET is required}
+  RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}
+  RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+  API_PUBLIC_HOST: ${API_PUBLIC_HOST:?API_PUBLIC_HOST is required}
+  PORTAL_PUBLIC_HOST: ${PORTAL_PUBLIC_HOST:?PORTAL_PUBLIC_HOST is required}
+  APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+  ADMIN_BASE_URL: ${ADMIN_BASE_URL:?ADMIN_BASE_URL is required}
+  PORTAL_BASE_URL: ${PORTAL_BASE_URL:?PORTAL_BASE_URL is required}
+  VOUCHER_QR_LOCAL_LOGIN_URL: ${VOUCHER_QR_LOCAL_LOGIN_URL:-http://10.55.0.1/login}
+  MIKROTIK_CALLBACK_HTTP_URL: ${MIKROTIK_CALLBACK_HTTP_URL:-}
+
+  # One runtime must own migrations/workers when desktop and dev share staging DB.
+  RUN_DB_MIGRATIONS: ${RUN_DB_MIGRATIONS:-true}
+  ACCESS_WORKERS_ENABLED: ${ACCESS_WORKERS_ENABLED:-true}
+  ACCESS_WORKER_INTERVAL_MS: ${ACCESS_WORKER_INTERVAL_MS:-5000}
+  RADIUS_DB_LISTEN_ENABLED: ${RADIUS_DB_LISTEN_ENABLED:-true}
+  RADIUS_DISCONNECT_MAX_RETRIES: ${RADIUS_DISCONNECT_MAX_RETRIES:-5}
+  ROUTER_HEARTBEAT_SECONDS: ${ROUTER_HEARTBEAT_SECONDS:-2}
+  ROUTER_LIVE_WINDOW_SECONDS: ${ROUTER_LIVE_WINDOW_SECONDS:-12}
+  ROUTER_STALE_WINDOW_SECONDS: ${ROUTER_STALE_WINDOW_SECONDS:-30}
+
+  ADMIN_OTP_TTL_MINUTES: ${ADMIN_OTP_TTL_MINUTES:-10}
+  ADMIN_OTP_MAX_ATTEMPTS: ${ADMIN_OTP_MAX_ATTEMPTS:-5}
+  ADMIN_OTP_RESEND_COOLDOWN_SECONDS: ${ADMIN_OTP_RESEND_COOLDOWN_SECONDS:-60}
+  ADMIN_LOGIN_MAX_FAILURES: ${ADMIN_LOGIN_MAX_FAILURES:-8}
+  ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES: ${ADMIN_LOGIN_LOCKOUT_WINDOW_MINUTES:-15}
+
+  ALERT_EMAIL: ${ALERT_EMAIL:-}
+  WEBHOOK_ALLOW_QUERY_SECRET: ${WEBHOOK_ALLOW_QUERY_SECRET:-false}
+  HOTSPOT_LOGIN_URL: ${HOTSPOT_LOGIN_URL:-http://10.55.0.1/login}
+  PORTAL_DEFAULT_TENANT_DOMAIN: ${PORTAL_DEFAULT_TENANT_DOMAIN:-}
+
+  RADIUS_SERVER_HOST: ${RADIUS_SERVER_HOST:-freeradius}
+  RADIUS_PUBLIC_HOST: ${RADIUS_PUBLIC_HOST:-127.0.0.1}
+  RADIUS_AUTH_PORT: ${RADIUS_AUTH_PORT:-1812}
+  RADIUS_ACCOUNTING_PORT: ${RADIUS_ACCOUNTING_PORT:-1813}
+  RADIUS_SECONDARY_HOST: ${RADIUS_SECONDARY_HOST:-}
+  RADIUS_DISCONNECT_ENABLED: ${RADIUS_DISCONNECT_ENABLED:-true}
+  RADIUS_DISCONNECT_HOST: ${RADIUS_DISCONNECT_HOST:-}
+  RADIUS_DISCONNECT_PORT: ${RADIUS_DISCONNECT_PORT:-3799}
+  RADIUS_DISCONNECT_SECRET: ${RADIUS_DISCONNECT_SECRET:-}
+
+  PAYMENT_CUSTOMER_LABEL: ${PAYMENT_CUSTOMER_LABEL:-Pay}
+  PAYMENT_DEFAULT_CURRENCY: ${PAYMENT_DEFAULT_CURRENCY:-UGX}
+  PLATFORM_PAYMENT_GATEWAY: ${PLATFORM_PAYMENT_GATEWAY:-YO_UGANDA}
+
+  YO_UGANDA_BASE_URL: ${YO_UGANDA_BASE_URL:-https://paymentsapi1.yo.co.ug/ybs/task.php}
+  YO_UGANDA_USERNAME: ${YO_UGANDA_USERNAME:-}
+  YO_UGANDA_PASSWORD: ${YO_UGANDA_PASSWORD:-}
+  YO_UGANDA_WEBHOOK_SECRET: ${YO_UGANDA_WEBHOOK_SECRET:-}
+  AGGREGATOR_PROVIDER: ${AGGREGATOR_PROVIDER:-YO_UGANDA}
+  AGGREGATOR_WEBHOOK_SECRET: ${AGGREGATOR_WEBHOOK_SECRET:-}
+
+  IOTEC_CLIENT_ID: ${IOTEC_CLIENT_ID:-}
+  IOTEC_CLIENT_SECRET: ${IOTEC_CLIENT_SECRET:-}
+  IOTEC_WALLET_ID: ${IOTEC_WALLET_ID:-}
+  IOTEC_IDENTITY_BASE_URL: ${IOTEC_IDENTITY_BASE_URL:-https://id.iotec.io}
+  IOTEC_PAY_BASE_URL: ${IOTEC_PAY_BASE_URL:-https://pay.iotec.io}
+  IOTEC_WEBHOOK_SECRET: ${IOTEC_WEBHOOK_SECRET:-}
+
+  MTN_COLLECTION_PROVIDER: ${MTN_COLLECTION_PROVIDER:-AGGREGATOR}
+  MTN_DISBURSEMENT_PROVIDER: ${MTN_DISBURSEMENT_PROVIDER:-MTN_MOMO_DIRECT}
+  MTN_MOMO_COLLECTION_BASE_URL: ${MTN_MOMO_COLLECTION_BASE_URL:-}
+  MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY: ${MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY:-}
+  MTN_MOMO_COLLECTION_API_USER: ${MTN_MOMO_COLLECTION_API_USER:-}
+  MTN_MOMO_COLLECTION_API_KEY: ${MTN_MOMO_COLLECTION_API_KEY:-}
+  MTN_MOMO_COLLECTION_WEBHOOK_SECRET: ${MTN_MOMO_COLLECTION_WEBHOOK_SECRET:-}
+  MTN_MOMO_DISBURSEMENT_BASE_URL: ${MTN_MOMO_DISBURSEMENT_BASE_URL:-}
+  MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY: ${MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY:-}
+  MTN_MOMO_DISBURSEMENT_API_USER: ${MTN_MOMO_DISBURSEMENT_API_USER:-}
+  MTN_MOMO_DISBURSEMENT_API_KEY: ${MTN_MOMO_DISBURSEMENT_API_KEY:-}
+  MTN_MOMO_DISBURSEMENT_WEBHOOK_SECRET: ${MTN_MOMO_DISBURSEMENT_WEBHOOK_SECRET:-}
+  MTN_MOMO_TARGET_ENVIRONMENT: ${MTN_MOMO_TARGET_ENVIRONMENT:-mtnuganda}
+  MTN_MOMO_CURRENCY: ${MTN_MOMO_CURRENCY:-UGX}
+  MTN_ALLOWED_PREFIXES: ${MTN_ALLOWED_PREFIXES:-}
+
+  AIRTEL_COLLECTION_PROVIDER: ${AIRTEL_COLLECTION_PROVIDER:-AGGREGATOR}
+  AIRTEL_DISBURSEMENT_PROVIDER: ${AIRTEL_DISBURSEMENT_PROVIDER:-AIRTEL_MONEY_DIRECT}
+  AIRTEL_MONEY_COLLECTION_BASE_URL: ${AIRTEL_MONEY_COLLECTION_BASE_URL:-}
+  AIRTEL_MONEY_DISBURSEMENT_BASE_URL: ${AIRTEL_MONEY_DISBURSEMENT_BASE_URL:-}
+  AIRTEL_MONEY_CLIENT_ID: ${AIRTEL_MONEY_CLIENT_ID:-}
+  AIRTEL_MONEY_CLIENT_SECRET: ${AIRTEL_MONEY_CLIENT_SECRET:-}
+  AIRTEL_MONEY_PUBLIC_KEY: ${AIRTEL_MONEY_PUBLIC_KEY:-}
+  AIRTEL_MONEY_COLLECTION_WEBHOOK_SECRET: ${AIRTEL_MONEY_COLLECTION_WEBHOOK_SECRET:-}
+  AIRTEL_MONEY_DISBURSEMENT_WEBHOOK_SECRET: ${AIRTEL_MONEY_DISBURSEMENT_WEBHOOK_SECRET:-}
+  AIRTEL_MONEY_COUNTRY: ${AIRTEL_MONEY_COUNTRY:-UG}
+  AIRTEL_MONEY_CURRENCY: ${AIRTEL_MONEY_CURRENCY:-UGX}
+  AIRTEL_ALLOWED_PREFIXES: ${AIRTEL_ALLOWED_PREFIXES:-}
+
+  PESAPAL_MODE: ${PESAPAL_MODE:-sandbox}
+  PESAPAL_BASE_URL: ${PESAPAL_BASE_URL:-https://cybqa.pesapal.com/pesapalv3}
+  PESAPAL_CONSUMER_KEY: ${PESAPAL_CONSUMER_KEY:-}
+  PESAPAL_CONSUMER_SECRET: ${PESAPAL_CONSUMER_SECRET:-}
+  PESAPAL_IPN_ID: ${PESAPAL_IPN_ID:-}
+  PESAPAL_CALLBACK_URL: ${PESAPAL_CALLBACK_URL:-}
+
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AROFi}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@arofi.net}
+  SMTP_ALLOW_SELF_SIGNED_CERT: ${SMTP_ALLOW_SELF_SIGNED_CERT:-false}
+  SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+
+  WHATSAPP_GATEWAY_URL: ${WHATSAPP_GATEWAY_URL:-http://whatsapp:3000}
+  WHATSAPP_GATEWAY_API_KEY: ${WHATSAPP_GATEWAY_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+x-web-env: &web-env
+  NODE_ENV: production
+  API_SERVER_URL: http://arofi-api-v2:3000/api
+  NEXT_PUBLIC_API_URL: /api
+  APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+  ADMIN_BASE_URL: ${ADMIN_BASE_URL:?ADMIN_BASE_URL is required}
+  PORTAL_BASE_URL: ${PORTAL_BASE_URL:?PORTAL_BASE_URL is required}
+  HOTSPOT_LOGIN_URL: ${HOTSPOT_LOGIN_URL:-http://10.55.0.1/login}
+  PORT: "3000"
+  HOSTNAME: 0.0.0.0
+
+services:
+  nginx:
+    image: ghcr.io/arosoftio/arofi-nginx:${AROFI_IMAGE_TAG:-staging}
+    restart: unless-stopped
+    ports:
+      - "${AROFI_HTTP_PORT:-3000}:3000"
+      - "${MIKROTIK_BOOTSTRAP_HTTP_PORT:-18081}:3001"
+    depends_on:
+      api:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      portal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  api:
+    image: ghcr.io/arosoftio/arofi-api:${AROFI_IMAGE_TAG:-staging}
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    ports:
+      - "${WINBOX_PROXY_HOST_PORT_RANGE:-32000-32100}:31000-31100"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - arofi-api-v2
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  admin:
+    image: ghcr.io/arosoftio/arofi-admin:${AROFI_IMAGE_TAG:-staging}
+    restart: unless-stopped
+    environment:
+      <<: *web-env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - arofi-admin-v2
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  portal:
+    image: ghcr.io/arosoftio/arofi-portal:${AROFI_IMAGE_TAG:-staging}
+    restart: unless-stopped
+    environment:
+      <<: *web-env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - arofi-portal-v2
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/portal 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  freeradius:
+    image: ghcr.io/arosoftio/arofi-freeradius:${AROFI_IMAGE_TAG:-staging}
+    restart: unless-stopped
+    ports:
+      - "${RADIUS_HOST_AUTH_PORT:-1912}:1812/udp"
+      - "${RADIUS_HOST_ACCOUNTING_PORT:-1913}:1813/udp"
+    environment:
+      RADIUS_SHARED_SECRET: ${RADIUS_SHARED_SECRET:?RADIUS_SHARED_SECRET is required}
+      RADIUS_CLIENT_CIDR: ${RADIUS_CLIENT_CIDR:-0.0.0.0/0}
+      RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR: ${RADIUS_REQUIRE_MESSAGE_AUTHENTICATOR:-no}
+      POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST is required}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGSSLMODE: ${PGSSLMODE:-require}
+    healthcheck:
+      test: ["CMD-SHELL", "pidof radiusd >/dev/null 2>&1 || pidof freeradius >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  whatsapp:
+    image: ${WAHA_IMAGE:-devlikeapro/waha:latest}
+    restart: unless-stopped
+    profiles: [integrations]
+    ports:
+      - "${WHATSAPP_HOST_PORT:-3005}:3000"
+    environment:
+      WAHA_PRINT_QR: "true"
+      WAHA_API_KEY: ${WHATSAPP_GATEWAY_API_KEY:-}
+    volumes:
+      - wa-sessions:/app/.sessions
+
+  backup:
+    image: ghcr.io/arosoftio/arofi-backup:${AROFI_IMAGE_TAG:-staging}
+    restart: unless-stopped
+    profiles: [ops]
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST is required}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGSSLMODE: ${PGSSLMODE:-require}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - backup-data:/backups
+
+volumes:
+  wa-sessions:
+  backup-data:
