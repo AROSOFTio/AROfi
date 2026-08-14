@@ -4,9 +4,12 @@
 The repository uses build-time source patches for features assembled from several
 parallel implementation passes. This pass removes outdated promises that a
 withdrawal is always instant and replaces them with provider-controlled wording.
+It also invokes the guarded public mobile-drawer correction so every existing
+production/CI pipeline that already runs this script receives the same nav fix.
 """
 
 from pathlib import Path
+import runpy
 
 PAGE = Path("apps/admin-web/src/app/page.tsx")
 
@@ -41,6 +44,11 @@ def main() -> None:
         print("Updated public homepage claims")
     else:
         print("Public homepage claims already current")
+
+    drawer_patch = Path(__file__).with_name("fix_public_mobile_drawer.py")
+    if not drawer_patch.exists():
+        raise SystemExit("Public mobile drawer patch is missing; refusing an incomplete production build.")
+    runpy.run_path(str(drawer_patch), run_name="__main__")
 
 
 if __name__ == "__main__":
