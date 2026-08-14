@@ -1,14 +1,51 @@
 import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import {
+  CallHandler,
+  ExecutionContext,
+  NestInterceptor,
+  ServiceUnavailableException,
+  ValidationPipe,
+} from '@nestjs/common';
 import helmet from 'helmet';
 import * as compression from 'compression';
+import { map, Observable } from 'rxjs';
 
 (BigInt.prototype as any).toJSON = function () {
   const num = Number(this);
   return Number.isSafeInteger(num) ? num : this.toString();
 };
+
+/**
+ * Defense-in-depth guard for the legacy OTP fallback behavior in AuthService.
+ * If SMTP delivery fails in production, AuthService historically attached the
+ * generated OTP to the response as `otpFallback`. That turns a second factor
+ * into a value returned to the same browser that supplied the password.
+ *
+ * Fail closed at the HTTP boundary: a production response containing an OTP
+ * fallback is converted to a 503 and the OTP never leaves the API process.
+ * Development keeps its local-test fallback behavior.
+ */
+class ProductionOtpFailClosedInterceptor implements NestInterceptor {
+  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    return next.handle().pipe(
+      map((data: unknown) => {
+        if (
+          process.env.NODE_ENV === 'production' &&
+          data !== null &&
+          typeof data === 'object' &&
+          Object.prototype.hasOwnProperty.call(data, 'otpFallback')
+        ) {
+          throw new ServiceUnavailableException(
+            'Verification email could not be delivered. Please try again.',
+          );
+        }
+        return data;
+      }),
+    );
+  }
+}
 
 async function bootstrap() {
   assertRequiredProductionConfig()
@@ -26,12 +63,75 @@ async function bootstrap() {
     level: 5,
     threshold: 1024,
   }));
-  // Two-tier CORS. Trusted admin origins (our own domains + the configured
-  // allowlist) get credentials so the HttpOnly admin session cookie works
-  // cross-subdomain. Hotspot/captive-portal origins (private LAN IPs,
-  // wifi.login) only ever call public portal endpoints and are served
-  // WITHOUT credentials — a page on a random LAN origin must never be able
-  // to ride an admin's session cookie (CSRF/credentialed-CORS hardening).
+  app.useGlobalInterceptors(new ProductionOtpFailClosedInterceptor());
+
+  // CSRF defense for cookie-authenticated admin writes. SameSite=Lax is useful,
+  // but subdomains are still considered same-site; a compromised non-admin
+  // subdomain must not be able to submit authenticated state-changing requests.
+  // Bearer-token API clients are unaffected because this only applies when the
+  // admin session cookie is present.
+  app.use(
+    (
+      req: {
+        method?: string;
+        headers?: Record<string, string | string[] | undefined>;
+      },
+      res: {
+        status: (code: number) => { json: (body: Record<string, unknown>) => unknown };
+      },
+      next: () => void,
+    ) => {
+      if (process.env.NODE_ENV === 'development') {
+        next();
+        return;
+      }
+
+      const method = (req.method ?? 'GET').toUpperCase();
+      if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        next();
+        return;
+      }
+
+      const rawCookie = req.headers?.cookie;
+      const cookie = Array.isArray(rawCookie) ? rawCookie.join(';') : rawCookie ?? '';
+      const hasAdminCookie = /(?:^|;\s*)arofi_admin_token=/.test(cookie);
+      if (!hasAdminCookie) {
+        next();
+        return;
+      }
+
+      const rawOrigin = req.headers?.origin;
+      const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+      if (origin && isTrustedAdminOrigin(origin)) {
+        next();
+        return;
+      }
+
+      // Some browser navigations omit Origin but include a browser-controlled
+      // Referer. Accept it only when its exact origin is trusted.
+      const rawReferer = req.headers?.referer;
+      const referer = Array.isArray(rawReferer) ? rawReferer[0] : rawReferer;
+      if (referer) {
+        try {
+          if (isTrustedAdminOrigin(new URL(referer).origin)) {
+            next();
+            return;
+          }
+        } catch {
+          // Fall through to the fail-closed rejection below.
+        }
+      }
+
+      res.status(403).json({
+        statusCode: 403,
+        message: 'Cross-site authenticated request blocked',
+        error: 'Forbidden',
+      });
+    },
+  );
+
+  // Two-tier CORS. Only explicit admin origins get credentials. Captive portal
+  // origins (private LAN IPs, wifi.login) remain uncredentialed.
   app.enableCors((req: { headers: Record<string, string | string[] | undefined> }, callback: (err: Error | null, options?: Record<string, unknown>) => void) => {
     const rawOrigin = req.headers?.origin;
     const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
@@ -64,13 +164,32 @@ async function bootstrap() {
 }
 bootstrap();
 
-// Trusted host suffixes for AROFi's own domains. Must be checked against the
-// parsed hostname (exact match or a real subdomain), never via
-// origin.includes(suffix) — a substring check lets an attacker register
-// e.g. "evil-arofi.net.attacker.com" and pass CORS with credentials.
-const TRUSTED_HOST_SUFFIXES = ['arofi.net'];
+const DEFAULT_TRUSTED_ADMIN_ORIGINS = new Set([
+  'https://arofi.net',
+  'https://www.arofi.net',
+]);
+
+function configuredTrustedAdminOrigins() {
+  const configured = (process.env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const adminBaseUrl = process.env.ADMIN_BASE_URL?.trim();
+  if (adminBaseUrl) {
+    try {
+      configured.push(new URL(adminBaseUrl).origin);
+    } catch {
+      // Invalid ADMIN_BASE_URL is handled by the caller as simply untrusted.
+    }
+  }
+
+  return new Set([...DEFAULT_TRUSTED_ADMIN_ORIGINS, ...configured]);
+}
 
 // Origins that may make CREDENTIALED requests (admin session cookie).
+// Deliberately exact-match only: trusting every *.arofi.net subdomain turns
+// any compromised store/blog/legacy subdomain into part of the admin boundary.
 function isTrustedAdminOrigin(origin: string) {
   // Explicit local-dev bypass — NODE_ENV must literally be "development",
   // not merely "not production" (unset/typo'd/staging NODE_ENV must still
@@ -79,22 +198,14 @@ function isTrustedAdminOrigin(origin: string) {
     return true;
   }
 
-  const configured = (process.env.CORS_ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-  if (configured.includes(origin)) {
-    return true;
-  }
-
-  let hostname: string;
+  let normalizedOrigin: string;
   try {
-    hostname = new URL(origin).hostname.toLowerCase();
+    normalizedOrigin = new URL(origin).origin;
   } catch {
     return false;
   }
 
-  return TRUSTED_HOST_SUFFIXES.some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
+  return configuredTrustedAdminOrigins().has(normalizedOrigin);
 }
 
 // Origins that may make UNCREDENTIALED requests only (captive portal pages
