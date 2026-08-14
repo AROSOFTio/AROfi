@@ -1,4 +1,4 @@
-name: Build component image
+name: Build release image
 
 on:
   workflow_call:
@@ -6,7 +6,15 @@ on:
       component:
         required: true
         type: string
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile.components
       target:
+        required: false
+        type: string
+        default: ''
+      channel:
         required: true
         type: string
 
@@ -33,13 +41,13 @@ jobs:
         with:
           images: ghcr.io/arosoftio/arofi-${{ inputs.component }}
           tags: |
-            type=sha,prefix=
-            type=raw,value=stable
+            type=sha,format=long,prefix=
+            type=raw,value=${{ inputs.channel }}
 
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.components
+          file: ${{ inputs.dockerfile }}
           target: ${{ inputs.target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
