@@ -1,6 +1,6 @@
 import * as bcrypt from 'bcrypt'
 import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
-import { BillingTransactionStatus, DisbursementStatus, PaymentNetwork, PaymentProvider, PayoutNumberChangeStatus, PayoutNumberStatus, WalletOwnerType } from '@prisma/client'
+import { BillingTransactionStatus, DisbursementStatus, PaymentNetwork, PaymentProvider, PayoutNumberChangeStatus, PayoutNumberStatus } from '@prisma/client'
 import { WalletsService } from './wallets.service'
 
 describe('WalletsService withdrawals', () => {
@@ -24,6 +24,7 @@ describe('WalletsService withdrawals', () => {
     disbursement: {
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
@@ -40,7 +41,12 @@ describe('WalletsService withdrawals', () => {
     platformSetting: { upsert: jest.fn() },
     tenantPayoutNumberChangeRequest: { findFirst: jest.fn() },
     tenantPayoutNumber: { findMany: jest.fn() },
-    disbursement: { count: jest.fn(), findUniqueOrThrow: jest.fn() },
+    disbursement: {
+      count: jest.fn(),
+      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      updateMany: jest.fn(),
+    },
     billingTransaction: { findUniqueOrThrow: jest.fn() },
     wallet: { findUniqueOrThrow: jest.fn() },
     auditLog: { create: jest.fn() },
@@ -104,19 +110,33 @@ describe('WalletsService withdrawals', () => {
       },
     ])
     prisma.disbursement.count.mockResolvedValue(1)
+    prisma.disbursement.findUnique.mockResolvedValue({
+      id: 'disb-1',
+      tenantId: 'tenant-1',
+      status: DisbursementStatus.PROCESSING,
+      metadata: {},
+    })
     prisma.disbursement.findUniqueOrThrow.mockResolvedValue({ id: 'disb-1', status: DisbursementStatus.FLAGGED_FOR_REVIEW })
+    prisma.disbursement.updateMany.mockResolvedValue({ count: 1 })
     prisma.billingTransaction.findUniqueOrThrow.mockResolvedValue({ id: 'billing-1', status: BillingTransactionStatus.PENDING })
     prisma.wallet.findUniqueOrThrow.mockResolvedValue({ id: 'wallet-1', balanceUgx: 40_000 })
     tx.wallet.findFirst.mockResolvedValue({ id: 'wallet-1', balanceUgx: 50_000, currency: 'UGX' })
     tx.wallet.updateMany.mockResolvedValue({ count: 1 })
+    tx.wallet.update.mockResolvedValue({ id: 'wallet-1', balanceUgx: 50_000 })
     tx.ledgerTransaction.create.mockResolvedValue({ id: 'ledger-1' })
     tx.billingTransaction.create.mockResolvedValue({ id: 'billing-1' })
     tx.disbursement.create.mockResolvedValue({ id: 'disb-1' })
     tx.disbursement.findMany.mockResolvedValue([])
     tx.billingTransaction.update.mockResolvedValue({ id: 'billing-1', status: BillingTransactionStatus.COMPLETED })
     tx.disbursement.update.mockResolvedValue({ id: 'disb-1', tenantId: 'tenant-1', status: DisbursementStatus.PROCESSING })
+    tx.disbursement.updateMany.mockResolvedValue({ count: 1 })
     tx.wallet.findUniqueOrThrow.mockResolvedValue({ id: 'wallet-1', balanceUgx: 40_000 })
-    tx.disbursement.findUnique.mockResolvedValue({ id: 'disb-1', status: DisbursementStatus.PROCESSING })
+    tx.disbursement.findUnique.mockResolvedValue({
+      id: 'disb-1',
+      tenantId: 'tenant-1',
+      status: DisbursementStatus.PROCESSING,
+      metadata: {},
+    })
     provider.sendMoney.mockResolvedValue({
       status: 'OK',
       statusCode: 1,
@@ -175,19 +195,58 @@ describe('WalletsService withdrawals', () => {
     }))
   })
 
-  it('reverses the reserved balance when provider submission fails', async () => {
-    provider.sendMoney.mockRejectedValue(new ServiceUnavailableException('provider down'))
+  it('keeps the wallet reserve locked when provider submission outcome is uncertain', async () => {
+    provider.sendMoney.mockRejectedValue(new ServiceUnavailableException('provider timeout'))
 
     await expect(service.requestWithdrawal('tenant-1', dto, 'user-1')).rejects.toBeInstanceOf(ServiceUnavailableException)
+
+    // A timeout may happen after the provider accepted the payout. Never give
+    // the reserved money back until callback/status reconciliation proves fail.
+    expect(tx.wallet.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: { balanceUgx: { increment: 10_000 } },
+    }))
+    expect(prisma.disbursement.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'disb-1' }),
+      data: expect.objectContaining({ status: DisbursementStatus.PROCESSING }),
+    }))
+  })
+
+  it('releases the reserve for a definite pre-submission validation rejection', async () => {
+    provider.sendMoney.mockRejectedValue(new BadRequestException('invalid payout request'))
+
+    await expect(service.requestWithdrawal('tenant-1', dto, 'user-1')).rejects.toBeInstanceOf(BadRequestException)
 
     expect(tx.wallet.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'wallet-1' },
       data: { balanceUgx: { increment: 10_000 } },
     }))
-    expect(tx.disbursement.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'disb-1' },
-      data: expect.objectContaining({ status: DisbursementStatus.FAILED }),
-    }))
+  })
+
+  it('refunds a failed reserve only once when two failure paths race', async () => {
+    tx.disbursement.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+
+    const releaseInput = {
+      tenantId: 'tenant-1',
+      walletId: 'wallet-1',
+      billingTransactionId: 'billing-1',
+      disbursementId: 'disb-1',
+      amountUgx: 10_000,
+      totalDebitUgx: 10_000,
+      reference: 'WD-TEST',
+      errorMessage: 'provider confirmed failure',
+    }
+
+    await Promise.all([
+      (service as any).releaseFailedWithdrawalReserve(releaseInput),
+      (service as any).releaseFailedWithdrawalReserve(releaseInput),
+    ])
+
+    const refundCalls = tx.wallet.update.mock.calls.filter(
+      ([arg]: any[]) => arg?.data?.balanceUgx?.increment === 10_000,
+    )
+    expect(refundCalls).toHaveLength(1)
   })
 
   it('auto-sends high-risk withdrawals after the secret PIN passes', async () => {
