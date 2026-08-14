@@ -804,7 +804,11 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('Router not found')
     }
 
-    if (this.isPendingSelfServiceHost(router.host)) {
+    const probeHost = this.isPendingSelfServiceHost(router.host)
+      ? router.remoteSstpIp?.trim() || null
+      : router.host
+
+    if (!probeHost) {
       const now = new Date()
       const message =
         'No reachable RouterOS management host is configured. RADIUS can still verify from live auth/accounting traffic, but API health checks need TCP 8728/8729 port forwarding or a reachable VPN/private IP.'
@@ -833,7 +837,7 @@ export class RoutersService implements OnModuleInit, OnModuleDestroy {
       return this.getRouterSetup(router.id, tenantId)
     }
 
-    const probe = await this.mikrotikService.probeConnection(router.host, router.apiPort)
+    const probe = await this.mikrotikService.probeConnection(probeHost, router.apiPort)
     const now = new Date()
 
     await this.prisma.$transaction(async (tx) => {
