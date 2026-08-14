@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { WalletTopupStatusService } from './wallet-topup-status.service'
 import { WalletsService } from './wallets.service'
 import { RegisterPayoutNumberDto } from './dto/register-payout-number.dto'
 import { RequestPayoutNumberChangeDto } from './dto/request-payout-number-change.dto'
@@ -18,6 +19,7 @@ import { TopUpWalletDto } from './dto/topup-wallet.dto'
 export class WalletsController {
   constructor(
     private readonly walletsService: WalletsService,
+    private readonly walletTopupStatus: WalletTopupStatusService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -177,7 +179,7 @@ export class WalletsController {
   @Get('topup/:reference/status')
   checkTopupStatus(@CurrentUser() user: AuthenticatedAdminUser, @Param('reference') reference: string) {
     const tenantId = this.accessScope.requireTenantScope(user)
-    return this.walletsService.checkTopupStatus(reference, tenantId)
+    return this.walletTopupStatus.check(reference, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
@@ -187,4 +189,3 @@ export class WalletsController {
     return this.walletsService.getWallet(tenantId, scopedTenantId)
   }
 }
-
