@@ -50,12 +50,10 @@ payments = PAYMENTS.read_text()
 
 payments = replace_once(
     payments,
-    """      paymentNetworks: availablePaymentNetworks,
-      activeActivation,
+    """      activeActivation,
       latestPayment,
 """,
-    """      paymentNetworks: availablePaymentNetworks,
-      activeActivation,
+    """      activeActivation,
       latestPayment: this.presentPublicPortalPayment(latestPayment),
 """,
     'public portal latest-payment presentation',
