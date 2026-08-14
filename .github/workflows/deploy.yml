@@ -1,8 +1,9 @@
-name: Verify AROFi main branch
+name: Verify AROFi release branches
 
 on:
   push:
     branches:
+      - staging
       - main
 
 jobs:
@@ -30,8 +31,9 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
-      # IMPORTANT: Keep this in the same order as Dockerfile.components. Main
-      # must compile the exact source state Coolify will build in production.
+      # IMPORTANT: Keep this in the same order as Dockerfile.components.
+      # staging and main must compile the exact guarded source state used by
+      # the release images.
       - name: Apply guarded production source patches
         run: |
           python3 scripts/apply_iotec_source_patches.py
