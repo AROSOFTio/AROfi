@@ -126,11 +126,13 @@ export class WalletTopupStatusService {
           }
 
           if (txRecord.walletId) {
+            // Preserve the existing top-up accounting behavior exactly: the
+            // top-up immediately changes balanceUgx. earnedBalanceUgx is still
+            // normalized by the existing wallet reconciliation path.
             await tx.wallet.update({
               where: { id: txRecord.walletId },
               data: {
                 balanceUgx: { increment: txRecord.grossAmountUgx },
-                earnedBalanceUgx: { increment: txRecord.grossAmountUgx },
               },
             })
           }
