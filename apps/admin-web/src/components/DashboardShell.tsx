@@ -9,6 +9,7 @@ import AdminSessionControl from './AdminSessionControl'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import RouterOnboardingNudge from './RouterOnboardingNudge'
+import RouterSupportDock from './RouterSupportDock'
 import Sidebar from './Sidebar'
 import { SESSION_RECOVERY_ATTEMPT_KEY } from './SessionRecoveryGate'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
@@ -99,6 +100,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <RouterSupportDock user={session.user} />
             <button
               type="button"
               className="topbar-ai-support"

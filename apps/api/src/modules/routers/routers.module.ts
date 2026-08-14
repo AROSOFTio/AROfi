@@ -10,6 +10,7 @@ import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interc
 import { MikrotikService } from './mikrotik.service'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
+import { RouterLifecycleService } from './router-lifecycle.service'
 import { MikrotikController } from './mikrotik.controller'
 import { RoutersController } from './routers.controller'
 import { RoutersService } from './routers.service'
@@ -22,6 +23,7 @@ import { RemoteProxyService } from './remote-proxy.service'
     RouterCredentialsService,
     MikrotikService,
     RoutersService,
+    RouterLifecycleService,
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
     MikrotikCompatibilityInitializer,
@@ -30,6 +32,6 @@ import { RemoteProxyService } from './remote-proxy.service'
       useClass: MikrotikInstantLoginInterceptor,
     },
   ],
-  exports: [RouterCredentialsService, MikrotikService, RoutersService, RemoteProxyService],
+  exports: [RouterCredentialsService, MikrotikService, RoutersService, RouterLifecycleService, RemoteProxyService],
 })
 export class RoutersModule {}
