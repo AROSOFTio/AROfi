@@ -72,7 +72,7 @@ export class AgentSalesController {
     return this.agentSales.checkMyMobileMoneyPayment(user.email, tenantId, paymentId)
   }
 
-  @RequirePermissions(PERMISSIONS.agentsRead)
+  @RequirePermissions(PERMISSIONS.agentsManage)
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
