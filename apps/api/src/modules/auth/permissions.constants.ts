@@ -92,6 +92,8 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.vouchersRead,
     PERMISSIONS.settingsManage,
     PERMISSIONS.tenantsRead,
+    PERMISSIONS.supportRead,
+    PERMISSIONS.supportWrite,
   ],
   WifiAdmin: [
     PERMISSIONS.routersRead,
@@ -126,6 +128,8 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.disbursementsManage,
     PERMISSIONS.reportsRead,
     PERMISSIONS.tenantsRead,
+    PERMISSIONS.supportRead,
+    PERMISSIONS.supportWrite,
   ],
   ReadOnlySupport: [
     PERMISSIONS.tenantsRead,
