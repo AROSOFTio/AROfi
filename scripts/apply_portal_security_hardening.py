@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Harden public portal payment data while preserving captive reconnect behavior.
+"""Harden public portal data while preserving captive reconnect behavior.
 
 This transform is intentionally scoped to:
-- the public payment summary returned by PaymentsService.getPortalContext; and
+- public payment summaries returned by PaymentsService.getPortalContext;
+- portal customer-session payment presentation;
+- trusted-router checks around reconnect credential issuance; and
 - the portal browser's local payment-token persistence/polling logic.
 
 It does NOT modify RADIUS, MikroTik provisioning, router connectivity,
-CoA/disconnect, hotspot login credentials, or remote-access scripts.
+CoA/disconnect, hotspot credential generation, or remote-access scripts.
 
-Security invariant:
-- a phone-number lookup may reveal only a safe payment status summary;
+Security invariants:
+- phone-number lookup never receives payment status tokens or RADIUS secrets;
+- reconnect credentials require a validated router registration key/context;
 - the unguessable payment status token remains only on the browser that
   initiated the payment (or an explicit provider return URL);
 - full reconnect credentials continue to come from the token-protected payment
@@ -20,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PAYMENTS = ROOT / 'apps/api/src/modules/payments/payments.service.ts'
+PORTAL_SERVICE = ROOT / 'apps/api/src/modules/portal/portal.service.ts'
 PORTAL = ROOT / 'apps/portal-web/src/components/PortalCheckout.tsx'
 
 
@@ -42,9 +46,9 @@ def insert_before_once(text: str, marker: str, block: str, sentinel: str, label:
 
 
 # ---------------------------------------------------------------------------
-# API: never return internal Payment scalar fields / radiusCredential through
-# anonymous portal context. The shared paymentInclude is intentionally rich for
-# authenticated admin/internal uses, so sanitize only this public presentation.
+# Payments API: never return internal Payment scalar fields/radiusCredential
+# through anonymous portal context. The shared paymentInclude stays rich for
+# authenticated admin/internal uses; only this public presentation is reduced.
 # ---------------------------------------------------------------------------
 payments = PAYMENTS.read_text()
 
@@ -69,9 +73,7 @@ presenter = """  private presentPublicPortalPayment(payment: any) {
           id: payment.activation.id,
           status: payment.activation.status,
           source: payment.activation.source,
-          // PortalActivation calls this field startedAt. Keep the wire shape
-          // stable while selecting only non-secret activation fields.
-          startedAt: payment.activation.startsAt,
+          startedAt: payment.activation.startedAt,
           endsAt: payment.activation.endsAt,
           package: payment.activation.package
             ? {
@@ -130,7 +132,161 @@ payments = insert_before_once(
     'private presentPublicPortalPayment(',
     'public portal payment presenter',
 )
+
+# Token comparisons are cheap to harden and this avoids exposing token-prefix
+# timing information on the public status endpoint.
+payments = replace_once(
+    payments,
+    """    if (!tenantId && (!payment.statusToken || payment.statusToken !== statusToken)) {
+      throw new ForbiddenException('Payment status token is required')
+    }
+""",
+    """    if (
+      !tenantId &&
+      (!payment.statusToken || !statusToken || !this.secretMatches(statusToken, payment.statusToken))
+    ) {
+      throw new ForbiddenException('Payment status token is required')
+    }
+""",
+    'constant-time portal payment token comparison',
+)
 PAYMENTS.write_text(payments)
+
+# ---------------------------------------------------------------------------
+# Portal API: the normal MikroTik login template always supplies the generated
+# registration key. Require that validated context before returning RADIUS
+# reconnect credentials. Public/direct portal links can still browse/buy.
+# ---------------------------------------------------------------------------
+portal_service = PORTAL_SERVICE.read_text()
+
+portal_service = replace_once(
+    portal_service,
+    """    const accessToken = this.extractBearerToken(authorization)
+    const returningDevice = await this.detectReturningDevice(context.tenant.id, resolvedHotspot)
+
+    if (!accessToken) {
+""",
+    """    const accessToken = this.extractBearerToken(authorization)
+    const trustedHotspot = resolvedHotspot as {
+      tenantId?: string
+      routerId?: string
+      macAddress?: string
+      ipAddress?: string
+      loginUrl?: string
+    }
+    const hasTrustedRouterContext =
+      Boolean(trustedHotspot.routerId) && trustedHotspot.tenantId === context.tenant.id
+    const returningDevice = hasTrustedRouterContext
+      ? await this.detectReturningDevice(context.tenant.id, trustedHotspot)
+      : {
+          existingActiveAccess: false,
+          reason: 'Automatic reconnect requires the WiFi login page router context.',
+        }
+
+    if (!accessToken) {
+""",
+    'trusted router context for automatic returning-device credentials',
+)
+
+portal_service = replace_once(
+    portal_service,
+    """  async reconnect(input: {
+    macAddress?: string
+    ipAddress?: string
+    routerId?: string
+    routerKey?: string
+    hotspotServerName?: string
+    loginUrl?: string
+  }) {
+    const resolvedHotspot = await this.resolveHotspotContext(input)
+    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, resolvedHotspot.routerId)
+
+    if (!activation) {
+      throw new NotFoundException('No active access was found for this device')
+    }
+""",
+    """  async reconnect(input: {
+    macAddress?: string
+    ipAddress?: string
+    routerId?: string
+    routerKey?: string
+    hotspotServerName?: string
+    loginUrl?: string
+  }) {
+    const resolvedHotspot = await this.resolveHotspotContext(input)
+    const trustedHotspot = resolvedHotspot as {
+      tenantId?: string
+      routerId?: string
+      loginUrl?: string
+    }
+    if (!trustedHotspot.tenantId || !trustedHotspot.routerId) {
+      throw new BadRequestException(
+        'Reconnect must be started from the WiFi login page so the router can be verified.',
+      )
+    }
+
+    const activation = await this.findActiveAccessByMacAndRouter(
+      input.macAddress,
+      trustedHotspot.routerId,
+      trustedHotspot.tenantId,
+    )
+
+    if (!activation) {
+      throw new NotFoundException('No active access was found for this device')
+    }
+""",
+    'trusted router context for explicit reconnect endpoint',
+)
+
+# Phone-based customer sessions need payment history for display only. Remove
+# statusToken and provider diagnostic/reference material from that presentation.
+old_map_payment = """    return {
+      id: payment.id,
+      status: payment.status,
+      provider: payment.provider,
+      method: payment.method,
+      network: payment.network,
+      amountUgx: payment.amountUgx,
+      phoneNumber: payment.phoneNumber,
+      customerReference: payment.customerReference,
+      externalReference: payment.externalReference,
+      providerReference: payment.providerReference,
+      providerStatus: payment.providerStatus,
+      statusMessage: payment.statusMessage,
+      statusToken: payment.statusToken,
+      checkoutUrl: this.extractCheckoutUrl(payment.responsePayload),
+      responsePayload: payment.responsePayload,
+      createdAt: payment.createdAt,
+      completedAt: payment.completedAt,
+      package: payment.package,
+      activation: payment.activation ? this.mapActivation(payment.activation) : null,
+    }
+"""
+new_map_payment = """    return {
+      id: payment.id,
+      status: payment.status,
+      provider: payment.provider,
+      method: payment.method,
+      network: payment.network,
+      amountUgx: payment.amountUgx,
+      phoneNumber: payment.phoneNumber,
+      statusMessage: payment.statusMessage,
+      createdAt: payment.createdAt,
+      completedAt: payment.completedAt,
+      package: payment.package,
+      activation: payment.activation ? this.mapActivation(payment.activation) : null,
+      // Deliberately absent from phone-session history: statusToken,
+      // external/provider references, providerStatus and responsePayload.
+    }
+"""
+portal_service = replace_once(
+    portal_service,
+    old_map_payment,
+    new_map_payment,
+    'safe customer-session payment history',
+)
+
+PORTAL_SERVICE.write_text(portal_service)
 
 # ---------------------------------------------------------------------------
 # Browser: keep the random status token on the device that initiated payment.
@@ -218,4 +374,4 @@ new_payment_created = """      const payment = body as PortalPayment
 portal = replace_once(portal, old_payment_created, new_payment_created, 'portal payment token persistence')
 
 PORTAL.write_text(portal)
-print('Portal security hardening applied: anonymous payment data minimized and local token polling preserved.')
+print('Portal security hardening applied: payment data minimized and reconnect requires trusted router context.')
