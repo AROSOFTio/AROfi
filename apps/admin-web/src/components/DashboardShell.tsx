@@ -11,13 +11,11 @@ import NotificationBell from './NotificationBell'
 import RouterOnboardingNudge from './RouterOnboardingNudge'
 import RouterSupportDock from './RouterSupportDock'
 import Sidebar from './Sidebar'
+import SupportTicketQuickAccess from './SupportTicketQuickAccess'
 import { SESSION_RECOVERY_ATTEMPT_KEY } from './SessionRecoveryGate'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
 import { isVendorWorkspace } from '@/lib/workspace'
 
-// The access token expires in 1h; refreshing every 45min while the tab stays
-// open means an active user never sees a forced logout, and it keeps the
-// cookie SSR reads fresh too (server components can't refresh it themselves).
 const ACCESS_TOKEN_REFRESH_INTERVAL_MS = 45 * 60 * 1000
 
 type DashboardShellProps = {
@@ -56,115 +54,53 @@ export default function DashboardShell({ children, initials, session, workspaceT
 
   useEffect(() => {
     const routes = isVendorWorkspace(session.user)
-      ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access']
-      : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions']
+      ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access', '/support']
+      : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions', '/support', '/users?tab=staff']
     const id = window.setTimeout(() => {
-      for (const route of routes) {
-        router.prefetch(route)
-      }
+      for (const route of routes) router.prefetch(route)
     }, 600)
     return () => window.clearTimeout(id)
   }, [router, session.user])
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
-      <button
-        type="button"
-        className="mobile-nav-backdrop"
-        aria-label="Close navigation menu"
-        onClick={() => setMenuOpen(false)}
-      />
+      <button type="button" className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)} />
       <Sidebar user={session.user} />
-      <button
-        type="button"
-        className="mobile-nav-close"
-        aria-label="Close navigation menu"
-        onClick={() => setMenuOpen(false)}
-      >
-        x
-      </button>
+      <button type="button" className="mobile-nav-close" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)}>x</button>
       <div className="main-content">
         <header className="topbar">
           <div className="topbar-left">
-            <button
-              type="button"
-              className="mobile-menu-button"
-              aria-label="Open navigation menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(true)}
-            >
-              <span />
-              <span />
-              <span />
+            <button type="button" className="mobile-menu-button" aria-label="Open navigation menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
+              <span /><span /><span />
             </button>
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <RouterSupportDock user={session.user} />
-            <button
-              type="button"
-              className="topbar-ai-support"
-              onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))}
-              aria-label="Open support chat"
-            >
-              <Headphones size={15} />
-              <span>Support</span>
+            <SupportTicketQuickAccess user={session.user} />
+            <button type="button" className="topbar-ai-support" onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))} aria-label="Open support chat">
+              <Headphones size={15} /><span>Support</span>
             </button>
             <NotificationBell />
             <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="topbar-profile-trigger"
-              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-            >
-              <div className="avatar" style={{ margin: 0 }}>{initials}</div>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--text-secondary)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  transform: profileDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s',
-                }}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
+              <button type="button" className="topbar-profile-trigger" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
+                <div className="avatar" style={{ margin: 0 }}>{initials}</div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: profileDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
 
-            {profileDropdownOpen && (
-              <>
-                <div
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 999,
-                  }}
-                  onClick={() => setProfileDropdownOpen(false)}
-                />
+              {profileDropdownOpen && <>
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} onClick={() => setProfileDropdownOpen(false)} />
                 <div className="topbar-profile-menu">
                   <div className="topbar-profile-menu-head">
-                    <span className="topbar-profile-name">
-                      {session.user.displayName}
-                    </span>
-                    <span className="topbar-profile-email">
-                      {session.user.email}
-                    </span>
+                    <span className="topbar-profile-name">{session.user.displayName}</span>
+                    <span className="topbar-profile-email">{session.user.email}</span>
                   </div>
                   <div className="topbar-profile-divider" />
-                  <div className="topbar-profile-actions">
-                    <AdminSessionControl />
-                  </div>
+                  <div className="topbar-profile-actions"><AdminSessionControl /></div>
                 </div>
-              </>
-            )}
+              </>}
             </div>
           </div>
         </header>

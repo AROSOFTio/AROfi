@@ -34,7 +34,9 @@ export const PERMISSIONS = {
 } as const
 
 export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
-  SuperAdmin: [PERMISSIONS.all],
+  // ALL remains authoritative. support.read is also explicit because the
+  // ticket-floor client uses it to identify staff-facing workflow controls.
+  SuperAdmin: [PERMISSIONS.all, PERMISSIONS.supportRead],
   VendorAdmin: [
     PERMISSIONS.tenantsRead,
     PERMISSIONS.usersRead,
@@ -90,6 +92,8 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.vouchersRead,
     PERMISSIONS.settingsManage,
     PERMISSIONS.tenantsRead,
+    PERMISSIONS.supportRead,
+    PERMISSIONS.supportWrite,
   ],
   WifiAdmin: [
     PERMISSIONS.routersRead,
@@ -124,6 +128,8 @@ export const STANDARD_ROLE_CATALOG: Record<string, string[]> = {
     PERMISSIONS.disbursementsManage,
     PERMISSIONS.reportsRead,
     PERMISSIONS.tenantsRead,
+    PERMISSIONS.supportRead,
+    PERMISSIONS.supportWrite,
   ],
   ReadOnlySupport: [
     PERMISSIONS.tenantsRead,
