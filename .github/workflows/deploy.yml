@@ -63,6 +63,7 @@ jobs:
           python3 scripts/fix_iotec_live_gateway_diagnostics.py
           python3 scripts/fix_iotec_oauth_compatibility.py
           python3 scripts/finalize_gateway_compile.py
+          python3 scripts/apply_financial_security_hardening.py
           python3 scripts/verify_router_captive_invariants.py
           python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
