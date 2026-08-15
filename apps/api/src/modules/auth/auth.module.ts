@@ -282,8 +282,27 @@ export class AuthService {
         userAgent: meta.userAgent ?? null,
       },
     })
-
     const otpDelivered = await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+
+    if (!otpDelivered && process.env.NODE_ENV === 'production') {
+      // Fail closed: an OTP that was not delivered is not a valid second
+      // factor. Remove it so it cannot later be guessed/replayed.
+      await this.prisma.adminLoginOtp.deleteMany({
+        where: { userId: user.id, verifiedAt: null },
+      })
+      await this.recordAuthAudit({
+        action: 'auth.otp.delivery_failed',
+        email: user.email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'Login OTP email delivery failed; authentication blocked',
+        meta,
+      })
+      throw new ServiceUnavailableException(
+        'Verification email could not be delivered. Please try again.',
+      )
+    }
 
     await this.recordAuthAudit({
       action: 'auth.otp.sent',
@@ -299,11 +318,10 @@ export class AuthService {
       email: user.email,
       expiresAt: expiresAt.toISOString(),
       resendAvailableAt: resendAvailableAt.toISOString(),
-      ...(otpDelivered ? {} : { otpFallback: otp }),
     }
   }
 
-  // ── Step 2: OTP → session tokens ──────────────────────────────────────────
+  // Step 2: OTP -> session tokens
   async verifyLogin(
     email: string,
     otp: string,
@@ -444,7 +462,25 @@ export class AuthService {
       },
     })
 
-    await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+    const otpDelivered = await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+    if (!otpDelivered && process.env.NODE_ENV === 'production') {
+      await this.prisma.adminLoginOtp.deleteMany({
+        where: { userId: user.id, verifiedAt: null },
+      })
+      await this.recordAuthAudit({
+        action: 'auth.otp.delivery_failed',
+        email: user.email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'Login OTP resend delivery failed; challenge invalidated',
+        meta,
+      })
+      throw new ServiceUnavailableException(
+        'Verification email could not be delivered. Please try again.',
+      )
+    }
+
     await this.recordAuthAudit({
       action: 'auth.otp.resent',
       email: user.email,
@@ -921,7 +957,7 @@ export class AuthService {
 
     if (!sent) {
       if (process.env.NODE_ENV === 'production') {
-        this.logger.error(`OTP email delivery failed for ${to}; returning fallback code to keep admin login available`)
+        this.logger.error(`OTP email delivery failed for ${to}; production authentication will fail closed`)
       } else {
         // Non-production only: SMTP is usually not configured on dev machines.
         // Logging the code locally keeps the full OTP flow testable end-to-end.

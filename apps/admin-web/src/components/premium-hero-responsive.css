@@ -48,9 +48,9 @@
 .ph-copy h1 {
   max-width: 510px;
   margin-top: 20px;
-  font-size: clamp(48px, 4.2vw, 65px);
-  line-height: .99;
-  letter-spacing: -.052em;
+  font-size: clamp(42px, 3.45vw, 55px);
+  line-height: 1.04;
+  letter-spacing: -.035em;
 }
 
 .ph-lead {
@@ -241,7 +241,7 @@
     min-height: 545px;
     margin-top: 24px;
   }
-  .ph-copy h1 { font-size: clamp(41px, 4.4vw, 56px); }
+  .ph-copy h1 { font-size: clamp(38px, 3.9vw, 48px); }
   .ph-stage { height: 480px; }
   .ph-laptop-wrap { top: 23px; }
   .ph-laptop { transform: translateX(-50%) perspective(1500px) rotateY(-10deg) rotateX(3deg) rotateZ(-.4deg) scale(.54); }
@@ -255,7 +255,7 @@
     width: calc(100% - 22px);
     min-height: 480px;
   }
-  .ph-copy h1 { max-width: 390px; font-size: clamp(35px, 4.6vw, 44px); }
+  .ph-copy h1 { max-width: 390px; font-size: clamp(32px, 4.1vw, 39px); }
   .ph-lead { max-width: 395px; font-size: 13.4px; }
   .ph-proof { gap: 9px; }
   .ph-proof strong { font-size: 10.8px; }
@@ -277,7 +277,7 @@
     margin-top: 16px;
     padding-bottom: 16px;
   }
-  .ph-copy h1 { max-width: 330px; font-size: clamp(30px, 4.8vw, 37px); }
+  .ph-copy h1 { max-width: 330px; font-size: clamp(28px, 4.2vw, 34px); }
   .ph-lead { max-width: 330px; margin-top: 16px; font-size: 11.8px; line-height: 1.5; }
   .ph-eyebrow { font-size: 8.7px; }
   .ph-actions { gap: 6px; margin-top: 17px; }
@@ -303,7 +303,7 @@
   }
   .ph-copy { max-width: 560px; margin: 0 auto; text-align: center; }
   .ph-copy h1, .ph-lead { margin-left: auto; margin-right: auto; }
-  .ph-copy h1 { max-width: 520px; font-size: clamp(35px, 9.5vw, 46px); }
+  .ph-copy h1 { max-width: 520px; font-size: clamp(31px, 8.6vw, 40px); }
   .ph-lead { max-width: 490px; font-size: 13.5px; }
   .ph-actions, .ph-status-strip { justify-content: center; }
   .ph-proof { max-width: 470px; margin-left: auto; margin-right: auto; text-align: left; }
@@ -315,7 +315,7 @@
 
 @media (max-width: 500px) {
   .ph-hero { width: calc(100% - 14px); }
-  .ph-copy h1 { font-size: clamp(33px, 10.5vw, 42px); }
+  .ph-copy h1 { font-size: clamp(29px, 9.2vw, 36px); }
   .ph-actions { display: grid; grid-template-columns: 1fr 1fr; width: min(100%, 390px); margin-left: auto; margin-right: auto; }
   .ph-actions .ph-btn-primary { grid-column: 1 / -1; }
   .ph-btn { width: 100%; }
