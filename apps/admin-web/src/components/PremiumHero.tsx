@@ -17,6 +17,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import './premium-hero.css'
+import './premium-hero-responsive.css'
 
 type PremiumHeroProps = {
   revenue: number
