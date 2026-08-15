@@ -29,6 +29,21 @@ import type { AgentCashDepositDto, AgentCommissionWithdrawalDto } from './dto/ag
 const CASH_SETTLEMENT_MARKER = 'AGENT_CASH_REMITTANCE'
 const CASH_DEPOSIT_KIND = 'AGENT_CASH_DEPOSIT'
 const COMMISSION_WITHDRAWAL_KIND = 'AGENT_MOBILE_MONEY_COMMISSION_WITHDRAWAL'
+const OPEN_DISBURSEMENT_STATUSES: readonly DisbursementStatus[] = [
+  DisbursementStatus.PENDING,
+  DisbursementStatus.PROCESSING,
+  DisbursementStatus.PENDING_APPROVAL,
+]
+const CLOSED_DISBURSEMENT_STATUSES: readonly DisbursementStatus[] = [
+  DisbursementStatus.FAILED,
+  DisbursementStatus.CANCELLED,
+  DisbursementStatus.REVERSED,
+]
+const FAILED_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+  PaymentStatus.FAILED,
+  PaymentStatus.CANCELLED,
+  PaymentStatus.EXPIRED,
+]
 
 @Injectable()
 export class AgentAccountingService {
@@ -96,7 +111,7 @@ export class AgentAccountingService {
       .reduce((sum, item) => sum + item.amountUgx, 0)
     const pendingWithdrawalUgx = withdrawals
       .filter((item) => this.metadataString(item.metadata, 'kind') === COMMISSION_WITHDRAWAL_KIND)
-      .filter((item) => [DisbursementStatus.PENDING, DisbursementStatus.PROCESSING, DisbursementStatus.PENDING_APPROVAL].includes(item.status))
+      .filter((item) => OPEN_DISBURSEMENT_STATUSES.includes(item.status))
       .reduce((sum, item) => sum + item.amountUgx, 0)
 
     const cashLiabilityUgx = cashSales.reduce(
@@ -261,7 +276,7 @@ export class AgentAccountingService {
     if (status === PaymentStatus.COMPLETED) {
       return this.finalizeCashDeposit(transaction.id, tenantId, agent.id)
     }
-    if ([PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(status)) {
+    if (FAILED_PAYMENT_STATUSES.includes(status)) {
       await this.prisma.billingTransaction.update({
         where: { id: transaction.id },
         data: { status: BillingTransactionStatus.FAILED },
@@ -351,7 +366,7 @@ export class AgentAccountingService {
     if (disbursement.status === DisbursementStatus.COMPLETED) {
       return { id: disbursement.id, status: 'COMPLETED', amountUgx: disbursement.amountUgx }
     }
-    if ([DisbursementStatus.FAILED, DisbursementStatus.CANCELLED, DisbursementStatus.REVERSED].includes(disbursement.status)) {
+    if (CLOSED_DISBURSEMENT_STATUSES.includes(disbursement.status)) {
       return { id: disbursement.id, status: disbursement.status, amountUgx: disbursement.amountUgx }
     }
 
@@ -594,14 +609,14 @@ export class AgentAccountingService {
   private toBillingStatus(status: PaymentStatus) {
     return status === PaymentStatus.COMPLETED
       ? BillingTransactionStatus.COMPLETED
-      : [PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(status)
+      : FAILED_PAYMENT_STATUSES.includes(status)
         ? BillingTransactionStatus.FAILED
         : BillingTransactionStatus.PENDING
   }
 
   private toDisbursementStatus(status: PaymentStatus) {
     if (status === PaymentStatus.COMPLETED) return DisbursementStatus.COMPLETED
-    if ([PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(status)) {
+    if (FAILED_PAYMENT_STATUSES.includes(status)) {
       return DisbursementStatus.FAILED
     }
     return DisbursementStatus.PROCESSING
