@@ -205,18 +205,14 @@ export class MailService {
     return this.sendMail({ to: input.to, subject, html: this.renderLayout(body), text })
   }
 
-  // Operational alert to the platform operator (ALERT_EMAIL). Used for
-  // production incidents: repeated CoA disconnect failures, payment
-  // mismatches, stale RADIUS accounting, router offline storms.
+  // Operational alerts always go to the AROFi support mailbox. SMTP_FROM_EMAIL
+  // remains the sender identity (normally no-reply@arofi.net) and must not be
+  // used as the destination for platform incidents.
   async sendOperationalAlertEmail(input: {
     subject: string
     lines: string[]
   }): Promise<boolean> {
-    const to = this.configService.get<string>('ALERT_EMAIL')
-    if (!to) {
-      this.logger.warn(`ALERT_EMAIL is not configured — dropping operational alert: ${input.subject}`)
-      return false
-    }
+    const to = this.configService.get<string>('SUPPORT_EMAIL')?.trim() || 'support@arofi.net'
 
     const body = `
       <h2 style="color:#b91c1c; margin-top:0;">AROFi production alert</h2>
