@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import AgentDashboard from '@/components/AgentDashboard'
 import DashboardHome from '@/components/DashboardHome'
 import PlatformCommandCenter from '@/components/PlatformCommandCenter'
+import VendorBusinessDashboard from '@/components/VendorBusinessDashboard'
 import { getAdminSession } from '@/lib/api'
 import { isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
 
@@ -19,13 +20,32 @@ export default async function DashboardAliasPage({
 
   const isVendor = isVendorWorkspace(user)
   const isReseller = isResellerWorkspace(user)
+  const resolvedSearchParams = await searchParams
 
   if (!isVendor && !isReseller) {
-    if (user?.role === 'Support' || user?.role === 'ReadOnlySupport') redirect('/support')
-    if (user?.role === 'NetworkOperator') redirect('/admin/router')
-    if (user?.role === 'FinanceManager') redirect('/earnings')
+    if (user?.role === 'Support' || user?.role === 'ReadOnlySupport') {
+      redirect('/support')
+    }
+
+    if (user?.role === 'NetworkOperator') {
+      redirect('/admin/router')
+    }
+
+    if (user?.role === 'FinanceManager') {
+      redirect('/earnings')
+    }
+
     return <PlatformCommandCenter />
   }
 
-  return <DashboardHome searchParams={await searchParams} />
+  if (isVendor) {
+    return (
+      <VendorBusinessDashboard
+        session={session}
+        searchParams={resolvedSearchParams}
+      />
+    )
+  }
+
+  return <DashboardHome searchParams={resolvedSearchParams} />
 }
