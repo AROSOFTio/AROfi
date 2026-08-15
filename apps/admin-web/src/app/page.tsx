@@ -32,6 +32,7 @@ import {
 import { RegisterModal } from '@/components/RegisterModal'
 import Reveal from '@/components/Reveal'
 import SiteFooter from '@/components/SiteFooter'
+import PremiumHero from '@/components/PremiumHero'
 import { getAppLoginUrl } from '@/lib/admin-session'
 
 const SITE_URL = 'https://arofi.net'
@@ -132,7 +133,6 @@ const pricingTiers = [
 
 // Decorative baseline figures for the hero preview. Public live stats are added on top.
 const demoBaseStats = { revenueUgx: 526000, activeSessions: 417, routersOnline: 82, routersTotal: 99 }
-const demoBars = [38, 52, 41, 64, 58, 79, 92]
 const demoFeed = [
   { who: 'Live payment added', plan: 'just now', amount: '+UGX 2,000' },
   { who: 'Live session added', plan: 'Kira Road', amount: '+1 user' },
@@ -395,67 +395,15 @@ export default function RootPage() {
         </div>
       </nav>
 
-      <section className="home-hero">
-        <div className="home-hero-copy">
-          <div className="home-kicker"><Activity size={15} /> Free WiFi Billing · Uganda</div>
-          <h1>Run your WiFi<br />like a business.</h1>
-          <p>MikroTik hotspot billing with MTN MoMo &amp; Airtel Money. Self-onboarding, simple setup, free to start.</p>
-          <div className="home-cta">
-            <button type="button" className="btn btn-primary" onClick={() => openRegister('FREE')}>Start Free</button>
-            <Link href="/docs" className="btn btn-ghost">Docs</Link>
-            <a href={getAppLoginUrl()} className="btn btn-ghost">Sign In</a>
-          </div>
-          <div className="home-trust">
-            <span><Radio size={13} className="pulse-dot" /> RADIUS auth</span>
-            <span>MTN MoMo &amp; Airtel</span>
-            <span>Vouchers &amp; wallets</span>
-            <span>Uganda-wide</span>
-          </div>
-        </div>
-
-        {/* Illustrative live console preview (decorative) */}
-        <div className="home-console" aria-hidden="true">
-          <div className="home-console-bar">
-            <span className="home-console-dot" /><span className="home-console-dot" /><span className="home-console-dot" />
-            <div className="home-console-title"><Wifi size={14} /> Operator console</div>
-            <span className="home-live"><span className="pulse-dot" /> LIVE</span>
-          </div>
-          <div className="home-console-body">
-            <div className="home-metric-row">
-              <div className="home-metric">
-                <span>Today&apos;s revenue</span>
-                <strong>UGX {revenue.toLocaleString()}</strong>
-              </div>
-              <div className="home-metric">
-                <span>Active sessions</span>
-                <strong>{sessions}</strong>
-              </div>
-              <div className="home-metric">
-                <span>Routers online</span>
-                <strong>{routers}/{totalRouters}</strong>
-              </div>
-            </div>
-
-            <div className="home-chart">
-              {demoBars.map((h, i) => (
-                <span key={i} className="home-bar" style={{ height: `${h}%`, animationDelay: `${i * 0.09}s` }} />
-              ))}
-            </div>
-
-            <div className="home-feed">
-              {demoFeed.map((row, i) => (
-                <div key={row.who} className={`home-feed-row ${i === feedIndex ? 'active' : ''}`}>
-                  <span className="home-feed-dot" />
-                  <span className="home-feed-who">{row.who}</span>
-                  <span className="home-feed-plan">{row.plan}</span>
-                  <span className="home-feed-amount">{row.amount}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="home-console-foot">Illustrative baseline · live public activity is added on top</div>
-        </div>
-      </section>
+      <PremiumHero
+        revenue={revenue}
+        sessions={sessions}
+        routers={routers}
+        totalRouters={totalRouters}
+        activeFeedIndex={feedIndex}
+        loginUrl={getAppLoginUrl()}
+        onStartFree={() => openRegister('FREE')}
+      />
 
       <section className="home-why" aria-label="Why AROFi">
         {whyPoints.map((point, i) => (
