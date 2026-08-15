@@ -28,8 +28,6 @@ type PremiumHeroProps = {
   onStartFree: () => void
 }
 
-const desktopBars = [31, 46, 40, 58, 50, 69, 63, 83, 76, 92]
-
 const activityRows = [
   { title: 'Live payment received', meta: 'just now', value: '+UGX 2,000', tone: 'green' },
   { title: 'New session started', meta: 'Kira Road', value: '+1 user', tone: 'blue' },
