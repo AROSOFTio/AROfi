@@ -36,6 +36,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
     && python3 scripts/apply_mikrotik_background_install.py \
+    && python3 scripts/apply_mikrotik_reset_first_onboarding.py \
     && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_router_presence_and_access_lifecycle.py \
     && python3 scripts/stabilize_router_status_hysteresis.py \
@@ -148,7 +149,7 @@ CMD if [ "$SERVICE_NAME" = "all" ]; then \
       test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
     elif [ "$SERVICE_NAME" = "portal" ]; then \
       server="$(find /usr/src/app/standalone/portal -type f -path '*/apps/portal-web/server.js' -print -quit)"; \
-      if [ -z "$server" ] && [ -f /usr/src/app/standalone/portal/server.js ]; then server=/usr/src/app/standalone/portal/server.js; fi; \
+      if [ -z "$server" ] && [ -f /runtime/portal/server.js ]; then server=/usr/src/app/standalone/portal/server.js; fi; \
       test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
     elif [ "$SERVICE_NAME" = "nginx" ]; then \
       cp config/nginx.split.conf /etc/nginx/nginx.conf && \
