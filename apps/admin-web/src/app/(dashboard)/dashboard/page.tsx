@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import AgentDashboard from '@/components/AgentDashboard'
 import DashboardHome from '@/components/DashboardHome'
 import PlatformCommandCenter from '@/components/PlatformCommandCenter'
 import { getAdminSession } from '@/lib/api'
@@ -11,6 +12,11 @@ export default async function DashboardAliasPage({
 }) {
   const session = await getAdminSession()
   const user = session?.user
+
+  if (user?.role === 'VoucherAgent') {
+    return <AgentDashboard />
+  }
+
   const isVendor = isVendorWorkspace(user)
   const isReseller = isResellerWorkspace(user)
 

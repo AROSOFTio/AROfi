@@ -33,6 +33,11 @@ const resellerAllowedPaths = new Set([
   '/support',
 ])
 
+const agentAllowedPaths = new Set([
+  '/dashboard',
+  '/vouchers',
+])
+
 export default function WorkspaceRouteGuard({
   user,
   children,
@@ -44,11 +49,13 @@ export default function WorkspaceRouteGuard({
   const router = useRouter()
   const isVendor = isVendorWorkspace(user)
   const isReseller = isResellerWorkspace(user)
+  const isAgent = user.role === 'VoucherAgent'
   const basePath = `/${pathname.split('/').filter(Boolean)[0] ?? 'dashboard'}`
   const wrongWorkspace =
-    (isReseller && !resellerAllowedPaths.has(basePath)) ||
-    (!isVendor && !isReseller && tenantOnlyPaths.has(basePath)) ||
-    (isVendor && platformOnlyPaths.has(basePath))
+    (isAgent && !agentAllowedPaths.has(basePath)) ||
+    (!isAgent && isReseller && !resellerAllowedPaths.has(basePath)) ||
+    (!isAgent && !isVendor && !isReseller && tenantOnlyPaths.has(basePath)) ||
+    (!isAgent && isVendor && platformOnlyPaths.has(basePath))
 
   useEffect(() => {
     if (wrongWorkspace) {
