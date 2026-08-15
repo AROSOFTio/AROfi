@@ -1,4 +1,4 @@
-import { NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { PortalService } from './portal.service'
 
 function buildActivation(overrides: Record<string, unknown> = {}) {
@@ -115,6 +115,40 @@ describe('PortalService', () => {
       UnauthorizedException,
     )
   })
+
+  it('does not expose payment status tokens or raw provider diagnostics in customer payment history', () => {
+    const payment = (service as any).mapPayment({
+      id: 'payment-1',
+      status: 'COMPLETED',
+      provider: 'YO_UGANDA',
+      method: 'MOBILE_MONEY',
+      network: 'MTN',
+      amountUgx: 5000,
+      phoneNumber: '256772000000',
+      customerReference: '256772000000',
+      externalReference: 'AROFI-SECRET-REF',
+      providerReference: 'PROVIDER-SECRET-REF',
+      providerStatus: 'SUCCESSFUL',
+      statusMessage: 'Paid',
+      statusToken: 'unguessable-status-token',
+      responsePayload: { rawRequest: '<APIPassword>secret</APIPassword>' },
+      createdAt: new Date(),
+      completedAt: new Date(),
+      package: { id: 'pkg-1', name: '1 Hour', code: 'H1', durationMinutes: 60 },
+      activation: null,
+    })
+
+    expect(payment).toMatchObject({
+      id: 'payment-1',
+      status: 'COMPLETED',
+      amountUgx: 5000,
+      package: { id: 'pkg-1', name: '1 Hour' },
+    })
+    expect(payment).not.toHaveProperty('statusToken')
+    expect(payment).not.toHaveProperty('responsePayload')
+    expect(payment).not.toHaveProperty('externalReference')
+    expect(payment).not.toHaveProperty('providerReference')
+  })
 })
 
 describe('PortalService returning-device auto-reconnect', () => {
@@ -157,12 +191,27 @@ describe('PortalService returning-device auto-reconnect', () => {
     expect(result.existingActiveAccess).toBe(false)
   })
 
-  it('reconnect() rejects an expired/unknown device with 404', async () => {
-    const { service } = buildReconnectHarness(null)
+  it('reconnect() rejects a request without validated router tenant context', async () => {
+    const { service } = buildReconnectHarness(buildActivation())
     ;(service as any).resolveHotspotContext = jest.fn().mockResolvedValue({ routerId: 'router-1' })
 
     await expect(
       service.reconnect({ macAddress: 'AA:BB:CC:DD:EE:FF', routerId: 'router-1' }),
+    ).rejects.toThrow(BadRequestException)
+  })
+
+  it('reconnect() returns 404 for an unknown device after router context is validated', async () => {
+    const { service } = buildReconnectHarness(null)
+    ;(service as any).resolveHotspotContext = jest.fn().mockResolvedValue({
+      routerId: 'router-1',
+      tenantId: 'tenant-1',
+    })
+
+    await expect(
+      service.reconnect({
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        routerKey: 'valid-router-registration-key',
+      }),
     ).rejects.toThrow(NotFoundException)
   })
 

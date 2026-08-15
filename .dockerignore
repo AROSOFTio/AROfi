@@ -12,7 +12,31 @@ apps/api/dist
 !.github/copilot-instructions.md
 docs/
 *.log
+
+# Never send local runtime secrets into the Docker build context.
 .env
+.env.*
+!.env.example
+!.env.vps.example
 .env.local
 .env.*.local
-!.env.example
+.app.env
+dev.env
+market.env
+prod.env
+
+# Private keys / local credential stores.
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Local backup artifacts.
+*.dump
+*.bak
+backups/

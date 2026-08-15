@@ -1,0 +1,56 @@
+name: Security audit
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '15 1 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: Production dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Reject high or critical production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
+  repository-secret-hygiene:
+    name: Repository secret hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # This deliberately avoids echoing matched secret values. It reports
+      # only file names so CI logs do not become another secret leak.
+      - name: Detect obvious committed secret material
+        shell: bash
+        run: |
+          set -euo pipefail
+          patterns='BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|sk_live_[0-9A-Za-z]{16,}|ghp_[0-9A-Za-z]{30,}|github_pat_[0-9A-Za-z_]{30,}'
+          matches="$(git grep -IlE "$patterns" -- ':!*.lock' ':!package-lock.json' || true)"
+          if [ -n "$matches" ]; then
+            echo 'Potential committed secret material found in:'
+            printf '%s\n' "$matches"
+            echo 'Rotate any real credential before removing it from history.'
+            exit 1
+          fi
+          echo 'No obvious private-key/token signatures detected.'

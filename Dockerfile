@@ -18,6 +18,10 @@ RUN chmod +x scripts/run_with_heartbeat.sh
 
 # The persistence normalizer must run before the router lifecycle validator.
 # The validator requires session-timeout=0s, which the normalizer installs.
+# Auth, financial, payment-surface, export and portal privacy hardening are
+# scoped to admin-auth, payment/wallet, CSV reporting and public portal
+# presentation source and are applied after gateway compilation without
+# altering router/RADIUS scripts.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
@@ -42,6 +46,11 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
     && python3 scripts/finalize_gateway_compile.py \
+    && python3 scripts/apply_auth_security_hardening.py \
+    && python3 scripts/apply_financial_security_hardening.py \
+    && python3 scripts/apply_payment_surface_security_hardening.py \
+    && python3 scripts/apply_export_security_hardening.py \
+    && python3 scripts/apply_portal_security_hardening.py \
     && python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
 RUN attempt=1; \

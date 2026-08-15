@@ -47,12 +47,14 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
         headers: {
           'Content-Type': 'text/xml',
         },
+        // Send the authenticated XML unchanged. Only diagnostic/storage copies
+        // are redacted below so gateway behavior is not modified.
         body: xmlPayload,
       })
 
       const responseXml = await response.text()
       if (!response.ok) {
-        throw new ServiceUnavailableException(`Yo Uganda disbursement failed with HTTP ${response.status}: ${responseXml}`)
+        throw new ServiceUnavailableException(`Yo Uganda disbursement failed with HTTP ${response.status}: ${this.redactXmlCredentials(responseXml)}`)
       }
 
       const status = this.getXmlValue(responseXml, 'Status', 'status')
@@ -62,7 +64,7 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
       if (status.toUpperCase() !== 'OK') {
         const faultString = this.getXmlValue(responseXml, 'faultString')
         const errorMessage = this.getXmlValue(responseXml, 'ErrorMessage', 'error_message') || this.getXmlValue(responseXml, 'StatusMessage', 'status_message') || faultString || 'Unknown error'
-        this.logger.error(`Yo Uganda API Error. Raw XML: ${responseXml}`)
+        this.logger.error(`Yo Uganda API Error. Raw XML: ${this.redactXmlCredentials(responseXml)}`)
         throw new ServiceUnavailableException(`Yo Uganda API error: ${errorMessage}`)
       }
 
@@ -74,8 +76,8 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
         statusMessage: 'Disbursement request sent. Waiting for mobile money network execution.',
         amount: input.amountUgx.toString(),
         currencyCode: input.currency,
-        rawRequest: xmlPayload,
-        rawResponse: responseXml,
+        rawRequest: this.redactXmlCredentials(xmlPayload),
+        rawResponse: this.redactXmlCredentials(responseXml),
       }
     } catch (error) {
       this.logger.error(`Failed to send money via Yo Uganda for ref ${input.externalReference}`, error instanceof Error ? error.stack : undefined)
@@ -120,7 +122,7 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
       if (status.toUpperCase() !== 'OK') {
         const faultString = this.getXmlValue(responseXml, 'faultString')
         const errorMessage = this.getXmlValue(responseXml, 'ErrorMessage', 'error_message') || this.getXmlValue(responseXml, 'StatusMessage', 'status_message') || faultString || 'Unknown error'
-        this.logger.error(`Yo Uganda status check API Error. Raw XML: ${responseXml}`)
+        this.logger.error(`Yo Uganda status check API Error. Raw XML: ${this.redactXmlCredentials(responseXml)}`)
         throw new ServiceUnavailableException(`Yo Uganda status check API error: ${errorMessage}`)
       }
 
@@ -132,7 +134,7 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
         statusMessage,
         amount,
         rawRequest: referenceId,
-        rawResponse: responseXml,
+        rawResponse: this.redactXmlCredentials(responseXml),
       }
     } catch (error) {
       this.logger.error(`Yo Uganda disbursement status check failed for reference ${referenceId}`, error instanceof Error ? error.stack : undefined)
@@ -154,7 +156,7 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
         transactionStatus: this.mapYoStatus(status),
         transactionReference: providerReference,
         rawRequest: '',
-        rawResponse: JSON.stringify(payload),
+        rawResponse: this.redactXmlCredentials(JSON.stringify(payload)),
       },
     }
   }
@@ -177,6 +179,14 @@ export class YoUgandaDisbursementService implements PaymentDisbursementProvider 
       throw new ServiceUnavailableException(`Yo Uganda configuration ${key} is missing`)
     }
     return value
+  }
+
+  private redactXmlCredentials(value: string) {
+    return value
+      .replace(/<APIUsername>[^<]*<\/APIUsername>/gi, '<APIUsername>[REDACTED]</APIUsername>')
+      .replace(/<APIPassword>[^<]*<\/APIPassword>/gi, '<APIPassword>[REDACTED]</APIPassword>')
+      .replace(/("APIUsername"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
+      .replace(/("APIPassword"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
   }
 
   private escapeXml(unsafe: string): string {

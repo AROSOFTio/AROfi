@@ -12,3 +12,19 @@ next-env.d.ts
 dev.env
 market.env
 prod.env
+
+# Never commit private key stores or locally exported production credentials.
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Local/database backup artifacts. Prisma migration *.sql files remain tracked.
+*.dump
+*.bak
+backups/

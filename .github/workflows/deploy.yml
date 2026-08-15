@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# Verification should not receive a write-capable GITHUB_TOKEN. Deployment is
+# handled separately by the production platform, so this job only needs read.
+permissions:
+  contents: read
+
 jobs:
   build-verify:
     name: Verify Builds Pass
@@ -58,6 +63,11 @@ jobs:
           python3 scripts/fix_iotec_live_gateway_diagnostics.py
           python3 scripts/fix_iotec_oauth_compatibility.py
           python3 scripts/finalize_gateway_compile.py
+          python3 scripts/apply_auth_security_hardening.py
+          python3 scripts/apply_financial_security_hardening.py
+          python3 scripts/apply_payment_surface_security_hardening.py
+          python3 scripts/apply_export_security_hardening.py
+          python3 scripts/apply_portal_security_hardening.py
           python3 scripts/verify_router_captive_invariants.py
           python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
