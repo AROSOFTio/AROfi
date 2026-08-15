@@ -1,7 +1,8 @@
-import { Banknote, Coins, Ticket, Wallet } from 'lucide-react'
+import { Ticket } from 'lucide-react'
 import { fetchApi } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/format'
 import type { PackageCatalogResponse } from '@/lib/admin-types'
+import AgentSalesAccountability from '@/components/AgentSalesAccountability'
 import AgentSellPanel from '@/components/AgentSellPanel'
 
 type AgentDashboardResponse = {
@@ -60,33 +61,31 @@ export default async function AgentDashboard() {
     }))
 
   return (
-    <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1180, margin: '0 auto' }}>
       <div className="page-header" style={{ marginBottom: 14 }}>
         <div>
           <h1 className="page-title">Agent Dashboard</h1>
-          <p className="page-subtitle">Welcome {data?.agent.name ?? 'Agent'}. Sell internet, track your commission and know exactly how much cash you need to remit.</p>
+          <p className="page-subtitle">
+            Welcome {data?.agent.name ?? 'Agent'}. Sell internet, track Cash and Mobile Money separately, deposit outstanding cash, and withdraw eligible Mobile Money commission.
+          </p>
         </div>
         <span className={`badge ${data?.agent.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
           {data?.agent.status?.toLowerCase() ?? 'agent'}
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 14 }} className="agent-dashboard-kpis">
-        <AgentKpi icon={<Banknote size={19} />} label="Today's Sales" value={formatCurrency(data?.summary.todaySalesUgx ?? 0)} note="Cash + Mobile Money" />
-        <AgentKpi icon={<Coins size={19} />} label="My Commission" value={formatCurrency(data?.summary.totalCommissionUgx ?? 0)} note={`Today ${formatCurrency(data?.summary.todayCommissionUgx ?? 0)}`} />
-        <AgentKpi icon={<Wallet size={19} />} label="Cash to Remit" value={formatCurrency(data?.summary.cashToRemitUgx ?? 0)} note={(data?.agent.cashLimitUgx ?? 0) > 0 ? `Limit ${formatCurrency(data?.agent.cashLimitUgx ?? 0)}` : 'No cash ceiling set'} />
-      </div>
+      <AgentSalesAccountability />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(280px, .65fr)', gap: 14, marginBottom: 14 }} className="agent-dashboard-sell-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(260px, .55fr)', gap: 14, margin: '14px 0' }} className="agent-dashboard-sell-grid">
         <div className="card" style={{ padding: 18, margin: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 14 }}>
             <div>
               <div className="card-title">Sell Internet</div>
               <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5, lineHeight: 1.5 }}>
-                Choose a package, then activate the customer's connected device now or issue a voucher for later.
+                Choose an allowed package, then activate the customer now or create one voucher only after a completed sale.
               </p>
             </div>
-            <span className="badge badge-info">{sellPackages.length} plans</span>
+            <span className="badge badge-info">{sellPackages.length} packages</span>
           </div>
 
           {sellPackages.length > 0 && data ? (
@@ -98,32 +97,22 @@ export default async function AgentDashboard() {
               commissionRateBps={data.agent.commissionRateBps}
             />
           ) : (
-            <div className="empty-state"><p>No internet package has been assigned to your agent account.</p></div>
+            <div className="empty-state"><p>No internet package has been assigned to your Agent account.</p></div>
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 9, marginTop: 12 }}>
-            <MethodInfo title="⚡ Activate Now" text="Customer connects first, requests a 6-digit agent number, then you complete the sale." />
-            <MethodInfo title="🎟 Voucher for Later" text="The voucher is generated only after a completed sale and starts when redeemed." />
+            <MethodInfo title="Activate Now" text="The customer connects first and gives you the 6-digit activation number shown on their device." />
+            <MethodInfo title="Voucher for Later" text="A single voucher is created only after the Cash or Mobile Money sale completes. It starts when redeemed." />
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div className="card" style={{ padding: 16, margin: 0 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Ticket size={17} /><strong>Offline Vouchers</strong></div>
-            <div style={{ fontSize: 29, fontWeight: 850, marginTop: 9 }}>{data?.summary.availableOfflineVouchers ?? 0}</div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5, margin: '3px 0 12px' }}>Assigned printed/PDF vouchers still available in your stock.</p>
-            <a href="/vouchers" className="btn btn-ghost btn-block">Open Vouchers</a>
-          </div>
-
-          <div className="card" style={{ padding: 16, margin: 0 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Wallet size={17} /><strong>Cash Accountability</strong></div>
-            <div style={{ marginTop: 10, display: 'grid', gap: 8, fontSize: 12.5 }}>
-              <AccountRow label="Outstanding cash" value={formatCurrency(data?.summary.cashToRemitUgx ?? 0)} strong />
-              <AccountRow label="Cash limit" value={(data?.agent.cashLimitUgx ?? 0) > 0 ? formatCurrency(data?.agent.cashLimitUgx ?? 0) : 'No limit'} />
-              <AccountRow label="Remaining capacity" value={data?.summary.cashRemainingBeforeLimitUgx === null ? 'No limit' : formatCurrency(data?.summary.cashRemainingBeforeLimitUgx ?? 0)} />
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 11.5, lineHeight: 1.45, margin: '11px 0 0' }}>The business owner records settlement after receiving your cash. Mobile Money sales never increase this amount.</p>
-          </div>
+        <div className="card" style={{ padding: 16, margin: 0 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Ticket size={17} /><strong>Assigned Offline Vouchers</strong></div>
+          <div style={{ fontSize: 29, fontWeight: 850, marginTop: 9 }}>{data?.summary.availableOfflineVouchers ?? 0}</div>
+          <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5, margin: '3px 0 12px' }}>
+            Printed or PDF vouchers assigned to you by the business owner for offline selling. Agents cannot create templates or generate voucher batches.
+          </p>
+          <a href="/vouchers" className="btn btn-ghost btn-block">View Assigned Stock</a>
         </div>
       </div>
 
@@ -131,7 +120,7 @@ export default async function AgentDashboard() {
         <div className="card-header">
           <div>
             <span className="card-title">Sales History</span>
-            <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 3 }}>Your latest cash and Mobile Money sales.</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 3 }}>Your latest Cash and Mobile Money sales with the commission earned on each sale.</div>
           </div>
         </div>
         <div className="table-wrap">
@@ -143,20 +132,20 @@ export default async function AgentDashboard() {
                 <th>Delivery</th>
                 <th>Payment</th>
                 <th>Sale</th>
-                <th>My Commission</th>
+                <th>Commission</th>
                 <th>Time</th>
               </tr>
             </thead>
             <tbody>
               {(data?.recentSales ?? []).length === 0 && (
-                <tr><td colSpan={7}><div className="empty-state"><p>No agent sales yet. Your first completed sale will appear here.</p></div></td></tr>
+                <tr><td colSpan={7}><div className="empty-state"><p>No Agent sales yet. Your first completed sale will appear here.</p></div></td></tr>
               )}
               {(data?.recentSales ?? []).map((sale) => (
                 <tr key={sale.id}>
                   <td>{displayPhone(sale.customerReference)}</td>
                   <td style={{ fontWeight: 650 }}>{sale.packageName}</td>
                   <td>
-                    <span className="badge badge-info">{sale.fulfillment === 'VOUCHER_LATER' ? 'Voucher later' : 'Activated now'}</span>
+                    <span className="badge badge-info">{sale.fulfillment === 'VOUCHER_LATER' ? 'Voucher for later' : 'Activated now'}</span>
                     {sale.voucherCode && <div style={{ fontSize: 11, marginTop: 4, fontFamily: 'monospace' }}>{sale.voucherCode}</div>}
                   </td>
                   <td><span className={sale.paymentMethod === 'MOBILE_MONEY' ? 'badge badge-success' : 'badge badge-warning'}>{sale.paymentMethod === 'MOBILE_MONEY' ? 'Mobile Money' : 'Cash'}</span></td>
@@ -172,23 +161,12 @@ export default async function AgentDashboard() {
 
       <style>{`
         @media (max-width: 820px) {
-          .agent-dashboard-kpis { grid-template-columns: 1fr !important; }
           .agent-dashboard-sell-grid { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 560px) {
           .agent-dashboard-sell-grid .card { padding: 14px !important; }
         }
       `}</style>
-    </div>
-  )
-}
-
-function AgentKpi({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note: string }) {
-  return (
-    <div className="card" style={{ margin: 0, padding: 16 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>{icon}<span>{label}</span></div>
-      <div style={{ fontSize: 23, fontWeight: 850, marginTop: 8 }}>{value}</div>
-      <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 3 }}>{note}</div>
     </div>
   )
 }
@@ -200,10 +178,6 @@ function MethodInfo({ title, text }: { title: string; text: string }) {
       <p style={{ color: 'var(--text-muted)', fontSize: 11.5, lineHeight: 1.45, margin: '4px 0 0' }}>{text}</p>
     </div>
   )
-}
-
-function AccountRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><span style={{ color: 'var(--text-muted)' }}>{label}</span><span style={{ fontWeight: strong ? 800 : 650 }}>{value}</span></div>
 }
 
 function displayPhone(value?: string | null) {

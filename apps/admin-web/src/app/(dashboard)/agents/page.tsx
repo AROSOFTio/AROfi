@@ -60,7 +60,7 @@ export default async function AgentsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Agents</h1>
-          <p className="page-subtitle">Hybrid agent sales: printed vouchers, live cash activation, Mobile Money, commission and cash accountability.</p>
+          <p className="page-subtitle">Agent sales: assigned offline vouchers, live Cash activation, Mobile Money, commission and cash accountability.</p>
         </div>
         {canManageBusinessAgents && <RegisterAgentPanel />}
       </div>
@@ -68,21 +68,21 @@ export default async function AgentsPage() {
       <div className="stats-grid" style={{ marginBottom: 16 }}>
         <Stat label="Active Agents" value={`${overview?.summary.activeAgents ?? 0}`} tone="blue" note="Enabled seller accounts" />
         <Stat label="Agent Sales" value={formatCurrency(overview?.summary.totalSalesUgx ?? 0)} tone="green" note={`Mobile Money ${formatCurrency(overview?.summary.mobileMoneySalesUgx ?? 0)}`} />
-        <Stat label="Agent Commission" value={formatCurrency(overview?.summary.totalCommissionUgx ?? 0)} tone="purple" note="Earned across cash and online sales" />
-        <Stat label="Cash to Collect" value={formatCurrency(overview?.summary.cashToCollectUgx ?? 0)} tone="amber" note="After agent commission and settlements" />
+        <Stat label="Agent Commission" value={formatCurrency(overview?.summary.totalCommissionUgx ?? 0)} tone="purple" note="Earned across Cash and Mobile Money sales" />
+        <Stat label="Cash to Collect" value={formatCurrency(overview?.summary.cashToCollectUgx ?? 0)} tone="amber" note="After Cash commission and completed settlements" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <ModeCard icon="⚡" title="Activate Now" text="Customer requests a 6-digit device code from the captive portal. The agent completes Cash or Mobile Money and the same device connects." />
-        <ModeCard icon="🎟" title="Voucher for Later" text="Generate one voucher only after Cash confirmation or provider-confirmed Mobile Money. The package starts when the voucher is redeemed." />
-        <ModeCard icon="🖨" title="Offline / PDF Vouchers" text="Your existing printed voucher workflow stays available for agents without reliable internet or smartphones." />
+        <ModeCard icon="⚡" title="Activate Now" text="Customer requests a 6-digit device code from the captive portal. The Agent completes Cash or Mobile Money and the same device connects." />
+        <ModeCard icon="🎟" title="Voucher for Later" text="One voucher is created only after a completed Cash or provider-confirmed Mobile Money sale. The package starts when the voucher is redeemed." />
+        <ModeCard icon="🖨" title="Assigned Offline Vouchers" text="The business owner generates and assigns printed or PDF voucher stock for Agents who need an offline selling option." />
       </div>
 
       <div className="card">
         <div className="card-header">
           <div>
             <span className="card-title">Agent Sales & Accountability</span>
-            <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>Cash limits block only new cash sales. Mobile Money can continue because the agent never holds that money.</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>Cash limits block only new Cash sales. Mobile Money can continue because the Agent never holds that customer money.</div>
           </div>
         </div>
         <div className="table-wrap">
@@ -103,7 +103,7 @@ export default async function AgentsPage() {
             </thead>
             <tbody>
               {(!overview?.agents || overview.agents.length === 0) && (
-                <tr><td colSpan={10}><div className="empty-state"><p>No agents have been registered yet.</p></div></td></tr>
+                <tr><td colSpan={10}><div className="empty-state"><p>No Agents have been registered yet.</p></div></td></tr>
               )}
               {(overview?.agents ?? []).map((agent) => {
                 const actionAgent = toAgentItem(agent)
@@ -128,7 +128,8 @@ export default async function AgentsPage() {
                     <td>{agent.cashLimitUgx > 0 ? formatCurrency(agent.cashLimitUgx) : 'No limit'}</td>
                     <td>
                       <div style={{ fontWeight: 700 }}>{formatCurrency(agent.totalSalesUgx)}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>MM {formatCurrency(agent.mobileMoneySalesUgx)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cash {formatCurrency(agent.cashSalesUgx)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Mobile Money {formatCurrency(agent.mobileMoneySalesUgx)}</div>
                     </td>
                     <td><strong style={{ color: agent.cashToCollectUgx > 0 ? 'var(--warn-fg)' : 'var(--success-fg)' }}>{formatCurrency(agent.cashToCollectUgx)}</strong></td>
                     <td>{agent.availableVoucherStock}</td>

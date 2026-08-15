@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
 import { Response } from 'express'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
@@ -27,6 +27,7 @@ export class VouchersController {
   @RedisCache({ namespace: 'vouchers:overview', ttlSeconds: 10 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    this.assertBusinessVoucherWorkspace(user)
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.vouchersService.getOverview(scopedTenantId)
   }
@@ -35,6 +36,7 @@ export class VouchersController {
   @RedisCache({ namespace: 'vouchers:templates', ttlSeconds: 60 })
   @Get('templates')
   getTemplates(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
+    this.assertBusinessVoucherWorkspace(user)
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.vouchersService.getTemplates(scopedTenantId)
   }
@@ -43,6 +45,7 @@ export class VouchersController {
   @InvalidateRedisCache('vouchers:overview', 'vouchers:templates')
   @Post('templates')
   createTemplate(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateVoucherTemplateDto) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
     return this.vouchersService.createTemplate({
       ...dto,
@@ -58,6 +61,7 @@ export class VouchersController {
     @Param('templateId') templateId: string,
     @Body() dto: UpdateVoucherTemplateDto,
   ) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.vouchersService.updateTemplate(templateId, dto, tenantId)
   }
@@ -66,6 +70,7 @@ export class VouchersController {
   @InvalidateRedisCache('vouchers:overview')
   @Post('batches')
   createBatch(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: CreateVoucherBatchDto) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
     return this.vouchersService.createBatch({
       ...dto,
@@ -83,10 +88,8 @@ export class VouchersController {
     @Query('preview') preview: string | undefined,
     @Res() response: Response,
   ) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.resolveTenantScope(user)
-    // The fifth argument is added by the guarded build transform. Casting here
-    // keeps the checked-in source compatible with both pre-transform local
-    // tooling and the production build that supports preview-safe rendering.
     const renderBatchPdf = this.vouchersService.renderBatchPdf.bind(this.vouchersService) as (
       batchId: string,
       tenantId?: string,
@@ -108,6 +111,7 @@ export class VouchersController {
     @Param('batchId') batchId: string,
     @Res() response: Response,
   ) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.resolveTenantScope(user)
     const file = await this.vouchersService.exportBatchCsv(batchId, tenantId)
     response.setHeader('Content-Type', file.contentType)
@@ -117,7 +121,8 @@ export class VouchersController {
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post(':voucherId/sale')
-  recordSale() {
+  recordSale(@CurrentUser() user: AuthenticatedAdminUser) {
+    this.assertBusinessVoucherWorkspace(user)
     throw new BadRequestException(
       'Voucher sales are recorded automatically only when the customer redeems the voucher.',
     )
@@ -125,7 +130,8 @@ export class VouchersController {
 
   @RequirePermissions(PERMISSIONS.vouchersManage)
   @Post('sell')
-  sellVoucher() {
+  sellVoucher(@CurrentUser() user: AuthenticatedAdminUser) {
+    this.assertBusinessVoucherWorkspace(user)
     throw new BadRequestException(
       'Voucher sales are recorded automatically only when the customer redeems the voucher.',
     )
@@ -135,6 +141,7 @@ export class VouchersController {
   @InvalidateRedisCache('vouchers:overview', 'billing:overview', 'billing:sales', 'billing:transactions')
   @Post('redeem')
   async redeemVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RedeemVoucherDto) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.resolveTenantScope(user)
     const result = await this.vouchersService.redeemVoucher(dto, tenantId)
     await this.voucherRedemptionSales.recordRedeemedVoucherAsSale(result.voucher.id)
@@ -145,6 +152,7 @@ export class VouchersController {
   @InvalidateRedisCache('vouchers:overview')
   @Delete('batches/:batchId')
   deleteBatch(@CurrentUser() user: AuthenticatedAdminUser, @Param('batchId') batchId: string) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.vouchersService.deleteBatch(batchId, tenantId)
   }
@@ -153,7 +161,16 @@ export class VouchersController {
   @InvalidateRedisCache('vouchers:overview')
   @Delete(':voucherId')
   deleteVoucher(@CurrentUser() user: AuthenticatedAdminUser, @Param('voucherId') voucherId: string) {
+    this.assertBusinessVoucherWorkspace(user)
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.vouchersService.deleteVoucher(voucherId, tenantId)
+  }
+
+  private assertBusinessVoucherWorkspace(user: AuthenticatedAdminUser) {
+    if (user.role === 'VoucherAgent') {
+      throw new ForbiddenException(
+        'Agents can only use voucher stock assigned to them by the business owner. Agents cannot create templates, generate batches, export business stock, or manage business vouchers.',
+      )
+    }
   }
 }
