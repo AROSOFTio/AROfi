@@ -274,7 +274,7 @@ export class AgentSalesService implements OnModuleDestroy {
     const todayTransactions = transactions.filter((item) => item.createdAt >= startOfToday)
     const todayCommissions = commissions.filter((item) => item.createdAt >= startOfToday)
     const availableOfflineVouchers = voucherBatches.reduce(
-      (total, batch) => total + batch.vouchers.filter((voucher) => [VoucherStatus.GENERATED, VoucherStatus.PRINTED].includes(voucher.status)).length,
+      (total, batch) => total + batch.vouchers.filter((voucher) => (voucher.status === VoucherStatus.GENERATED || voucher.status === VoucherStatus.PRINTED)).length,
       0,
     )
 
@@ -361,7 +361,7 @@ export class AgentSalesService implements OnModuleDestroy {
         .reduce((sum, item) => sum + Math.max(0, item.grossAmountUgx - (item.sourceCommission?.amountUgx ?? 0)), 0)
       const stock = batches
         .filter((batch) => batch.agentId === agent.id)
-        .reduce((sum, batch) => sum + batch.vouchers.filter((voucher) => [VoucherStatus.GENERATED, VoucherStatus.PRINTED].includes(voucher.status)).length, 0)
+        .reduce((sum, batch) => sum + batch.vouchers.filter((voucher) => (voucher.status === VoucherStatus.GENERATED || voucher.status === VoucherStatus.PRINTED)).length, 0)
       const mobileMoneySalesUgx = sales
         .filter((item) => item.channel === BillingChannel.MOBILE_MONEY)
         .reduce((sum, item) => sum + item.grossAmountUgx, 0)
@@ -557,7 +557,7 @@ export class AgentSalesService implements OnModuleDestroy {
     const pkg = await this.requireSellablePackage(tenantId, dto.packageId, policy)
     const customerPhoneNumber = this.phoneNumberService.normalize(dto.customerPhoneNumber)
     const network = dto.network ?? this.phoneNumberService.resolveNetwork(dto.payingPhoneNumber)
-    if (![PaymentNetwork.MTN, PaymentNetwork.AIRTEL].includes(network)) {
+    if (network !== PaymentNetwork.MTN && network !== PaymentNetwork.AIRTEL) {
       throw new BadRequestException('Choose MTN or Airtel Mobile Money.')
     }
     const payingPhoneNumber = this.phoneNumberService.normalizeForNetwork(dto.payingPhoneNumber, network)
@@ -702,7 +702,7 @@ export class AgentSalesService implements OnModuleDestroy {
   private async checkMobileMoneyPaymentById(paymentId: string): Promise<AgentPaymentState> {
     let state = await this.requirePayment(paymentId)
     if (state.status === PaymentStatus.COMPLETED) return this.finalizeMobileMoneyPayment(state)
-    if ([PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(state.status)) return state
+    if ((state.status === PaymentStatus.FAILED || state.status === PaymentStatus.CANCELLED || state.status === PaymentStatus.EXPIRED)) return state
 
     const provider = state.provider as PaymentProvider
     const collection = this.paymentRouterService.resolveCollection(state.network, provider)
@@ -717,7 +717,7 @@ export class AgentSalesService implements OnModuleDestroy {
     await this.savePayment(state)
 
     if (status === PaymentStatus.COMPLETED) return this.finalizeMobileMoneyPayment(state)
-    if ([PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(status) && state.claimCode) {
+    if ((status === PaymentStatus.FAILED || status === PaymentStatus.CANCELLED || status === PaymentStatus.EXPIRED) && state.claimCode) {
       const claim = await this.readJson<ClaimState>(this.claimCodeKey(state.claimCode))
       if (claim) await this.saveClaim({ ...claim, status: 'FAILED', failureMessage: state.statusMessage ?? 'Mobile Money payment failed.' })
     }
