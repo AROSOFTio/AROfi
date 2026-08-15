@@ -13,16 +13,19 @@ const rules = [
   {
     from: '[DisbursementStatus.PENDING, DisbursementStatus.PROCESSING, DisbursementStatus.PENDING_APPROVAL].includes(item.status)',
     to: '([DisbursementStatus.PENDING, DisbursementStatus.PROCESSING, DisbursementStatus.PENDING_APPROVAL] as DisbursementStatus[]).includes(item.status)',
+    accepted: ['OPEN_DISBURSEMENT_STATUSES.includes(item.status)'],
     expected: 1,
   },
   {
     from: '[PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED].includes(status)',
     to: '([PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.EXPIRED] as PaymentStatus[]).includes(status)',
+    accepted: ['FAILED_PAYMENT_STATUSES.includes(status)'],
     expected: 3,
   },
   {
     from: '[DisbursementStatus.FAILED, DisbursementStatus.CANCELLED, DisbursementStatus.REVERSED].includes(disbursement.status)',
     to: '([DisbursementStatus.FAILED, DisbursementStatus.CANCELLED, DisbursementStatus.REVERSED] as DisbursementStatus[]).includes(disbursement.status)',
+    accepted: ['CLOSED_DISBURSEMENT_STATUSES.includes(disbursement.status)'],
     expected: 1,
   },
 ]
@@ -31,7 +34,8 @@ let changed = false
 for (const rule of rules) {
   const count = source.split(rule.from).length - 1
   if (count === 0) {
-    if (!source.includes(rule.to)) {
+    const isAlreadyNormalized = source.includes(rule.to) || rule.accepted?.some((marker) => source.includes(marker))
+    if (!isAlreadyNormalized) {
       throw new Error(`Agent accounting compatibility marker missing: ${rule.from}`)
     }
     continue
