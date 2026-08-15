@@ -137,7 +137,7 @@ export class DisconnectRoutingInitializer {
         const candidates = forcedHost
           ? [forcedHost]
           : route.router
-            ? [route.router.remoteSstIp ?? route.router.remoteSstpIp, route.router.radiusNasIpAddress, route.router.host]
+            ? [route.router.remoteSstpIp, route.router.radiusNasIpAddress, route.router.host]
             : []
         const targets = [...new Set(candidates.filter((value): value is string => Boolean(value?.trim())).map((value) => value.trim()))]
 
