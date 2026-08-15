@@ -1,0 +1,27 @@
+# AroFi dev/staging overlay.
+# Use together with docker-compose.yaml for the dev.arofi.net environment.
+# Secrets remain in the dev deployment environment; nothing here is sensitive.
+services:
+  api:
+    environment:
+      AROFI_DEPLOYMENT_ENV: dev
+      API_PUBLIC_HOST: dev.arofi.net
+      PORTAL_PUBLIC_HOST: dev.arofi.net
+      APP_BASE_URL: https://dev.arofi.net
+      ADMIN_BASE_URL: https://dev.arofi.net
+      PORTAL_BASE_URL: https://dev.arofi.net/portal
+      CORS_ALLOWED_ORIGINS: https://dev.arofi.net
+      CORS_ALLOWED_ADMIN_ORIGINS: https://dev.arofi.net
+      MIKROTIK_CALLBACK_HTTP_URL: http://dev.arofi.net
+
+  admin:
+    environment:
+      APP_BASE_URL: https://dev.arofi.net
+      ADMIN_BASE_URL: https://dev.arofi.net
+      PORTAL_BASE_URL: https://dev.arofi.net/portal
+
+  portal:
+    environment:
+      APP_BASE_URL: https://dev.arofi.net
+      ADMIN_BASE_URL: https://dev.arofi.net
+      PORTAL_BASE_URL: https://dev.arofi.net/portal
