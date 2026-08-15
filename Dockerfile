@@ -42,6 +42,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
     && python3 scripts/finalize_gateway_compile.py \
+    && python3 scripts/apply_arofi_brand_and_three_plan_patches.py \
     && python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
 RUN attempt=1; \
@@ -60,17 +61,17 @@ RUN --mount=type=cache,target=/usr/src/app/apps/admin-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
-    sh scripts/run_with_heartbeat.sh "AROFi Admin build" npm run build --workspace=arofi-admin
+    sh scripts/run_with_heartbeat.sh "AroFi Admin build" npm run build --workspace=arofi-admin
 
 RUN --mount=type=cache,target=/usr/src/app/apps/portal-web/.next/cache \
     export NODE_OPTIONS='--max-old-space-size=512 --max-semi-space-size=8' && \
     export NEXT_CPU_LIMIT=1 && \
     export CI=1 && \
-    sh scripts/run_with_heartbeat.sh "AROFi Portal build" npm run build --workspace=arofi-portal
+    sh scripts/run_with_heartbeat.sh "AroFi Portal build" npm run build --workspace=arofi-portal
 
 RUN export NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' && \
     export CI=1 && \
-    sh scripts/run_with_heartbeat.sh "AROFi API build" npm run build --workspace=arofi-api
+    sh scripts/run_with_heartbeat.sh "AroFi API build" npm run build --workspace=arofi-api
 
 RUN set -eux; \
     mkdir -p /runtime/admin /runtime/portal; \
