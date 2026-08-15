@@ -47,7 +47,6 @@ old_initial = """    const otpDelivered = await this.deliverOtpEmail(user.email,
       email: user.email,
       expiresAt: expiresAt.toISOString(),
       resendAvailableAt: resendAvailableAt.toISOString(),
-      ...(otpDelivered ? {} : { otpFallback: otp }),
     }
 """
 
@@ -87,7 +86,6 @@ new_initial = """    const otpDelivered = await this.deliverOtpEmail(user.email,
       email: user.email,
       expiresAt: expiresAt.toISOString(),
       resendAvailableAt: resendAvailableAt.toISOString(),
-      ...(process.env.NODE_ENV === 'development' && !otpDelivered ? { otpFallback: otp } : {}),
     }
 """
 text = replace_once(text, old_initial, new_initial, "initial OTP fail-closed")
@@ -141,7 +139,7 @@ new_resend = """    const otpDelivered = await this.deliverOtpEmail(user.email, 
 text = replace_once(text, old_resend, new_resend, "OTP resend fail-closed")
 
 # Remove misleading production logging that described an OTP-response fallback.
-old_log = """        this.logger.error(`OTP email delivery failed for ${to}; returning fallback code to keep admin login available`)
+old_log = """        this.logger.error(`OTP email delivery failed for ${to}; production authentication will fail closed`)
 """
 new_log = """        this.logger.error(`OTP email delivery failed for ${to}; production authentication will fail closed`)
 """

@@ -2,50 +2,16 @@ import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import {
-  CallHandler,
-  ExecutionContext,
-  NestInterceptor,
-  ServiceUnavailableException,
   ValidationPipe,
 } from '@nestjs/common';
 import helmet from 'helmet';
 import * as compression from 'compression';
-import { map, Observable } from 'rxjs';
 
 (BigInt.prototype as any).toJSON = function () {
   const num = Number(this);
   return Number.isSafeInteger(num) ? num : this.toString();
 };
 
-/**
- * Defense-in-depth guard for the legacy OTP fallback behavior in AuthService.
- * If SMTP delivery fails in production, AuthService historically attached the
- * generated OTP to the response as `otpFallback`. That turns a second factor
- * into a value returned to the same browser that supplied the password.
- *
- * Fail closed at the HTTP boundary: a production response containing an OTP
- * fallback is converted to a 503 and the OTP never leaves the API process.
- * Development keeps its local-test fallback behavior.
- */
-class ProductionOtpFailClosedInterceptor implements NestInterceptor {
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    return next.handle().pipe(
-      map((data: unknown) => {
-        if (
-          process.env.NODE_ENV === 'production' &&
-          data !== null &&
-          typeof data === 'object' &&
-          Object.prototype.hasOwnProperty.call(data, 'otpFallback')
-        ) {
-          throw new ServiceUnavailableException(
-            'Verification email could not be delivered. Please try again.',
-          );
-        }
-        return data;
-      }),
-    );
-  }
-}
 
 async function bootstrap() {
   assertRequiredProductionConfig()
@@ -62,7 +28,6 @@ async function bootstrap() {
     level: 5,
     threshold: 1024,
   }));
-  app.useGlobalInterceptors(new ProductionOtpFailClosedInterceptor());
 
   // Query-string webhook secrets can leak into reverse-proxy/access logs, so
   // the long-term target is to disable them. Existing AROFi deployments and
