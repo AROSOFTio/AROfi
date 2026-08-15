@@ -20,6 +20,7 @@ function buildHarness(logoutResult: 'removed' | 'absent' | 'failed' = 'removed')
       findMany: jest.fn().mockResolvedValue([
         {
           id: 'disconnect-1',
+          tenantId: 'tenant-1',
           routerId: 'router-1',
           username: 'expired-user',
           macAddress: 'AA:BB:CC:DD:EE:FF',
@@ -47,6 +48,7 @@ describe('ExpiryRouterLogoutInitializer', () => {
 
     expect(lifecycle.logoutHotspotActiveSession).toHaveBeenCalledWith(
       expect.objectContaining({
+        tenantId: 'tenant-1',
         routerId: 'router-1',
         username: 'expired-user',
         macAddress: 'AA:BB:CC:DD:EE:FF',
