@@ -4,6 +4,11 @@
 # then starts NestJS. restart: unless-stopped handles any later DB outage.
 set -eu
 
+# Hard safety boundary: validate desktop/dev/production isolation BEFORE
+# touching PostgreSQL or running Prisma migrations. A bad environment must
+# fail here rather than migrate or contact the wrong AroFi deployment.
+node /usr/src/app/scripts/assert_deployment_isolation.js
+
 cd /usr/src/app/apps/api
 
 if [ -n "${DATABASE_URL:-}" ]; then
