@@ -9,6 +9,7 @@ import { AccessLifecycleService } from './access-lifecycle.service'
 
 type LogoutAttempt = {
   id: string
+  tenantId: string
   routerId: string | null
   username: string | null
   macAddress: string | null
@@ -68,6 +69,7 @@ export class ExpiryRouterLogoutInitializer implements OnModuleInit {
       },
       select: {
         id: true,
+        tenantId: true,
         routerId: true,
         username: true,
         macAddress: true,
