@@ -1,5 +1,8 @@
 # AroFi tracked desktop Docker overlay.
 # Secrets stay in .env.desktop.local; this file is safe to commit.
+#
+# SAFETY: desktop is local UI/data only. It must never target arofi.net,
+# dev.arofi.net, live routers, RADIUS, VPN, or live payment providers.
 services:
   nginx:
     ports:
@@ -7,21 +10,56 @@ services:
 
   api:
     environment:
-      # PaymentRouterService reads PAYMENT_GATEWAY. Keep the technical enum
-      # IOTEC_PAY while customer-facing copy uses the ioTec brand.
-      PAYMENT_GATEWAY: ${PAYMENT_GATEWAY:-IOTEC_PAY}
+      AROFI_DEPLOYMENT_ENV: desktop
+
+      API_PUBLIC_HOST: localhost:3000
+      PORTAL_PUBLIC_HOST: localhost:3000
+      APP_BASE_URL: http://localhost:3000
+      ADMIN_BASE_URL: http://localhost:3000
+      PORTAL_BASE_URL: http://localhost:3000/portal
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      CORS_ALLOWED_ADMIN_ORIGINS: http://localhost:3000
+
+      # Neutralize all router-facing production targets on desktop.
+      MIKROTIK_CALLBACK_HTTP_URL: http://127.0.0.1:18080
+      RADIUS_PUBLIC_HOST: 127.0.0.1
+      VPN_SERVER_IP: 127.0.0.1
+      ROUTER_PROBE_ENABLED: "false"
+      ROUTER_ALERTS_ENABLED: "false"
+      ACCESS_WORKERS_ENABLED: "false"
+      RADIUS_DB_LISTEN_ENABLED: "false"
+      RADIUS_DISCONNECT_ENABLED: "false"
+
+      # Desktop does not perform live provider transactions. Real ioTec / Yo!
+      # Uganda tests belong on dev.arofi.net.
+      PAYMENT_GATEWAY: IOTEC_PAY
+      IOTEC_CLIENT_ID: ""
+      IOTEC_CLIENT_SECRET: ""
+      IOTEC_WALLET_ID: ""
+      IOTEC_WEBHOOK_SECRET: ""
+      YO_UGANDA_USERNAME: ""
+      YO_UGANDA_PASSWORD: ""
+      YO_UGANDA_WEBHOOK_SECRET: ""
     networks:
       default:
         aliases:
           - arofi-api-v2
 
   admin:
+    environment:
+      APP_BASE_URL: http://localhost:3000
+      ADMIN_BASE_URL: http://localhost:3000
+      PORTAL_BASE_URL: http://localhost:3000/portal
     networks:
       default:
         aliases:
           - arofi-admin-v2
 
   portal:
+    environment:
+      APP_BASE_URL: http://localhost:3000
+      ADMIN_BASE_URL: http://localhost:3000
+      PORTAL_BASE_URL: http://localhost:3000/portal
     networks:
       default:
         aliases:
