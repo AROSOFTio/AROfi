@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Normalize icon names for the lucide-react version used by admin-web.
 
-lucide-react 0.330.0 exports AlertCircle, while newer examples may use the
-renamed CircleAlert symbol. Build-time source generators can recreate those
-imports, so this compatibility pass runs after all generators and before the
-Next.js build.
+lucide-react 0.330.0 exports AlertCircle and Briefcase, while newer examples
+may use renamed/newer symbols such as CircleAlert or BriefcaseBusiness.
+Build-time source generators can recreate those imports, so this compatibility
+pass runs after all generators and before the Next.js build.
 """
 from pathlib import Path
 
@@ -16,6 +16,7 @@ SOURCE_ROOTS = [
 
 REPLACEMENTS = {
     "CircleAlert": "AlertCircle",
+    "BriefcaseBusiness": "Briefcase",
 }
 
 changed_files: list[str] = []

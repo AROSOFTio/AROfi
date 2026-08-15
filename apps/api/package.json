@@ -4,14 +4,14 @@
   "description": "AROFi Backend API",
   "private": true,
   "scripts": {
-    "build": "node ../../scripts/apply_redis_read_cache.mjs && nest build",
+    "build": "node ../../scripts/fix_agent_accounting_type_compat.mjs && node ../../scripts/apply_redis_read_cache.mjs && nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/fix_agent_accounting_type_compat.mjs && tsc --noEmit",
     "lint": "npm run typecheck",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
