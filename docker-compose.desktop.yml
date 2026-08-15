@@ -1,0 +1,28 @@
+# AroFi tracked desktop Docker overlay.
+# Secrets stay in .env.desktop.local; this file is safe to commit.
+services:
+  nginx:
+    ports:
+      - "3000:3000"
+
+  api:
+    environment:
+      # PaymentRouterService reads PAYMENT_GATEWAY. Keep the technical enum
+      # IOTEC_PAY while customer-facing copy uses the ioTec brand.
+      PAYMENT_GATEWAY: ${PAYMENT_GATEWAY:-IOTEC_PAY}
+    networks:
+      default:
+        aliases:
+          - arofi-api-v2
+
+  admin:
+    networks:
+      default:
+        aliases:
+          - arofi-admin-v2
+
+  portal:
+    networks:
+      default:
+        aliases:
+          - arofi-portal-v2
