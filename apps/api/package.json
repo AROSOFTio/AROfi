@@ -11,7 +11,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/fix_agent_accounting_type_compat.mjs && tsc --noEmit",
     "lint": "npm run typecheck",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
