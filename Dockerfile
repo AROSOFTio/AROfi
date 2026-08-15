@@ -149,7 +149,7 @@ CMD if [ "$SERVICE_NAME" = "all" ]; then \
       test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
     elif [ "$SERVICE_NAME" = "portal" ]; then \
       server="$(find /usr/src/app/standalone/portal -type f -path '*/apps/portal-web/server.js' -print -quit)"; \
-      if [ -z "$server" ] && [ -f /runtime/portal/server.js ]; then server=/usr/src/app/standalone/portal/server.js; fi; \
+      if [ -z "$server" ] && [ -f /usr/src/app/standalone/portal/server.js ]; then server=/usr/src/app/standalone/portal/server.js; fi; \
       test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
     elif [ "$SERVICE_NAME" = "nginx" ]; then \
       cp config/nginx.split.conf /etc/nginx/nginx.conf && \
