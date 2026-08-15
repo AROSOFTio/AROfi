@@ -6,6 +6,7 @@ import { Headphones } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
+import AgentSidebar from './AgentSidebar'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import RouterOnboardingNudge from './RouterOnboardingNudge'
@@ -25,11 +26,19 @@ type DashboardShellProps = {
   workspaceTitle: string
 }
 
-export default function DashboardShell({ children, initials, session, workspaceTitle }: DashboardShellProps) {
+export default function DashboardShell({
+  children,
+  initials,
+  session,
+  workspaceTitle,
+}: DashboardShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const isAgent = session.user.role === 'VoucherAgent'
+  const vendorExperienceEnabled = isVendorWorkspace(session.user) && !isAgent
 
   useEffect(() => {
     setMenuOpen(false)
@@ -42,73 +51,197 @@ export default function DashboardShell({ children, initials, session, workspaceT
 
   useEffect(() => {
     document.body.classList.toggle('mobile-nav-locked', menuOpen)
-    return () => document.body.classList.remove('mobile-nav-locked')
+
+    return () => {
+      document.body.classList.remove('mobile-nav-locked')
+    }
   }, [menuOpen])
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       void refreshAccessToken()
     }, ACCESS_TOKEN_REFRESH_INTERVAL_MS)
+
     return () => window.clearInterval(interval)
   }, [])
 
   useEffect(() => {
-    const routes = isVendorWorkspace(session.user)
-      ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access', '/support']
-      : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions', '/support', '/users?tab=staff']
+    const routes = isAgent
+      ? ['/dashboard', '/vouchers']
+      : isVendorWorkspace(session.user)
+        ? [
+            '/admin/settings/routers',
+            '/packages',
+            '/vouchers',
+            '/sales',
+            '/sessions',
+            '/earnings',
+            '/admin/remote-access',
+            '/support',
+          ]
+        : [
+            '/businesses',
+            '/admin/router',
+            '/sales-by-business',
+            '/disbursements',
+            '/admin/settings',
+            '/sessions',
+            '/support',
+            '/users?tab=staff',
+          ]
+
     const id = window.setTimeout(() => {
-      for (const route of routes) router.prefetch(route)
+      for (const route of routes) {
+        router.prefetch(route)
+      }
     }, 600)
+
     return () => window.clearTimeout(id)
-  }, [router, session.user])
+  }, [router, session.user, isAgent])
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
-      <button type="button" className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)} />
-      <Sidebar user={session.user} />
-      <button type="button" className="mobile-nav-close" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)}>x</button>
+      <button
+        type="button"
+        className="mobile-nav-backdrop"
+        aria-label="Close navigation menu"
+        onClick={() => setMenuOpen(false)}
+      />
+
+      {isAgent ? (
+        <AgentSidebar user={session.user} />
+      ) : (
+        <Sidebar user={session.user} />
+      )}
+
+      <button
+        type="button"
+        className="mobile-nav-close"
+        aria-label="Close navigation menu"
+        onClick={() => setMenuOpen(false)}
+      >
+        x
+      </button>
+
       <div className="main-content">
         <header className="topbar">
           <div className="topbar-left">
-            <button type="button" className="mobile-menu-button" aria-label="Open navigation menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
-              <span /><span /><span />
+            <button
+              type="button"
+              className="mobile-menu-button"
+              aria-label="Open navigation menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(true)}
+            >
+              <span />
+              <span />
+              <span />
             </button>
-            <span className="topbar-title">{workspaceTitle}</span>
+
+            <span className="topbar-title">
+              {isAgent
+                ? `${session.user.tenantName ?? 'AROFi'} Agent`
+                : workspaceTitle}
+            </span>
           </div>
-          <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <RouterSupportDock user={session.user} />
-            <SupportTicketQuickAccess user={session.user} />
-            <button type="button" className="topbar-ai-support" onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))} aria-label="Open support chat">
-              <Headphones size={15} /><span>Support</span>
+
+          <div
+            className="topbar-actions"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            {!isAgent && <RouterSupportDock user={session.user} />}
+            {!isAgent && <SupportTicketQuickAccess user={session.user} />}
+
+            <button
+              type="button"
+              className="topbar-ai-support"
+              onClick={() =>
+                window.dispatchEvent(new Event('arofi:open-chat'))
+              }
+              aria-label="Open support chat"
+            >
+              <Headphones size={15} />
+              <span>Support</span>
             </button>
+
             <NotificationBell />
+
             <div style={{ position: 'relative' }}>
-              <button type="button" className="topbar-profile-trigger" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
-                <div className="avatar" style={{ margin: 0 }}>{initials}</div>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: profileDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+              <button
+                type="button"
+                className="topbar-profile-trigger"
+                onClick={() =>
+                  setProfileDropdownOpen(!profileDropdownOpen)
+                }
+              >
+                <div className="avatar" style={{ margin: 0 }}>
+                  {initials}
+                </div>
+
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--text-secondary)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: profileDropdownOpen
+                      ? 'rotate(180deg)'
+                      : 'rotate(0deg)',
+                    transition: 'transform 0.2s',
+                  }}
+                >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
 
-              {profileDropdownOpen && <>
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} onClick={() => setProfileDropdownOpen(false)} />
-                <div className="topbar-profile-menu">
-                  <div className="topbar-profile-menu-head">
-                    <span className="topbar-profile-name">{session.user.displayName}</span>
-                    <span className="topbar-profile-email">{session.user.email}</span>
+              {profileDropdownOpen && (
+                <>
+                  <div
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 999,
+                    }}
+                    onClick={() => setProfileDropdownOpen(false)}
+                  />
+
+                  <div className="topbar-profile-menu">
+                    <div className="topbar-profile-menu-head">
+                      <span className="topbar-profile-name">
+                        {session.user.displayName}
+                      </span>
+
+                      <span className="topbar-profile-email">
+                        {session.user.email}
+                      </span>
+                    </div>
+
+                    <div className="topbar-profile-divider" />
+
+                    <div className="topbar-profile-actions">
+                      <AdminSessionControl />
+                    </div>
                   </div>
-                  <div className="topbar-profile-divider" />
-                  <div className="topbar-profile-actions"><AdminSessionControl /></div>
-                </div>
-              </>}
+                </>
+              )}
             </div>
           </div>
         </header>
+
         <WorkspaceRouteGuard user={session.user}>
-          <RouterOnboardingNudge enabled={isVendorWorkspace(session.user)} />
+          <RouterOnboardingNudge enabled={vendorExperienceEnabled} />
+
           <div className="content">{children}</div>
         </WorkspaceRouteGuard>
-        <FeedbackPrompt enabled={isVendorWorkspace(session.user)} />
+
+        <FeedbackPrompt enabled={vendorExperienceEnabled} />
       </div>
     </div>
   )

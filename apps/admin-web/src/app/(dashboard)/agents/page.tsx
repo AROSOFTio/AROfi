@@ -1,160 +1,151 @@
+import { redirect } from 'next/navigation'
 import RegisterAgentPanel from '@/components/RegisterAgentPanel'
 import AgentActionsPanel from '@/components/AgentActionsPanel'
-import { AdminSessionResponse, AgentsOverviewResponse } from '@/lib/admin-types'
+import AgentSalesControlsPanel from '@/components/AgentSalesControlsPanel'
+import type { AdminSessionResponse, AgentItem, PackageCatalogResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
-import { formatCurrency, formatDate, formatTransactionType, getStatusBadgeClass } from '@/lib/format'
+import { encodeAgentSalesPolicy } from '@/lib/agent-sales-policy'
+import { formatCurrency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
 
 export const dynamic = 'force-dynamic'
 
-type AgentVoucherMetricsResponse = {
+type HybridAgent = {
+  id: string
+  code: string
+  name: string
+  phoneNumber: string
+  email?: string | null
+  type: string
+  status: string
+  territory?: string | null
+  commissionRateBps: number
+  cashLimitUgx: number
+  notes?: string | null
+  tenant: { id: string; name: string }
+  policy: { cashEnabled: boolean; mobileMoneyEnabled: boolean; allowedPackageIds: string[] }
+  totalSalesUgx: number
+  mobileMoneySalesUgx: number
+  cashSalesUgx: number
+  commissionUgx: number
+  cashToCollectUgx: number
+  availableVoucherStock: number
+  loginReady: boolean
+}
+
+type HybridOverview = {
   summary: {
-    agentsWithStock: number
-    totalAssigned: number
-    unsold: number
-    soldAwaitingUse: number
-    redeemed: number
-    expired: number
-    voided: number
-    unsoldValueUgx: number
-    recordedSales: number
-    recordedSalesUgx: number
+    activeAgents: number
+    totalSalesUgx: number
+    mobileMoneySalesUgx: number
+    totalCommissionUgx: number
+    cashToCollectUgx: number
   }
-  items: Array<{
-    agentId: string
-    totalAssigned: number
-    generated: number
-    printed: number
-    unsold: number
-    soldAwaitingUse: number
-    redeemed: number
-    expired: number
-    voided: number
-    assignedValueUgx: number
-    unsoldValueUgx: number
-    recordedSales: number
-    recordedSalesUgx: number
-    recordedFeesUgx: number
-    recordedNetUgx: number
-  }>
+  agents: HybridAgent[]
 }
 
 export default async function AgentsPage() {
-  const [data, voucherMetrics, session] = await Promise.all([
-    fetchApi<AgentsOverviewResponse>('/agents/overview'),
-    fetchApi<AgentVoucherMetricsResponse>('/agents/voucher-metrics'),
-    fetchApi<AdminSessionResponse>('/auth/me'),
+  const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  if (session?.user.role === 'VoucherAgent') redirect('/dashboard')
+
+  const [overview, packages] = await Promise.all([
+    fetchApi<HybridOverview>('/agent-sales/overview'),
+    fetchApi<PackageCatalogResponse>('/packages').catch(() => null),
   ])
   const canManageBusinessAgents = isVendorWorkspace(session?.user)
-  const agents = data?.agents ?? []
-  const recentCommissions = data?.recentCommissions ?? []
-  const voucherMetricsByAgent = new Map(
-    (voucherMetrics?.items ?? []).map((item) => [item.agentId, item]),
-  )
+  const activePackages = (packages?.items ?? []).filter((pkg) => pkg.status === 'ACTIVE')
 
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Agents</h1>
-          <p className="page-subtitle">Track every agent's assigned voucher stock, sales, usage, expiry, commission, and cash accountability.</p>
+          <p className="page-subtitle">Hybrid agent sales: printed vouchers, live cash activation, Mobile Money, commission and cash accountability.</p>
         </div>
-        {canManageBusinessAgents && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <RegisterAgentPanel />
-        </div>}
+        {canManageBusinessAgents && <RegisterAgentPanel />}
       </div>
 
-      <div className="stats-grid" style={{ marginBottom: 20 }}>
-        {[
-          { label: 'Active Agents', value: `${data?.summary.activeAgents ?? 0}`, color: 'blue' },
-          { label: 'Vouchers Assigned', value: `${voucherMetrics?.summary.totalAssigned ?? 0}`, color: 'purple' },
-          { label: 'Unsold Stock', value: `${voucherMetrics?.summary.unsold ?? 0}`, color: 'amber' },
-          { label: 'Recorded Sales', value: `${voucherMetrics?.summary.recordedSales ?? 0}`, color: 'green' },
-          { label: 'Vouchers Used', value: `${voucherMetrics?.summary.redeemed ?? 0}`, color: 'blue' },
-          { label: 'Expired', value: `${voucherMetrics?.summary.expired ?? 0}`, color: 'amber' },
-          { label: 'Voucher Sales', value: formatCurrency(voucherMetrics?.summary.recordedSalesUgx ?? data?.summary.voucherSalesUgx ?? 0), color: 'green' },
-          { label: 'Cash to Collect', value: formatCurrency(data?.summary.cashToCollectUgx ?? 0), color: 'purple' },
-        ].map((stat) => (
-          <div key={stat.label} className={`stat-card ${stat.color}`}>
-            <div className="stat-label">{stat.label}</div>
-            <div className={`stat-value ${stat.color}`}>{stat.value}</div>
-          </div>
-        ))}
+      <div className="stats-grid" style={{ marginBottom: 16 }}>
+        <Stat label="Active Agents" value={`${overview?.summary.activeAgents ?? 0}`} tone="blue" note="Enabled seller accounts" />
+        <Stat label="Agent Sales" value={formatCurrency(overview?.summary.totalSalesUgx ?? 0)} tone="green" note={`Mobile Money ${formatCurrency(overview?.summary.mobileMoneySalesUgx ?? 0)}`} />
+        <Stat label="Agent Commission" value={formatCurrency(overview?.summary.totalCommissionUgx ?? 0)} tone="purple" note="Earned across cash and online sales" />
+        <Stat label="Cash to Collect" value={formatCurrency(overview?.summary.cashToCollectUgx ?? 0)} tone="amber" note="After agent commission and settlements" />
       </div>
 
-      {!data && (
-        <div className="card">
-          <div className="empty-state">
-            <p>Agent data is unavailable right now. Once the API responds, this page will show live voucher seller metrics.</p>
-          </div>
-        </div>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 16 }}>
+        <ModeCard icon="⚡" title="Activate Now" text="Customer requests a 6-digit device code from the captive portal. The agent completes Cash or Mobile Money and the same device connects." />
+        <ModeCard icon="🎟" title="Voucher for Later" text="Generate one voucher only after Cash confirmation or provider-confirmed Mobile Money. The package starts when the voucher is redeemed." />
+        <ModeCard icon="🖨" title="Offline / PDF Vouchers" text="Your existing printed voucher workflow stays available for agents without reliable internet or smartphones." />
+      </div>
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Agent Voucher Inventory & Sales</span>
+          <div>
+            <span className="card-title">Agent Sales & Accountability</span>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>Cash limits block only new cash sales. Mobile Money can continue because the agent never holds that money.</div>
+          </div>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Agent</th>
-                <th>Territory</th>
-                <th>Assigned</th>
-                <th>Unsold</th>
-                <th>Sold</th>
-                <th>Used</th>
-                <th>Expired</th>
-                <th>Sales Value</th>
+                <th>Login</th>
+                <th>Commission</th>
+                <th>Permissions</th>
+                <th>Cash Limit</th>
+                <th>Sales</th>
                 <th>Cash to Collect</th>
+                <th>Offline Stock</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {agents.length === 0 && (
-                <tr>
-                  <td colSpan={11}>
-                    <div className="empty-state">
-                      <p>No agents or resellers have been onboarded yet.</p>
-                    </div>
-                  </td>
-                </tr>
+              {(!overview?.agents || overview.agents.length === 0) && (
+                <tr><td colSpan={10}><div className="empty-state"><p>No agents have been registered yet.</p></div></td></tr>
               )}
-              {agents.map((agent) => {
-                const metric = voucherMetricsByAgent.get(agent.id)
+              {(overview?.agents ?? []).map((agent) => {
+                const actionAgent = toAgentItem(agent)
                 return (
                   <tr key={agent.id}>
                     <td>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{agent.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{agent.code} - {agent.phoneNumber}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{formatTransactionType(agent.type)}</div>
-                    </td>
-                    <td>{agent.territory ?? 'Unassigned'}</td>
-                    <td>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{metric?.totalAssigned ?? 0}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatCurrency(metric?.assignedValueUgx ?? 0)}</div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{agent.name}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{agent.code} · {agent.phoneNumber}</div>
+                      {agent.territory && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{agent.territory}</div>}
                     </td>
                     <td>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{metric?.unsold ?? 0}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{metric?.generated ?? 0} generated · {metric?.printed ?? 0} printed</div>
+                      {agent.loginReady ? (
+                        <><span className="badge badge-success">Ready</span><div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>{agent.email}</div></>
+                      ) : <span className="badge badge-warning">No login</span>}
                     </td>
-                    <td>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{metric?.recordedSales ?? 0}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{metric?.soldAwaitingUse ?? 0} awaiting use</div>
+                    <td style={{ fontWeight: 700 }}>{(agent.commissionRateBps / 100).toFixed(1)}%<div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{formatCurrency(agent.commissionUgx)} earned</div></td>
+                    <td style={{ fontSize: 12 }}>
+                      <div>{agent.policy.cashEnabled ? '✓ Cash' : '— Cash'}</div>
+                      <div>{agent.policy.mobileMoneyEnabled ? '✓ Mobile Money' : '— Mobile Money'}</div>
+                      <div style={{ color: 'var(--text-muted)' }}>{agent.policy.allowedPackageIds.length ? `${agent.policy.allowedPackageIds.length} package(s)` : 'All packages'}</div>
                     </td>
-                    <td style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{metric?.redeemed ?? 0}</td>
+                    <td>{agent.cashLimitUgx > 0 ? formatCurrency(agent.cashLimitUgx) : 'No limit'}</td>
                     <td>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{metric?.expired ?? 0}</div>
-                      {(metric?.voided ?? 0) > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{metric?.voided} voided</div>}
+                      <div style={{ fontWeight: 700 }}>{formatCurrency(agent.totalSalesUgx)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>MM {formatCurrency(agent.mobileMoneySalesUgx)}</div>
                     </td>
-                    <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(metric?.recordedSalesUgx ?? agent.voucherSalesUgx ?? agent.lifetimeSalesUgx)}</td>
-                    <td>{formatCurrency(agent.cashToCollectUgx ?? Math.max(agent.lifetimeSalesUgx - agent.accruedCommissionUgx, 0))}</td>
+                    <td><strong style={{ color: agent.cashToCollectUgx > 0 ? 'var(--warn-fg)' : 'var(--success-fg)' }}>{formatCurrency(agent.cashToCollectUgx)}</strong></td>
+                    <td>{agent.availableVoucherStock}</td>
+                    <td><span className={getStatusBadgeClass(agent.status)}>{agent.status.toLowerCase()}</span></td>
                     <td>
-                      <span className={getStatusBadgeClass(agent.status)}>{agent.status.toLowerCase()}</span>
-                    </td>
-                    <td>
-                      <AgentActionsPanel agent={agent} canManage={canManageBusinessAgents} />
+                      <div style={{ display: 'grid', gap: 7 }}>
+                        {canManageBusinessAgents && (
+                          <AgentSalesControlsPanel
+                            agentId={agent.id}
+                            policy={agent.policy}
+                            cashLimitUgx={agent.cashLimitUgx}
+                            cashToCollectUgx={agent.cashToCollectUgx}
+                            packages={activePackages.map((pkg) => ({ id: pkg.id, name: pkg.name }))}
+                          />
+                        )}
+                        <AgentActionsPanel agent={actionAgent} canManage={canManageBusinessAgents} />
+                      </div>
                     </td>
                   </tr>
                 )
@@ -163,52 +154,54 @@ export default async function AgentsPage() {
           </table>
         </div>
       </div>
-
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Recent Agent Voucher Sales</span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Sale</th>
-                <th>Agent Pay</th>
-                <th>Status</th>
-                <th>Posted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentCommissions.length === 0 && (
-                <tr>
-                  <td colSpan={5}>
-                    <div className="empty-state">
-                      <p>No voucher sales have been attributed to agents yet.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {recentCommissions.map((commission) => (
-                <tr key={commission.id}>
-                  <td>{commission.agent.name}</td>
-                  <td>
-                    <div>{commission.sourceTransaction ? formatTransactionType(commission.sourceTransaction.type) : 'Voucher Sale'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {commission.sourceTransaction ? formatCurrency(commission.sourceTransaction.grossAmountUgx) : 'No linked sale'}
-                    </div>
-                  </td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(commission.amountUgx)}</td>
-                  <td>
-                    <span className={getStatusBadgeClass(commission.status)}>{commission.status.toLowerCase()}</span>
-                  </td>
-                  <td style={{ fontSize: 12 }}>{formatDate(commission.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </>
+  )
+}
+
+function toAgentItem(agent: HybridAgent): AgentItem {
+  return {
+    id: agent.id,
+    code: agent.code,
+    name: agent.name,
+    phoneNumber: agent.phoneNumber,
+    email: agent.email,
+    type: agent.type,
+    status: agent.status,
+    territory: agent.territory,
+    commissionRateBps: agent.commissionRateBps,
+    floatLimitUgx: agent.cashLimitUgx,
+    notes: encodeAgentSalesPolicy(agent.notes ?? '', agent.policy),
+    createdAt: new Date().toISOString(),
+    tenant: agent.tenant,
+    wallet: null,
+    walletBalanceUgx: 0,
+    availableFloatUgx: 0,
+    accruedCommissionUgx: agent.commissionUgx,
+    settledCommissionUgx: 0,
+    lifetimeSalesUgx: agent.totalSalesUgx,
+    voucherSalesUgx: agent.cashSalesUgx,
+    voucherAgentPayUgx: agent.commissionUgx,
+    cashToCollectUgx: agent.cashToCollectUgx,
+    lifetimeCommissionUgx: agent.commissionUgx,
+    totalDisbursedUgx: 0,
+  }
+}
+
+function Stat({ label, value, note, tone }: { label: string; value: string; note: string; tone: string }) {
+  return (
+    <div className={`stat-card ${tone}`}>
+      <div className="stat-label">{label}</div>
+      <div className={`stat-value ${tone}`}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 5 }}>{note}</div>
+    </div>
+  )
+}
+
+function ModeCard({ icon, title, text }: { icon: string; title: string; text: string }) {
+  return (
+    <div className="card" style={{ margin: 0, padding: 15 }}>
+      <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 7 }}><span style={{ fontSize: 20 }}>{icon}</span><strong>{title}</strong></div>
+      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 12.5, lineHeight: 1.55 }}>{text}</p>
+    </div>
   )
 }
