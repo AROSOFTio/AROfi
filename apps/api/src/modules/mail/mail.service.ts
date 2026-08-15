@@ -19,8 +19,8 @@ export class MailService {
   private getTransporter(): nodemailer.Transporter | null {
     const host = this.configService.get<string>('SMTP_HOST')
     const port = Number(this.configService.get<string>('SMTP_PORT') ?? '587')
-    const user = this.configService.get<string>('SMTP_USER')
-    const pass = this.configService.get<string>('SMTP_PASS')
+    const user = this.configService.get<string>('SMTP_USER') || this.configService.get<string>('SMTP_USERNAME')
+    const pass = this.configService.get<string>('SMTP_PASS') || this.configService.get<string>('SMTP_PASSWORD')
 
     if (!host || !user || !pass) {
       return null
@@ -63,7 +63,10 @@ export class MailService {
       return false
     }
 
-    const fromEmail = this.configService.get<string>('SMTP_FROM_EMAIL') ?? this.configService.get<string>('SMTP_USER')
+    const fromEmail =
+      this.configService.get<string>('SMTP_FROM_EMAIL') ??
+      this.configService.get<string>('SMTP_USER') ??
+      this.configService.get<string>('SMTP_USERNAME')
     const fromName = this.configService.get<string>('SMTP_FROM_NAME') ?? 'AROFi'
 
     try {
