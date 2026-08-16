@@ -6,7 +6,7 @@ comparisons and unresolved platform settings constants recreated by later
 gateway patches, validates the final ioTec OAuth/diagnostics output, restores
 the business-specific voucher QR route, installs the active-bundle disconnect
 guard, locks the operator-facing MikroTik onboarding command, then verifies the
-MikroTik captive/session and no-automatic-MAC-auth policies.
+MikroTik captive/session, seamless-close, and no-automatic-MAC-auth policies.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -27,6 +27,7 @@ BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
 ACTIVE_BUNDLE_GUARD = ROOT / "scripts/guard_active_bundle_disconnects.py"
 SIMPLE_ONBOARDING_GUARD = ROOT / "scripts/enforce_simple_mikrotik_onboarding.py"
 CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
+SEAMLESS_CAPTIVE_GUARD = ROOT / "scripts/forbid_customer_post_auth_pages.py"
 MAC_AUTH_GUARD = ROOT / "scripts/forbid_mikrotik_auto_mac_auth.py"
 
 
@@ -114,6 +115,12 @@ def verify_captive_flow_last() -> None:
     runpy.run_path(str(CAPTIVE_VERIFY), run_name="__main__")
 
 
+def enforce_seamless_captive_last() -> None:
+    if not SEAMLESS_CAPTIVE_GUARD.exists():
+        raise RuntimeError("Permanent seamless-captive guard is missing")
+    runpy.run_path(str(SEAMLESS_CAPTIVE_GUARD), run_name="__main__")
+
+
 def enforce_no_automatic_mac_auth_last() -> None:
     if not MAC_AUTH_GUARD.exists():
         raise RuntimeError("Permanent automatic-MAC-auth guard is missing")
@@ -131,10 +138,11 @@ def main() -> None:
     install_active_bundle_guard()
     lock_simple_mikrotik_onboarding()
     verify_captive_flow_last()
+    enforce_seamless_captive_last()
     enforce_no_automatic_mac_auth_last()
     print(
         "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
-        "disconnect guard, RouterOS 6/7 IP-first onboarding, captive-flow state, "
+        "disconnect guard, RouterOS 6/7 IP-first onboarding, seamless captive close, "
         "and no-automatic-MAC-auth policy verified."
     )
 
