@@ -9,6 +9,7 @@ import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initi
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
 import { MikrotikService } from './mikrotik.service'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
+import { RouterCaptiveUiV3Initializer } from './router-captive-ui-v3.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RouterLifecycleService } from './router-lifecycle.service'
 import { MikrotikController } from './mikrotik.controller'
@@ -27,6 +28,9 @@ import { RemoteProxyService } from './remote-proxy.service'
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
     MikrotikCompatibilityInitializer,
+    // Final runtime UX wrapper: it deliberately runs after the compatibility
+    // and legacy captive initializers so it sees their final login/status HTML.
+    RouterCaptiveUiV3Initializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,

@@ -15,6 +15,7 @@ import { PaymentRouterService } from './payment-router.service'
 import { PaymentWebhookService } from './payment-webhook.service'
 import { PesapalCollectionService } from './pesapal-collection.service'
 import { PhoneNumberService } from './phone-number.service'
+import { PortalPaymentFastPathInitializer } from './portal-payment-fastpath.initializer'
 import { WalletLedgerService } from './wallet-ledger.service'
 import { YoUgandaCollectionService } from './yo-uganda-collection.service'
 import { YoUgandaDisbursementService } from './yo-uganda-disbursement.service'
@@ -40,6 +41,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module'
     PhoneNumberService,
     WalletLedgerService,
     VoucherCodeService,
+    PortalPaymentFastPathInitializer,
   ],
   exports: [
     IotecPayService,
