@@ -57,7 +57,7 @@ const features = [
   { icon: Layers, title: 'Multi-Device Bundles', text: 'Sell packages that cover several devices per customer on one payment.' },
   { icon: ShieldCheck, title: 'Bank-Grade Security', text: 'Encrypted payments, isolated business workspaces, and secret-key protected withdrawals.' },
   { icon: Zap, title: 'Instant Withdrawals', text: 'Cash out to your approved mobile money number the moment you need it.' },
-  { icon: Router, title: 'Add Router Then Run Scripts', text: 'Finish signup first, add each MikroTik in the dashboard, then run the two required setup scripts.' },
+  { icon: Router, title: 'Add Router Then Run Scripts', text: 'Finish signup first, add your gateway or MikroTik router in the dashboard, then run the required setup scripts when ready.' },
   { icon: Wifi, title: 'Remote Router Access', text: 'Reach routers over a secure tunnel with open, close, and test controls under each router.' },
   { icon: Timer, title: 'Live Session Tracking', text: 'See who is online, for how long, and how much they have paid — in real time.' },
   { icon: Users, title: 'Independent Business Workspaces · Self-Onboard', text: 'Every operator gets an isolated branded portal. No IT team needed.' },
@@ -74,7 +74,7 @@ const faqs = [
   },
   {
     q: 'Which routers work with AROFi?',
-    a: 'Any MikroTik RouterOS device - RB951Ui, hAP ac2, CCR, CHR and more. Add the router in your dashboard, run the onboarding script first, then run the remote access script.',
+    a: 'MikroTik RouterOS devices are supported today, including RB951Ui, hAP ac2, CCR and CHR. AROFi is built to support more hotspot gateways over time, so the platform is not limited to MikroTik only.',
   },
   {
     q: 'Can I manage a router that isn’t on-site?',
@@ -106,9 +106,21 @@ const CONTACT_PHONE = '256787726388'
 const CONTACT_PHONE_DISPLAY = '+256 787 726 388'
 const CONTACT_EMAIL = 'support@arofi.net'
 
+type SignupPlan = 'FREE' | 'PRO'
+type PricingTier = {
+  key: SignupPlan | 'ENTERPRISE'
+  name: string
+  priceUgx: number
+  period: string | null
+  commissionSummary: string
+  routerLimit: string
+  features: string[]
+  featured: boolean
+  note?: string
+}
 // Mirrors SUBSCRIPTION_PLAN_CATALOG in apps/api/src/modules/subscription/subscription.service.ts
 // — keep these in sync if the plans/commission rates ever change there.
-const pricingTiers = [
+const pricingTiers: PricingTier[] = [
   {
     key: 'FREE',
     name: 'Starter',
@@ -128,6 +140,17 @@ const pricingTiers = [
     routerLimit: 'Unlimited routers and hotspots',
     features: ['Everything in Starter', '4% gateway fee', 'Free voucher sales', 'Custom logo and colours', 'SMS alerts', 'Smart TV package workflows', 'Router outage compensation alerts', '30-day analytics history', 'Priority support'],
     featured: true,
+  },
+  {
+    key: 'ENTERPRISE',
+    name: 'Enterprise',
+    priceUgx: 0,
+    period: null,
+    commissionSummary: 'No transaction charges',
+    routerLimit: 'Custom rollout and support',
+    features: ['No transaction charges', 'Custom enterprise onboarding', 'Dedicated support', 'Custom payment and router workflows', 'Advanced reporting options'],
+    featured: false,
+    note: 'Coming soon',
   },
 ]
 
@@ -177,7 +200,6 @@ const realScreenshots = [
 ]
 
 type PublicStats = { salesTodayUgx: number; activeSessions: number; liveRouters: number; routers: number }
-type SignupPlan = 'FREE' | 'PRO'
 type ModeTheme = 'light' | 'dark'
 type BlogPostSummary = {
   id: string
@@ -321,7 +343,7 @@ export default function RootPage() {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: 'AROFi WiFi Hotspot Billing Platform',
-    description: 'Cloud WiFi hotspot billing with MTN Mobile Money and Airtel Money collection for MikroTik router operators in Uganda.',
+    description: 'Cloud WiFi hotspot billing with MTN Mobile Money and Airtel Money collection for hotspot operators in Uganda, starting with MikroTik support and expanding to more routers.',
     brand: { '@type': 'Brand', name: 'AROFi' },
     offers: pricingTiers.map((tier) => ({
       '@type': 'Offer',
@@ -507,6 +529,7 @@ export default function RootPage() {
             {pricingTiers.map((tier, i) => (
               <Reveal key={tier.key} as="article" delay={i * 80} className={`home-pricing-card ${tier.featured ? 'featured' : ''}`}>
                 {tier.featured && <div className="home-pricing-badge">Most Popular</div>}
+                {tier.note && <div className="home-pricing-note">{tier.note}</div>}
                 <h3>{tier.name}</h3>
                 <div className="home-pricing-price">
                   <strong>UGX {tier.priceUgx.toLocaleString()}</strong>
@@ -522,9 +545,10 @@ export default function RootPage() {
                 <button
                   type="button"
                   className={`btn ${tier.featured ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => openRegister(tier.key as SignupPlan)}
+                  onClick={() => { if (tier.key !== 'ENTERPRISE') openRegister(tier.key) }}
+                  disabled={tier.key === 'ENTERPRISE'}
                 >
-                  {tier.priceUgx === 0 ? 'Register Free' : 'Get Started'}
+                  {tier.key === 'ENTERPRISE' ? 'Coming Soon' : tier.priceUgx === 0 ? 'Register Free' : 'Get Started'}
                 </button>
               </Reveal>
             ))}
@@ -640,15 +664,15 @@ export default function RootPage() {
       {/* SEO-only content — hidden from visual users and available to crawlers */}
       <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>
         <h2>Best WiFi Hotspot Billing Software in Uganda</h2>
-        <p>AROFi is Uganda&apos;s leading cloud-based WiFi hotspot billing and management platform built by AROSOFT Innovations Ltd, headquartered in Kampala. Designed for MikroTik router operators, ISPs, cyber cafés, hotels, schools, and community networks across Uganda and East Africa.</p>
+        <p>AROFi is Uganda&apos;s leading cloud-based WiFi hotspot billing and management platform built by AROSOFT Innovations Ltd, headquartered in Kampala. Designed for hotspot operators, ISPs, cyber cafés, hotels, schools, and community networks across Uganda and East Africa, starting with MikroTik support and expanding to more routers.</p>
         <h3>Accept MTN MoMo &amp; Airtel Money for WiFi Payments</h3>
         <p>AROFi natively integrates with MTN Mobile Money (MoMo) and Airtel Money Uganda — your customers pay directly from their phones. No cash handling, no manual reconciliation.</p>
-        <h3>MikroTik Hotspot Billing Made Easy</h3>
-        <p>Paste one RouterOS command and AROFi handles RADIUS authentication, captive portal redirect, session tracking, and billing automatically. Works with RB951Ui, hAP ac², CCR, CHR, and all RouterOS-based devices.</p>
+        <h3>Router Hotspot Billing Made Easy</h3>
+        <p>Add a supported hotspot gateway and AROFi handles RADIUS authentication, captive portal redirect, session tracking, and billing automatically. MikroTik RouterOS works today, with support planned for more router platforms.</p>
         <h3>How to Start a WiFi Business in Uganda</h3>
-        <p>Register free → Add your MikroTik router → Set packages → Start collecting MTN MoMo and Airtel Money. No upfront cost. AROFi earns a small commission only when you do.</p>
+        <p>Register free → Add your supported router → Set packages → Start collecting MTN MoMo and Airtel Money. No upfront cost. AROFi earns a small commission only when you do.</p>
         <h3>Business WiFi for Operators &amp; Resellers in Kampala and Uganda</h3>
-        <p>Run a WiFi reseller business across Kampala and Uganda. Each business gets its own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
+        <p>Run a WiFi reseller business across Kampala and Uganda. Each business gets its own isolated dashboard, branded captive portal, wallet, and mobile money collection. Agents self-onboard — no IT team needed. free wifi billing software Uganda free hotspot billing system router billing Uganda MikroTik billing Uganda MTN MoMo wifi Airtel Money hotspot best wifi software Uganda 2024 2025.</p>
       </div>
 
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={signupPlan} />

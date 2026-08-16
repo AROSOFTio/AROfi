@@ -71,7 +71,7 @@ export default function PremiumHero({
         </h1>
 
         <p className="ph-lead">
-          MikroTik hotspot billing with MTN MoMo, Airtel Money, vouchers, wallets and live router control.
+          Hotspot billing for MikroTik and other supported gateways, with MTN MoMo, Airtel Money, vouchers, wallets and live router control.
           Everything you need to launch, manage and scale — in minutes.
         </p>
 
