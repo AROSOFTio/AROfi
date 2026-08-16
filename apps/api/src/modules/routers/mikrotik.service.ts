@@ -202,10 +202,16 @@ export class MikrotikService {
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ??
       this.configService.get<string>('RADIUS_SERVER_HOST') ??
       '127.0.0.1'
+    const normalizedHost = this.normalizeHostForRouterOs(configuredHost)
     const host = this.resolveRouterOsRadiusAddress(configuredHost)
-    const authPort = Number.parseInt(this.configService.get<string>('RADIUS_AUTH_PORT') ?? '1812', 10)
+    const authPort = Number.parseInt(
+      this.configService.get<string>('RADIUS_AUTH_PORT') ??
+        (normalizedHost === 'dev.arofi.net' ? '1814' : '1812'),
+      10,
+    )
     const accountingPort = Number.parseInt(
-      this.configService.get<string>('RADIUS_ACCOUNTING_PORT') ?? '1813',
+      this.configService.get<string>('RADIUS_ACCOUNTING_PORT') ??
+        (normalizedHost === 'dev.arofi.net' ? '1815' : '1813'),
       10,
     )
     const secret =
@@ -242,6 +248,10 @@ export class MikrotikService {
     ]
       .map((value) => this.normalizeHostForRouterOs(value))
       .find((value) => value && net.isIP(value))
+
+    if (!explicitIp && host === 'dev.arofi.net') {
+      return '95.111.234.34'
+    }
 
     return explicitIp ?? host
   }

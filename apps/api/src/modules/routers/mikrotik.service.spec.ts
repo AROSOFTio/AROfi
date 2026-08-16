@@ -68,6 +68,20 @@ describe('MikrotikService', () => {
     expect(script).not.toContain('/ip dhcp-client add interface=ether1')
   })
 
+  it('uses the isolated dev RADIUS endpoint when dev host env is present without explicit ports', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        RADIUS_PUBLIC_HOST: 'dev.arofi.net',
+        RADIUS_SHARED_SECRET: 'dev_radius_shared_secret',
+      }),
+    )
+
+    const radius = service.getRadiusServerConfig()
+
+    expect(radius.host).toBe('95.111.234.34')
+    expect(radius.authPort).toBe(1814)
+    expect(radius.accountingPort).toBe(1815)
+  })
   it('builds an additive customer Wi-Fi hotspot on an isolated bridge without disturbing WAN or admin login', () => {
     const service = new MikrotikService(new ConfigService({}))
 
