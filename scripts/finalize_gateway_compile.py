@@ -5,9 +5,10 @@ This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
 gateway patches, validates the final ioTec OAuth/diagnostics output, restores
 the business-specific voucher QR route, installs the active-bundle disconnect
-guard, locks the operator-facing MikroTik onboarding command, finalizes the
-captive portal once, then verifies the MikroTik captive/session, seamless-close,
-and no-automatic-MAC-auth policies.
+guard, finalizes the captive portal once, then locks the operator-facing
+MikroTik onboarding command into its proven raw-IP-first form, and finally
+verifies the MikroTik captive/session, seamless-close, and no-automatic-MAC-auth
+policies.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -144,14 +145,17 @@ def main() -> None:
     validate_iotec_final_state()
     enforce_business_qr()
     install_active_bundle_guard()
-    lock_simple_mikrotik_onboarding()
+    # Captive UI normalization can touch buildOneRunCommand. Run it first, then
+    # lock the installer last so no later patch can flip the proven raw-IP-first
+    # bootstrap back to hostname/TLS-first.
     finalize_captive_portal_once()
+    lock_simple_mikrotik_onboarding()
     verify_captive_flow_last()
     enforce_seamless_captive_last()
     enforce_no_automatic_mac_auth_last()
     print(
         "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
-        "disconnect guard, RouterOS 6/7 IP-first onboarding, Smart-TV captive layout, "
+        "disconnect guard, RouterOS 6/7 raw-IP-first onboarding, Smart-TV captive layout, "
         "seamless captive close, and no-automatic-MAC-auth policy verified."
     )
 
