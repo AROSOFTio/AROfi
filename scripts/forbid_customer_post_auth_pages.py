@@ -8,11 +8,13 @@ silently restored when the same device comes back into Wi-Fi coverage.
 """
 
 from pathlib import Path
+import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "apps/api/src/modules/routers/router-captive-ui-v3.initializer.ts"
 ALOGIN = ROOT / "apps/api/src/modules/routers/mikrotik-alogin.controller.ts"
 FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
+TEMPLATE_JS_GUARD = ROOT / "scripts/forbid_routeros_template_js_breakage.py"
 
 
 def fail(message: str) -> None:
@@ -20,7 +22,7 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
-    for path in (UI, ALOGIN, FLOW):
+    for path in (UI, ALOGIN, FLOW, TEMPLATE_JS_GUARD):
         if not path.exists():
             fail(f"required file missing: {path.relative_to(ROOT)}")
 
@@ -74,6 +76,11 @@ def main() -> None:
     ):
         if marker not in flow:
             fail(f"missing {label}: {marker}")
+
+    # This second permanent guard specifically protects browser JavaScript from
+    # RouterOS template expansion. It is chained here so every existing build
+    # path that enforces the seamless captive contract also enforces JS safety.
+    runpy.run_path(str(TEMPLATE_JS_GUARD), run_name="__main__")
 
     print(
         "SEAMLESS_CAPTIVE_ONLY verified: no Connected/Disconnect/logout/resume customer page, "
