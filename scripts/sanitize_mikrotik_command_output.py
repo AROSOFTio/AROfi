@@ -159,23 +159,41 @@ def patch_mikrotik_service(text: str) -> str:
     # matches dns-name aborts provisioning when the matching row is dynamic.
     # Delete only the static AROFi-owned row (identified by our comment), and
     # make both cleanup and add non-fatal so a RouterOS dynamic row can coexist.
-    old_dns_block = """      ...(input.dnsName ? [
+    dns_blocks = [
+        (
+            """      ...(input.dnsName ? [
         `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
         `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
       ] : []),
-"""
-    new_dns_block = """      ...(input.dnsName ? [
+""",
+            """      ...(input.dnsName ? [
         `:do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}`,
         `:do { /ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway" } on-error={}`,
       ] : []),
-"""
-    if ':do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}' not in text:
-        text = replace_once(
-            text,
-            old_dns_block,
-            new_dns_block,
-            "dynamic-safe hotspot DNS cleanup",
-        )
+""",
+        ),
+        (
+            """      ...(input.dnsName ? [
+        `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway"`,
+        `:do { /ip dns cache flush } on-error={}`,
+      ] : []),
+""",
+            """      ...(input.dnsName ? [
+        `:do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}`,
+        `:do { /ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway" } on-error={}`,
+        `:do { /ip dns cache flush } on-error={}`,
+      ] : []),
+""",
+        ),
+    ]
+    matched = False
+    for old_dns_block, new_dns_block in dns_blocks:
+        if old_dns_block in text:
+            text = text.replace(old_dns_block, new_dns_block, 1)
+            matched = True
+    if not matched and '/ip dns static remove [find name="${this.escape(input.dnsName)}"]' in text:
+        raise RuntimeError("dynamic-safe hotspot DNS cleanup: unsafe DNS removal remains but no known block matched")
 
     required = [
         'dst-address="0.0.0.0/0" active=yes',

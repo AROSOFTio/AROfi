@@ -73,8 +73,8 @@ def main() -> None:
         'address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,'
     )
     new_dns_add = (
-        '`/ip dns static add name="${this.escape(input.dnsName)}" '
-        'address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway"`,\n'
+        '`:do { /ip dns static add name="${this.escape(input.dnsName)}" '
+        'address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway" } on-error={}`,\n'
         '        `:do { /ip dns cache flush } on-error={}`,'
     )
     if new_dns_add not in text:
