@@ -35,6 +35,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/fix_support_ticket_workspace.py \
     && python3 scripts/apply_router_wan_port_support.py \
     && python3 scripts/sanitize_mikrotik_command_output.py \
+    && python3 scripts/fix_routeros6_7_provisioning.py \
     && python3 scripts/apply_mikrotik_background_install.py \
     && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_router_presence_and_access_lifecycle.py \
@@ -137,37 +138,3 @@ EXPOSE 3000
 EXPOSE 31000-31100
 ENV SERVICE_NAME=all
 ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/arofi_dev?schema=public}
-
-CMD if [ "$SERVICE_NAME" = "all" ]; then \
-      sh scripts/start-all.sh; \
-    elif [ "$SERVICE_NAME" = "api" ]; then \
-      exec sh scripts/start-api.sh; \
-    elif [ "$SERVICE_NAME" = "admin" ]; then \
-      server="$(find /usr/src/app/standalone/admin -type f -path '*/apps/admin-web/server.js' -print -quit)"; \
-      if [ -z "$server" ] && [ -f /usr/src/app/standalone/admin/server.js ]; then server=/usr/src/app/standalone/admin/server.js; fi; \
-      test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
-    elif [ "$SERVICE_NAME" = "portal" ]; then \
-      server="$(find /usr/src/app/standalone/portal -type f -path '*/apps/portal-web/server.js' -print -quit)"; \
-      if [ -z "$server" ] && [ -f /usr/src/app/standalone/portal/server.js ]; then server=/usr/src/app/standalone/portal/server.js; fi; \
-      test -f "$server" && cd "$(dirname "$server")" && PORT=3000 HOSTNAME=0.0.0.0 exec node server.js; \
-    elif [ "$SERVICE_NAME" = "nginx" ]; then \
-      cp config/nginx.split.conf /etc/nginx/nginx.conf && \
-      exec nginx -g 'daemon off;'; \
-    else \
-      echo "Invalid SERVICE_NAME: $SERVICE_NAME"; exit 1; \
-    fi
-
-# Keep separate image names/containers for Coolify, but use the last proven
-# all-in-one runtime payload for each target. This removes the fragile divergent
-# runtime stages while preserving independently restartable API/Admin/Portal/Nginx services.
-FROM runtime AS api-runtime
-ENV SERVICE_NAME=api
-
-FROM runtime AS admin-runtime
-ENV SERVICE_NAME=admin
-
-FROM runtime AS portal-runtime
-ENV SERVICE_NAME=portal
-
-FROM runtime AS nginx-runtime
-ENV SERVICE_NAME=nginx
