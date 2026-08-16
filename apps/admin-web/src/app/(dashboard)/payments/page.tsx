@@ -1,6 +1,7 @@
 import { PaymentOverviewResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
-import { formatCurrency, formatDate, formatDuration, getStatusBadgeClass } from '@/lib/format'
+import { PaymentsTable } from '@/components/PaymentsTable'
+import { formatCurrency, formatDate, getStatusBadgeClass } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,66 +37,7 @@ export default async function PaymentsPage() {
         <div className="card-header">
           <span className="card-title">Mobile Money Payments</span>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Business</th>
-                <th>Package</th>
-                <th>Phone</th>
-                <th>Network</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Activation</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.length === 0 && (
-                <tr>
-                  <td colSpan={9}>
-                    <div className="empty-state">
-                      <p>No payment requests recorded yet.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {payments.map((payment) => (
-                <tr key={payment.id}>
-                  <td>
-                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{payment.externalReference}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{payment.providerReference ?? 'Awaiting provider ref'}</div>
-                  </td>
-                  <td>{payment.tenant.name}</td>
-                  <td>
-                    <div>{payment.package.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{formatDuration(payment.package.durationMinutes)}</div>
-                  </td>
-                  <td>{payment.phoneNumber}</td>
-                  <td>{payment.network}</td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{formatCurrency(payment.amountUgx)}</td>
-                  <td>
-                    <span className={getStatusBadgeClass(payment.status)}>{payment.status.toLowerCase()}</span>
-                  </td>
-                  <td>
-                    {payment.activation ? (
-                      <div>
-                        <span className={getStatusBadgeClass(payment.activation.status)}>{payment.activation.status.toLowerCase()}</span>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                          Until {formatDate(payment.activation.endsAt)}
-                        </div>
-                      </div>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>Pending</span>
-                    )}
-                  </td>
-                  <td style={{ fontSize: 12 }}>{formatDate(payment.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <PaymentsTable initialPayments={payments} />
       </div>
 
       <div className="card">

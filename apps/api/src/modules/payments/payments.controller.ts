@@ -165,6 +165,14 @@ export class PaymentsController {
 
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.paymentsRead)
+  @Post(':paymentId/reconcile')
+  reconcilePayment(@CurrentUser() user: AuthenticatedAdminUser, @Param('paymentId') paymentId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.paymentsService.checkPaymentStatus(paymentId, tenantId)
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.paymentsRead)
   @Get(':paymentId')
   getPayment(@CurrentUser() user: AuthenticatedAdminUser, @Param('paymentId') paymentId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
