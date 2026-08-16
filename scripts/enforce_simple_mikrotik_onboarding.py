@@ -6,8 +6,15 @@ and 7, try the known raw public HTTP/IP bootstrap first, retain configured HTTPS
 as an immediate fallback, import in the foreground, preserve selected-WAN setup,
 and never reintroduce artificial 20-second cooldowns.
 
-Fresh/rebooted routers can have a 1970 clock and broken DNS. The raw-IP path is
-therefore intentionally first: it does not depend on DNS or TLS. The Admin UI
+RouterOS 6 reset/no-defaults devices can have no active WAN at all. AUTO mode
+therefore has one deliberately narrow recovery path: only RouterOS major 6,
+only when there is no active default route, only when ether1 exists, has no
+static IP, is not a bridge member, and has no PPPoE client. In that exact case
+AROFi enables/creates a DHCP client on ether1 and waits briefly for a route.
+RouterOS 7 never enters this compatibility branch.
+
+Fresh/rebooted routers can also have a 1970 clock and broken DNS. The raw-IP path
+is therefore intentionally first: it does not depend on DNS or TLS. The Admin UI
 uses the same IP-first helper and may reject stale API-provided commands when
 they do not contain the known fallback path.
 '''
@@ -28,6 +35,31 @@ FORBIDDEN_BOOTSTRAP_MARKERS = (
     ":delay 20s",
 )
 
+ROUTEROS6_RESET_WAN_TS = (
+    "':local arofiRosVersion [/system resource get version]; "
+    ":local arofiRosMajor [:pick $arofiRosVersion 0 1]; "
+    ":if ($arofiRosMajor = \"6\") do={ "
+    ":if ([:len [/ip route find dst-address=\"0.0.0.0/0\" active=yes]] = 0) do={ "
+    ":if ([:len [/interface find where name=\"ether1\"]] > 0) do={ "
+    ":if ([:len [/ip address find where interface=\"ether1\"]] = 0) do={ "
+    ":if ([:len [/interface bridge port find where interface=\"ether1\"]] = 0) do={ "
+    ":if ([:len [/interface pppoe-client find where interface=\"ether1\"]] = 0) do={ "
+    ":local arofiRos6Dhcp [/ip dhcp-client find where interface=\"ether1\"]; "
+    ":if ([:len $arofiRos6Dhcp] = 0) do={ "
+    ":do { /ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment=\"AROFi RouterOS6 reset WAN\" } on-error={} "
+    "} else={ :do { /ip dhcp-client set $arofiRos6Dhcp add-default-route=yes use-peer-dns=yes disabled=no } on-error={} }; "
+    ":local arofiRos6Wait 0; "
+    ":while ($arofiRos6Wait < 12 && [:len [/ip route find dst-address=\"0.0.0.0/0\" active=yes]] = 0) do={ "
+    ":delay 1s; :set arofiRos6Wait ($arofiRos6Wait + 1) "
+    "} "
+    "} "
+    "} "
+    "} "
+    "} "
+    "} "
+    "}; '"
+)
+
 
 def patch_api_onboarding() -> None:
     text = MIKROTIK.read_text(encoding="utf-8")
@@ -41,6 +73,32 @@ def patch_api_onboarding() -> None:
     replacement = r'''  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
     const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
     const fallbackUrl = `http://95.111.234.34/api/mikrotik/script/${this.escape(registrationKey)}`
+    const requestedWanInterface = this.normalizeWanInterface(wanInterface)
+    const selectedWanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)
+    const routerOs6AutoWanBootstrap =
+      ':local arofiRosVersion [/system resource get version]; ' +
+      ':local arofiRosMajor [:pick $arofiRosVersion 0 1]; ' +
+      ':if ($arofiRosMajor = "6") do={ ' +
+        ':if ([:len [/ip route find dst-address="0.0.0.0/0" active=yes]] = 0) do={ ' +
+          ':if ([:len [/interface find where name="ether1"]] > 0) do={ ' +
+            ':if ([:len [/ip address find where interface="ether1"]] = 0) do={ ' +
+              ':if ([:len [/interface bridge port find where interface="ether1"]] = 0) do={ ' +
+                ':if ([:len [/interface pppoe-client find where interface="ether1"]] = 0) do={ ' +
+                  ':local arofiRos6Dhcp [/ip dhcp-client find where interface="ether1"]; ' +
+                  ':if ([:len $arofiRos6Dhcp] = 0) do={ ' +
+                    ':do { /ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi RouterOS6 reset WAN" } on-error={} ' +
+                  '} else={ :do { /ip dhcp-client set $arofiRos6Dhcp add-default-route=yes use-peer-dns=yes disabled=no } on-error={} }; ' +
+                  ':local arofiRos6Wait 0; ' +
+                  ':while ($arofiRos6Wait < 12 && [:len [/ip route find dst-address="0.0.0.0/0" active=yes]] = 0) do={ ' +
+                    ':delay 1s; :set arofiRos6Wait ($arofiRos6Wait + 1) ' +
+                  '} ' +
+                '} ' +
+              '} ' +
+            '} ' +
+          '} ' +
+        '} ' +
+      '}; '
+    const wanBootstrap = requestedWanInterface ? selectedWanBootstrap : routerOs6AutoWanBootstrap
     const bootstrap =
       ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
       ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
@@ -48,6 +106,7 @@ def patch_api_onboarding() -> None:
       ':delay 1s; '
 
     return (
+      wanBootstrap +
       bootstrap +
       ':local arofiOk 0; :local attempts 0; ' +
       ':while ($attempts < 3) do={ ' +
@@ -105,6 +164,16 @@ def patch_api_onboarding() -> None:
         "/ip dns set servers=8.8.8.8,1.1.1.1",
         '[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]',
         '[:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]',
+        "const requestedWanInterface = this.normalizeWanInterface(wanInterface)",
+        "const selectedWanBootstrap = this.buildSelectedWanBootstrap(requestedWanInterface)",
+        "const wanBootstrap = requestedWanInterface ? selectedWanBootstrap : routerOs6AutoWanBootstrap",
+        ':if ($arofiRosMajor = "6") do={',
+        '[/ip route find dst-address="0.0.0.0/0" active=yes]',
+        '[/ip address find where interface="ether1"]',
+        '[/interface bridge port find where interface="ether1"]',
+        '[/interface pppoe-client find where interface="ether1"]',
+        '/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi RouterOS6 reset WAN"',
+        "wanBootstrap +",
         "/tool fetch url=",
         "check-certificate=no",
         '/import file-name="arofi-setup.rsc"',
@@ -114,6 +183,11 @@ def patch_api_onboarding() -> None:
         if marker not in method:
             raise RuntimeError(f"IP-first RouterOS 6/7 onboarding marker missing: {marker}")
 
+    auto_gate = method.find(':if ($arofiRosMajor = "6") do={')
+    auto_dhcp = method.find('/ip dhcp-client add interface=ether1')
+    if auto_gate < 0 or auto_dhcp < 0 or auto_gate >= auto_dhcp:
+        raise RuntimeError("RouterOS 6 AUTO-WAN DHCP recovery is not protected by the RouterOS 6 version gate")
+
     http_idx = method.find(http_fetch)
     https_idx = method.find(https_fetch)
     if http_idx < 0 or https_idx < 0 or http_idx >= https_idx:
@@ -122,11 +196,50 @@ def patch_api_onboarding() -> None:
     MIKROTIK.write_text(updated, encoding="utf-8")
 
 
+def patch_admin_routeros6_bootstrap(text: str) -> str:
+    constant_marker = "const AROFI_HTTP_FALLBACK_ORIGIN = 'http://95.111.234.34/api'\n"
+    if constant_marker not in text:
+        raise RuntimeError("Admin raw-IP fallback origin is missing")
+
+    if "const ROUTEROS6_RESET_WAN_BOOTSTRAP" not in text:
+        routeros6_constant = (
+            constant_marker
+            + "const ROUTEROS6_RESET_WAN_BOOTSTRAP = "
+            + ROUTEROS6_RESET_WAN_TS
+            + "\n"
+        )
+        text = text.replace(constant_marker, routeros6_constant, 1)
+
+    old_prefix = "  return `${DNS_BOOTSTRAP}:local arofiOk 0;"
+    new_prefix = "  return `${ROUTEROS6_RESET_WAN_BOOTSTRAP}${DNS_BOOTSTRAP}:local arofiOk 0;"
+    if new_prefix not in text:
+        if old_prefix not in text:
+            raise RuntimeError("Admin RouterOS download helper bootstrap prefix is missing")
+        text = text.replace(old_prefix, new_prefix, 1)
+
+    for marker in (
+        "const ROUTEROS6_RESET_WAN_BOOTSTRAP",
+        ':if ($arofiRosMajor = "6") do={',
+        '[/ip route find dst-address="0.0.0.0/0" active=yes]',
+        '[/ip address find where interface="ether1"]',
+        '[/interface bridge port find where interface="ether1"]',
+        '[/interface pppoe-client find where interface="ether1"]',
+        'comment="AROFi RouterOS6 reset WAN"',
+        "${ROUTEROS6_RESET_WAN_BOOTSTRAP}${DNS_BOOTSTRAP}",
+    ):
+        if marker not in text:
+            raise RuntimeError(f"Admin RouterOS 6 reset-WAN bootstrap marker missing: {marker}")
+
+    return text
+
+
 def patch_admin_fallback() -> None:
     text = ADMIN_COMMANDS.read_text(encoding="utf-8")
 
     if "function buildReliableRouterOsDownload(" not in text:
         raise RuntimeError("Admin RouterOS download helper is missing")
+
+    text = patch_admin_routeros6_bootstrap(text)
 
     pattern = re.compile(
         r"export function buildSetupFallbackCommand\(registrationKey: string(?:, origin\?: string)?\) \{.*?\n\}",
@@ -178,6 +291,8 @@ def patch_admin_fallback() -> None:
     https_idx = helper.find('url="${httpsUrl}"')
     if http_idx < 0 or https_idx < 0 or http_idx >= https_idx:
         raise RuntimeError("Admin RouterOS download helper must attempt raw HTTP/IP before HTTPS")
+    if "${ROUTEROS6_RESET_WAN_BOOTSTRAP}${DNS_BOOTSTRAP}" not in helper:
+        raise RuntimeError("Admin download helper lost the RouterOS 6 reset-WAN bootstrap")
 
     ADMIN_COMMANDS.write_text(updated, encoding="utf-8")
 
@@ -233,7 +348,7 @@ def patch_unit_test() -> None:
         r"  it\('buildOneRunCommand:.*?\n  \}\)\n(?=\}\)\s*$)",
         flags=re.S,
     )
-    test_replacement = r'''  it('buildOneRunCommand: tries raw public HTTP/IP before hostname HTTPS', () => {
+    test_replacement = r'''  it('buildOneRunCommand: keeps RouterOS 6 reset WAN recovery behind a v6-only gate', () => {
     const service = new MikrotikService(
       new ConfigService({
         API_PUBLIC_HOST: 'arofi.net',
@@ -243,6 +358,13 @@ def patch_unit_test() -> None:
 
     const cmd = service.buildOneRunCommand('test-reg-key')
 
+    expect(cmd).toContain(':local arofiRosMajor [:pick $arofiRosVersion 0 1]')
+    expect(cmd).toContain(':if ($arofiRosMajor = "6") do={')
+    expect(cmd).toContain('[/ip route find dst-address="0.0.0.0/0" active=yes]')
+    expect(cmd).toContain('[/ip address find where interface="ether1"]')
+    expect(cmd).toContain('[/interface bridge port find where interface="ether1"]')
+    expect(cmd).toContain('[/interface pppoe-client find where interface="ether1"]')
+    expect(cmd).toContain('/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi RouterOS6 reset WAN"')
     expect(cmd).toContain('[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]')
     expect(cmd).toContain('primary-ntp=162.159.200.1')
     const httpIdx = cmd.indexOf('http://95.111.234.34/api/mikrotik/script/test-reg-key')
@@ -256,6 +378,10 @@ def patch_unit_test() -> None:
     expect(cmd).toContain('/import file-name="arofi-setup.rsc"')
     expect(cmd).not.toContain('waiting 20 seconds')
     expect(cmd).not.toContain(':delay 20s')
+
+    const explicitWan = service.buildOneRunCommand('test-reg-key', 'ether2')
+    expect(explicitWan).toContain(':local arofiSelectedWan "ether2"')
+    expect(explicitWan).toContain('AROFi: selected ISP/WAN port ether2 is ready.')
   })
 '''
 
@@ -266,12 +392,16 @@ def patch_unit_test() -> None:
         )
 
     for marker in (
-        "tries raw public HTTP/IP before hostname HTTPS",
+        "keeps RouterOS 6 reset WAN recovery behind a v6-only gate",
+        ':if ($arofiRosMajor = \"6\") do={',
+        "AROFi RouterOS6 reset WAN",
         "http://95.111.234.34/api/mikrotik/script/test-reg-key",
         "https://arofi.net/api/mikrotik/script/test-reg-key",
         "expect(httpIdx).toBeLessThan(httpsIdx)",
         "expect(cmd.match(/\\/tool fetch/g)).toHaveLength(2)",
         "expect(cmd).toContain(':while ($attempts < 3)')",
+        "service.buildOneRunCommand('test-reg-key', 'ether2')",
+        ':local arofiSelectedWan \"ether2\"',
         "expect(cmd).not.toContain('waiting 20 seconds')",
     ):
         if marker not in spec:
@@ -291,9 +421,10 @@ def main() -> None:
     patch_unit_test()
 
     print(
-        "MikroTik onboarding verified end-to-end: RouterOS 6/7 raw-IP-first bootstrap, "
-        "HTTPS fallback, foreground import, and no 20-second cooldown; Admin rejects "
-        "stale installer commands and uses the same reliable raw-IP-first fallback."
+        "MikroTik onboarding verified end-to-end: selected-WAN preparation is preserved, "
+        "RouterOS 6 AUTO mode can safely recover ether1 DHCP after a blank reset, RouterOS 7 "
+        "is outside that compatibility branch, raw-IP-first + HTTPS fallback remain guarded, "
+        "foreground import remains intact, and Admin uses the same protected fallback."
     )
 
 
