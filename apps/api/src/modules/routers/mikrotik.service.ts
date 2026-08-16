@@ -407,9 +407,9 @@ export class MikrotikService {
       ...this.buildWalledGarden(input.portalHosts ?? []),
       `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,
       `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,
-      // Also allow the raw HTTP-fallback IP by address so captive-portal
-      // mini-browsers can reach the API even when HTTPS or hostname DNS fails.
-      ...this.buildWalledGardenIp(this.resolveHttpCallbackBaseUrl()),
+      // Also allow raw public API IPs so captive-portal mini-browsers can
+      // reach the API even when hostname matching or intercepted DNS is flaky.
+      ...this.buildWalledGardenIps(this.resolveHttpCallbackBaseUrl()),
       ``,
       `# 4b. Install the AROFi captive portal redirect page`,
       ...loginHtmlInstallScript,
@@ -605,18 +605,33 @@ export class MikrotikService {
     ]
   }
 
-  // Adds raw-IP walled-garden entries (/ip hotspot walled-garden ip) for the
-  // HTTP fallback host so captive-portal mini-browsers (Android/iOS NCSI) can
-  // reach the API even when HTTPS fails or the DNS entry for the hostname is
-  // not yet resolving. Hostname-only walled-garden entries are useless when
-  // the client is asking by IP.
-  private buildWalledGardenIp(httpCallbackBaseUrl: string) {
-    const match = httpCallbackBaseUrl.match(/^https?:\/\/([\d.]+)(:\d+)?(\/|$)/)
-    if (!match) return [] // not an IP-literal URL (e.g. it's a hostname) — hostname entry covers it
-    const ip = match[1]
+  // Adds raw-IP walled-garden entries (/ip hotspot walled-garden ip) for public
+  // AROFi API addresses. Hostname-only walled-garden entries are fragile on
+  // captive clients when DNS is intercepted, cached, or the AP chain hides the
+  // original request. Keeping the public IP allowed pre-auth makes voucher,
+  // trial and payment APIs reachable without granting open internet.
+  private buildWalledGardenIps(httpCallbackBaseUrl: string) {
+    const candidates = [
+      httpCallbackBaseUrl.match(/^https?:\/\/([\d.]+)(:\d+)?(\/|$)/)?.[1],
+      this.configService.get<string>('MIKROTIK_CALLBACK_PUBLIC_IP'),
+      this.configService.get<string>('API_PUBLIC_IP'),
+      this.configService.get<string>('PORTAL_PUBLIC_IP'),
+      this.configService.get<string>('SERVER_PUBLIC_IP'),
+      this.configService.get<string>('VPS_PUBLIC_IP'),
+      this.configService.get<string>('RADIUS_PUBLIC_IP'),
+    ]
+      .map((value) => this.normalizeHostForRouterOs(value))
+      .filter((value): value is string => Boolean(value) && net.isIP(value) !== 0)
+
+    const ips = Array.from(new Set(candidates))
+    if (ips.length === 0) return []
+
     return [
       `:do { /ip hotspot walled-garden ip remove [find comment="AROFi portal ip"] } on-error={}`,
-      `:do { /ip hotspot walled-garden ip add dst-address=${ip}/32 action=accept comment="AROFi portal ip" } on-error={}`,
+      ...ips.map(
+        (ip) =>
+          `:do { /ip hotspot walled-garden ip add dst-address=${ip}/32 action=accept comment="AROFi portal ip" } on-error={}`,
+      ),
     ]
   }
 
@@ -968,7 +983,7 @@ export class MikrotikService {
     var pkgs=[],selId=null,selTv=false;
     // Try HTTPS API first; if the captive-portal mini-browser blocks it (clock
     // wrong, cert issue, CORS), retry the same path over plain HTTP fallback IP.
-    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(e)ajax(m,APIFB+p,d,cb);else cb(null,r);});}
+    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(!e){cb(null,r);return;}if(e.network){ajax(m,APIFB+p,d,function(fe,fr){if(!fe){cb(null,fr);return;}cb(fe||e);});return;}cb(e);});}
 
     window.onload=function(){
       var search=window.location.search;
@@ -1006,13 +1021,20 @@ export class MikrotikService {
       x.open(method, url, true);
       if(data) x.setRequestHeader('Content-Type','application/json');
       x.onload=function(){
-        try{
-          var j=JSON.parse(x.responseText);
-          if(x.status>=200&&x.status<300) cb(null,j);
-          else cb(new Error(j.message||'HTTP '+x.status));
-        }catch(e){cb(new Error('Parse err'));}
+        var raw=x.responseText||'',j=null;
+        try{j=raw?JSON.parse(raw):{};}catch(e){}
+        if(x.status>=200&&x.status<300){cb(null,j||{});return;}
+        var msg=j&&j.message;
+        if(Object.prototype.toString.call(msg)==='[object Array]')msg=msg.join('. ');
+        if(!msg&&j&&j.error)msg=j.error;
+        if(!msg&&raw&&raw.charAt(0)!=='<')msg=raw.substring(0,240);
+        if(!msg&&x.status===429)msg='Too many voucher attempts. Wait one minute and try again.';
+        if(!msg)msg='Voucher request failed (HTTP '+x.status+').';
+        var er=new Error(String(msg));er.status=x.status;cb(er);
       };
-      x.onerror=function(){cb(new Error('Network err'));};
+      x.onerror=function(){var er=new Error('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.');er.network=true;cb(er);};
+      x.ontimeout=function(){var er=new Error('The voucher service took too long to respond. Try again.');er.network=true;cb(er);};
+      x.timeout=12000;
       x.send(data?JSON.stringify(data):null);
     }
 

@@ -193,6 +193,45 @@ describe('MikrotikService', () => {
     expect(html).toContain('multiList')
   })
 
+  it('only falls back to the HTTP API when the captive browser has a network failure', () => {
+    const service = new MikrotikService(new ConfigService({ PORTAL_PUBLIC_HOST: 'wifi.example.com' }))
+
+    const html = service.buildLoginHtml('router-key-123', 'http://tenantname.wifi/login')
+
+    expect(html).toContain('if(e.network){ajax(m,APIFB+p,d')
+    expect(html).toContain('var er=new Error(String(msg));er.status=x.status;cb(er);')
+    expect(html).toContain('er.network=true;cb(er);')
+    expect(html).not.toContain('if(e)ajax(m,APIFB+p,d,cb)')
+    expect(html).not.toContain("cb(new Error('Parse err'))")
+    expect(html).not.toContain("cb(new Error('Network err'))")
+  })
+
+  it('allows configured public API IPs in the pre-auth walled garden', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        API_PUBLIC_HOST: 'portal.arofi.test',
+        SERVER_PUBLIC_IP: '95.111.234.34',
+        VPS_PUBLIC_IP: '95.111.234.34',
+      }),
+    )
+
+    const script = service.buildProvisioningScript({
+      routerName: 'Branch Router',
+      identity: 'branch-router',
+      registrationKey: 'router-registration-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: 'radius.example.com',
+      radiusAuthPort: 1812,
+      radiusAccountingPort: 1813,
+      sharedSecret: 'unique-router-secret',
+      portalHosts: ['portal.arofi.test'],
+    })
+
+    expect(script).toContain('/ip hotspot walled-garden ip remove [find comment="AROFi portal ip"]')
+    expect(script).toContain('dst-address=95.111.234.34/32 action=accept comment="AROFi portal ip"')
+    expect(script.match(/dst-address=95\.111\.234\.34\/32/g)).toHaveLength(1)
+  })
   it('builds idempotent walled garden and optional TTL anti-tethering sections', () => {
     const service = new MikrotikService(
       new ConfigService({
