@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "apps/api/src/modules/routers/router-captive-ui-v3.initializer.ts"
 ALOGIN = ROOT / "apps/api/src/modules/routers/mikrotik-alogin.controller.ts"
 FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
+TEMPLATE_JS_PATCH = ROOT / "scripts/apply_routeros_template_js_safety.py"
 TEMPLATE_JS_GUARD = ROOT / "scripts/forbid_routeros_template_js_breakage.py"
 
 
@@ -22,9 +23,14 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
-    for path in (UI, ALOGIN, FLOW, TEMPLATE_JS_GUARD):
+    for path in (UI, ALOGIN, FLOW, TEMPLATE_JS_PATCH, TEMPLATE_JS_GUARD):
         if not path.exists():
             fail(f"required file missing: {path.relative_to(ROOT)}")
+
+    # Normalize browser-side RouterOS macro sentinel checks before validating the
+    # final captive contract. This is idempotent and touches only the unsafe
+    # JavaScript sentinel; it does not alter the working router installer.
+    runpy.run_path(str(TEMPLATE_JS_PATCH), run_name="__main__")
 
     ui = UI.read_text(encoding="utf-8")
     alogin = ALOGIN.read_text(encoding="utf-8")
@@ -77,9 +83,9 @@ def main() -> None:
         if marker not in flow:
             fail(f"missing {label}: {marker}")
 
-    # This second permanent guard specifically protects browser JavaScript from
-    # RouterOS template expansion. It is chained here so every existing build
-    # path that enforces the seamless captive contract also enforces JS safety.
+    # Permanent browser-JS guard. If any future patch brings back the unsafe
+    # literal sentinel or makes the compact wrapper own captive behavior again,
+    # the build fails before deployment.
     runpy.run_path(str(TEMPLATE_JS_GUARD), run_name="__main__")
 
     print(
