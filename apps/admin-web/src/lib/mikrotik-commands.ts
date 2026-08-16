@@ -34,11 +34,11 @@ function buildReliableRouterOsDownload(options: {
     missingError,
   } = options
 
-  // HTTPS is the normal path and is attempted first. Plain HTTP is retained
-  // only as a compatibility fallback for old routers whose clock/TLS stack is
-  // not ready yet. This avoids a guaranteed-looking "status: failed" before a
-  // healthy HTTPS success on normal RouterOS 6/7 installations.
-  return `${DNS_BOOTSTRAP}:local arofiOk 0; :local attempts 0; :while ($attempts < 3) do={ :set attempts ($attempts + 1); :do { /file remove [find name="${fileName}"] } on-error={}; :do { /tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}" mode=https; :delay 1s; :local f [/file find name="${fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; :if ($arofiOk = 0) do={ :do { /file remove [find name="${fileName}"] } on-error={}; :do { /tool fetch url="${httpFallbackUrl}" dst-path="${fileName}" mode=http; :delay 1s; :local f [/file find name="${fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} }; :if ($arofiOk = 1) do={ :set attempts 3 } else={ :if ($attempts < 3) do={ :put "${retryLabel}"; :delay 2s } } }; :local f [/file find name="${fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "${downloadedLabel}"; :delay 1s; /import file-name="${fileName}"; :delay 1s; /file remove "${fileName}"; :put "${installedLabel}" } else={ :put "${emptyError}"; /file remove $f } } else={ :put "${missingError}" }`
+  // Bootstrap from the raw public IP first. Fresh/rebooted RouterOS devices can
+  // have a 1970 clock and no working DNS yet, so hostname/TLS is not a reliable
+  // first dependency. HTTPS remains the immediate fallback if the raw HTTP path
+  // is unavailable. Keep the guarded retry loop; do not weaken install safety.
+  return `${DNS_BOOTSTRAP}:local arofiOk 0; :local attempts 0; :while ($attempts < 3) do={ :set attempts ($attempts + 1); :do { /file remove [find name="${fileName}"] } on-error={}; :do { /tool fetch url="${httpFallbackUrl}" dst-path="${fileName}" mode=http; :delay 1s; :local f [/file find name="${fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; :if ($arofiOk = 0) do={ :do { /file remove [find name="${fileName}"] } on-error={}; :do { /tool fetch url="${httpsUrl}" check-certificate=no dst-path="${fileName}" mode=https; :delay 1s; :local f [/file find name="${fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} }; :if ($arofiOk = 1) do={ :set attempts 3 } else={ :if ($attempts < 3) do={ :put "${retryLabel}"; :delay 2s } } }; :local f [/file find name="${fileName}"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :put "${downloadedLabel}"; :delay 1s; /import file-name="${fileName}"; :delay 1s; /file remove "${fileName}"; :put "${installedLabel}" } else={ :put "${emptyError}"; /file remove $f } } else={ :put "${missingError}" }`
 }
 
 export function buildRemoteAccessInstallCommand(remoteToken: string | null | undefined, origin?: string) {
