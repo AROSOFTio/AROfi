@@ -10,12 +10,14 @@ voucher/payment login and uses it to restore that same active customer.
 from __future__ import annotations
 
 import re
+import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
 FINALIZER = ROOT / "scripts/finalize_gateway_compile.py"
+FINAL_STABILITY = ROOT / "scripts/final_captive_stability_lock.py"
 DOCKERFILE = ROOT / "Dockerfile"
 CI = ROOT / ".github/workflows/ci.yml"
 DEPLOY = ROOT / ".github/workflows/deploy.yml"
@@ -36,7 +38,7 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
-    required_files = (MIKROTIK, FLOW, FINALIZER, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
+    required_files = (MIKROTIK, FLOW, FINALIZER, FINAL_STABILITY, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
     missing_files = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
     if missing_files:
         fail("required guard/policy files missing: " + ", ".join(missing_files))
@@ -129,10 +131,17 @@ def main() -> None:
         if "login-by=cookie,mac-cookie,http-pap" not in text:
             fail(f"trusted returning-device policy missing from {path.relative_to(ROOT)}")
 
+    # Permanent last-line safety lock. On a raw CI checkout it deliberately
+    # defers without mutation; during Docker normalization the RouterOS6 marker
+    # is present, so it freezes the proven installer and removes risky captive
+    # DOM/JS surgery before TypeScript compilation. Because this guard is also
+    # the final Docker guard, later patch scripts cannot silently undo it.
+    runpy.run_path(str(FINAL_STABILITY), run_name="__main__")
+
     print(
         "AROFI_NO_AUTOMATIC_MAC_AUTH verified: automatic login-by=mac is absent, "
         "trusted post-login mac-cookie reconnect remains, RouterOS 6/7 onboarding guard "
-        "is locked, and captive/session policy is intact."
+        "is locked, final captive stability lock ran, and captive/session policy is intact."
     )
 
 
