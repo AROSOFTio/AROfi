@@ -767,9 +767,6 @@ export class MikrotikService {
     // HTTP fallback base URL (raw IP) so the page works when HTTPS fails in a
     // captive-portal mini-browser or when DNS hasn't resolved yet.
     const fallbackApiBaseUrl = this.escapeHtml(this.resolveHttpCallbackBaseUrl())
-    const connectedUrl = this.escapeHtml(
-      `${(portalBaseUrl || this.resolvePortalBaseUrl()).replace(/\/$/, '')}?connected=1`,
-    )
     const escapedKey = this.escapeHtml(registrationKey)
 
     // Self-contained white-themed static portal served directly from the router's
@@ -1164,7 +1161,7 @@ export class MikrotikService {
       }
       var b=document.getElementById('vbtn');
       b.disabled=true;b.textContent='Logging in...';
-      sst('Verifying voucher...','info');
+      closeMsg();
 
       apiCall('POST', '/api/portal/redeem-voucher', {code:code,macAddress:targetMac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo,targetDevice:tvMode?'SMART_TV':undefined}, function(err, res){
         if(err){
@@ -1175,7 +1172,6 @@ export class MikrotikService {
             sst('Voucher activated for Smart TV '+targetMac+'. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');
             return;
           }
-          sst('Success! Connecting...','ok');
           conn(res.reconnect);
         }
       });
@@ -1202,31 +1198,35 @@ export class MikrotikService {
       apiCall('POST', '/api/payments/portal/initiate', {packageId:selId,phoneNumber:c,customerReference:selTv?payMac:c,network:net,macAddress:payMac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo}, function(err, pmt){
         if(err){ sst(err.message||'Failed','err');b.disabled=false;return; }
         if(pmt.status==='FAILED'){ sst(pmt.statusMessage||'Failed','err');b.disabled=false;return; }
-        
-        var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
-        if(cu){window.location.href=cu;return;}
-        sst(selTv?'Enter your Mobile Money PIN. After approval, reconnect the Smart TV to WiFi.':'Enter your Mobile Money PIN on your phone. Waiting for approval...','info');
+        if(pmt.activation&&pmt.reconnect&&pmt.reconnect.username){conn(pmt.reconnect);return;}
+        sst(selTv?'Approve the Mobile Money prompt. The Smart TV will activate automatically.':'Approve the Mobile Money prompt on your phone.','info');
         poll(pmt.id,pmt.statusToken);
       });
     }
 
     function poll(id,tok){
-      var n=0,iv=setInterval(function(){
-        if(++n>200){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
+      var n=0,stopped=false;
+      function stop(){stopped=true;}
+      function check(){
+        if(stopped)return;
+        if(++n>240){stop();sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
         apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
-          if(err) return;
+          if(stopped)return;
+          if(err){setTimeout(check,250);return;}
           if(p.activation){
             if(selTv){
-              clearInterval(iv);
-              document.getElementById('pbtn').disabled=false;
-              closePay();
+              stop();document.getElementById('pbtn').disabled=false;closePay();closeMsg();
               var tvm=normMac(document.getElementById('tvmac').value);
-              sst('Payment approved. Smart TV '+tvm+' is active. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');
-            }else if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}
+              sst('Smart TV '+tvm+' is active. Reconnect the TV to this WiFi.','ok');
+              return;
+            }
+            if(p.reconnect&&p.reconnect.username){stop();conn(p.reconnect);return;}
           }
-          else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
+          if(p.status==='FAILED'){stop();sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;return;}
+          setTimeout(check,250);
         });
-      },600);
+      }
+      check();
     }
 
     function rec(){
@@ -1241,8 +1241,10 @@ export class MikrotikService {
       });
     }
 
-    function finishTarget(){var o=orig||'';if(o&&o.indexOf('$(')!==0&&!/\\.wifi(?:\\/|$)/i.test(o)&&!/\\/login(?:[/?]|$)/i.test(o))return o;var ua=navigator.userAgent||'';if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';return 'http://connectivitycheck.gstatic.com/generate_204';}
-    function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}closePay();closeMsg();var target=(rc.loginUrl||lo||'http://10.55.0.1/login');var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',finishTarget());add('popup','false');document.body.appendChild(f);document.documentElement.style.visibility='hidden';f.submit();}
+    function cleanRouterUrl(v){v=v||'';return v&&v.indexOf('$(')!==0?v:'';}
+    function currentLoginUrl(){var h=window.location&&window.location.hostname||'';if(/\.wifi$/i.test(h)||/\/login(?:[/?]|$)/i.test(window.location.pathname||''))return window.location.origin+'/login';return '';}
+    function finishTarget(){var o=orig||'';if(o&&o.indexOf('$(')!==0&&!/\.wifi(?:\/|$)/i.test(o)&&!/\/login(?:[/?]|$)/i.test(o))return o;var ua=navigator.userAgent||'';if(/Windows/i.test(ua))return 'http://www.msftconnecttest.com/connecttest.txt';if(/iPhone|iPad|Macintosh/i.test(ua))return 'http://captive.apple.com/hotspot-detect.html';return 'http://connectivitycheck.gstatic.com/generate_204';}
+    function conn(rc){if(!rc||!rc.username){sst('Access is active but login credentials were not returned. Please try again.','err');return;}closePay();closeMsg();var target=cleanRouterUrl(rc.loginUrl)||cleanRouterUrl(lo)||currentLoginUrl()||'http://10.55.0.1/login';var f=document.createElement('form');f.method='post';f.action=target;f.style.display='none';function add(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v||'';f.appendChild(i);}add('username',rc.username);add('password',rc.password||rc.username);add('dst',finishTarget());add('popup','false');document.body.appendChild(f);document.documentElement.style.visibility='hidden';f.submit();}
     function closeMsg(){document.getElementById('msgOverlay').classList.remove('on');}
     function sst(m,t){var s=document.getElementById('st');var o=document.getElementById('msgOverlay');var b=document.getElementById('msgBox');var x=document.getElementById('msgText');if(m){if(s){s.style.display='none';s.textContent='';}b.className='message-box '+(t||'info');x.textContent=m;o.classList.add('on');}else{if(s)s.style.display='none';o.classList.remove('on');}}
     function fdur(m){if(m>=1440&&m%1440===0)return m/1440+' Day'+(m/1440>1?'s':'');if(m>=60&&m%60===0)return m/60+' Hour'+(m/60>1?'s':'');return m+' Min';}

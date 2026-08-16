@@ -176,14 +176,17 @@ describe('MikrotikService', () => {
 
     expect(html).toContain('var API="https://wifi.example.com"')
     expect(html).toContain('RKEY="router-key-123"')
-    expect(html).toContain('CONNECTED="http://tenantname.wifi/login?connected=1"')
+
     expect(html).toContain('mac="$(mac)"')
     expect(html).toContain('ip="$(ip)"')
     expect(html).toContain('lo="$(link-login-only)"')
     expect(html).toContain('srv="$(server-name)"')
-    expect(html).toContain('var dst=CONNECTED')
-    expect(html).toContain('encodeURIComponent(dst)')
-    expect(html).not.toContain('CONNECTED="https://wifi.example.com/portal?connected=1"')
+    expect(html).toContain('orig="$(link-orig)"')
+    expect(html).toContain('function cleanRouterUrl(v)')
+    expect(html).toContain('function currentLoginUrl()')
+    expect(html).toContain("f.method='post';f.action=target")
+    expect(html).not.toContain('CONNECTED=')
+    expect(html).not.toContain('connected=1')
     expect(html).not.toContain('window.location.href=lo+\'?username=')
     expect(html).not.toContain('neverssl.com')
     expect(html).not.toContain('http://google.com')
@@ -191,6 +194,21 @@ describe('MikrotikService', () => {
     expect(html).toContain('Multi-device packages')
     expect(html).toContain('deviceLimit')
     expect(html).toContain('multiList')
+  })
+
+  it('checks Mobile Money payment status immediately and posts credentials without a success delay', () => {
+    const service = new MikrotikService(new ConfigService({ PORTAL_PUBLIC_HOST: 'wifi.example.com' }))
+
+    const html = service.buildLoginHtml('router-key-123', 'http://tenantname.wifi/login')
+
+    expect(html).toContain('if(pmt.activation&&pmt.reconnect&&pmt.reconnect.username){conn(pmt.reconnect);return;}')
+    expect(html).toContain('function check(){')
+    expect(html).toContain('check();')
+    expect(html).toContain('setTimeout(check,250)')
+    expect(html).not.toContain('setInterval(function()')
+    expect(html).not.toContain('Payment Approved! Connecting')
+    expect(html).not.toContain('Success! Connecting')
+    expect(html).not.toContain('checkoutUrl')
   })
 
   it('only falls back to the HTTP API when the captive browser has a network failure', () => {
