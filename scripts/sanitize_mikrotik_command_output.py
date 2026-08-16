@@ -3,8 +3,9 @@
 
 The RouterOS command must never contain rich-text Markdown links or escaped
 command prefixes. The generated provisioning script must also preserve an owner
-management path, quote IP-prefix selectors, and never use console row number 0
-as a firewall move destination because that row can be a built-in rule.
+management path, quote IP-prefix selectors, avoid deleting RouterOS dynamic DNS
+objects, and never use console row number 0 as a firewall move destination
+because that row can be a built-in rule.
 """
 
 from pathlib import Path
@@ -154,6 +155,28 @@ def patch_mikrotik_service(text: str) -> str:
         if old in text:
             text = replace_once(text, old, new, label)
 
+    # RouterOS HotSpot can expose dynamic DNS rows. Removing every row that
+    # matches dns-name aborts provisioning when the matching row is dynamic.
+    # Delete only the static AROFi-owned row (identified by our comment), and
+    # make both cleanup and add non-fatal so a RouterOS dynamic row can coexist.
+    old_dns_block = """      ...(input.dnsName ? [
+        `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
+      ] : []),
+"""
+    new_dns_block = """      ...(input.dnsName ? [
+        `:do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}`,
+        `:do { /ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway" } on-error={}`,
+      ] : []),
+"""
+    if ':do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}' not in text:
+        text = replace_once(
+            text,
+            old_dns_block,
+            new_dns_block,
+            "dynamic-safe hotspot DNS cleanup",
+        )
+
     required = [
         'dst-address="0.0.0.0/0" active=yes',
         "# 3d-2. Preserve owner management while assigning unused wired ports",
@@ -163,17 +186,19 @@ def patch_mikrotik_service(text: str) -> str:
         "destination=$arofiHotspotInputAnchor",
         "destination=$arofiHotspotMgmtAnchor",
         "destination=$arofiHotspotForwardAnchor",
+        ':do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}',
+        'comment="AROFi hotspot DNS gateway" } on-error={}',
     ]
     for sentinel in required:
         if sentinel not in text:
             raise RuntimeError(f"MikroTik provisioning safety sentinel missing: {sentinel}")
 
-    # Match the executable RouterOS command, not explanatory TypeScript comments
-    # that may mention the text "destination=0" while describing the old behavior.
+    # Match executable RouterOS commands, not explanatory TypeScript comments.
     forbidden = [
         "dst-address=0.0.0.0/0 active=yes",
         "# 3d-2. Put wired LAN ports on the captive hotspot bridge too",
         "/ip firewall filter move $r destination=0",
+        '/ip dns static remove [find name="${this.escape(input.dnsName)}"]',
     ]
     for unsafe in forbidden:
         if unsafe in text:
@@ -220,11 +245,31 @@ def patch_mikrotik_spec(text: str) -> str:
             "wired management and firewall safety tests",
         )
 
+    old_dns_expectations = """    expect(script).toContain('/ip dns static remove [find name="tenantname.wifi"]')
+    expect(script).toContain('/ip dns static add name="tenantname.wifi" address=10.55.0.1')
+"""
+    new_dns_expectations = """    // A RouterOS HotSpot may own a dynamic dns-name row; only AROFi's static row is removable.
+    expect(script).toContain(':do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}')
+    expect(script).toContain(':do { /ip dns static add name="tenantname.wifi" address=10.55.0.1 comment="AROFi hotspot DNS gateway" } on-error={}')
+    expect(script).not.toContain('/ip dns static remove [find name="tenantname.wifi"]')
+    // dynamic DNS row must never abort provisioning
+"""
+    if "dynamic DNS row must never abort provisioning" not in text:
+        text = replace_once(
+            text,
+            old_dns_expectations,
+            new_dns_expectations,
+            "dynamic-safe hotspot DNS tests",
+        )
+
     required = [
         'dst-address="0.0.0.0/0" active=yes',
         "expect(script).toContain('$ethName != \"ether2\"')",
         "expect(script).toContain('$ethRunning = false')",
         "expect(script).not.toContain('destination=0')",
+        "dynamic DNS row must never abort provisioning",
+        'find comment="AROFi hotspot DNS gateway"',
+        "expect(script).not.toContain('/ip dns static remove [find name=\"tenantname.wifi\"]')",
     ]
     for sentinel in required:
         if sentinel not in text:
@@ -248,7 +293,10 @@ def main() -> None:
         if updated != original:
             path.write_text(updated, encoding="utf-8")
 
-    print("MikroTik command output and provisioning safety fixes applied.")
+    print(
+        "MikroTik command output, dynamic-safe DNS cleanup, and provisioning "
+        "safety fixes applied."
+    )
 
 
 if __name__ == "__main__":
