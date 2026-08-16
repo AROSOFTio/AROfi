@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Harden generated MikroTik provisioning for RouterOS 6.x and 7.x.
+"""Harden MikroTik provisioning and returning-device access for RouterOS 6.x and 7.x.
 
-This build-time patch fixes failures that otherwise leave a router half-installed:
+This build-time patch fixes failures that otherwise leave a router half-installed
+or make a paid customer lose easy access after Wi-Fi disconnect/logout:
 - RouterOS /radius address= accepts only IPv4/IPv6, never a DNS hostname.
 - legacy /interface wireless APs can withhold the running flag before first client.
 - captive clients must use the MikroTik gateway as DNS.
 - the plain-HTTP bootstrap URL must be a clean origin, not an HTTPS callback path.
+- the first successful RADIUS accounting signal permanently binds an active
+  activation/credential to the observed device MAC and router, even when the
+  browser did not provide a MAC during checkout.
+- a legitimate same-device logout/reconnect is allowed to auto-login immediately;
+  the loop guard only activates after RouterOS actually reports a login error.
 
 The generated RouterOS script intentionally uses only scripting primitives available
 since RouterOS 6.2 (:resolve, :typeof, :do/on-error) for the shared v6/v7 path.
@@ -20,6 +26,8 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 MIKROTIK_SPEC = ROOT / "apps/api/src/modules/routers/mikrotik.service.spec.ts"
+RADIUS_SIGNAL = ROOT / "apps/api/src/modules/radius/radius-signal-sync.service.ts"
+RADIUS_SIGNAL_SPEC = ROOT / "apps/api/src/modules/radius/radius-signal-sync.service.spec.ts"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -164,6 +172,20 @@ def patch_mikrotik(text: str) -> str:
     if "A raw public IP is the most reliable plain-HTTP bootstrap" not in existing:
         text = callback_pattern.sub(lambda _match: callback_replacement, text, count=1)
 
+    # A successful same-device logout/reconnect must not be held for an arbitrary
+    # 8-second timer. RouterOS already gives us $(error), so only use the loop
+    # guard after a real login error. Normal disconnect/reconnect can immediately
+    # reuse the API-confirmed active activation.
+    old_hotspot_params = '    var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"",orig="$(link-orig)"||"";'
+    new_hotspot_params = '    var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"",orig="$(link-orig)"||"",herr="$(error)"||"";'
+    if 'herr="$(error)"' not in text and old_hotspot_params in text:
+        text = replace_once(text, old_hotspot_params, new_hotspot_params, "HotSpot error-aware reconnect context")
+
+    old_loop_guard = "        var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<8000;"
+    new_loop_guard = "        var loopGuard=!!herr&&_lastAuto&&(Date.now()-_lastAuto)<5000;"
+    if old_loop_guard in text:
+        text = replace_once(text, old_loop_guard, new_loop_guard, "error-aware auto reconnect loop guard")
+
     required = {
         "legacy AP running state": "disable-running-check=yes",
         "gateway-only DHCP DNS": "dns-server=${gatewayIp}`",
@@ -173,6 +195,8 @@ def patch_mikrotik(text: str) -> str:
         "secondary RADIUS variable": "address=${radiusSecondaryAddress}",
         "clean callback origin": "A raw public IP is the most reliable plain-HTTP bootstrap",
         "HTTP callback scheme": "return `http://${configuredHost}`",
+        "HotSpot error macro": 'herr="$(error)"',
+        "logout-safe reconnect loop guard": "var loopGuard=!!herr&&_lastAuto&&(Date.now()-_lastAuto)<5000;",
     }
     missing = [label for label, marker in required.items() if marker not in text]
     if missing:
@@ -183,6 +207,7 @@ def patch_mikrotik(text: str) -> str:
         "direct hostname in secondary RADIUS address": "address=${input.radiusSecondaryHost}",
         "public DNS advertised to captive clients": "dns-server=${gatewayIp},1.1.1.1,8.8.8.8",
         "alternate public DNS advertised to captive clients": "dns-server=${gatewayIp},8.8.8.8,1.1.1.1",
+        "blind reconnect delay": "var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<8000;",
     }
     present = [label for label, marker in forbidden.items() if marker in text]
     if present:
@@ -246,12 +271,236 @@ def patch_spec(text: str) -> str:
             test + marker,
             "RouterOS 6/7 regression tests",
         )
+
+    if 'herr="$(error)"' not in text:
+        marker = "    expect(html).toContain('orig=\"$(link-orig)\"')\n"
+        replacement = marker + "    expect(html).toContain('herr=\"$(error)\"')\n    expect(html).toContain('var loopGuard=!!herr&&_lastAuto&&(Date.now()-_lastAuto)<5000;')\n"
+        text = replace_once(text, marker, replacement, "logout-safe reconnect regression expectations")
+
+    return text
+
+
+def patch_radius_signal(text: str) -> str:
+    call_marker = """    const activationStillActive = Boolean(
+      activation?.status === PackageActivationStatus.ACTIVE && activation.endsAt > now,
+    )
+
+    const sessionStatus = isStopped
+"""
+    call_replacement = """    const activationStillActive = Boolean(
+      activation?.status === PackageActivationStatus.ACTIVE && activation.endsAt > now,
+    )
+
+    // Browser state is not an access-control source of truth. The first real
+    // RADIUS accounting row is authoritative proof of which physical device
+    // successfully used this activation. Claim an unbound activation exactly
+    // once so Mobile Money/voucher customers are remembered even after the
+    // captive tab closes, the portal token expires, or they explicitly log out.
+    if (activation && activationStillActive && macAddress) {
+      await this.rememberObservedDevice({
+        activationId: activation.id,
+        routerId: router.id,
+        macAddress,
+        ipAddress,
+        observedAt: row.acctstarttime ?? now,
+      })
+    }
+
+    const sessionStatus = isStopped
+"""
+    if "await this.rememberObservedDevice({" not in text:
+        text = replace_once(text, call_marker, call_replacement, "RADIUS accounting device-memory hook")
+
+    method_marker = "  async processPostAuthRow(row: RadPostAuth) {\n"
+    if "private async rememberObservedDevice(" not in text:
+        method = r"""  private async rememberObservedDevice(input: {
+    activationId: string
+    routerId: string
+    macAddress: string
+    ipAddress?: string | null
+    observedAt: Date
+  }) {
+    const normalizedMac = input.macAddress.trim().toUpperCase().replace(/-/g, ':')
+    if (!/^[0-9A-F]{2}(?::[0-9A-F]{2}){5}$/.test(normalizedMac)) {
+      return
+    }
+
+    // Atomic first-device claim: two devices cannot overwrite one another.
+    // An already-bound activation is accepted only when the observed MAC is
+    // the same MAC. This preserves the one-device rule while repairing the
+    // old "browser forgot me" behaviour.
+    const claim = await this.prisma.packageActivation.updateMany({
+      where: {
+        id: input.activationId,
+        OR: [
+          { boundMacAddress: null },
+          { boundMacAddress: '' },
+          { boundMacAddress: normalizedMac },
+        ],
+      },
+      data: { boundMacAddress: normalizedMac },
+    })
+
+    if (claim.count === 0) {
+      this.logger.warn(
+        `RADIUS device-memory claim refused for activation=${input.activationId}: observed MAC ${normalizedMac} differs from the device already bound to this package.`,
+      )
+      return
+    }
+
+    // Fill identity fields only when they were never captured by the browser.
+    // Do not move an already-bound package to another router/IP just because a
+    // later accounting sweep reprocessed the same row.
+    await this.prisma.packageActivation.updateMany({
+      where: { id: input.activationId, routerId: null },
+      data: { routerId: input.routerId },
+    })
+    if (input.ipAddress) {
+      await this.prisma.packageActivation.updateMany({
+        where: { id: input.activationId, firstSeenIp: null },
+        data: { firstSeenIp: input.ipAddress },
+      })
+    }
+    await this.prisma.packageActivation.updateMany({
+      where: { id: input.activationId, firstSeenAt: null },
+      data: { firstSeenAt: input.observedAt },
+    })
+
+    // Portal returning-device lookup reads PackageActivation, while FreeRADIUS
+    // authorization reads RadiusCredential. Keep both records aligned. Like
+    // the activation claim, never overwrite a credential bound to another MAC.
+    await this.prisma.radiusCredential.updateMany({
+      where: {
+        activationId: input.activationId,
+        OR: [
+          { boundMacAddress: null },
+          { boundMacAddress: '' },
+          { boundMacAddress: normalizedMac },
+        ],
+      },
+      data: { boundMacAddress: normalizedMac },
+    })
+    await this.prisma.radiusCredential.updateMany({
+      where: { activationId: input.activationId, routerId: null },
+      data: { routerId: input.routerId },
+    })
+  }
+
+"""
+        text = replace_once(text, method_marker, method + method_marker, "persistent returning-device memory helper")
+
+    required = [
+        "await this.rememberObservedDevice({",
+        "Atomic first-device claim: two devices cannot overwrite one another.",
+        "data: { boundMacAddress: normalizedMac }",
+        "where: { id: input.activationId, routerId: null }",
+        "where: { activationId: input.activationId, routerId: null }",
+    ]
+    for marker in required:
+        if marker not in text:
+            raise RuntimeError(f"Returning-device memory marker missing: {marker}")
+
+    return text
+
+
+def patch_radius_signal_spec(text: str) -> str:
+    # Existing mock omitted status/endsAt even though processAcctRow selects both,
+    # making the test harness unable to represent a genuinely active activation.
+    old_activation_mock = """        if (select?.voucherRedemptionId) {
+          return Promise.resolve({ id: 'activation-1', voucherRedemptionId: null })
+        }
+"""
+    new_activation_mock = """        if (select?.voucherRedemptionId) {
+          return Promise.resolve({
+            id: 'activation-1',
+            voucherRedemptionId: null,
+            status: 'ACTIVE',
+            endsAt: new Date(Date.now() + 60 * 60 * 1000),
+          })
+        }
+"""
+    if "endsAt: new Date(Date.now() + 60 * 60 * 1000)" not in text:
+        text = replace_once(text, old_activation_mock, new_activation_mock, "active activation accounting mock")
+
+    if "updateMany: jest.fn().mockResolvedValue({ count: 1 })," not in text.split("networkSession:", 1)[0]:
+        old_package_update = """      update: jest.fn().mockResolvedValue({}),
+    },
+    networkSession: {
+"""
+        new_package_update = """      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    networkSession: {
+"""
+        text = replace_once(text, old_package_update, new_package_update, "package activation updateMany mock")
+
+    old_credential_tail = """    radiusCredential: {
+      findFirst: jest.fn().mockResolvedValue(
+        options.credential === undefined
+          ? { username: 'arofi-user', tenantId: 'tenant-1', routerId: 'router-1' }
+          : options.credential,
+      ),
+    },
+"""
+    new_credential_tail = """    radiusCredential: {
+      findFirst: jest.fn().mockResolvedValue(
+        options.credential === undefined
+          ? { username: 'arofi-user', tenantId: 'tenant-1', routerId: 'router-1' }
+          : options.credential,
+      ),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+"""
+    if "radiusCredential" in text and "updateMany: jest.fn().mockResolvedValue({ count: 1 }),\n    },\n  }\n  const realtimeEvents" not in text:
+        text = replace_once(text, old_credential_tail, new_credential_tail, "radius credential updateMany mock")
+
+    if "remembers the first successfully authenticated device for future reconnects" not in text:
+        marker = "  it('publishes session.stopped when a stop row closes an active session', async () => {\n"
+        test = r"""  it('remembers the first successfully authenticated device for future reconnects', async () => {
+    const { service, prisma } = buildHarness({ existingSession: null })
+
+    await service.processAcctRow(buildAcctRow() as never)
+
+    expect(prisma.packageActivation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'activation-1',
+          OR: expect.arrayContaining([
+            { boundMacAddress: null },
+            { boundMacAddress: 'AA:BB:CC:DD:EE:FF' },
+          ]),
+        }),
+        data: { boundMacAddress: 'AA:BB:CC:DD:EE:FF' },
+      }),
+    )
+    expect(prisma.radiusCredential.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ activationId: 'activation-1' }),
+        data: { boundMacAddress: 'AA:BB:CC:DD:EE:FF' },
+      }),
+    )
+  })
+
+"""
+        text = replace_once(text, marker, test + marker, "returning-device memory regression test")
+
+    required = [
+        "remembers the first successfully authenticated device for future reconnects",
+        "data: { boundMacAddress: 'AA:BB:CC:DD:EE:FF' }",
+        "endsAt: new Date(Date.now() + 60 * 60 * 1000)",
+    ]
+    for marker in required:
+        if marker not in text:
+            raise RuntimeError(f"Returning-device memory test marker missing: {marker}")
+
     return text
 
 
 def main() -> None:
-    if not MIKROTIK.exists() or not MIKROTIK_SPEC.exists():
-        raise RuntimeError("RouterOS source/spec files are missing")
+    required_files = (MIKROTIK, MIKROTIK_SPEC, RADIUS_SIGNAL, RADIUS_SIGNAL_SPEC)
+    for path in required_files:
+        if not path.exists():
+            raise RuntimeError(f"Required RouterOS/Radius source file missing: {path.relative_to(ROOT)}")
 
     source = MIKROTIK.read_text(encoding="utf-8")
     patched = patch_mikrotik(source)
@@ -263,9 +512,19 @@ def main() -> None:
     if patched_spec != spec:
         MIKROTIK_SPEC.write_text(patched_spec, encoding="utf-8")
 
+    radius_source = RADIUS_SIGNAL.read_text(encoding="utf-8")
+    patched_radius = patch_radius_signal(radius_source)
+    if patched_radius != radius_source:
+        RADIUS_SIGNAL.write_text(patched_radius, encoding="utf-8")
+
+    radius_spec = RADIUS_SIGNAL_SPEC.read_text(encoding="utf-8")
+    patched_radius_spec = patch_radius_signal_spec(radius_spec)
+    if patched_radius_spec != radius_spec:
+        RADIUS_SIGNAL_SPEC.write_text(patched_radius_spec, encoding="utf-8")
+
     print(
-        "RouterOS 6/7 provisioning hardened: IP-safe RADIUS, clean HTTP bootstrap, "
-        "legacy AP running-state, and gateway-only captive DNS."
+        "RouterOS 6/7 access hardened: IP-safe RADIUS, clean HTTP bootstrap, legacy AP running-state, "
+        "gateway-only captive DNS, immediate same-device reconnect, and persistent first-login device memory."
     )
 
 
