@@ -1193,10 +1193,34 @@ export function setAdminAccessCookie(response: Response, token: string, domain?:
   })
 }
 
+function legacyCookieDomainsFor(domain?: string) {
+  if (!domain || domain === '.arofi.net' || !domain.endsWith('.arofi.net')) {
+    return []
+  }
+  return ['.arofi.net']
+}
+
+function clearCookieDomain(response: Response, domain?: string, includeTrustedDevice = true) {
+  const domainOptions = domain ? { domain } : {}
+  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...domainOptions })
+  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...domainOptions })
+  if (includeTrustedDevice) {
+    response.clearCookie(TRUSTED_DEVICE_COOKIE_NAME, { path: '/api/auth', ...domainOptions })
+  }
+}
+
+function clearConflictingAdminSessionCookies(response: Response, domain?: string, includeTrustedDevice = true) {
+  clearCookieDomain(response, undefined, includeTrustedDevice)
+  if (domain) {
+    clearCookieDomain(response, domain, includeTrustedDevice)
+  }
+  for (const legacyDomain of legacyCookieDomainsFor(domain)) {
+    clearCookieDomain(response, legacyDomain, includeTrustedDevice)
+  }
+}
+
 export function clearAdminSessionCookies(response: Response, request?: Request) {
-  const domain = resolveCookieDomain(request)
-  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...(domain ? { domain } : {}) })
-  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...(domain ? { domain } : {}) })
+  clearConflictingAdminSessionCookies(response, resolveCookieDomain(request))
 }
 
 // Shared by auth + onboarding: apply both session cookies and strip the raw
@@ -1208,6 +1232,7 @@ export function applySessionCookies<
 >(response: Response, session: T, request?: Request): Omit<T, 'access_token' | 'refresh_token'> {
   const { access_token, refresh_token, ...rest } = session
   const domain = resolveCookieDomain(request)
+  clearConflictingAdminSessionCookies(response, domain, false)
   setAdminAccessCookie(response, access_token, domain)
   setRefreshCookie(response, refresh_token, domain)
   return rest
@@ -1226,6 +1251,7 @@ export function applyLoginCookies<
 ): Omit<T, 'access_token' | 'refresh_token' | 'trusted_device_token'> {
   const { access_token, refresh_token, trusted_device_token, ...rest } = session
   const domain = resolveCookieDomain(request)
+  clearConflictingAdminSessionCookies(response, domain)
   setAdminAccessCookie(response, access_token, domain)
   setRefreshCookie(response, refresh_token, domain)
   setTrustedDeviceCookie(response, trusted_device_token ?? null, domain)
