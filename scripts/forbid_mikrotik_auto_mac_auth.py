@@ -10,12 +10,15 @@ voucher/payment login and uses it to restore that same active customer.
 from __future__ import annotations
 
 import re
+import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
+CAPTIVE_UI = ROOT / "apps/api/src/modules/routers/router-captive-ui-v3.initializer.ts"
 FINALIZER = ROOT / "scripts/finalize_gateway_compile.py"
+FINAL_STABILITY = ROOT / "scripts/final_captive_stability_lock.py"
 DOCKERFILE = ROOT / "Dockerfile"
 CI = ROOT / ".github/workflows/ci.yml"
 DEPLOY = ROOT / ".github/workflows/deploy.yml"
@@ -35,8 +38,63 @@ def fail(message: str) -> None:
     raise RuntimeError(f"MIKROTIK SESSION POLICY REJECTED: {message}")
 
 
+def verify_post_brand_stability(generated_source: str) -> None:
+    """Verify the stability lock after display-brand normalization.
+
+    The monolithic Dockerfile intentionally runs the display-brand patch after
+    finalize_gateway_compile(), changing AROFi -> AroFi in apps/api/src. That is
+    text-only. Do not rerun a mutating installer patch afterward; instead verify
+    the already-stabilized portal and installer with brand spelling normalized
+    only in memory.
+    """
+
+    normalized = generated_source.replace("AroFi", "AROFi")
+    required_source = (
+        "const routerOs6AutoWanBootstrap =",
+        ':if ($arofiRosMajor = "6") do={',
+        '/ip dhcp-client add interface=ether1 add-default-route=yes use-peer-dns=yes disabled=no comment="AROFi RouterOS6 reset WAN"',
+        "const wanBootstrap = requestedWanInterface ? selectedWanBootstrap : routerOs6AutoWanBootstrap",
+        "http://95.111.234.34/api/mikrotik/script/",
+        'url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http',
+        'url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https',
+        ':while ($attempts < 3)',
+        '/import file-name="arofi-setup.rsc"',
+        "wrap.style.setProperty('display',on?'block':'none','important');",
+        "p.style.setProperty('display',opening?'block':'none','important');",
+        "function load(attempt){",
+        "Packages did not load. Tap to retry.",
+    )
+    for marker in required_source:
+        if marker not in normalized:
+            fail(f"post-brand final stability marker missing: {marker}")
+
+    block_start = normalized.find("  buildOneRunCommand(registrationKey: string")
+    block_end = normalized.find("  // VPS-side tunnel gateway", block_start)
+    if block_start < 0 or block_end <= block_start:
+        fail("post-brand installer block could not be isolated")
+    block = normalized[block_start:block_end]
+    http_idx = block.find('url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http')
+    https_idx = block.find('url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https')
+    if http_idx < 0 or https_idx < 0 or http_idx >= https_idx:
+        fail("post-brand raw-IP-first installer order changed")
+    if ':if ($arofiRosMajor = "7") do={' in block:
+        fail("RouterOS 7 was added to the RouterOS 6 reset-WAN branch")
+
+    ui = CAPTIVE_UI.read_text(encoding="utf-8")
+    for marker in (
+        "Decoration only. Do not rebuild DOM nodes and do not rewrite captive JS.",
+        '#tvVoucherBox.on .tv-mac-wrap{display:block!important}',
+        '.find-panel.on{display:block!important}',
+    ):
+        if marker not in ui:
+            fail(f"post-brand safe captive wrapper missing marker: {marker}")
+    for marker in ("utility-row", "function poll(id,tok)", "function setPayState(", "resumeBox", "loggedout=1"):
+        if marker in ui:
+            fail(f"post-brand captive wrapper regained behavior-changing surgery: {marker}")
+
+
 def main() -> None:
-    required_files = (MIKROTIK, FLOW, FINALIZER, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
+    required_files = (MIKROTIK, FLOW, CAPTIVE_UI, FINALIZER, FINAL_STABILITY, DOCKERFILE, CI, DEPLOY, AGENTS, COPILOT)
     missing_files = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
     if missing_files:
         fail("required guard/policy files missing: " + ", ".join(missing_files))
@@ -129,10 +187,18 @@ def main() -> None:
         if "login-by=cookie,mac-cookie,http-pap" not in text:
             fail(f"trusted returning-device policy missing from {path.relative_to(ROOT)}")
 
+    # Permanent final safety lock. During normal finalization this applies the
+    # CSS-only captive stabilization and verifies the working installer. After
+    # the display-brand pass, do not mutate the installer again: verify in place.
+    if "AroFi RouterOS6 reset WAN" in generated_source:
+        verify_post_brand_stability(generated_source)
+    else:
+        runpy.run_path(str(FINAL_STABILITY), run_name="__main__")
+
     print(
         "AROFI_NO_AUTOMATIC_MAC_AUTH verified: automatic login-by=mac is absent, "
         "trusted post-login mac-cookie reconnect remains, RouterOS 6/7 onboarding guard "
-        "is locked, and captive/session policy is intact."
+        "is locked, final captive stability lock is enforced, and captive/session policy is intact."
     )
 
 
