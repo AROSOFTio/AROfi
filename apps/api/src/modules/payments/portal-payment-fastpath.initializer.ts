@@ -135,6 +135,18 @@ export class PortalPaymentFastPathInitializer implements OnModuleInit {
       this.failures.delete(paymentId)
 
       if (TERMINAL.has(mappedStatus)) {
+        // A webhook may have completed the payment while this provider request
+        // was in flight. Never let an older status response overwrite a state
+        // that has already become terminal (especially COMPLETED -> FAILED).
+        const current = await this.prisma.payment.findUnique({
+          where: { id: paymentId },
+          select: { status: true },
+        })
+        if (!current || TERMINAL.has(current.status)) {
+          this.nextProbeAt.delete(paymentId)
+          return
+        }
+
         this.nextProbeAt.delete(paymentId)
         await service.applyProviderTransition(paymentId, gatewayResponse, {
           eventType: PaymentEventType.STATUS_CHECK,
