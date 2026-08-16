@@ -135,6 +135,7 @@ describe('MikrotikService', () => {
       radiusAccountingPort: 1813,
       sharedSecret: 'existing-secret',
       mode: 'SAFE_EXISTING_ROUTER',
+      dnsName: 'tenantname.wifi',
     })
 
     expect(script).toContain(':foreach h in=[/ip hotspot find] do={')
@@ -142,6 +143,9 @@ describe('MikrotikService', () => {
     expect(script).not.toContain('/interface bridge add name=arofi-hotspot')
     expect(script).not.toContain('ssid=')
     expect(script).not.toContain('/ip address add')
+    expect(script).toContain(':local arofiHotspotAddress [/ip hotspot profile get [find name="arofi-existing"] hotspot-address]')
+    expect(script).toContain('/ip dns static add name="tenantname.wifi" address=$arofiHotspotAddress')
+    expect(script).toContain('/ip dhcp-server network set [find gateway=$arofiHotspotAddress] dns-server=$arofiHotspotAddress')
   })
 
   it('serves a MikroTik login page that forwards captive portal parameters to AROFi', () => {

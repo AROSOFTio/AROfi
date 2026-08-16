@@ -357,7 +357,8 @@ export class MikrotikService {
       // hotspot, which has no reason to already know about "<tenant>.wifi".
       ...(input.dnsName ? [
         `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
-        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
+        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway"`,
+        `:do { /ip dns cache flush } on-error={}`,
       ] : []),
     ]
 
@@ -365,6 +366,8 @@ export class MikrotikService {
       ``,
       `# 4. Walled garden so the portal + payment pages load before login`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
+      `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,
+      `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,
       // Also allow the raw HTTP-fallback IP by address so captive-portal
       // mini-browsers can reach the API even when HTTPS or hostname DNS fails.
       ...this.buildWalledGardenIp(this.resolveHttpCallbackBaseUrl()),
@@ -407,6 +410,14 @@ export class MikrotikService {
         `# Bind every existing HotSpot server on this router to the AROFi profile`,
         `:foreach h in=[/ip hotspot find] do={ /ip hotspot set $h profile="${profileName}" }`,
         `:if ([:len [/ip hotspot find]] = 0) do={ :put "Warning: no existing HotSpot server found. Re-run in Add Customer HotSpot mode to create one." }`,
+        ...(input.dnsName ? [
+          `:local arofiHotspotAddress [/ip hotspot profile get [find name="${profileName}"] hotspot-address]`,
+          `:if (($arofiHotspotAddress != "") && ($arofiHotspotAddress != "0.0.0.0")) do={`,
+          `  :do { /ip dns static remove [find name="${this.escape(input.dnsName)}"] } on-error={}`,
+          `  :do { /ip dns static add name="${this.escape(input.dnsName)}" address=$arofiHotspotAddress ttl=1m comment="AROFi hotspot DNS gateway" } on-error={}`,
+          `  :do { /ip dhcp-server network set [find gateway=$arofiHotspotAddress] dns-server=$arofiHotspotAddress } on-error={}`,
+          `}`,
+        ] : []),
         ...walledGarden,
         ...antiTether,
         ...telemetry,
@@ -430,7 +441,7 @@ export class MikrotikService {
       `/ip pool remove [find name=arofi-pool]`,
       `/ip pool add name=arofi-pool ranges=${poolRange}`,
       `/ip dhcp-server network remove [find address="${subnet}"]`,
-      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
+      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,

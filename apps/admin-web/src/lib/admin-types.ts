@@ -18,6 +18,7 @@ export type KycDocumentItem = {
 
 export type VoucherTenantSummary = TenantSummary & {
   domain?: string | null
+  hotspotDomain?: string | null
   supportPhone?: string | null
   supportEmail?: string | null
 }

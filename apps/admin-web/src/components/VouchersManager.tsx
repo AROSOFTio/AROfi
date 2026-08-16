@@ -166,16 +166,15 @@ function getVoucherPortalHost() {
 }
 
 function getVoucherQrPortalUrl(code: string, dnsName?: string) {
-  if (dnsName) {
-    return `http://${dnsName}/login?voucher=${encodeURIComponent(code)}`
-  }
-  // Fallback
-  const base =
-    process.env.NEXT_PUBLIC_VOUCHER_QR_BASE_URL ||
-    'https://arofi.net/portal'
-  const normalized = base.replace(/\/$/, '')
-  const separator = normalized.includes('?') ? '&' : '?'
-  return `${normalized}${separator}voucher=${encodeURIComponent(code)}`
+  const host = (dnsName ?? 'arofi.wifi')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '')
+  const safeHost = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.wifi$/i.test(host)
+    ? host
+    : 'arofi.wifi'
+  return `http://${safeHost}/login?voucher=${encodeURIComponent(code.trim().toUpperCase())}`
 }
 
 function formatVoucherSupport(phone?: string | null, email?: string | null) {
@@ -830,6 +829,7 @@ export default function VouchersManager() {
                     amount={formatCurrency(printBatch.faceValueUgx)}
                     support={formatVoucherSupport(printBatch.tenant.supportPhone, printBatch.tenant.supportEmail)}
                     portalHost={getVoucherPortalHost()}
+                    hotspotDomain={printBatch.tenant.hotspotDomain}
                   />
                 ))}
               </div>
@@ -865,6 +865,7 @@ function VoucherSampleCard({
   amount,
   support,
   portalHost,
+  hotspotDomain,
   adLine = DEFAULT_VOUCHER_AD,
   compact = false,
 }: {
@@ -875,6 +876,7 @@ function VoucherSampleCard({
   amount: string
   support: string
   portalHost: string
+  hotspotDomain?: string | null
   adLine?: string
   compact?: boolean
 }) {
@@ -882,9 +884,9 @@ function VoucherSampleCard({
 
   useEffect(() => {
     let active = true
-    // Always use the hosted portal URL — dnsName-based URLs only work on the
-    // local hotspot network and show "unknown page" when scanned elsewhere.
-    const portalUrl = getVoucherQrPortalUrl(code)
+    // Printed vouchers are intentionally local to this venue. The exact
+    // hostname comes from the API so the QR and MikroTik DNS cannot diverge.
+    const portalUrl = getVoucherQrPortalUrl(code, hotspotDomain)
 
     void QRCode.toDataURL(portalUrl, {
       errorCorrectionLevel: 'M',
@@ -903,7 +905,7 @@ function VoucherSampleCard({
     return () => {
       active = false
     }
-  }, [code])
+  }, [code, hotspotDomain])
 
   return (
     <div className={`voucher-sample${compact ? ' voucher-sample--sheet' : ''}`}>

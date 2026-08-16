@@ -39,23 +39,6 @@ export class MikrotikController {
     return this.prepareCompletionHtml(html);
   }
 
-  // RouterOS uses alogin.html immediately after accepting credentials. It must
-  // never show a second "Connected" page. Serve the same invisible close/204
-  // response used by status.html so voucher and Mobile Money logins finish in
-  // the original captive window without asking the customer to tap again.
-  @Get('alogin-html/:key')
-  @Header('Content-Type', 'text/html')
-  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
-  async getAloginHtml(@Param('key') key: string) {
-    const html = await this.routersService.getMikrotikStatusHtmlByKey(key);
-    if (!html) {
-      throw new NotFoundException('Router alogin.html not found');
-    }
-    return this.prepareCompletionHtml(html);
-  }
-
   @Get('mobile-setup/:key')
   async getMobileSetup(@Param('key') key: string) {
     const summary = await this.routersService.getMobileSetupSummaryByKey(key);

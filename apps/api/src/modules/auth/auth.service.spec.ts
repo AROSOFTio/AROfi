@@ -11,6 +11,11 @@ describe('resolveCookieDomain', () => {
     expect(resolveCookieDomain(req('portal.arofi.net:443'))).toBe('.arofi.net')
   })
 
+  it('prefers forwarded host headers from the public proxy', () => {
+    const request = { headers: { host: 'arofi-api-v2:4012', 'x-forwarded-host': 'dev.arofi.net' } } as never
+    expect(resolveCookieDomain(request)).toBe('.arofi.net')
+  })
+
   it('stays host-only for hosts that cannot carry a Domain attribute', () => {
     expect(resolveCookieDomain(req('localhost'))).toBeUndefined()
     expect(resolveCookieDomain(req('localhost:3000'))).toBeUndefined()

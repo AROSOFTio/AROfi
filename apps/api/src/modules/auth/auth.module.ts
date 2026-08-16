@@ -1122,12 +1122,17 @@ export function resolveCookieDomain(request?: Request): string | undefined {
   if (COOKIE_DOMAIN_OVERRIDE) {
     return COOKIE_DOMAIN_OVERRIDE
   }
-  const hostHeader = request?.headers?.host
+  const forwardedHost = request?.headers?.['x-forwarded-host']
+  const originalHost = request?.headers?.['x-original-host']
+  const directHost = request?.headers?.host
+  const hostHeader = [forwardedHost, originalHost, directHost]
+    .map((value) => (Array.isArray(value) ? value[0] : value))
+    .find((value): value is string => Boolean(value?.trim()))
   if (!hostHeader) {
     return undefined
   }
-  // Strip any :port suffix.
-  const host = hostHeader.split(':')[0].trim().toLowerCase()
+  // Strip comma-separated proxy hops and any :port suffix.
+  const host = hostHeader.split(',')[0].split(':')[0].trim().toLowerCase()
   if (!host || host === 'localhost') {
     return undefined
   }
