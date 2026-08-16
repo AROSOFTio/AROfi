@@ -90,13 +90,15 @@ def patch_api_onboarding() -> None:
         if marker in method:
             raise RuntimeError(f"Forbidden onboarding retry/cooldown/insecure marker remains: {marker}")
 
+    https_fetch = 'url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https'
+    http_fetch = 'url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http'
     required = (
         "fallbackUrl",
         "arofiOk",
         "attempts",
         ':while ($attempts < 3)',
-        'mode=http',
-        'mode=https',
+        https_fetch,
+        http_fetch,
         "/ip dns set servers=8.8.8.8,1.1.1.1",
         '[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]',
         '[:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]',
@@ -109,8 +111,8 @@ def patch_api_onboarding() -> None:
         if marker not in method:
             raise RuntimeError(f"HTTPS-first RouterOS 6/7 onboarding marker missing: {marker}")
 
-    https_idx = method.find('mode=https')
-    http_idx = method.find('mode=http')
+    https_idx = method.find(https_fetch)
+    http_idx = method.find(http_fetch)
     if https_idx < 0 or http_idx < 0 or https_idx >= http_idx:
         raise RuntimeError("Router setup command must attempt HTTPS before the HTTP/IP fallback")
 
