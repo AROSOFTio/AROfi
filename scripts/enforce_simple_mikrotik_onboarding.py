@@ -2,12 +2,14 @@
 '''Enforce the final MikroTik onboarding command contract.
 
 The final operator-facing setup command must stay compatible with RouterOS 6
-and 7, try the configured HTTPS API first, retain the raw public HTTP/IP path
-only as a compatibility fallback, import in the foreground, preserve
-selected-WAN setup, and never reintroduce artificial 20-second cooldowns.
+and 7, try the known raw public HTTP/IP bootstrap first, retain configured HTTPS
+as an immediate fallback, import in the foreground, preserve selected-WAN setup,
+and never reintroduce artificial 20-second cooldowns.
 
-The Admin UI uses the same HTTPS-first helper and may reject stale API-provided
-commands when they do not contain the known fallback path.
+Fresh/rebooted routers can have a 1970 clock and broken DNS. The raw-IP path is
+therefore intentionally first: it does not depend on DNS or TLS. The Admin UI
+uses the same IP-first helper and may reject stale API-provided commands when
+they do not contain the known fallback path.
 '''
 
 from __future__ import annotations
@@ -38,12 +40,12 @@ def patch_api_onboarding() -> None:
 
     replacement = r'''  buildOneRunCommand(registrationKey: string, wanInterface?: string | null) {
     const url = `${this.resolveApiBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
-    const fallbackUrl = `${this.resolveHttpCallbackBaseUrl()}/api/mikrotik/script/${this.escape(registrationKey)}`
+    const fallbackUrl = `http://95.111.234.34/api/mikrotik/script/${this.escape(registrationKey)}`
     const bootstrap =
       ':if ([:len [/ip dns get servers]] = 0) do={ /ip dns set servers=8.8.8.8,1.1.1.1 }; ' +
       ':do { :local n [:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]; $n } ' +
       'on-error={ :do { :local n [:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]; $n } on-error={} }; ' +
-      ':delay 2s; '
+      ':delay 1s; '
 
     return (
       bootstrap +
@@ -51,10 +53,10 @@ def patch_api_onboarding() -> None:
       ':while ($attempts < 3) do={ ' +
         ':set attempts ($attempts + 1); ' +
         ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-        `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https; :delay 1s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
+        `:do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http; :delay 1s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={}; ` +
         ':if ($arofiOk = 0) do={ ' +
           ':do { /file remove [find name="arofi-setup.rsc"] } on-error={}; ' +
-          `:do { /tool fetch url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http; :delay 1s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
+          `:do { /tool fetch url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https; :delay 1s; :local f [/file find name="arofi-setup.rsc"]; :if ([:len $f] > 0) do={ :local sz [/file get $f size]; :if ($sz > 0) do={ :set arofiOk 1 } else={ /file remove $f } } } on-error={} ` +
         '}; ' +
         ':if ($arofiOk = 1) do={ :set attempts 3 } else={ :if ($attempts < 3) do={ :put "Retrying AROFi setup download..."; :delay 2s } } ' +
       '}; ' +
@@ -78,7 +80,7 @@ def patch_api_onboarding() -> None:
         flags=re.S,
     )
     if not method_match:
-        raise RuntimeError("HTTPS-first onboarding method is missing after normalization")
+        raise RuntimeError("IP-first onboarding method is missing after normalization")
 
     method = method_match.group(1)
     if method.count("/tool fetch") != 2:
@@ -90,15 +92,16 @@ def patch_api_onboarding() -> None:
         if marker in method:
             raise RuntimeError(f"Forbidden onboarding retry/cooldown/insecure marker remains: {marker}")
 
-    https_fetch = 'url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https'
     http_fetch = 'url="${fallbackUrl}" dst-path="arofi-setup.rsc" mode=http'
+    https_fetch = 'url="${url}" check-certificate=no dst-path="arofi-setup.rsc" mode=https'
     required = (
+        "http://95.111.234.34/api/mikrotik/script/",
         "fallbackUrl",
         "arofiOk",
         "attempts",
         ':while ($attempts < 3)',
-        https_fetch,
         http_fetch,
+        https_fetch,
         "/ip dns set servers=8.8.8.8,1.1.1.1",
         '[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]',
         '[:parse "/system ntp client set enabled=yes primary-ntp=162.159.200.1"]',
@@ -109,12 +112,12 @@ def patch_api_onboarding() -> None:
     )
     for marker in required:
         if marker not in method:
-            raise RuntimeError(f"HTTPS-first RouterOS 6/7 onboarding marker missing: {marker}")
+            raise RuntimeError(f"IP-first RouterOS 6/7 onboarding marker missing: {marker}")
 
-    https_idx = method.find(https_fetch)
     http_idx = method.find(http_fetch)
-    if https_idx < 0 or http_idx < 0 or https_idx >= http_idx:
-        raise RuntimeError("Router setup command must attempt HTTPS before the HTTP/IP fallback")
+    https_idx = method.find(https_fetch)
+    if http_idx < 0 or https_idx < 0 or http_idx >= https_idx:
+        raise RuntimeError("Router setup command must attempt raw public HTTP/IP before HTTPS")
 
     MIKROTIK.write_text(updated, encoding="utf-8")
 
@@ -123,7 +126,7 @@ def patch_admin_fallback() -> None:
     text = ADMIN_COMMANDS.read_text(encoding="utf-8")
 
     if "function buildReliableRouterOsDownload(" not in text:
-        raise RuntimeError("Admin HTTPS-first RouterOS download helper is missing")
+        raise RuntimeError("Admin RouterOS download helper is missing")
 
     pattern = re.compile(
         r"export function buildSetupFallbackCommand\(registrationKey: string(?:, origin\?: string)?\) \{.*?\n\}",
@@ -166,15 +169,15 @@ def patch_admin_fallback() -> None:
         "fileName: 'arofi-setup.rsc'",
     ):
         if marker not in fallback:
-            raise RuntimeError(f"Admin HTTPS-first fallback marker missing: {marker}")
+            raise RuntimeError(f"Admin IP-first fallback marker missing: {marker}")
 
     helper_start = updated.find("function buildReliableRouterOsDownload(")
     helper_end = updated.find("export function buildRemoteAccessInstallCommand", helper_start)
     helper = updated[helper_start:helper_end] if helper_start >= 0 and helper_end > helper_start else ""
-    https_idx = helper.find('url="${httpsUrl}"')
     http_idx = helper.find('url="${httpFallbackUrl}"')
-    if https_idx < 0 or http_idx < 0 or https_idx >= http_idx:
-        raise RuntimeError("Admin RouterOS download helper must attempt HTTPS before HTTP fallback")
+    https_idx = helper.find('url="${httpsUrl}"')
+    if http_idx < 0 or https_idx < 0 or http_idx >= https_idx:
+        raise RuntimeError("Admin RouterOS download helper must attempt raw HTTP/IP before HTTPS")
 
     ADMIN_COMMANDS.write_text(updated, encoding="utf-8")
 
@@ -230,11 +233,11 @@ def patch_unit_test() -> None:
         r"  it\('buildOneRunCommand:.*?\n  \}\)\n(?=\}\)\s*$)",
         flags=re.S,
     )
-    test_replacement = r'''  it('buildOneRunCommand: tries hostname HTTPS before public HTTP/IP fallback', () => {
+    test_replacement = r'''  it('buildOneRunCommand: tries raw public HTTP/IP before hostname HTTPS', () => {
     const service = new MikrotikService(
       new ConfigService({
         API_PUBLIC_HOST: 'arofi.net',
-        MIKROTIK_CALLBACK_HTTP_URL: 'http://95.111.234.34',
+        MIKROTIK_CALLBACK_HTTP_URL: 'http://dev.arofi.net',
       }),
     )
 
@@ -242,11 +245,11 @@ def patch_unit_test() -> None:
 
     expect(cmd).toContain('[:parse "/system ntp client set enabled=yes servers=pool.ntp.org"]')
     expect(cmd).toContain('primary-ntp=162.159.200.1')
-    const httpsIdx = cmd.indexOf('https://arofi.net/api/mikrotik/script/test-reg-key')
     const httpIdx = cmd.indexOf('http://95.111.234.34/api/mikrotik/script/test-reg-key')
-    expect(httpsIdx).toBeGreaterThan(-1)
+    const httpsIdx = cmd.indexOf('https://arofi.net/api/mikrotik/script/test-reg-key')
     expect(httpIdx).toBeGreaterThan(-1)
-    expect(httpsIdx).toBeLessThan(httpIdx)
+    expect(httpsIdx).toBeGreaterThan(-1)
+    expect(httpIdx).toBeLessThan(httpsIdx)
     expect(cmd).toContain('check-certificate=no')
     expect(cmd.match(/\/tool fetch/g)).toHaveLength(2)
     expect(cmd).toContain(':while ($attempts < 3)')
@@ -263,10 +266,10 @@ def patch_unit_test() -> None:
         )
 
     for marker in (
-        "tries hostname HTTPS before public HTTP/IP fallback",
-        "https://arofi.net/api/mikrotik/script/test-reg-key",
+        "tries raw public HTTP/IP before hostname HTTPS",
         "http://95.111.234.34/api/mikrotik/script/test-reg-key",
-        "expect(httpsIdx).toBeLessThan(httpIdx)",
+        "https://arofi.net/api/mikrotik/script/test-reg-key",
+        "expect(httpIdx).toBeLessThan(httpsIdx)",
         "expect(cmd.match(/\\/tool fetch/g)).toHaveLength(2)",
         "expect(cmd).toContain(':while ($attempts < 3)')",
         "expect(cmd).not.toContain('waiting 20 seconds')",
@@ -288,9 +291,9 @@ def main() -> None:
     patch_unit_test()
 
     print(
-        "MikroTik onboarding verified end-to-end: RouterOS 6/7 HTTPS-first API bootstrap, "
-        "public HTTP/IP fallback, foreground import, and no 20-second cooldown; Admin rejects "
-        "stale legacy API installer commands and uses the environment-aware local fallback."
+        "MikroTik onboarding verified end-to-end: RouterOS 6/7 raw-IP-first bootstrap, "
+        "HTTPS fallback, foreground import, and no 20-second cooldown; Admin rejects "
+        "stale installer commands and uses the same reliable raw-IP-first fallback."
     )
 
 
