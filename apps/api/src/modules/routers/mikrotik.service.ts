@@ -198,10 +198,11 @@ export class MikrotikService {
   }
 
   getRadiusServerConfig(sharedSecret?: string) {
-    const host =
+    const configuredHost =
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ??
       this.configService.get<string>('RADIUS_SERVER_HOST') ??
       '127.0.0.1'
+    const host = this.resolveRouterOsRadiusAddress(configuredHost)
     const authPort = Number.parseInt(this.configService.get<string>('RADIUS_AUTH_PORT') ?? '1812', 10)
     const accountingPort = Number.parseInt(
       this.configService.get<string>('RADIUS_ACCOUNTING_PORT') ?? '1813',
@@ -213,7 +214,7 @@ export class MikrotikService {
       ''
     // Optional standby FreeRADIUS instance on the same shared secret. RouterOS
     // natively supports multiple `/radius add service=hotspot` entries and
-    // fails over to the next one if the first stops answering — no extra
+    // fails over to the next one if the first stops answering - no extra
     // logic needed on the router side, just a second config line.
     const secondaryHost = this.configService.get<string>('RADIUS_SECONDARY_HOST') || undefined
 
@@ -222,8 +223,35 @@ export class MikrotikService {
       authPort,
       accountingPort,
       sharedSecret: secret,
-      secondaryHost,
+      secondaryHost: secondaryHost ? this.resolveRouterOsRadiusAddress(secondaryHost) : undefined,
     }
+  }
+
+  private resolveRouterOsRadiusAddress(configuredHost: string) {
+    const host = this.normalizeHostForRouterOs(configuredHost)
+    if (net.isIP(host)) {
+      return host
+    }
+
+    const explicitIp = [
+      this.configService.get<string>('RADIUS_PUBLIC_IP'),
+      this.configService.get<string>('RADIUS_SERVER_IP'),
+      this.configService.get<string>('VPS_PUBLIC_IP'),
+      this.configService.get<string>('SERVER_PUBLIC_IP'),
+      this.configService.get<string>('MIKROTIK_CALLBACK_PUBLIC_IP'),
+    ]
+      .map((value) => this.normalizeHostForRouterOs(value))
+      .find((value) => value && net.isIP(value))
+
+    return explicitIp ?? host
+  }
+
+  private normalizeHostForRouterOs(value?: string | null) {
+    return (value ?? '')
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/:\d+$/, '')
   }
 
   buildProvisioningScript(input: ProvisioningInput) {

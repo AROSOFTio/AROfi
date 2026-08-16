@@ -23,6 +23,7 @@ services:
       # Neutralize all router-facing production targets on desktop.
       MIKROTIK_CALLBACK_HTTP_URL: http://127.0.0.1:18080
       RADIUS_PUBLIC_HOST: 127.0.0.1
+      RADIUS_PUBLIC_IP: ${RADIUS_PUBLIC_IP:-}
       VPN_SERVER_IP: 127.0.0.1
       ROUTER_PROBE_ENABLED: "false"
       ROUTER_ALERTS_ENABLED: "false"

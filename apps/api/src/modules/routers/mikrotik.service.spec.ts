@@ -215,6 +215,33 @@ describe('MikrotikService', () => {
     expect(script).toContain('AROFi anti-tether')
   })
 
+  it('uses an explicit IP for RouterOS RADIUS entries when the public host is a DNS name', () => {
+    const service = new MikrotikService(
+      new ConfigService({
+        RADIUS_PUBLIC_HOST: 'dev.arofi.net',
+        RADIUS_PUBLIC_IP: '95.111.234.34',
+        RADIUS_SHARED_SECRET: 'radius-secret',
+      }),
+    )
+
+    const radius = service.getRadiusServerConfig()
+    const script = service.buildProvisioningScript({
+      routerName: 'RouterOS 6 Test',
+      identity: 'routeros6-test',
+      registrationKey: 'routeros6-token',
+      apiPort: 8728,
+      connectionMode: RouterConnectionMode.ROUTEROS_API,
+      radiusHost: radius.host,
+      radiusAuthPort: radius.authPort,
+      radiusAccountingPort: radius.accountingPort,
+      sharedSecret: radius.sharedSecret,
+    })
+
+    expect(radius.host).toBe('95.111.234.34')
+    expect(script).toContain('/radius add service=hotspot address=95.111.234.34')
+    expect(script).not.toContain('/radius add service=hotspot address=dev.arofi.net')
+  })
+
   it('configures dns-name and static DNS entry when dnsName parameter is provided', () => {
     const service = new MikrotikService(new ConfigService({}))
 
