@@ -102,6 +102,8 @@ export class RouterCaptiveUiV3Initializer implements OnModuleInit {
       '<div id="loading" class="spin-wrap"><div class="wifi-loader" aria-hidden="true"><i></i><i></i><i></i><b></b></div><p>Loading packages...</p></div>',
     )
 
+    html = html.replace('id="content" style="display:none"', 'id="content" style="display:block"')
+
     html = html.replace(
       '<div class="tv-voucher" id="tvVoucherBox">',
       '<div class="utility-row"><div class="tv-voucher" id="tvVoucherBox">',
@@ -143,6 +145,22 @@ export class RouterCaptiveUiV3Initializer implements OnModuleInit {
     html = html.replace(
       "      sst('Initiating payment...','info');",
       "      closeMsg();setPayState('Sending payment prompt...','wait');",
+    )
+    html = html.replace(
+      "      if(!/^256\\d{9}$/.test(c)){sst('Enter a valid Mobile Money number.','err');return;}",
+      "      if(!/^256\\d{9}$/.test(c)){setPayState('Enter a valid Mobile Money number.','err');return;}",
+    )
+    html = html.replace(
+      "        if(!payMac){sst('Enter the Smart TV wireless MAC address before paying for this TV package.','err');return;}",
+      "        if(!payMac){setPayState('Enter the Smart TV wireless MAC address before paying.','err');return;}",
+    )
+    html = html.replace(
+      "        if(err){ sst(err.message||'Failed','err');b.disabled=false;return; }",
+      "        if(err){ setPayState(err.message||'Payment request failed.','err');b.disabled=false;return; }",
+    )
+    html = html.replace(
+      "        if(pmt.status==='FAILED'){ sst(pmt.statusMessage||'Failed','err');b.disabled=false;return; }",
+      "        if(pmt.status==='FAILED'){ setPayState(pmt.statusMessage||'Payment request failed.','err');b.disabled=false;return; }",
     )
     html = html.replace(
       "      document.getElementById('pbtn').disabled=false;\n      document.getElementById('payOverlay').classList.add('on');",
@@ -193,7 +211,7 @@ body{background:#f6f8fb!important;color:#111827!important;font-family:Inter,ui-s
 .card{max-width:430px!important;background:#fff!important;border:1px solid #e5e7eb!important;border-radius:16px!important;padding:14px!important;box-shadow:0 3px 14px rgba(15,23,42,.06)!important}
 .hdr{min-height:72px!important;justify-content:center!important}.wifi-icon{width:42px!important;height:42px!important;margin:0 0 2px!important;color:#10b981!important;animation:arofiWifiPulse 1.8s ease-in-out infinite!important}.wifi-icon svg{width:42px!important;height:42px!important}.title{font-size:14px!important;font-weight:800!important;letter-spacing:.045em!important;opacity:1!important;color:#2563eb!important;margin-top:0!important}
 @keyframes arofiWifiPulse{0%,100%{opacity:.72;transform:scale(.97)}50%{opacity:1;transform:scale(1.035)}}
-.spin-wrap{padding:23px 0 18px!important}.spinner{display:none!important}.wifi-loader{position:relative;width:42px;height:32px;margin:0 auto;color:#2563eb}.wifi-loader i{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);border:2.5px solid transparent;border-top-color:currentColor;border-radius:50%;animation:arofiArc 1.05s ease-in-out infinite}.wifi-loader i:nth-child(1){width:38px;height:38px}.wifi-loader i:nth-child(2){width:27px;height:27px;animation-delay:.12s}.wifi-loader i:nth-child(3){width:16px;height:16px;animation-delay:.24s}.wifi-loader b{position:absolute;left:50%;bottom:2px;width:5px;height:5px;border-radius:50%;background:currentColor;transform:translateX(-50%);animation:arofiDot 1.05s ease-in-out infinite .3s}@keyframes arofiArc{0%,100%{opacity:.18;transform:translateX(-50%) translateY(2px) scale(.94)}45%{opacity:1;transform:translateX(-50%) scale(1)}}@keyframes arofiDot{0%,100%{opacity:.28}45%{opacity:1}}.spin-wrap p{margin-top:7px!important;font-size:12px!important;color:#64748b!important}
+.spin-wrap{padding:7px 0 5px!important}.spinner{display:none!important}.wifi-loader{position:relative;width:34px;height:27px;margin:0 auto;color:#2563eb}.wifi-loader i{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);border:2.5px solid transparent;border-top-color:currentColor;border-radius:50%;animation:arofiArc 1.05s ease-in-out infinite}.wifi-loader i:nth-child(1){width:31px;height:31px}.wifi-loader i:nth-child(2){width:22px;height:22px;animation-delay:.12s}.wifi-loader i:nth-child(3){width:13px;height:13px;animation-delay:.24s}.wifi-loader b{position:absolute;left:50%;bottom:2px;width:5px;height:5px;border-radius:50%;background:currentColor;transform:translateX(-50%);animation:arofiDot 1.05s ease-in-out infinite .3s}@keyframes arofiArc{0%,100%{opacity:.18;transform:translateX(-50%) translateY(2px) scale(.94)}45%{opacity:1;transform:translateX(-50%) scale(1)}}@keyframes arofiDot{0%,100%{opacity:.28}45%{opacity:1}}.spin-wrap p{margin-top:7px!important;font-size:12px!important;color:#64748b!important}
 .resume-box{display:none;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;padding:8px 9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#166534;font-size:11px;font-weight:800}.resume-box button{border:0;background:#16a34a;color:#fff;border-radius:8px;padding:7px 11px;font-size:11px;font-weight:900}
 .quick-row{gap:7px!important;margin-top:10px!important}.quick-row input{background:#fff!important;border-color:#dbe1e8!important;border-radius:10px!important;padding:11px 12px!important;font-size:13px!important}.connect-btn{border-radius:10px!important;padding:11px 16px!important;font-size:13px!important;box-shadow:none!important}
 .utility-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;margin-top:7px;align-items:start}.utility-row .tv-voucher,.utility-row .find-wrap{margin:0!important;min-width:0!important}.utility-row .tv-voucher{padding:0!important;border:0!important;background:transparent!important}.utility-row .tv-voucher label,.utility-row .find-link{width:100%!important;min-height:38px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;margin:0!important;padding:8px!important;border:1px solid #e2e8f0!important;border-radius:10px!important;background:#fff!important;color:#1d4ed8!important;font-size:11px!important;font-weight:800!important;line-height:1.1!important;text-align:center!important;box-shadow:none!important}.utility-row .tv-voucher input[type=checkbox]{width:14px!important;height:14px!important}.utility-row .tv-voucher.on{grid-column:1/-1!important}.utility-row .tv-voucher.on .tv-mac-wrap{margin-top:7px!important}.find-panel{margin-top:7px!important;border-color:#e5e7eb!important;border-radius:10px!important;padding:9px!important;box-shadow:none!important}
