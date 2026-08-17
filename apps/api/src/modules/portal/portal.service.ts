@@ -712,7 +712,16 @@ export class PortalService {
     routerKey?: string
     hotspotServerName?: string
     loginUrl?: string
-  }) {
+  }): Promise<{
+    macAddress?: string
+    ipAddress?: string
+    routerId?: string
+    routerKey?: string
+    hotspotServerName?: string
+    loginUrl?: string
+    tenantDomain?: string
+    tenantId?: string
+  }> {
     if (!hotspot?.routerKey) {
       return hotspot ?? {}
     }
@@ -732,7 +741,7 @@ export class PortalService {
     })
 
     if (!router) {
-      return hotspot
+      return hotspot ?? {}
     }
 
     return {
