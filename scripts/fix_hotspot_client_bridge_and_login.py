@@ -16,6 +16,10 @@ This patch:
 - publishes ``arofi.login`` as a stable local alias for manual portal testing;
 - installs ``alogin.html`` as well as login/status so RouterOS has a real
   post-auth page when a client completes HotSpot authentication.
+
+``login.html`` remains authoritative. A failed optional alogin/status fetch must
+never prevent the login portal itself from becoming active; the final captive
+normalizer enforces that invariant later in the build.
 """
 
 from pathlib import Path
@@ -86,13 +90,6 @@ def patch_local_login_alias(text: str) -> str:
 def patch_alogin_install(text: str) -> str:
     text = replace_once(
         text,
-        '          `:if ($arofiHtmlOk = 1 && $arofiStatusOk = 1) do={`,\n',
-        '          `:if ($arofiHtmlOk = 1 && $arofiStatusOk = 1 && $arofiAloginOk = 1) do={`,\n',
-        "custom portal activation condition",
-    )
-
-    text = replace_once(
-        text,
         '''      `:local arofiStatusPath ($arofiPortalDir . "/status.html")`,
       `:do { /file remove [find name=$arofiLoginPath] } on-error={}`,
       `:do { /file remove [find name=$arofiStatusPath] } on-error={}`,
@@ -138,7 +135,7 @@ def patch_alogin_install(text: str) -> str:
       `      :set arofiAloginOk 1`,
       `    }`,
       `  } on-error={`,
-      `    :put "WARNING: alogin.html install FAILED - successful HotSpot login may use the MikroTik fallback page."`,
+      `    :put "AROFi: optional alogin.html completion page was not installed; login.html remains active."`,
       `  }`,
       `}`,
       ...profileSet,
@@ -161,7 +158,7 @@ def verify(text: str) -> None:
         'name="arofi.login" address=${gatewayIp}',
         ':local arofiAloginPath ($arofiPortalDir . "/alogin.html")',
         "AROFi HotSpot alogin.html installed.",
-        "$arofiAloginOk = 1",
+        ":set arofiAloginOk 1",
     )
     for marker in required:
         if marker not in text:
@@ -189,7 +186,7 @@ def main() -> None:
     MIKROTIK.write_text(text, encoding="utf-8")
     print(
         "HotSpot client path repaired: non-WAN AP/LAN ports are captive, "
-        "arofi.login resolves locally, and alogin.html is installed."
+        "arofi.login resolves locally, and alogin.html is installed without gating login.html."
     )
 
 
