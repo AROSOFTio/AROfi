@@ -71,8 +71,6 @@ def patch_flash_hotspot_path() -> None:
         if token not in block:
             fail(f"flash-aware portal installer missing marker: {token}")
 
-    # RouterOS 7 must retain the existing root hotspot path. Flash selection is
-    # explicitly v6-only.
     if ':if ($arofiPortalRosMajor = "7")' in block:
         fail("RouterOS 7 was added to the RouterOS 6 flash-path compatibility branch")
 
@@ -106,6 +104,12 @@ def patch_login_browser_context() -> None:
         if old not in block:
             fail("RouterOS values are not in the expected login-script shape")
         block = block.replace(old, new, 1)
+
+    # RouterCaptiveFlowInitializer historically used a literal '$(' sentinel.
+    # Normalize it here before parse validation; the permanent guard later also
+    # rejects any reintroduction.
+    block = block.replace("indexOf('$(')", "indexOf(String.fromCharCode(36,40))")
+    block = block.replace('indexOf("$(")', 'indexOf(String.fromCharCode(36,40))')
 
     scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", block, flags=re.S | re.I)
     if not scripts:
@@ -143,14 +147,14 @@ def patch_login_browser_context() -> None:
 def patch_completion_scripts() -> None:
     for path in (CONTROLLER, ALOGIN):
         text = path.read_text(encoding="utf-8")
-        # Completion has exactly one job: close the captive webview and hand the
-        # OS its normal connectivity probe. No RouterOS redirect value is needed.
-        text = re.sub(
+        text, count = re.subn(
             r"\s*var target='\$\(link-redirect\)';\n\s*if\(!target\|\|target\.indexOf\([^\n]+\)target=finishTarget\(\);",
             "\n  var AROFI_ROS_MACRO=String.fromCharCode(36,40);\n  var target=finishTarget();",
             text,
             count=1,
         )
+        if count == 0 and "var target=finishTarget();" not in text:
+            fail(f"completion redirect block could not be normalized in {path.relative_to(ROOT)}")
         path.write_text(text, encoding="utf-8")
 
 
