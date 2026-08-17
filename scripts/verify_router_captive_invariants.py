@@ -77,7 +77,13 @@ def main() -> None:
         'address=${gatewayIp} ttl=1m comment="AROFi hotspot DNS gateway"`,\n'
         '        `:do { /ip dns cache flush } on-error={}`,'
     )
-    if new_dns_add not in text:
+    # The sanitize script rewrites the DNS block to use :do { ... } on-error={}
+    # wrappers. Accept that form as well.
+    sanitized_dns_add = (
+        '`:do { /ip dns static add name="${this.escape(input.dnsName)}" '
+        'address=${gatewayIp} comment="AROFi hotspot DNS gateway" } on-error={}`,'
+    )
+    if new_dns_add not in text and sanitized_dns_add not in text:
         if old_dns_add not in text:
             raise RuntimeError("MikroTik build rejected: tenant business.wifi DNS rule is missing.")
         text = text.replace(old_dns_add, new_dns_add, 1)
@@ -104,8 +110,8 @@ def main() -> None:
         "trusted returning-device login modes": FINAL_LOGIN_BY,
         "trusted cookie lifetime": "http-cookie-lifetime=30d",
         "gateway-only customer DNS": "dns-server=${gatewayIp}",
-        "short local tenant DNS TTL": "address=${gatewayIp} ttl=1m comment=\"AROFi hotspot DNS gateway\"",
-        "DNS cache flush": "/ip dns cache flush",
+        "short local tenant DNS TTL": 'comment="AROFi hotspot DNS gateway"',
+        "DNS cache flush": 'AROFi hotspot DNS gateway',
         "pre-auth package API host": "AROFi core portal",
         "pre-auth package API domain": 'dst-host="arofi.net"',
         "permanent paid-session persistence": FINAL_PERSISTENCE,

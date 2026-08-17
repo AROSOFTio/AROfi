@@ -339,7 +339,7 @@ export class PortalService {
     loginUrl?: string
   }) {
     const resolvedHotspot = await this.resolveHotspotContext(input)
-    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, resolvedHotspot.routerId)
+    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, resolvedHotspot.routerId, resolvedHotspot.tenantId)
 
     if (!activation) {
       throw new NotFoundException('No active access was found for this device')
@@ -756,7 +756,9 @@ export class PortalService {
         status: PackageActivationStatus.ACTIVE,
         endsAt: { gt: new Date() },
         boundMacAddress: normalizedMac,
-        ...(routerId ? { OR: [{ routerId }, { routerId: null }] } : {}),
+        // Any router/AP under the same business (tenantId) recognizes active access.
+        // Router-level filter only applies as fallback when tenantId is unknown.
+        ...(!tenantId && routerId ? { OR: [{ routerId }, { routerId: null }] } : {}),
       },
       include: {
         ...this.activationInclude,
