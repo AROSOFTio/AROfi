@@ -12,6 +12,7 @@ import {
   WalletOwnerType,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+import { buildTenantHotspotDomain, buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'
 import { BillingService } from '../billing/billing.service'
 import { FeeEngineService } from '../billing/fee-engine.service'
 import { MailService } from '../mail/mail.service'
@@ -247,7 +248,10 @@ export class VouchersService {
           quantity: batch.quantity,
           faceValueUgx: batch.faceValueUgx,
           status: batch.status,
-          tenant: batch.tenant,
+          tenant: {
+            ...batch.tenant,
+            hotspotDomain: this.buildTenantHotspotDomain(batch.tenant.name),
+          },
           package: batch.package,
           agent: batch.agent,
           generatedCount,
@@ -1618,11 +1622,7 @@ export class VouchersService {
   }
 
   private buildVoucherPortalUrl(voucherCode: string, hotspotDomain?: string) {
-    const baseUrl = hotspotDomain
-      ? `http://${hotspotDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/login`
-      : this.getVoucherQrBaseUrl()
-    const separator = baseUrl.includes('?') ? '&' : '?'
-    return `${baseUrl}${separator}voucher=${encodeURIComponent(voucherCode)}`
+    return buildVoucherHotspotUrl(voucherCode, hotspotDomain)
   }
 
   private generateBatchScopedSerialNumber(batchId: string, index: number) {
@@ -1631,14 +1631,7 @@ export class VouchersService {
   }
 
   private buildTenantHotspotDomain(tenantName?: string | null) {
-    const slug = (tenantName ?? '')
-      .replace(/^arofi(?:\s+wifi)?(?:\s+tenant)?[\s:_-]*/i, '')
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '')
-
-    return `${slug || 'arofi'}.wifi`
+    return buildTenantHotspotDomain(tenantName)
   }
 
   private getVoucherPortalBaseUrl() {

@@ -104,11 +104,18 @@ describe('MikrotikService', () => {
     expect(script).toContain('bridge=arofi-hotspot')
     expect(script).toContain('/interface ethernet find')
     expect(script).toContain('$ethName != "ether1"')
+    expect(script).toContain('$ethName != "ether2"')
+    expect(script).toContain('$ethRunning = false')
+    expect(script).toContain('destination=$arofiWanMgmtAnchor')
+    expect(script).toContain('destination=$arofiHotspotInputAnchor')
+    expect(script).toContain('destination=$arofiHotspotMgmtAnchor')
+    expect(script).toContain('destination=$arofiHotspotForwardAnchor')
+    expect(script).not.toContain('destination=0')
     expect(script).toContain('/ip address add address=10.55.0.1/24 interface=arofi-hotspot')
     expect(script).toContain('/ip pool add name=arofi-pool')
     expect(script).toContain('/ip dhcp-server add name=arofi-dhcp')
     expect(script).toContain('/ip dns set allow-remote-requests=yes')
-    expect(script).toContain(':foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes]')
+    expect(script).toContain(':foreach r in=[/ip route find dst-address="0.0.0.0/0" active=yes]')
     expect(script).toContain('PPPoE WAN scan skipped')
     expect(script).toContain('LTE WAN scan skipped')
     expect(script).toContain('\\$arofiWanIface')
@@ -221,8 +228,11 @@ describe('MikrotikService', () => {
     })
 
     expect(script).toContain('dns-name="tenantname.wifi"')
-    expect(script).toContain('/ip dns static remove [find name="tenantname.wifi"]')
-    expect(script).toContain('/ip dns static add name="tenantname.wifi" address=10.55.0.1')
+    // A RouterOS HotSpot may own a dynamic dns-name row; only AROFi's static row is removable.
+    expect(script).toContain(':do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}')
+    expect(script).toContain(':do { /ip dns static add name="tenantname.wifi" address=10.55.0.1 comment="AROFi hotspot DNS gateway" } on-error={}')
+    expect(script).not.toContain('/ip dns static remove [find name="tenantname.wifi"]')
+    // dynamic DNS row must never abort provisioning
   })
 
   it('buildOneRunCommand: tries plain HTTP fallback FIRST, then HTTPS, and includes NTP sync', () => {

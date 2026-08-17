@@ -289,7 +289,8 @@ export class MikrotikService {
       `/ip firewall filter remove [find comment="AROFi WAN mgmt block"]`,
       `:if ($arofiMgmtWan != "") do={`,
       `  /ip firewall filter add chain=input action=drop in-interface=$arofiMgmtWan protocol=tcp dst-port=80,443,8291,8728,8729,${input.apiPort} comment="AROFi WAN mgmt block"`,
-      `  :foreach r in=[/ip firewall filter find comment="AROFi WAN mgmt block"] do={ /ip firewall filter move $r destination=0 }`,
+      `  :local arofiWanMgmtAnchor [/ip firewall filter find chain=input dynamic=no]`,
+      `  :if ([:len $arofiWanMgmtAnchor] > 0) do={ :set arofiWanMgmtAnchor [:pick $arofiWanMgmtAnchor 0]; :foreach r in=[/ip firewall filter find comment="AROFi WAN mgmt block"] do={ :do { /ip firewall filter move $r destination=$arofiWanMgmtAnchor } on-error={} } }`,
       `}`,
       // Deliberately NOT touching /tool mac-server allowed-interface-list here.
       // Forcing it to "all" would expose MAC-Telnet/MAC-WinBox discovery (a
@@ -356,8 +357,8 @@ export class MikrotikService {
       // BOTH provisioning modes — SAFE_EXISTING_ROUTER reuses the operator's own
       // hotspot, which has no reason to already know about "<tenant>.wifi".
       ...(input.dnsName ? [
-        `/ip dns static remove [find name="${this.escape(input.dnsName)}"]`,
-        `/ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway"`,
+        `:do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}`,
+        `:do { /ip dns static add name="${this.escape(input.dnsName)}" address=${gatewayIp} comment="AROFi hotspot DNS gateway" } on-error={}`,
       ] : []),
     ]
 
@@ -365,6 +366,8 @@ export class MikrotikService {
       ``,
       `# 4. Walled garden so the portal + payment pages load before login`,
       ...this.buildWalledGarden(input.portalHosts ?? []),
+      `/ip hotspot walled-garden remove [find comment="AROFi core portal"]`,
+      `/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"`,
       // Also allow the raw HTTP-fallback IP by address so captive-portal
       // mini-browsers can reach the API even when HTTPS or hostname DNS fails.
       ...this.buildWalledGardenIp(this.resolveHttpCallbackBaseUrl()),
@@ -430,7 +433,7 @@ export class MikrotikService {
       `/ip pool remove [find name=arofi-pool]`,
       `/ip pool add name=arofi-pool ranges=${poolRange}`,
       `/ip dhcp-server network remove [find address="${subnet}"]`,
-      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,
+      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} dns-server=${gatewayIp}`,
       `/ip dhcp-server remove [find name=arofi-dhcp]`,
       `/ip dhcp-server add name=arofi-dhcp interface=arofi-hotspot address-pool=arofi-pool lease-time=1h disabled=no`,
       `/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8`,
@@ -459,12 +462,16 @@ export class MikrotikService {
       `  }`,
       `}`,
       ``,
-      `# 3d-2. Put wired LAN ports on the captive hotspot bridge too`,
-      `# Excludes the detected WAN and ether1 so upstream internet stays intact.`,
+      `# 3d-2. Preserve owner management while assigning unused wired ports`,
+      `# ether2 and every currently running Ethernet link stay on the existing management bridge.`,
       `:foreach e in=[/interface ethernet find] do={`,
       `  :local ethName [/interface ethernet get $e name]`,
-      `  :if ($ethName != "" && $ethName != "ether1" && $ethName != $wanIface && $ethName != "${this.escape(remoteClientName)}") do={`,
-      `    :if ([:len [/interface bridge port find interface=$ethName]]=0) do={ /interface bridge port add bridge=arofi-hotspot interface=$ethName } else={ /interface bridge port set [find interface=$ethName] bridge=arofi-hotspot }`,
+      `  :local ethRunning [/interface ethernet get $e running]`,
+      `  :if ($ethName != "" && $ethName != "ether1" && $ethName != "ether2" && $ethName != $wanIface && $ethName != "${this.escape(remoteClientName)}" && ($ethRunning = false)) do={`,
+      `    :local ethBridgePort [/interface bridge port find interface=$ethName]`,
+      `    :if ([:len $ethBridgePort]=0) do={ /interface bridge port add bridge=arofi-hotspot interface=$ethName } else={ /interface bridge port set $ethBridgePort bridge=arofi-hotspot }`,
+      `  } else={`,
+      `    :if ($ethName != "" && $ethName != "ether1" && $ethName != $wanIface && $ethName != "${this.escape(remoteClientName)}") do={ :put ("AROFi: preserving management/link-active port " . $ethName) }`,
       `  }`,
       `}`,
       `/ip firewall nat remove [find comment="AROFi hotspot nat"]`,
@@ -479,7 +486,8 @@ export class MikrotikService {
       `/ip firewall filter add chain=input action=accept src-address=${subnet} protocol=udp dst-port=53 comment="AROFi hotspot input"`,
       `/ip firewall filter add chain=input action=accept src-address=${subnet} protocol=tcp dst-port=53 comment="AROFi hotspot input"`,
       `/ip firewall filter add chain=input action=accept src-address=${subnet} dst-address=${gatewayIp} comment="AROFi hotspot input"`,
-      `:foreach r in=[/ip firewall filter find comment="AROFi hotspot input"] do={ /ip firewall filter move $r destination=0 }`,
+      `:local arofiHotspotInputAnchor [/ip firewall filter find chain=input dynamic=no]`,
+      `:if ([:len $arofiHotspotInputAnchor] > 0) do={ :set arofiHotspotInputAnchor [:pick $arofiHotspotInputAnchor 0]; :foreach r in=[/ip firewall filter find comment="AROFi hotspot input"] do={ :do { /ip firewall filter move $r destination=$arofiHotspotInputAnchor } on-error={} } }`,
       ``,
       // The broad "allow gateway access" rule just above is needed for the
       // hotspot's own captive-portal page serving (login/status pages are
@@ -495,7 +503,8 @@ export class MikrotikService {
       `/ip firewall filter add chain=input action=drop src-address=${subnet} dst-address=${gatewayIp} protocol=tcp dst-port=8291 comment="AROFi hotspot mgmt block"`,
       `/ip firewall filter add chain=input action=drop src-address=${subnet} dst-address=${gatewayIp} protocol=tcp dst-port=8728 comment="AROFi hotspot mgmt block"`,
       `/ip firewall filter add chain=input action=drop src-address=${subnet} dst-address=${gatewayIp} protocol=tcp dst-port=8729 comment="AROFi hotspot mgmt block"`,
-      `:foreach r in=[/ip firewall filter find comment="AROFi hotspot mgmt block"] do={ /ip firewall filter move $r destination=0 }`,
+      `:local arofiHotspotMgmtAnchor [/ip firewall filter find chain=input dynamic=no]`,
+      `:if ([:len $arofiHotspotMgmtAnchor] > 0) do={ :set arofiHotspotMgmtAnchor [:pick $arofiHotspotMgmtAnchor 0]; :foreach r in=[/ip firewall filter find comment="AROFi hotspot mgmt block"] do={ :do { /ip firewall filter move $r destination=$arofiHotspotMgmtAnchor } on-error={} } }`,
       ``,
       // out-interface=$wanIface (not a bare accept-from-subnet) so hotspot
       // customers can only ever reach the internet via the detected WAN —
@@ -508,7 +517,8 @@ export class MikrotikService {
       `/ip firewall filter remove [find comment="AROFi hotspot forward"]`,
       `/ip firewall filter add chain=forward action=accept src-address=${subnet} out-interface=$wanIface comment="AROFi hotspot forward"`,
       `/ip firewall filter add chain=forward action=accept dst-address=${subnet} connection-state=established,related comment="AROFi hotspot forward"`,
-      `:foreach r in=[/ip firewall filter find comment="AROFi hotspot forward"] do={ /ip firewall filter move $r destination=0 }`,
+      `:local arofiHotspotForwardAnchor [/ip firewall filter find chain=forward dynamic=no]`,
+      `:if ([:len $arofiHotspotForwardAnchor] > 0) do={ :set arofiHotspotForwardAnchor [:pick $arofiHotspotForwardAnchor 0]; :foreach r in=[/ip firewall filter find comment="AROFi hotspot forward"] do={ :do { /ip firewall filter move $r destination=$arofiHotspotForwardAnchor } on-error={} } }`,
       ``,
       `# 3e. Create the HotSpot server on the isolated bridge`,
       `/ip hotspot profile set [find name="${profileName}"] hotspot-address=${gatewayIp}`,
@@ -1325,7 +1335,7 @@ export class MikrotikService {
     const excluded = this.escape(excludeIface)
     return [
       `:local ${varName} ""`,
-      `:foreach r in=[/ip route find dst-address=0.0.0.0/0 active=yes] do={`,
+      `:foreach r in=[/ip route find dst-address="0.0.0.0/0" active=yes] do={`,
       `  :global arofiTmpRouteId $r`,
       `  :global arofiTmpIface ""`,
       `  :do {`,

@@ -99,6 +99,19 @@ function parseHosts(value: string) {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
+function normalizeRouterOsCommand(value: string) {
+  return value
+    // Rich-text editors sometimes turn a literal URL into [url](url). RouterOS
+    // needs only the URL inside the quotes.
+    .replace(/\[(https?:\/\/[^\]]+)\]\((https?:\/\/[^)]+)\)/gi, '$2')
+    // Remove accidental escaping added by chat/rich-text copies, e.g. \:if.
+    .replace(/\\:/g, ':')
+    // Invisible formatting characters can make an otherwise correct command fail.
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim()
+}
+
 function formatSecondsDuration(seconds?: number | null) {
   if (!seconds || seconds <= 0) return '0 min'
   const minutes = Math.max(1, Math.round(seconds / 60))
@@ -452,7 +465,8 @@ export default function RoutersManager() {
       serverCommand.includes('http://95.111.234.34/api/mikrotik/script/') &&
       !serverCommand.includes('waiting 20 seconds') &&
       !serverCommand.includes(':delay 20s')
-    return hasSafeBootstrap ? serverCommand : (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
+    const command = hasSafeBootstrap ? serverCommand : (registrationKey ? buildSetupFallbackCommand(registrationKey) : '')
+    return normalizeRouterOsCommand(command)
   }
 
   async function copyScript() {

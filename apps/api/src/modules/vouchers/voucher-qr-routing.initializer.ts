@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common'
 import { VouchersService } from './vouchers.service'
+import { buildVoucherHotspotUrl } from '../../common/tenant-hotspot-domain'
 
 type VoucherQrUrlBuilder = {
   buildVoucherPortalUrl: (voucherCode: string, hotspotDomain?: string) => string
@@ -22,17 +23,7 @@ export class VoucherQrRoutingInitializer implements OnModuleInit {
     const service = this.vouchersService as unknown as VoucherQrUrlBuilder
 
     service.buildVoucherPortalUrl = (voucherCode: string, hotspotDomain?: string) => {
-      void hotspotDomain
-      const configuredBase = (
-        process.env.VOUCHER_QR_LOCAL_LOGIN_URL ??
-        'http://10.55.0.1/login'
-      ).trim()
-      const withProtocol = /^https?:\/\//i.test(configuredBase)
-        ? configuredBase
-        : `http://${configuredBase}`
-      const normalized = withProtocol.replace(/\/$/, '')
-      const loginBase = normalized.endsWith('/login') ? normalized : `${normalized}/login`
-      return `${loginBase}?voucher=${encodeURIComponent(voucherCode.trim().toUpperCase())}`
+      return buildVoucherHotspotUrl(voucherCode, hotspotDomain)
     }
   }
 }
