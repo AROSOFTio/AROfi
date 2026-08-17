@@ -22,10 +22,6 @@ export function appendInstantAloginInstaller(script: string) {
 
   const additions: string[] = []
 
-  // Defensive fallback. RouterCaptiveFlowInitializer normally installs the
-  // self-healing version of this policy before the response reaches this
-  // interceptor. These commands protect any alternate provisioning response
-  // path without introducing automatic RADIUS MAC authentication.
   if (!script.includes(SESSION_PERSISTENCE_MARKER)) {
     additions.push(
       SESSION_PERSISTENCE_MARKER,
@@ -63,11 +59,18 @@ export function appendInstantAloginInstaller(script: string) {
 
       additions.push(
         ALOGIN_INSTALLER_MARKER,
-        ':do { /file remove [find name="hotspot/alogin.html"] } on-error={}',
+        ':local arofiAloginDir "hotspot"',
+        ':local arofiAloginRosVersion [/system resource get version]',
+        ':local arofiAloginRosMajor [:pick $arofiAloginRosVersion 0 1]',
+        ':if ($arofiAloginRosMajor = "6" && [:len [/file find name="flash"]] > 0) do={ :set arofiAloginDir "flash/hotspot" }',
+        ':do { :if ([:len [/file find name=$arofiAloginDir]] = 0) do={ /file add name=$arofiAloginDir type=directory } } on-error={}',
+        ':local arofiAloginPath ($arofiAloginDir . "/alogin.html")',
+        ':do { /file remove [find name=$arofiAloginPath] } on-error={}',
+        ':if ($arofiAloginRosMajor = "6" && $arofiAloginDir = "flash/hotspot") do={ :do { /file remove [find name="hotspot/alogin.html"] } on-error={} }',
         ':local arofiAloginOk 0',
         ':do {',
-        `  /tool fetch url="${aloginUrl}" check-certificate=no mode=https dst-path="hotspot/alogin.html"`,
-        '  :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
+        `  /tool fetch url="${aloginUrl}" check-certificate=no mode=https dst-path=$arofiAloginPath`,
+        '  :if ([:len [/file find name=$arofiAloginPath]] > 0) do={',
         '    :set arofiAloginOk 1',
         '    :put "AROFi HotSpot alogin.html installed - post-login redirect is instant."',
         '  } else={',
@@ -75,13 +78,13 @@ export function appendInstantAloginInstaller(script: string) {
         '  }',
         '} on-error={',
         '  :do {',
-        `    /tool fetch url="${fallbackAloginUrl}" mode=http dst-path="hotspot/alogin.html"`,
-        '    :if ([:len [/file find name="hotspot/alogin.html"]] > 0) do={',
+        `    /tool fetch url="${fallbackAloginUrl}" mode=http dst-path=$arofiAloginPath`,
+        '    :if ([:len [/file find name=$arofiAloginPath]] > 0) do={',
         '      :set arofiAloginOk 1',
         '      :put "AROFi HotSpot alogin.html installed by HTTP fallback."',
         '    }',
         '  } on-error={',
-        '    :put "WARNING: alogin.html install failed - MikroTik may keep showing its delayed post-login page."',
+        '    :put "WARNING: alogin.html install failed - invisible completion fallback was not updated."',
         '  }',
         '}',
         '',
@@ -102,11 +105,6 @@ export class MikrotikInstantLoginInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest()
     const requestUrl = String(request?.originalUrl ?? request?.url ?? '')
 
-    // npm workspaces can install a second physical RxJS copy inside apps/api.
-    // Nest's CallHandler is typed against the root copy, while this operator may
-    // resolve against the workspace copy. The operator is runtime-compatible;
-    // erase only that duplicate-package type identity so the API build remains
-    // stable without weakening the response transformation itself.
     const transformResponse = map((body: any) => {
       if (
         typeof body === 'string' &&
