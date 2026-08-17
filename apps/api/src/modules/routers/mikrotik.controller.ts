@@ -109,61 +109,124 @@ export class MikrotikController {
   prepareLoginHtml(html: string) {
     let prepared = html;
 
-    // The runtime captive-flow initializer restores this only when the API has
-    // confirmed an ACTIVE, unexpired activation for the same router and MAC.
-    prepared = prepared.replace(
-      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
+    prepared = this.replaceFirst(
+      prepared,
+      /var autoReady\s*=\s*d\.returningDevice&&d\.returningDevice\.existingActiveAccess&&d\.returningDevice\.reconnect\s*;/,
       'var autoReady=false;',
     );
 
-    // Preserve the API's real voucher message. The original parser returned
-    // "Parse err" for a text/HTML proxy response and "Network err" after both
-    // HTTPS and HTTP attempts, hiding useful errors such as an already-used or
-    // expired voucher.
-    prepared = prepared.replace(
-      `    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(e)ajax(m,APIFB+p,d,cb);else cb(null,r);});}`,
-      `    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(!e){cb(null,r);return;}if(e.network){ajax(m,APIFB+p,d,function(fe,fr){if(!fe){cb(null,fr);return;}cb(fe||e);});return;}cb(e);});}`,
+    prepared = this.replaceFirst(
+      prepared,
+      /function apiCall\(m,p,d,cb\)\{ajax\(m,API\+p,d,function\(e,r\)\{if\(e\)ajax\(m,APIFB\+p,d,cb\);else cb\(null,r\);\}\);\}/,
+      `function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(!e){cb(null,r);return;}ajax(m,APIFB+p,d,function(fe,fr){if(!fe){cb(null,fr);return;}cb(new Error((fe&&fe.message)||(e&&e.message)||'Unable to reach the AROFi voucher service.'));});});}`,
     );
 
-    prepared = prepared.replace(
-      `    function ajax(method, url, data, cb){\n      var x=new XMLHttpRequest();\n      x.open(method, url, true);\n      if(data) x.setRequestHeader('Content-Type','application/json');\n      x.onload=function(){\n        try{\n          var j=JSON.parse(x.responseText);\n          if(x.status>=200&&x.status<300) cb(null,j);\n          else cb(new Error(j.message||'HTTP '+x.status));\n        }catch(e){cb(new Error('Parse err'));}\n      };\n      x.onerror=function(){cb(new Error('Network err'));};\n      x.send(data?JSON.stringify(data):null);\n    }`,
-      `    function ajax(method, url, data, cb){\n      var x=new XMLHttpRequest();\n      x.open(method, url, true);\n      if(data) x.setRequestHeader('Content-Type','application/json');\n      x.onload=function(){\n        var raw=x.responseText||'',j=null;\n        try{j=raw?JSON.parse(raw):{};}catch(e){}\n        if(x.status>=200&&x.status<300){cb(null,j||{});return;}\n        var msg=j&&j.message;\n        if(Object.prototype.toString.call(msg)==='[object Array]')msg=msg.join('. ');\n        if(!msg&&j&&j.error)msg=j.error;\n        if(!msg&&raw&&raw.charAt(0)!=='<')msg=raw.substring(0,240);\n        if(!msg&&x.status===429)msg='Too many voucher attempts. Wait one minute and try again.';\n        if(!msg)msg='Voucher request failed (HTTP '+x.status+').';\n        var er=new Error(String(msg));er.status=x.status;cb(er);\n      };\n      x.onerror=function(){var er=new Error('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.');er.network=true;cb(er);};\n      x.ontimeout=function(){var er=new Error('The voucher service took too long to respond. Try again.');er.network=true;cb(er);};\n      x.timeout=12000;\n      x.send(data?JSON.stringify(data):null);\n    }`,
+    prepared = this.replaceFirst(
+      prepared,
+      /function ajax\(method, url, data, cb\)\{[\s\S]*?\n    \}/,
+      `function ajax(method, url, data, cb){
+      var x=new XMLHttpRequest();
+      x.open(method, url, true);
+      if(data) x.setRequestHeader('Content-Type','application/json');
+      x.onload=function(){
+        var raw=x.responseText||'',j=null;
+        try{j=raw?JSON.parse(raw):{};}catch(e){}
+        if(x.status>=200&&x.status<300){cb(null,j||{});return;}
+        var msg=j&&j.message;
+        if(Object.prototype.toString.call(msg)==='[object Array]')msg=msg.join('. ');
+        if(!msg&&j&&j.error)msg=j.error;
+        if(!msg&&raw&&raw.charAt(0)!=='<')msg=raw.substring(0,240);
+        if(!msg&&x.status===429)msg='Too many voucher attempts. Wait one minute and try again.';
+        if(!msg)msg='Voucher request failed (HTTP '+x.status+').';
+        cb(new Error(String(msg)));
+      };
+      x.onerror=function(){cb(new Error('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.'));};
+      x.ontimeout=function(){cb(new Error('The voucher service took too long to respond. Try again.'));};
+      x.timeout=12000;
+      x.send(data?JSON.stringify(data):null);
+    }`,
     );
 
-    prepared = prepared.replace(
-      'var pkgs=[],selId=null,selTv=false;',
+    prepared = this.replaceFirst(
+      prepared,
+      /var pkgs=\[\],selId=null,selTv=false;?/,
       'var pkgs=[],selId=null,selTv=false,trialStarting=false;',
     );
 
-    // Keep the free trial completely outside paid, Smart TV, and multi-device
-    // package lists in the router-hosted login.html.
-    prepared = prepared.replace(
-      `      <p class="section-label">Select a package and pay with Mobile Money</p>\n      <div class="pkgs" id="plist"></div>`,
-      `      <div id="trialSection" class="tv-section">\n        <p class="section-label">Try WiFi Free</p>\n        <p class="section-sub">Start your one-time free trial on this device.</p>\n        <div class="pkgs" id="trialList"></div>\n      </div>\n\n      <p class="section-label">Select a package and pay with Mobile Money</p>\n      <div class="pkgs" id="plist"></div>`,
+    prepared = this.replaceFirst(
+      prepared,
+      /<p class="section-label">Select a package and pay with Mobile Money<\/p>\s*<div class="pkgs" id="plist"><\/div>/,
+      `      <div id="trialSection" class="tv-section">
+        <p class="section-label">Try WiFi Free</p>
+        <p class="section-sub">Start your one-time free trial on this device.</p>
+        <div class="pkgs" id="trialList"></div>
+      </div>
+
+      <p class="section-label">Select a package and pay with Mobile Money</p>
+      <div class="pkgs" id="plist"></div>`,
     );
 
-    prepared = prepared.replace(
-      `    function normMac(v){`,
-      `    function isTrialPkg(p){\n      return !!(p&&(p.isTrialEnabled===true||Number(p.amountUgx||0)<=0||/trial/i.test((p.name||'')+' '+(p.code||''))));\n    }\n\n    function normMac(v){`,
+    prepared = this.replaceFirst(
+      prepared,
+      /function normMac\(v\)\{/,
+      `function isTrialPkg(p){
+      return !!(p&&(p.isTrialEnabled===true||Number(p.amountUgx||0)<=0||/trial/i.test((p.name||'')+' '+(p.code||''))));
+    }
+
+    function normMac(v){`,
     );
 
-    prepared = prepared.replace(
-      `        var el=document.getElementById('plist');el.innerHTML='';\n        var tvl=document.getElementById('tvList');tvl.innerHTML='';\n        var ml=document.getElementById('multiList');ml.innerHTML='';\n        var mc=0,tc=0;\n        pkgs.forEach(function(p){\n          var limit=parseInt(p.deviceLimit||1,10)||1;\n          var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;\n          var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');\n          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">UGX '+fn(p.amountUgx)+'</span><span class="pk-buy">BUY</span>';\n          c.onclick=function(){selPkg(p.id);};\n          if(isTvPkg(p)){tvl.appendChild(c);tc++;}\n          else if(limit>1){ml.appendChild(c);mc++;}\n          else{el.appendChild(c);}\n        });\n        document.getElementById('tvSection').style.display=tc>0?'block':'none';\n        document.getElementById('multiSection').style.display=mc>0?'block':'none';`,
-      `        var el=document.getElementById('plist');el.innerHTML='';\n        var trl=document.getElementById('trialList');trl.innerHTML='';\n        var tvl=document.getElementById('tvList');tvl.innerHTML='';\n        var ml=document.getElementById('multiList');ml.innerHTML='';\n        var mc=0,tc=0,trc=0;\n        pkgs.forEach(function(p){\n          var limit=parseInt(p.deviceLimit||1,10)||1;\n          var trial=isTrialPkg(p);\n          var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;\n          var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');\n          var price=trial?'FREE':'UGX '+fn(p.amountUgx);\n          var action=trial?'TRY':'BUY';\n          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">'+price+'</span><span class="pk-buy">'+action+'</span>';\n          c.onclick=function(){if(trial){startTrial(p.id);return;}selPkg(p.id);};\n          if(trial){trl.appendChild(c);trc++;}\n          else if(isTvPkg(p)){tvl.appendChild(c);tc++;}\n          else if(limit>1){ml.appendChild(c);mc++;}\n          else{el.appendChild(c);}\n        });\n        document.getElementById('trialSection').style.display=trc>0?'block':'none';\n        document.getElementById('tvSection').style.display=tc>0?'block':'none';\n        document.getElementById('multiSection').style.display=mc>0?'block':'none';`,
+    prepared = this.replaceFirst(
+      prepared,
+      /var el=document\.getElementById\('plist'\);el\.innerHTML='';\s*var tvl=document\.getElementById\('tvList'\);tvl\.innerHTML='';\s*var ml=document\.getElementById\('multiList'\);ml\.innerHTML='';\s*var mc=0,tc=0;\s*pkgs\.forEach\(function\(p\)\{[\s\S]*?document\.getElementById\('multiSection'\)\.style\.display=mc>0\?'block':'none';/,
+      `var el=document.getElementById('plist');el.innerHTML='';
+        var trl=document.getElementById('trialList');trl.innerHTML='';
+        var tvl=document.getElementById('tvList');tvl.innerHTML='';
+        var ml=document.getElementById('multiList');ml.innerHTML='';
+        var mc=0,tc=0,trc=0;
+        pkgs.forEach(function(p){
+          var limit=parseInt(p.deviceLimit||1,10)||1;
+          var trial=isTrialPkg(p);
+          var c=document.createElement('div');c.className='pkg';c.id='pkg-'+p.id;
+          var dur=fdur(p.durationMinutes)+(limit>1?' - '+limit+' devices':'');
+          var price=trial?'FREE':'UGX '+fn(p.amountUgx);
+          var action=trial?'TRY':'BUY';
+          c.innerHTML='<span><span class="pk-name">'+esc(p.name)+'</span><span class="pk-dur">'+esc(dur)+'</span></span><span class="pk-price">'+price+'</span><span class="pk-buy">'+action+'</span>';
+          c.onclick=function(){if(trial){startTrial(p.id);return;}selPkg(p.id);};
+          if(trial){trl.appendChild(c);trc++;}
+          else if(isTvPkg(p)){tvl.appendChild(c);tc++;}
+          else if(limit>1){ml.appendChild(c);mc++;}
+          else{el.appendChild(c);}
+        });
+        document.getElementById('trialSection').style.display=trc>0?'block':'none';
+        document.getElementById('tvSection').style.display=tc>0?'block':'none';
+        document.getElementById('multiSection').style.display=mc>0?'block':'none';`,
     );
 
-    prepared = prepared.replace(
-      `    function selPkg(id){`,
-      `    function startTrial(id){\n      if(trialStarting)return;\n      var pkg=null;\n      for(var i=0;i<pkgs.length;i++){if(pkgs[i].id===id){pkg=pkgs[i];break;}}\n      if(!pkg)return;\n      trialStarting=true;\n      sst('Starting your free trial...','info');\n      apiCall('POST','/api/portal/start-trial',{packageId:id,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo},function(err,res){\n        if(err){trialStarting=false;sst(err.message||'Unable to start the free trial.','err');return;}\n        if(res&&res.reconnect&&res.reconnect.username){conn(res.reconnect);return;}\n        trialStarting=false;\n        sst('Trial started. Reconnect to this WiFi if internet does not begin automatically.','ok');\n      });\n    }\n\n    function selPkg(id){`,
+    prepared = this.replaceFirst(
+      prepared,
+      /function selPkg\(id\)\{/,
+      `function startTrial(id){
+      if(trialStarting)return;
+      var pkg=null;
+      for(var i=0;i<pkgs.length;i++){if(pkgs[i].id===id){pkg=pkgs[i];break;}}
+      if(!pkg)return;
+      trialStarting=true;
+      sst('Starting your free trial...','info');
+      apiCall('POST','/api/portal/start-trial',{packageId:id,macAddress:mac,clientIp:ip,routerKey:RKEY,hotspotServerName:srv,loginUrl:lo},function(err,res){
+        if(err){trialStarting=false;sst(err.message||'Unable to start the free trial.','err');return;}
+        if(res&&res.reconnect&&res.reconnect.username){conn(res.reconnect);return;}
+        trialStarting=false;
+        sst('Trial started. Reconnect to this WiFi if internet does not begin automatically.','ok');
+      });
+    }
+
+    function selPkg(id){`,
     );
 
     return prepared;
   }
 
-  // Both status.html and alogin.html use this invisible completion document.
-  // It first asks the captive mini-browser to close, then falls back to the
-  // operating system's connectivity-check URL. There is deliberately no
-  // customer-facing "Connected" page and no extra button.
   prepareCompletionHtml(_html: string) {
     return `
 $(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
@@ -206,9 +269,6 @@ $(if http-header == "Expires")0$(endif)
     const reportedIp = this.normalizeIpv4(selfReportedNasIp);
     const observedIp = this.normalizeIpv4(httpSourceIp);
 
-    // FreeRADIUS must register the address it actually sees. A router behind
-    // CGNAT often reports a private WAN address even though auth packets arrive
-    // from the public address observed by this API callback.
     if (reportedIp && !this.isPrivateOrReservedIpv4(reportedIp)) {
       return reportedIp;
     }
@@ -254,5 +314,13 @@ $(if http-header == "Expires")0$(endif)
       request.socket?.remoteAddress ||
       ''
     ).replace(/^::ffff:/, '');
+  }
+
+  private replaceFirst(script: string, pattern: string | RegExp, replacement: string) {
+    if (typeof pattern === 'string') {
+      return script.includes(pattern) ? script.replace(pattern, replacement) : script;
+    }
+
+    return pattern.test(script) ? script.replace(pattern, replacement) : script;
   }
 }
