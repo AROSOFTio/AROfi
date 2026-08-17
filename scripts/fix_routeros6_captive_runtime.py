@@ -85,25 +85,35 @@ def patch_login_browser_context() -> None:
         fail("buildLoginHtml() could not be isolated")
     block = text[start:end]
 
-    old = '''  <script>
+    old_variants = (
+        '''  <script>
     var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"",orig="$(link-orig)"||"";
-'''
+''',
+        '''  <script>
+    var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
+    var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"",orig="$(link-orig)"||"",herr="$(error)"||"";
+''',
+    )
     new = '''  <input type="hidden" id="arofiRosMac" value="$(mac-esc)">
   <input type="hidden" id="arofiRosIp" value="$(ip-esc)">
   <input type="hidden" id="arofiRosLogin" value="$(link-login-only-esc)">
   <input type="hidden" id="arofiRosServer" value="$(server-name-esc)">
   <input type="hidden" id="arofiRosOrig" value="$(link-orig-esc)">
+  <input type="hidden" id="arofiRosError" value="$(error-esc)">
   <script>
     function arofiRosValue(id){var e=document.getElementById(id),v=e?e.value:'';if(!v)return '';try{return decodeURIComponent(String(v).split('+').join('%20'));}catch(_e){return String(v);}}
     var AROFI_ROS_MACRO=String.fromCharCode(36,40);
     var API="${apiBaseUrl}",APIFB="${fallbackApiBaseUrl}",RKEY="${escapedKey}";
-    var mac=arofiRosValue('arofiRosMac'),ip=arofiRosValue('arofiRosIp'),lo=arofiRosValue('arofiRosLogin'),srv=arofiRosValue('arofiRosServer'),orig=arofiRosValue('arofiRosOrig');
+    var mac=arofiRosValue('arofiRosMac'),ip=arofiRosValue('arofiRosIp'),lo=arofiRosValue('arofiRosLogin'),srv=arofiRosValue('arofiRosServer'),orig=arofiRosValue('arofiRosOrig'),herr=arofiRosValue('arofiRosError');
 '''
     if new not in block:
-        if old not in block:
+        for old in old_variants:
+            if old in block:
+                block = block.replace(old, new, 1)
+                break
+        else:
             fail("RouterOS values are not in the expected login-script shape")
-        block = block.replace(old, new, 1)
 
     # RouterCaptiveFlowInitializer historically used a literal '$(' sentinel.
     # Normalize it here before parse validation; the permanent guard later also
@@ -128,12 +138,14 @@ def patch_login_browser_context() -> None:
         finally:
             path.unlink(missing_ok=True)
 
+    if 'function load(attempt){' not in block and 'function load(){' not in block:
+        fail('functional captive marker missing after JS hardening: package loader')
+
     for token in (
         'id="vTvMode" onchange="toggleVoucherTv()"',
         'id="vTvMac"',
         'onclick="toggleFind()"',
         'id="rtxn" placeholder="Phone number or Transaction ID"',
-        'function load(attempt){',
         'function login(){',
         'function rec(){',
         'function conn(rc){',
@@ -170,13 +182,16 @@ def verify() -> None:
         if "$(" in script:
             fail("final login JavaScript still contains a RouterOS template token")
 
+    if 'Packages did not load. Tap to retry.' not in mik and "apiCall('GET', '/api/portal/context?" not in mik:
+        fail('final captive runtime missing marker: package loader')
+
     for token in (
         'value="$(mac-esc)"',
         'value="$(link-login-only-esc)"',
+        'value="$(error-esc)"',
         'arofiRosValue',
         'flash/hotspot',
         'html-directory=$arofiPortalDir',
-        'Packages did not load. Tap to retry.',
     ):
         if token not in mik:
             fail(f"final captive runtime missing marker: {token}")
