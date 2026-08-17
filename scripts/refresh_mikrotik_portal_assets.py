@@ -49,6 +49,39 @@ def replace_expected(
     path.write_text(text.replace(old, new), encoding="utf-8")
 
 
+def ensure_portal_file_cleanup() -> None:
+    """Support both legacy fixed paths and the RouterOS 6/7 dynamic portal path.
+
+    Newer provisioning code chooses ``flash/hotspot`` on RouterOS 6 when flash
+    storage is present and therefore removes files through ``$arofiLoginPath``
+    and ``$arofiStatusPath``. That is already stronger than the old hard-coded
+    cleanup this patch used to inject, so treat it as an already-patched state
+    instead of failing the entire Docker build.
+    """
+    text = MIKROTIK.read_text(encoding="utf-8")
+    dynamic_markers = (
+        ':local arofiLoginPath ($arofiPortalDir . "/login.html")',
+        ':local arofiStatusPath ($arofiPortalDir . "/status.html")',
+        ':do { /file remove [find name=$arofiLoginPath] } on-error={}',
+        ':do { /file remove [find name=$arofiStatusPath] } on-error={}',
+    )
+    if all(marker in text for marker in dynamic_markers):
+        return
+
+    replace_once(
+        MIKROTIK,
+        """      `:do { /file add name=\"hotspot\" type=directory } on-error={}`,
+      `:local arofiHtmlOk 0`,
+""",
+        """      `:do { /file add name=\"hotspot\" type=directory } on-error={}`,
+      `:do { /file remove [find name=\"hotspot/login.html\"] } on-error={}`,
+      `:do { /file remove [find name=\"hotspot/status.html\"] } on-error={}`,
+      `:local arofiHtmlOk 0`,
+""",
+        "old portal-file cleanup block",
+    )
+
+
 # Generate a new URL on every provisioning-script request so no proxy or router
 # can reuse yesterday's login/status response.
 replace_once(
@@ -67,20 +100,10 @@ replace_once(
     "portal asset URL block",
 )
 
-# Explicitly replace the old files. RouterOS versions differ in how reliably a
-# fetch to an existing dst-path overwrites the previous file.
-replace_once(
-    MIKROTIK,
-    """      `:do { /file add name=\"hotspot\" type=directory } on-error={}`,
-      `:local arofiHtmlOk 0`,
-""",
-    """      `:do { /file add name=\"hotspot\" type=directory } on-error={}`,
-      `:do { /file remove [find name=\"hotspot/login.html\"] } on-error={}`,
-      `:do { /file remove [find name=\"hotspot/status.html\"] } on-error={}`,
-      `:local arofiHtmlOk 0`,
-""",
-    "old portal-file cleanup block",
-)
+# Explicitly replace old files. RouterOS versions differ in how reliably a
+# fetch to an existing dst-path overwrites the previous file. RouterOS 6/7
+# dynamic portal-path provisioning already performs this cleanup itself.
+ensure_portal_file_cleanup()
 
 # Tell RouterOS and captive mini-browsers not to retain either page after it has
 # been updated. There are intentionally two page renderers with this prefix:
