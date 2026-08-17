@@ -339,7 +339,11 @@ export class PortalService {
     loginUrl?: string
   }) {
     const resolvedHotspot = await this.resolveHotspotContext(input)
-    const activation = await this.findActiveAccessByMacAndRouter(input.macAddress, resolvedHotspot.routerId)
+    const activation = await this.findActiveAccessByMacAndNetwork(
+      input.macAddress,
+      resolvedHotspot.routerId,
+      resolvedHotspot.hotspotServerName,
+    )
 
     if (!activation) {
       throw new NotFoundException('No active access was found for this device')
@@ -644,9 +648,14 @@ export class PortalService {
 
   private async detectReturningDevice(
     tenantId: string,
-    hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; loginUrl?: string },
+    hotspot?: { macAddress?: string; ipAddress?: string; routerId?: string; hotspotServerName?: string; loginUrl?: string },
   ) {
-    const activation = await this.findActiveAccessByMacAndRouter(hotspot?.macAddress, hotspot?.routerId, tenantId)
+    const activation = await this.findActiveAccessByMacAndNetwork(
+      hotspot?.macAddress,
+      hotspot?.routerId,
+      hotspot?.hotspotServerName,
+      tenantId,
+    )
     if (!activation) {
       return {
         existingActiveAccess: false,
@@ -744,10 +753,23 @@ export class PortalService {
     }
   }
 
-  private async findActiveAccessByMacAndRouter(macAddress?: string | null, routerId?: string | null, tenantId?: string) {
+  private async findActiveAccessByMacAndNetwork(
+    macAddress?: string | null,
+    routerId?: string | null,
+    hotspotServerName?: string | null,
+    tenantId?: string,
+  ) {
     const normalizedMac = this.normalizeMac(macAddress)
     if (!normalizedMac) {
       return null
+    }
+
+    const networkMatchers: Prisma.PackageActivationWhereInput[] = [{ routerId: null }]
+    if (routerId) {
+      networkMatchers.push({ routerId })
+    }
+    if (hotspotServerName?.trim()) {
+      networkMatchers.push({ hotspotServerName: hotspotServerName.trim() })
     }
 
     return this.prisma.packageActivation.findFirst({
@@ -756,7 +778,7 @@ export class PortalService {
         status: PackageActivationStatus.ACTIVE,
         endsAt: { gt: new Date() },
         boundMacAddress: normalizedMac,
-        ...(routerId ? { OR: [{ routerId }, { routerId: null }] } : {}),
+        OR: networkMatchers,
       },
       include: {
         ...this.activationInclude,

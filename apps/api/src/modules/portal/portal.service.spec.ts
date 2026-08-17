@@ -146,6 +146,34 @@ describe('PortalService returning-device auto-reconnect', () => {
     )
   })
 
+  it('recognizes a returning device across access points that share the same hotspot network name', async () => {
+    const activation = buildActivation({ routerId: null, hotspotServerName: 'AroFi-Lobby' })
+    const { service, prisma } = buildReconnectHarness(activation)
+
+    const result = await (service as any).detectReturningDevice('tenant-1', {
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      routerId: 'router-new-ap',
+      hotspotServerName: 'AroFi-Lobby',
+      ipAddress: '10.55.0.44',
+      loginUrl: 'http://10.55.0.1/login',
+    })
+
+    expect(result.existingActiveAccess).toBe(true)
+    expect(result.reconnect).toMatchObject({
+      username: 'arofi-user',
+      password: 'secret-pass',
+    })
+    expect(prisma.packageActivation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          boundMacAddress: 'AA:BB:CC:DD:EE:FF',
+          status: 'ACTIVE',
+        }),
+      }),
+    )
+  })
+
   it('reports no access for a device without an active (non-expired) activation', async () => {
     const { service } = buildReconnectHarness(null)
 
