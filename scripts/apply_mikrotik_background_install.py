@@ -8,6 +8,8 @@ access are deterministic:
 - trusted post-login ``mac-cookie`` reconnect is enabled;
 - clients use the MikroTik gateway as their only DNS server;
 - arofi.net is allowed before authentication so packages load;
+- wired AP/LAN client ports are placed behind the HotSpot rather than bypassing it;
+- a stable local ``arofi.login`` alias and RouterOS ``alogin.html`` are installed;
 - idle, keepalive and local session logout timers are disabled.
 """
 
@@ -174,14 +176,16 @@ def main() -> None:
     validate_foreground_install()
     validate_portal_reconnect()
     run_required_patch("refresh_mikrotik_portal_assets.py")
+    run_required_patch("fix_hotspot_client_bridge_and_login.py")
     run_required_patch("fix_sstp_remote_target.py")
     run_required_patch("fix_router_hardware_detection.py")
     patch_deterministic_captive_flow()
     patch_voucher_qr_local_login()
 
     print(
-        "MikroTik foreground installer, trusted returning-device reconnect, no-idle active-bundle policy, "
-        "pre-auth packages, business .wifi voucher QR, SSTP target and hardware detection verified."
+        "MikroTik foreground installer, captive AP/LAN client path, arofi.login + alogin, "
+        "trusted returning-device reconnect, no-idle active-bundle policy, pre-auth packages, "
+        "business .wifi voucher QR, SSTP target and hardware detection verified."
     )
 
 
