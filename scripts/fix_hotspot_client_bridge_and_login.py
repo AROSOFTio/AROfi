@@ -15,7 +15,9 @@ This patch:
   bridge from being moved;
 - publishes ``arofi.login`` as a stable local alias for manual portal testing;
 - installs ``alogin.html`` as well as login/status so RouterOS has a real
-  post-auth page when a client completes HotSpot authentication.
+  post-auth page when a client completes HotSpot authentication;
+- replaces the older regression expectation that incorrectly required active
+  Ethernet/AP ports to remain outside the captive bridge.
 
 ``login.html`` remains authoritative. A failed optional alogin/status fetch must
 never prevent the login portal itself from becoming active; the final captive
@@ -26,6 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
+MIKROTIK_SPEC = ROOT / "apps/api/src/modules/routers/mikrotik.service.spec.ts"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -150,7 +153,51 @@ def patch_alogin_install(text: str) -> str:
     return text
 
 
-def verify(text: str) -> None:
+def patch_regression_spec(text: str) -> str:
+    old = '''    expect(script).toContain('/interface ethernet find')
+    expect(script).toContain('$ethName != "ether1"')
+    expect(script).toContain('$ethName != "ether2"')
+    expect(script).toContain('$ethRunning = false')
+    expect(script).toContain('destination=$arofiWanMgmtAnchor')
+    expect(script).toContain('destination=$arofiHotspotInputAnchor')
+    expect(script).toContain('destination=$arofiHotspotMgmtAnchor')
+    expect(script).toContain('destination=$arofiHotspotForwardAnchor')
+    expect(script).not.toContain('destination=0')
+'''
+    new = '''    expect(script).toContain('/interface ethernet find')
+    expect(script).toContain('# 3d-2. Put customer Ethernet/AP ports behind the HotSpot')
+    expect(script).toContain('$arofiKeepAsWan = 0')
+    expect(script).toContain('status=bound')
+    expect(script).toContain('/interface pppoe-client find where interface=$ethName disabled=no')
+    expect(script).toContain('customer HotSpot port active:')
+    expect(script).toContain('preserving WAN/uplink port')
+    expect(script).not.toContain('$ethRunning = false')
+    expect(script).not.toContain('preserving management/link-active port')
+    expect(script).toContain('destination=$arofiWanMgmtAnchor')
+    expect(script).toContain('destination=$arofiHotspotInputAnchor')
+    expect(script).toContain('destination=$arofiHotspotMgmtAnchor')
+    expect(script).toContain('destination=$arofiHotspotForwardAnchor')
+    expect(script).not.toContain('destination=0')
+'''
+    if new not in text:
+        if old not in text:
+            raise RuntimeError("customer-port regression expectation block not found")
+        text = text.replace(old, new, 1)
+
+    # Manual deterministic portal route must remain available for field tests.
+    if "expect(script).toContain('name=\"arofi.login\" address=10.55.0.1')" not in text:
+        marker = "    expect(script).toContain('dns-server=10.55.0.1')\n"
+        if marker in text:
+            text = text.replace(
+                marker,
+                marker + "    expect(script).toContain('name=\"arofi.login\" address=10.55.0.1')\n",
+                1,
+            )
+
+    return text
+
+
+def verify_service(text: str) -> None:
     required = (
         "# 3d-2. Put customer Ethernet/AP ports behind the HotSpot",
         "customer HotSpot port active:",
@@ -174,19 +221,38 @@ def verify(text: str) -> None:
             raise RuntimeError(f"HotSpot client-path bypass still present: {marker}")
 
 
-def main() -> None:
-    if not MIKROTIK.exists():
-        raise RuntimeError(f"Required source file missing: {MIKROTIK.relative_to(ROOT)}")
+def verify_spec(text: str) -> None:
+    for marker in (
+        "# 3d-2. Put customer Ethernet/AP ports behind the HotSpot",
+        "$arofiKeepAsWan = 0",
+        "customer HotSpot port active:",
+        "expect(script).not.toContain('$ethRunning = false')",
+    ):
+        if marker not in text:
+            raise RuntimeError(f"HotSpot regression test repair missing marker: {marker}")
 
-    text = MIKROTIK.read_text(encoding="utf-8")
-    text = patch_customer_ethernet_ports(text)
-    text = patch_local_login_alias(text)
-    text = patch_alogin_install(text)
-    verify(text)
-    MIKROTIK.write_text(text, encoding="utf-8")
+
+def main() -> None:
+    for path in (MIKROTIK, MIKROTIK_SPEC):
+        if not path.exists():
+            raise RuntimeError(f"Required source file missing: {path.relative_to(ROOT)}")
+
+    service = MIKROTIK.read_text(encoding="utf-8")
+    service = patch_customer_ethernet_ports(service)
+    service = patch_local_login_alias(service)
+    service = patch_alogin_install(service)
+    verify_service(service)
+    MIKROTIK.write_text(service, encoding="utf-8")
+
+    spec = MIKROTIK_SPEC.read_text(encoding="utf-8")
+    spec = patch_regression_spec(spec)
+    verify_spec(spec)
+    MIKROTIK_SPEC.write_text(spec, encoding="utf-8")
+
     print(
         "HotSpot client path repaired: non-WAN AP/LAN ports are captive, "
-        "arofi.login resolves locally, and alogin.html is installed without gating login.html."
+        "arofi.login resolves locally, alogin.html is installed without gating login.html, "
+        "and the regression tests now forbid the old active-port bypass."
     )
 
 
