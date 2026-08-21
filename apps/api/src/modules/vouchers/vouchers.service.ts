@@ -321,6 +321,10 @@ export class VouchersService {
       throw new BadRequestException('Package does not belong to the business')
     }
 
+    if (pkg && this.isTrialPackage(pkg)) {
+      throw new BadRequestException('Free trial cannot be used for voucher templates. It is only available from the portal trial button.')
+    }
+
     if (dto.isDefault) {
       await this.prisma.voucherTemplate.updateMany({
         where: {
@@ -382,6 +386,9 @@ export class VouchersService {
       const pkg = await this.prisma.package.findUnique({ where: { id: dto.packageId } })
       if (!pkg || pkg.tenantId !== existing.tenantId) {
         throw new BadRequestException('Package does not belong to the template business')
+      }
+      if (this.isTrialPackage(pkg)) {
+        throw new BadRequestException('Free trial cannot be used for voucher templates. It is only available from the portal trial button.')
       }
     }
 
@@ -461,6 +468,10 @@ export class VouchersService {
 
     if (!pkg || pkg.tenantId !== dto.tenantId) {
       throw new NotFoundException('Package not found for this business')
+    }
+
+    if (this.isTrialPackage(pkg)) {
+      throw new BadRequestException('Free trial cannot be generated as vouchers. It is only available from the portal trial button.')
     }
 
     if (dto.agentId && (!agent || agent.tenantId !== dto.tenantId)) {
@@ -1735,6 +1746,14 @@ export class VouchersService {
     if (!pkg) return false
     const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
     return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
+  }
+
+  private isTrialPackage(
+    pkg?: { isTrialEnabled?: boolean | null; name?: string | null; code?: string | null; description?: string | null },
+  ) {
+    if (!pkg) return false
+    const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
+    return Boolean(pkg.isTrialEnabled) || haystack.includes('trial')
   }
 
   private async refreshBatchStatus(batchId: string, tx?: Prisma.TransactionClient) {

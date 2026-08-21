@@ -10,6 +10,8 @@ type PackageItem = {
   id: string
   name: string
   code: string
+  description?: string | null
+  isTrialEnabled?: boolean
   activePriceUgx?: number
   tenant: { id: string; name: string }
   prices?: Array<{ amountUgx: number; isDefault?: boolean }>
@@ -56,6 +58,12 @@ const pdfTemplates: Array<{ value: PdfTemplate; label: string }> = [
   { value: 'agent', label: 'Agent strip' },
   { value: 'thermal', label: 'Mini thermal' },
 ]
+
+function isTrialPackage(item: PackageItem) {
+  const haystack = `${item.name ?? ''} ${item.code ?? ''} ${item.description ?? ''}`.toLowerCase()
+  const price = item.activePriceUgx ?? item.prices?.find((entry) => entry.isDefault)?.amountUgx ?? item.prices?.[0]?.amountUgx ?? 0
+  return Boolean(item.isTrialEnabled) || price <= 0 || haystack.includes('trial')
+}
 
 export default function AgentVoucherIssuancePanel() {
   const [open, setOpen] = useState(false)
@@ -108,7 +116,7 @@ export default function AgentVoucherIssuancePanel() {
   }
 
   const availablePackages = useMemo(
-    () => packages.filter((item) => item.tenant.id === tenantId && !/trial/i.test(`${item.name} ${item.code}`)),
+    () => packages.filter((item) => item.tenant.id === tenantId && !isTrialPackage(item)),
     [packages, tenantId],
   )
   const availableAgents = useMemo(

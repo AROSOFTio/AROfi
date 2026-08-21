@@ -65,6 +65,13 @@ const initialBatchForm: BatchFormState = {
 
 const DEFAULT_VOUCHER_AD = 'Powered by AROFi · Professional Hotspot Management Platform'
 
+type VoucherPackageItem = PackageCatalogResponse['items'][number]
+
+function isTrialPackage(pkg: VoucherPackageItem) {
+  const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
+  return Boolean(pkg.isTrialEnabled) || (pkg.activePriceUgx ?? 0) <= 0 || haystack.includes('trial')
+}
+
 const printTemplates = [
   {
     id: 'signal',
@@ -207,12 +214,12 @@ export default function VouchersManager() {
   }, [])
 
   const tenantPackages = useMemo(
-    () => packages.filter((pkg) => pkg.tenant.id === batchForm.tenantId),
+    () => packages.filter((pkg) => pkg.tenant.id === batchForm.tenantId && !isTrialPackage(pkg)),
     [packages, batchForm.tenantId],
   )
 
   const templatePackages = useMemo(
-    () => packages.filter((pkg) => pkg.tenant.id === templateForm.tenantId),
+    () => packages.filter((pkg) => pkg.tenant.id === templateForm.tenantId && !isTrialPackage(pkg)),
     [packages, templateForm.tenantId],
   )
 

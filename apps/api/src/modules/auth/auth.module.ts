@@ -282,8 +282,27 @@ export class AuthService {
         userAgent: meta.userAgent ?? null,
       },
     })
-
     const otpDelivered = await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+
+    if (!otpDelivered && process.env.NODE_ENV === 'production') {
+      // Fail closed: an OTP that was not delivered is not a valid second
+      // factor. Remove it so it cannot later be guessed/replayed.
+      await this.prisma.adminLoginOtp.deleteMany({
+        where: { userId: user.id, verifiedAt: null },
+      })
+      await this.recordAuthAudit({
+        action: 'auth.otp.delivery_failed',
+        email: user.email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'Login OTP email delivery failed; authentication blocked',
+        meta,
+      })
+      throw new ServiceUnavailableException(
+        'Verification email could not be delivered. Please try again.',
+      )
+    }
 
     await this.recordAuthAudit({
       action: 'auth.otp.sent',
@@ -299,11 +318,10 @@ export class AuthService {
       email: user.email,
       expiresAt: expiresAt.toISOString(),
       resendAvailableAt: resendAvailableAt.toISOString(),
-      ...(otpDelivered ? {} : { otpFallback: otp }),
     }
   }
 
-  // ── Step 2: OTP → session tokens ──────────────────────────────────────────
+  // Step 2: OTP -> session tokens
   async verifyLogin(
     email: string,
     otp: string,
@@ -444,7 +462,25 @@ export class AuthService {
       },
     })
 
-    await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+    const otpDelivered = await this.deliverOtpEmail(user.email, this.displayNameOf(user), otp)
+    if (!otpDelivered && process.env.NODE_ENV === 'production') {
+      await this.prisma.adminLoginOtp.deleteMany({
+        where: { userId: user.id, verifiedAt: null },
+      })
+      await this.recordAuthAudit({
+        action: 'auth.otp.delivery_failed',
+        email: user.email,
+        userId: user.id,
+        tenantId: user.tenantId ?? null,
+        severity: 'WARNING',
+        message: 'Login OTP resend delivery failed; challenge invalidated',
+        meta,
+      })
+      throw new ServiceUnavailableException(
+        'Verification email could not be delivered. Please try again.',
+      )
+    }
+
     await this.recordAuthAudit({
       action: 'auth.otp.resent',
       email: user.email,
@@ -921,7 +957,7 @@ export class AuthService {
 
     if (!sent) {
       if (process.env.NODE_ENV === 'production') {
-        this.logger.error(`OTP email delivery failed for ${to}; returning fallback code to keep admin login available`)
+        this.logger.error(`OTP email delivery failed for ${to}; production authentication will fail closed`)
       } else {
         // Non-production only: SMTP is usually not configured on dev machines.
         // Logging the code locally keeps the full OTP flow testable end-to-end.
@@ -1086,12 +1122,17 @@ export function resolveCookieDomain(request?: Request): string | undefined {
   if (COOKIE_DOMAIN_OVERRIDE) {
     return COOKIE_DOMAIN_OVERRIDE
   }
-  const hostHeader = request?.headers?.host
+  const forwardedHost = request?.headers?.['x-forwarded-host']
+  const originalHost = request?.headers?.['x-original-host']
+  const directHost = request?.headers?.host
+  const hostHeader = [forwardedHost, originalHost, directHost]
+    .map((value) => (Array.isArray(value) ? value[0] : value))
+    .find((value): value is string => Boolean(value?.trim()))
   if (!hostHeader) {
     return undefined
   }
-  // Strip any :port suffix.
-  const host = hostHeader.split(':')[0].trim().toLowerCase()
+  // Strip comma-separated proxy hops and any :port suffix.
+  const host = hostHeader.split(',')[0].split(':')[0].trim().toLowerCase()
   if (!host || host === 'localhost') {
     return undefined
   }
@@ -1152,10 +1193,34 @@ export function setAdminAccessCookie(response: Response, token: string, domain?:
   })
 }
 
+function legacyCookieDomainsFor(domain?: string) {
+  if (!domain || domain === '.arofi.net' || !domain.endsWith('.arofi.net')) {
+    return []
+  }
+  return ['.arofi.net']
+}
+
+function clearCookieDomain(response: Response, domain?: string, includeTrustedDevice = true) {
+  const domainOptions = domain ? { domain } : {}
+  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...domainOptions })
+  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...domainOptions })
+  if (includeTrustedDevice) {
+    response.clearCookie(TRUSTED_DEVICE_COOKIE_NAME, { path: '/api/auth', ...domainOptions })
+  }
+}
+
+function clearConflictingAdminSessionCookies(response: Response, domain?: string, includeTrustedDevice = true) {
+  clearCookieDomain(response, undefined, includeTrustedDevice)
+  if (domain) {
+    clearCookieDomain(response, domain, includeTrustedDevice)
+  }
+  for (const legacyDomain of legacyCookieDomainsFor(domain)) {
+    clearCookieDomain(response, legacyDomain, includeTrustedDevice)
+  }
+}
+
 export function clearAdminSessionCookies(response: Response, request?: Request) {
-  const domain = resolveCookieDomain(request)
-  response.clearCookie(ACCESS_COOKIE_NAME, { path: '/', ...(domain ? { domain } : {}) })
-  response.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/auth', ...(domain ? { domain } : {}) })
+  clearConflictingAdminSessionCookies(response, resolveCookieDomain(request))
 }
 
 // Shared by auth + onboarding: apply both session cookies and strip the raw
@@ -1167,6 +1232,7 @@ export function applySessionCookies<
 >(response: Response, session: T, request?: Request): Omit<T, 'access_token' | 'refresh_token'> {
   const { access_token, refresh_token, ...rest } = session
   const domain = resolveCookieDomain(request)
+  clearConflictingAdminSessionCookies(response, domain, false)
   setAdminAccessCookie(response, access_token, domain)
   setRefreshCookie(response, refresh_token, domain)
   return rest
@@ -1185,6 +1251,7 @@ export function applyLoginCookies<
 ): Omit<T, 'access_token' | 'refresh_token' | 'trusted_device_token'> {
   const { access_token, refresh_token, trusted_device_token, ...rest } = session
   const domain = resolveCookieDomain(request)
+  clearConflictingAdminSessionCookies(response, domain)
   setAdminAccessCookie(response, access_token, domain)
   setRefreshCookie(response, refresh_token, domain)
   setTrustedDeviceCookie(response, trusted_device_token ?? null, domain)

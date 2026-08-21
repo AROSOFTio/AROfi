@@ -90,6 +90,7 @@ export class PaymentsService {
         deviceLimit: true,
         downloadSpeedKbps: true,
         uploadSpeedKbps: true,
+        isTrialEnabled: true,
       },
     },
     billingTransaction: {
@@ -346,6 +347,7 @@ export class PaymentsService {
             downloadSpeedKbps: pkg.downloadSpeedKbps,
             uploadSpeedKbps: pkg.uploadSpeedKbps,
             isFeatured: pkg.isFeatured,
+            isTrialEnabled: pkg.isTrialEnabled,
             amountUgx: activePrice?.amountUgx ?? 0,
           }
         })
@@ -409,6 +411,14 @@ export class PaymentsService {
 
     if (!activePrice) {
       throw new BadRequestException('Package has no active price configured')
+    }
+
+    if (this.isTrialPackage(pkg, activePrice.amountUgx)) {
+      throw new BadRequestException('Free trial access must be started from the portal trial button, not Mobile Money checkout.')
+    }
+
+    if (activePrice.amountUgx <= 0) {
+      throw new BadRequestException('Mobile Money checkout requires a paid package.')
     }
 
     if (dto.network !== PaymentNetwork.MTN && dto.network !== PaymentNetwork.AIRTEL) {
@@ -1846,5 +1856,14 @@ export class PaymentsService {
     if (!pkg) return false
     const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
     return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
+  }
+
+  private isTrialPackage(
+    pkg?: { isTrialEnabled?: boolean | null; name?: string | null; code?: string | null; description?: string | null },
+    amountUgx?: number | null,
+  ) {
+    if (!pkg) return false
+    const haystack = `${pkg.name ?? ''} ${pkg.code ?? ''} ${pkg.description ?? ''}`.toLowerCase()
+    return Boolean(pkg.isTrialEnabled) || haystack.includes('trial') || Number(amountUgx ?? 0) <= 0
   }
 }

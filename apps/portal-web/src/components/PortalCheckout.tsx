@@ -66,6 +66,12 @@ function isTvPackage(pkg?: Pick<PortalPackage, 'name' | 'code'> & { description?
   return haystack.includes('tv') || haystack.includes('smart') || haystack.includes('stream')
 }
 
+function isTrialPackage(pkg?: PortalPackage | null) {
+  if (!pkg) return false
+  const haystack = `${pkg.name} ${pkg.code} ${pkg.description ?? ''}`.toLowerCase()
+  return Boolean(pkg.isTrialEnabled) || pkg.amountUgx <= 0 || haystack.includes('trial')
+}
+
 function normalizeMacInput(value: string) {
   const compact = value.replace(/[^a-fA-F0-9]/g, '').toUpperCase()
   if (!/^[A-F0-9]{12}$/.test(compact)) return ''
@@ -463,13 +469,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   })
   const [paymentReturnHandled, setPaymentReturnHandled] = useState(false)
   const selectedIsTvPackage = isTvPackage(selectedPackage)
-  const selectedIsTrialPackage = Boolean(
-    selectedPackage &&
-    (selectedPackage.isTrialEnabled || selectedPackage.amountUgx <= 0 || /trial/i.test(selectedPackage.name)),
-  )
-  const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
-  const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
-  const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))
+  const selectedIsTrialPackage = isTrialPackage(selectedPackage)
+  const trialPackages = (context?.packages ?? []).filter(isTrialPackage)
+  const paidPackages = (context?.packages ?? []).filter((pkg) => !isTrialPackage(pkg))
+  const normalPackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
+  const smartTvPackages = paidPackages.filter((pkg) => isTvPackage(pkg))
+  const multiDevicePackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))
 
   useEffect(() => {
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
@@ -1028,6 +1033,12 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
       return
     }
 
+    if (isTrialPackage(selectedPackage)) {
+      setErrorMessage('Use the portal trial button to start free trial access.')
+      setCheckoutOpen(false)
+      return
+    }
+
     if (!phoneNumber.trim()) {
       setErrorMessage('Enter the customer phone number for payment verification and session matching.')
       return
@@ -1309,13 +1320,13 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   )
 
   function renderPackageButton(pkg: PortalPackage) {
-    const isTrialPackage = Boolean(pkg.isTrialEnabled) || pkg.amountUgx <= 0 || /trial/i.test(pkg.name)
+    const isTrial = isTrialPackage(pkg)
     return (
       <button
         key={pkg.id}
         type="button"
         onClick={() => {
-          if (isTrialPackage) {
+          if (isTrial) {
             void handleTrialStart(pkg)
             return
           }
@@ -1335,8 +1346,8 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
             {isMultiDevicePackage(pkg) ? ` - ${pkg.deviceLimit} devices` : ''}
           </span>
         </span>
-        <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{isTrialPackage ? 'Free' : formatCurrency(pkg.amountUgx)}</span>
-        <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>{isTrialPackage ? 'TRY' : 'BUY'}</span>
+        <span className={`text-sm font-extrabold ${portalStyle.packagePrice}`}>{isTrial ? 'Free' : formatCurrency(pkg.amountUgx)}</span>
+        <span className={`rounded-xl border px-4 py-2 text-sm font-extrabold shadow-sm ${portalStyle.buyPill}`}>{isTrial ? 'TRY' : 'BUY'}</span>
       </button>
     )
   }
@@ -1589,6 +1600,15 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
 
               {(!activeActivation || showMorePackages) && (
                 <>
+                  {trialPackages.length > 0 && (
+                    <>
+                      <p className={`mt-5 text-center text-sm font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Free trial</p>
+                      <div className="mx-auto mt-3 grid max-w-md gap-3">
+                        {trialPackages.map(renderPackageButton)}
+                      </div>
+                    </>
+                  )}
+
                   <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -1598,11 +1618,11 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     <div className="h-[54px] animate-pulse rounded-lg border border-slate-100 bg-slate-100" />
                   </>
                 )}
-                {!isContextLoading && packages.length === 0 && (
+                {!isContextLoading && paidPackages.length === 0 && (
                   <div className={`rounded-lg border p-4 text-sm text-slate-500 ${portalStyle.panel}`}>
                     {contextUnresolved
                       ? 'Open this page from your WiFi login screen so we can load the right operator and packages. If you scanned a code, reconnect to the WiFi and try again.'
-                      : 'No packages are published for this portal yet.'}
+                      : 'No paid packages are published for this portal yet.'}
                   </div>
                 )}
                 {normalPackages.map(renderPackageButton)}
