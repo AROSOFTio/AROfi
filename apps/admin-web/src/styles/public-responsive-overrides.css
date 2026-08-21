@@ -1,0 +1,170 @@
+/* Public homepage responsive alignment overrides.
+   Keep desktop/tablet sections constrained to the same 1180px frame as the
+   navigation and hero. Only switch to full-width stacked pricing on phones. */
+
+.home-pricing {
+  width: 100%;
+  max-width: 1180px;
+  margin: 72px auto 0;
+  padding-inline: 24px;
+}
+
+.home-pricing-grid {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-columns: none;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.home-pricing-card {
+  min-width: 0;
+  height: 100%;
+  padding: 22px 20px;
+  gap: 11px;
+  border-radius: 14px;
+}
+
+.home-pricing-card h3 {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.home-pricing-price strong {
+  font-size: clamp(22px, 2.2vw, 27px);
+  line-height: 1.1;
+}
+
+.home-pricing-price span,
+.home-pricing-commission,
+.home-pricing-routers,
+.home-pricing-list {
+  font-size: 12.5px;
+}
+
+.home-pricing-list {
+  gap: 8px;
+}
+
+.home-pricing-card .btn {
+  min-height: 40px;
+  margin-top: auto;
+}
+.home-pricing-note {
+  width: fit-content;
+  padding: 5px 9px;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.home-pricing-card .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+/* Keep all major public sections on the same desktop/tablet content rail. */
+.home-nav,
+.home-hero,
+.home-why,
+.home-section,
+.home-pricing,
+.site-footer-inner,
+.site-footer-bottom {
+  width: 100%;
+  max-width: 1180px;
+}
+
+/* Tablet: keep pricing on one line as requested; tighten gutters/cards. */
+@media (max-width: 900px) and (min-width: 641px) {
+  .home-pricing {
+    padding-inline: 18px;
+  }
+
+  .home-pricing-grid {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    gap: 12px;
+  }
+
+  .home-pricing-card {
+    padding: 18px 16px;
+    gap: 9px;
+  }
+
+  .home-pricing-card h3 {
+    font-size: 16px;
+  }
+
+  .home-pricing-price strong {
+    font-size: 21px;
+  }
+
+  .home-pricing-list {
+    gap: 6px;
+  }
+}
+
+/* Phone only: pricing becomes a true full-width single-column layout. */
+@media (max-width: 640px) {
+  .home-pricing {
+    width: 100%;
+    max-width: none;
+    margin-top: 48px;
+    padding-inline: 14px;
+  }
+
+  .home-pricing-head {
+    width: 100%;
+    max-width: none;
+    margin-bottom: 24px;
+    padding-inline: 2px;
+  }
+
+  .home-pricing-grid {
+    width: 100%;
+    max-width: none;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-columns: auto;
+    gap: 12px;
+  }
+
+  .home-pricing-card {
+    width: 100%;
+    max-width: none;
+    padding: 20px 18px;
+    border-radius: 14px;
+  }
+
+  .home-pricing-card .btn {
+    width: 100%;
+  }
+
+  .home-section,
+  .home-why,
+  .home-hero {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* Very small phones: preserve readable edge spacing without horizontal scroll. */
+@media (max-width: 380px) {
+  .home-pricing {
+    padding-inline: 10px;
+  }
+
+  .home-pricing-card {
+    padding: 18px 15px;
+  }
+}

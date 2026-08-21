@@ -35,7 +35,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
-  const [fallbackOtp, setFallbackOtp] = useState('')
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
   const [resendCountdown, setResendCountdown] = useState(0)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
@@ -105,12 +104,7 @@ export default function LoginPage() {
       }
       setStep('otp')
       setOtp('')
-      setFallbackOtp(typeof data?.otpFallback === 'string' ? data.otpFallback : '')
-      setInfo(
-        data?.otpFallback
-          ? 'Email delivery failed, so a fallback code is shown below to keep sign-in working.'
-          : `We emailed a 6-digit verification code to ${email}. It expires in a few minutes.`,
-      )
+      setInfo(`We emailed a 6-digit verification code to ${email}. It expires in a few minutes.`)
       if (typeof data?.resendAvailableAt === 'string') {
         setResendAvailableAt(new Date(data.resendAvailableAt).getTime())
       }
@@ -176,7 +170,6 @@ export default function LoginPage() {
         setError(await readErrorMessage(res, 'Could not resend the code. Sign in again.'))
         return
       }
-      setFallbackOtp('')
       setInfo(`A new verification code was sent to ${email}.`)
       setResendAvailableAt(Date.now() + 60_000)
     } catch {
@@ -222,11 +215,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {fallbackOtp && !error && (
-            <div className="login-notice" style={{ marginTop: 12, fontFamily: 'monospace', letterSpacing: '0.2em', fontSize: 18, fontWeight: 700 }}>
-              {fallbackOtp}
-            </div>
-          )}
 
           {step === 'credentials' ? (
             <form onSubmit={handleCredentialsSubmit}>
