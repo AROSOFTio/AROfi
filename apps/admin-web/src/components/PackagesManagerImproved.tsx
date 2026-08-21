@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal'
+import { DurationInput } from './DurationInput'
 import { PackageCatalogResponse, TenantOverviewResponse } from '@/lib/admin-types'
 import { clientDeleteApi, clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatCurrency, formatDuration } from '@/lib/format'
@@ -430,7 +431,15 @@ export default function PackagesManagerImproved() {
                 <div className="form-group"><label className="form-label">Name</label><input className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} onBlur={() => setForm((current) => current.code ? current : { ...current, code: `${packageCodePart(tenants.find((tenant) => tenant.id === current.tenantId)?.name ?? '', 'BIZ')}-${packageCodePart(current.name, 'PLAN')}` })} required /></div>
                 <div className="form-group"><label className="form-label">Code</label><input className="form-input" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} disabled={Boolean(editing)} required /></div>
                 <div className="form-group"><label className="form-label">Price (UGX)</label><input className="form-input" type="number" min={0} value={form.priceUgx} onChange={(event) => setForm((current) => ({ ...current, priceUgx: event.target.value }))} required /></div>
-                <div className="form-group"><label className="form-label">Duration (minutes)</label><input className="form-input" type="number" min={1} value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))} required /></div>
+                <div className="form-group">
+                  <label className="form-label">Duration</label>
+                  <DurationInput
+                    valueMinutes={form.durationMinutes}
+                    onChangeMinutes={(durationMinutes) => setForm((current) => ({ ...current, durationMinutes }))}
+                    inputClassName="form-input"
+                    selectClassName="form-input"
+                  />
+                </div>
                 {kind === 'MULTI' && <div className="form-group"><label className="form-label">Devices</label><input className="form-input" type="number" min={2} value={form.deviceLimit} onChange={(event) => setForm((current) => ({ ...current, deviceLimit: event.target.value }))} /></div>}
                 <div className="form-group"><label className="form-label">Data limit (MB)</label><input className="form-input" type="number" min={1} value={form.dataLimitMb} onChange={(event) => setForm((current) => ({ ...current, dataLimitMb: event.target.value }))} placeholder="Unlimited" /></div>
                 <div className="form-group"><label className="form-label">Download (Kbps)</label><input className="form-input" type="number" min={1} value={form.downloadSpeedKbps} onChange={(event) => setForm((current) => ({ ...current, downloadSpeedKbps: event.target.value }))} placeholder="Unlimited" /></div>
@@ -452,8 +461,13 @@ export default function PackagesManagerImproved() {
       <Modal open={trialOpen} title="Free trial duration" onClose={() => !saving && setTrialOpen(false)} width={460}>
         <form onSubmit={saveTrial}>
           <div className="form-group">
-            <label className="form-label">Duration (minutes)</label>
-            <input className="form-input" type="number" min={1} value={trialDuration} onChange={(event) => setTrialDuration(event.target.value)} required />
+            <label className="form-label">Trial duration</label>
+            <DurationInput
+              valueMinutes={trialDuration}
+              onChangeMinutes={setTrialDuration}
+              inputClassName="form-input"
+              selectClassName="form-input"
+            />
           </div>
           <div className="package-form-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setTrialOpen(false)}>Cancel</button>

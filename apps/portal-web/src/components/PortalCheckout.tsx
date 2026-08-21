@@ -422,7 +422,13 @@ function getWhatsAppLink(phone?: string | null): string {
   return `https://wa.me/${clean}`
 }
 
-export default function PortalCheckout({ initialView = 'home' }: { initialView?: PortalView }) {
+export default function PortalCheckout({
+  initialView = 'home',
+  tvOnly = false,
+}: {
+  initialView?: PortalView
+  tvOnly?: boolean
+}) {
   const router = useRouter()
   const cachedCtx = readCachedContext()
   const [context, setContext] = useState<PortalContextResponse | null>(cachedCtx)
@@ -436,7 +442,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const [customerReference, setCustomerReference] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
   const [tvMacAddress, setTvMacAddress] = useState('')
-  const [voucherTvMode, setVoucherTvMode] = useState(false)
+  const [voucherTvMode] = useState(tvOnly)
   const [smartTvNotice, setSmartTvNotice] = useState<SmartTvActivationNotice | null>(null)
   const [isContextLoading, setIsContextLoading] = useState(!cachedCtx)
   const [contextUnresolved, setContextUnresolved] = useState(false)
@@ -471,6 +477,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
   const selectedIsTvPackage = isTvPackage(selectedPackage)
   const selectedIsTrialPackage = isTrialPackage(selectedPackage)
   const trialPackages = (context?.packages ?? []).filter(isTrialPackage)
+  const freeTrialPackage = trialPackages[0] ?? null
   const paidPackages = (context?.packages ?? []).filter((pkg) => !isTrialPackage(pkg))
   const normalPackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
   const smartTvPackages = paidPackages.filter((pkg) => isTvPackage(pkg))
@@ -1521,34 +1528,78 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
               )}
             </div>        
 
-              <div className="mt-5 flex gap-2">
-                <input value={voucherCode} onChange={(event) => setVoucherCode(event.target.value)} placeholder="Enter your voucher code" className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`} />
-                <button type="button" onClick={() => void handleVoucherRedeem()} disabled={isVoucherLoading} className={`rounded-lg px-5 py-3 text-sm font-bold ${portalStyle.button}`}>
-                  {isVoucherLoading ? 'Connecting…' : 'Connect'}
-                </button>
-              </div>
-
-              <label className={`mt-3 flex items-center gap-2 text-xs font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>
-                <input
-                  type="checkbox"
-                  checked={voucherTvMode}
-                  onChange={(event) => setVoucherTvMode(event.target.checked)}
-                />
-                Connect this voucher to a Smart TV
-              </label>
-              {voucherTvMode && (
-                <div className="mt-2">
-                  <input
-                    value={tvMacAddress}
-                    onChange={(event) => setTvMacAddress(formatMacInput(event.target.value))}
-                    placeholder="TV wireless MAC address, e.g. AA:BB:CC:DD:EE:FF"
-                    className={`w-full rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`}
-                  />
-                  <p className={`mt-1 text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-500'}`}>
-                    On the TV: go to the client WiFi name, click that same WiFi name/details, then copy the Device MAC Address.
-                  </p>
+              <div className="mt-5 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-extrabold text-slate-900">{tvOnly ? 'Connect a Smart TV' : 'Quick access'}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {tvOnly ? 'Enter a TV voucher or choose a TV package below.' : 'Voucher, TV, previous purchase, or free trial.'}
+                    </div>
+                  </div>
+                  {tvOnly && (
+                    <Link href="/" className={`rounded-lg border px-3 py-2 text-xs font-bold ${portalStyle.link}`}>
+                      Back
+                    </Link>
+                  )}
                 </div>
-              )}
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={voucherCode}
+                    onChange={(event) => setVoucherCode(event.target.value)}
+                    placeholder={tvOnly ? 'Enter TV voucher code' : 'Enter voucher code'}
+                    className={`min-w-0 flex-1 rounded-lg border px-4 py-3 text-sm outline-none ${portalStyle.input}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleVoucherRedeem()}
+                    disabled={isVoucherLoading}
+                    className={`rounded-lg px-4 py-3 text-sm font-bold ${portalStyle.button}`}
+                  >
+                    {isVoucherLoading ? 'Connecting…' : 'Connect'}
+                  </button>
+                </div>
+
+                {tvOnly && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-bold text-slate-700">TV wireless MAC address</label>
+                    <input
+                      value={tvMacAddress}
+                      onChange={(event) => setTvMacAddress(formatMacInput(event.target.value))}
+                      placeholder="AA:BB:CC:DD:EE:FF"
+                      inputMode="text"
+                      className={`mt-1 w-full rounded-lg border px-4 py-3 text-sm font-semibold tracking-wide outline-none ${portalStyle.input}`}
+                    />
+                    <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                      Find it under the TV WiFi network details. After activation, disconnect and reconnect the TV to this same WiFi.
+                    </p>
+                  </div>
+                )}
+
+                {!tvOnly && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <Link
+                      href={`/tv${context?.tenant.domain || hotspotParams.tenantDomain ? `?tenantDomain=${encodeURIComponent(context?.tenant.domain || hotspotParams.tenantDomain)}` : ''}`}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-bold ${portalStyle.link}`}
+                    >
+                      <Wifi className="h-3.5 w-3.5" /> Connect TV
+                    </Link>
+                    <Link href="/login" className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-bold ${portalStyle.link}`}>
+                      <LogIn className="h-3.5 w-3.5" /> Find purchase
+                    </Link>
+                    {freeTrialPackage && (
+                      <button
+                        type="button"
+                        onClick={() => void handleTrialStart(freeTrialPackage)}
+                        disabled={isPaymentLoading}
+                        className={`col-span-2 flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-bold sm:col-span-1 ${portalStyle.link}`}
+                      >
+                        <Ticket className="h-3.5 w-3.5" /> Try free
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {activeActivation && (
                 <div className={`mt-5 rounded-xl border p-4 text-center ${portalStyle.notice}`}>
@@ -1598,7 +1649,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 Already bought? Find My Voucher
               </Link>
 
-              {(!activeActivation || showMorePackages) && (
+              {(tvOnly || !activeActivation || showMorePackages) && (
                 <>
                   {trialPackages.length > 0 && (
                     <>
@@ -1609,7 +1660,9 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                     </>
                   )}
 
-                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Select a package and pay with Mobile Money</p>
+                  <p className={`mt-5 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>
+                    {tvOnly ? 'Choose a Smart TV package or use a voucher above' : 'Select a package and choose a payment method'}
+                  </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {isContextLoading && packages.length === 0 && (
@@ -1625,14 +1678,16 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                       : 'No paid packages are published for this portal yet.'}
                   </div>
                 )}
-                {normalPackages.map(renderPackageButton)}
+                {!tvOnly && normalPackages.map(renderPackageButton)}
               </div>
 
               {smartTvPackages.length > 0 && (
                 <>
-                  <p className={`mt-6 text-center text-sm font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Smart TV connection</p>
+                  <p className={`mt-6 text-center text-sm font-semibold ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>
+                    {tvOnly ? 'Smart TV packages' : 'Smart TV connection'}
+                  </p>
                   <p className={`mx-auto mt-1 max-w-sm text-center text-xs ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-300' : 'text-slate-500'}`}>
-                    Select a TV package, enter the TV wireless MAC address, pay by phone, then select this WiFi on the TV.
+                    Enter the TV MAC address, pay from any phone, then reconnect the TV to this WiFi.
                   </p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {smartTvPackages.map(renderPackageButton)}
@@ -1640,7 +1695,7 @@ export default function PortalCheckout({ initialView = 'home' }: { initialView?:
                 </>
               )}
 
-              {multiDevicePackages.length > 0 && (
+              {!tvOnly && multiDevicePackages.length > 0 && (
                 <>
                   <p className={`mt-6 text-center text-sm ${resolvePortalTemplate(context?.tenant.portalTemplate) === 'midnight' ? 'text-slate-200' : 'text-slate-700'}`}>Multi-device packages</p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">

@@ -127,19 +127,25 @@ replace_once(
     "  const [voucherTvMode] = useState(tvOnly)",
     "useState(tvOnly)",
 )
-replace_once(
+replace_one_of(
     portal,
-    """  const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
+    (
+        """  const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
   const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
   const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))""",
-    """  const normalPackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
-  const freeTrialPackage = normalPackages.find(
-    (pkg) => Boolean(pkg.isTrialEnabled) || pkg.amountUgx <= 0 || /trial/i.test(pkg.name),
-  )
-  const paidNormalPackages = normalPackages.filter((pkg) => pkg.id !== freeTrialPackage?.id)
-  const smartTvPackages = (context?.packages ?? []).filter((pkg) => isTvPackage(pkg))
-  const multiDevicePackages = (context?.packages ?? []).filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))""",
-    "const freeTrialPackage = normalPackages.find",
+        """  const trialPackages = (context?.packages ?? []).filter(isTrialPackage)
+  const paidPackages = (context?.packages ?? []).filter((pkg) => !isTrialPackage(pkg))
+  const normalPackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
+  const smartTvPackages = paidPackages.filter((pkg) => isTvPackage(pkg))
+  const multiDevicePackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))""",
+    ),
+    """  const trialPackages = (context?.packages ?? []).filter(isTrialPackage)
+  const freeTrialPackage = trialPackages[0] ?? null
+  const paidPackages = (context?.packages ?? []).filter((pkg) => !isTrialPackage(pkg))
+  const normalPackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && !isMultiDevicePackage(pkg))
+  const smartTvPackages = paidPackages.filter((pkg) => isTvPackage(pkg))
+  const multiDevicePackages = paidPackages.filter((pkg) => !isTvPackage(pkg) && isMultiDevicePackage(pkg))""",
+    "const freeTrialPackage = trialPackages[0] ?? null",
 )
 
 quick_access = '''              <div className="mt-5 rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm">
@@ -252,7 +258,7 @@ replace_one_of(
 replace_once(
     portal,
     "                {normalPackages.map(renderPackageButton)}",
-    "                {!tvOnly && paidNormalPackages.map(renderPackageButton)}",
+    "                {!tvOnly && normalPackages.map(renderPackageButton)}",
 )
 replace_once(
     portal,
@@ -286,7 +292,7 @@ for obsolete in [
 for required in [
     "Choose a Smart TV package or use a voucher above",
     "Select a package and choose a payment method",
-    "paidNormalPackages.map(renderPackageButton)",
+    "normalPackages.map(renderPackageButton)",
 ]:
     if required not in portal_text:
         raise RuntimeError(f"PortalCheckout missing required final marker: {required}")
