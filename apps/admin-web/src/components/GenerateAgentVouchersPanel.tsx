@@ -47,6 +47,11 @@ function buildBatchFileUrl(batchId: string, templateId = 'agent') {
   return `/api/vouchers/batches/${batchId}/print.pdf?${params.toString()}`
 }
 
+function isTrialPackage(pkg: PackageCatalogResponse['items'][number]) {
+  const haystack = `${pkg.name} ${pkg.code} ${pkg.description ?? ''}`.toLowerCase()
+  return Boolean(pkg.isTrialEnabled) || (pkg.activePriceUgx ?? 0) <= 0 || haystack.includes('trial')
+}
+
 export default function GenerateAgentVouchersPanel({ agent }: { agent: AgentItem }) {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<FormState>(initialForm)
@@ -64,7 +69,7 @@ export default function GenerateAgentVouchersPanel({ agent }: { agent: AgentItem
   }, [open])
 
   const tenantPackages = useMemo(
-    () => packages.filter((pkg) => pkg.tenant.id === agent.tenant.id),
+    () => packages.filter((pkg) => pkg.tenant.id === agent.tenant.id && !isTrialPackage(pkg)),
     [packages, agent.tenant.id],
   )
 

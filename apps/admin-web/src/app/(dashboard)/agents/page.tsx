@@ -44,6 +44,11 @@ type HybridOverview = {
   agents: HybridAgent[]
 }
 
+function isTrialPackage(pkg: PackageCatalogResponse['items'][number]) {
+  const haystack = `${pkg.name} ${pkg.code} ${pkg.description ?? ''}`.toLowerCase()
+  return Boolean(pkg.isTrialEnabled) || (pkg.activePriceUgx ?? 0) <= 0 || haystack.includes('trial')
+}
+
 export default async function AgentsPage() {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
   if (session?.user.role === 'VoucherAgent') redirect('/dashboard')
@@ -53,7 +58,7 @@ export default async function AgentsPage() {
     fetchApi<PackageCatalogResponse>('/packages').catch(() => null),
   ])
   const canManageBusinessAgents = isVendorWorkspace(session?.user)
-  const activePackages = (packages?.items ?? []).filter((pkg) => pkg.status === 'ACTIVE')
+  const activePackages = (packages?.items ?? []).filter((pkg) => pkg.status === 'ACTIVE' && !isTrialPackage(pkg))
 
   return (
     <>

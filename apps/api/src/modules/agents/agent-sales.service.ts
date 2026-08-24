@@ -638,11 +638,26 @@ export class AgentSalesService implements OnModuleDestroy {
     }
 
     if (policy.allowedPackageIds.length > 0) {
-      const count = await this.prisma.package.count({
+      const packages = await this.prisma.package.findMany({
         where: { id: { in: policy.allowedPackageIds }, tenantId: agent.tenantId, status: PackageStatus.ACTIVE },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          description: true,
+          isTrialEnabled: true,
+          prices: {
+            orderBy: { startsAt: 'desc' },
+            take: 1,
+            select: { amountUgx: true },
+          },
+        },
       })
-      if (count !== new Set(policy.allowedPackageIds).size) {
+      if (packages.length !== new Set(policy.allowedPackageIds).size) {
         throw new BadRequestException('One or more selected packages are unavailable for this business.')
+      }
+      if (packages.some((pkg) => this.isTrialPackage(pkg, pkg.prices[0]?.amountUgx))) {
+        throw new BadRequestException('Free trial cannot be assigned to Agents. It is only available from the customer portal trial button.')
       }
     }
 
@@ -658,6 +673,14 @@ export class AgentSalesService implements OnModuleDestroy {
       cashLimitUgx: updated.floatLimitUgx,
       policy,
     }
+  }
+
+  private isTrialPackage(
+    pkg?: { isTrialEnabled?: boolean | null; name?: string | null; code?: string | null; description?: string | null },
+    amountUgx?: number | null,
+  ) {
+    const haystack = `${pkg?.name ?? ''} ${pkg?.code ?? ''} ${pkg?.description ?? ''}`.toLowerCase()
+    return Boolean(pkg?.isTrialEnabled) || haystack.includes('trial') || Number(amountUgx ?? 0) <= 0
   }
 
   async recordCashSettlement(scopedTenantId: string | undefined, dto: RecordAgentCashSettlementDto) {

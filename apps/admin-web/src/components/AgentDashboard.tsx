@@ -42,6 +42,11 @@ type AgentDashboardResponse = {
   }>
 }
 
+function isTrialPackage(pkg: PackageCatalogResponse['items'][number]) {
+  const haystack = `${pkg.name} ${pkg.code} ${pkg.description ?? ''}`.toLowerCase()
+  return Boolean(pkg.isTrialEnabled) || (pkg.activePriceUgx ?? 0) <= 0 || haystack.includes('trial')
+}
+
 export default async function AgentDashboard() {
   const [data, packageResponse] = await Promise.all([
     fetchApi<AgentDashboardResponse>('/agent-sales/me/dashboard'),
@@ -50,7 +55,7 @@ export default async function AgentDashboard() {
 
   const allowed = new Set(data?.agent.policy.allowedPackageIds ?? [])
   const sellPackages = (packageResponse?.items ?? [])
-    .filter((pkg) => pkg.status === 'ACTIVE')
+    .filter((pkg) => pkg.status === 'ACTIVE' && !isTrialPackage(pkg))
     .filter((pkg) => allowed.size === 0 || allowed.has(pkg.id))
     .map((pkg) => ({
       id: pkg.id,
