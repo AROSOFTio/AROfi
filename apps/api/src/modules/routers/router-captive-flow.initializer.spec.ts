@@ -41,7 +41,7 @@ describe('RouterCaptiveFlowInitializer', () => {
     expect(script).toContain('interval=1m')
   })
 
-  it('restores active returning-device auto reconnect with an immediate top-level RouterOS POST', () => {
+  it('preserves active returning-device auto reconnect with an immediate top-level RouterOS POST', () => {
     const oldConnect = "function conn(rc){if(!rc||!rc.username)return;var dst=CONNECTED;var target=(rc.loginUrl||lo||'http://10.55.0.1/login');window.location.href=target+'?username='+encodeURIComponent(rc.username)+'&password='+encodeURIComponent(rc.password||rc.username)+'&dst='+encodeURIComponent(dst);}"
     const controller = {
       prepareLoginHtml: jest.fn((html: string) => html),
@@ -61,15 +61,13 @@ describe('RouterCaptiveFlowInitializer', () => {
 
     const html = controller.prepareLoginHtml([
       '<html><head></head><body><script>',
-      'var autoReady=false;',
+      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
       "var loopGuard=_lastAuto&&(Date.now()-_lastAuto)<8000;",
       oldConnect,
       '</script></body></html>',
     ].join(''))
 
-    expect(html).toContain(
-      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
-    )
+    expect(html).toContain('var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;')
     expect(html).toContain('(Date.now()-_lastAuto)<2500')
     expect(html).toContain("f.method='post';f.action=target;f.style.display='none'")
     expect(html).toContain('document.body.appendChild(f);f.submit();}')

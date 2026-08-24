@@ -103,10 +103,10 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
     controller.prepareLoginHtml = (html: string) => {
       let prepared = original(html)
 
-      // Restore activation-aware return login only for the API-confirmed same
+      // Preserve activation-aware return login only for the API-confirmed same
       // device/router bundle. New visitors still see the portal immediately.
       prepared = prepared.replace(
-        'var autoReady=false;',
+        'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
         'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
       )
 

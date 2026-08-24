@@ -265,7 +265,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   }, [router, visibleGroups])
 
   const workspaceLabel = isReseller ? 'Referral Partner' : isVendor ? 'Business Console' : 'Platform Control'
-  const homeLabel = isVendor ? 'Home' : isReseller ? 'Overview' : 'Command Center'
+  const homeLabel = isVendor ? 'Dashboard' : isReseller ? 'Overview' : 'Command Center'
 
   return (
     <aside className={`sidebar ${isPlatform ? 'platform-sidebar' : ''}`}>

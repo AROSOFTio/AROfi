@@ -85,7 +85,7 @@ export default async function VendorBusinessDashboard({
   const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((router) => router.liveState === 'LIVE').length
   const staleRouters = routers?.summary.staleRouters ?? routerItems.filter((router) => router.liveState === 'STALE').length
   const onlineRouters = liveRouters + staleRouters
-  const totalDataUsedMb = billing?.summary.dataUsedMb ?? sessions?.summary.dataUsedTodayMb ?? activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
+  const dataUsedTodayMb = sessions?.summary.dataUsedTodayMb ?? activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
   const averageLatency = routers?.summary.averageLatencyMs ?? 0
 
   const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []
@@ -161,7 +161,7 @@ export default async function VendorBusinessDashboard({
               icon={<Users size={17} />}
               iconTone="purple"
               footLeft={['Sessions today', `${sessions?.summary.totalSessionsToday ?? 0}`]}
-              footRight={['Data today', formatMegabytes(totalDataUsedMb)]}
+              footRight={['Data today', formatMegabytes(dataUsedTodayMb)]}
             />
             <Kpi
               title="Routers Online"
@@ -222,7 +222,7 @@ export default async function VendorBusinessDashboard({
               </div>
               <div className={styles.insightGrid}>
                 <Insight icon={<Users size={16} />} value={`${activeCustomers}`} label="Active users" />
-                <Insight icon={<Database size={16} />} value={formatMegabytes(totalDataUsedMb)} label="Data used today" />
+                <Insight icon={<Database size={16} />} value={formatMegabytes(dataUsedTodayMb)} label="Data used today" />
                 <Insight icon={<Activity size={16} />} value={`${onlineRouters}/${totalRouters}`} label="Routers available" />
                 <Insight icon={<Cpu size={16} />} value={averageLatency > 0 ? `${Math.round(averageLatency)} ms` : '—'} label="Average latency" />
               </div>

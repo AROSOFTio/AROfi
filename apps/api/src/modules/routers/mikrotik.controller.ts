@@ -109,13 +109,6 @@ export class MikrotikController {
   prepareLoginHtml(html: string) {
     let prepared = html;
 
-    // The runtime captive-flow initializer restores this only when the API has
-    // confirmed an ACTIVE, unexpired activation for the same router and MAC.
-    prepared = prepared.replace(
-      'var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;',
-      'var autoReady=false;',
-    );
-
     // Preserve the API's real voucher message. The original parser returned
     // "Parse err" for a text/HTML proxy response and "Network err" after both
     // HTTPS and HTTP attempts, hiding useful errors such as an already-used or

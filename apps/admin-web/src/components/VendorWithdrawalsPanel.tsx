@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -83,7 +83,7 @@ type PayoutProfile = {
   } | null
 }
 
-type PanelAction = 'secret' | 'number' | 'change' | 'withdraw' | null
+type PanelAction = 'secret' | 'secret-reset' | 'number' | 'change' | 'withdraw' | null
 
 export default function VendorWithdrawalsPanel({ initialProfile }: { initialProfile: PayoutProfile | null }) {
   const [profile, setProfile] = useState(initialProfile)
@@ -101,6 +101,7 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
   const [historyRange, setHistoryRange] = useState<'today' | 'yesterday' | 'last7' | 'month' | 'custom'>('last7')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [secretResetToken, setSecretResetToken] = useState('')
 
   const verifiedNumbers = profile?.numbers.filter((item) => item.status === 'VERIFIED') ?? []
   const selectedNumber = verifiedNumbers.find((item) => item.id === selectedPayoutNumberId) ?? verifiedNumbers[0] ?? null
@@ -153,6 +154,13 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
     confirmedPhone &&
     acceptedTerms
 
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('withdrawalSecretReset')
+    if (!token) return
+    setSecretResetToken(token)
+    setAction('secret-reset')
+  }, [])
+
   async function refreshProfile() {
     const fresh = await clientFetchApi<PayoutProfile>('/wallets/payouts/profile/me')
     setProfile(fresh)
@@ -197,6 +205,26 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         secretKey: form.get('secretKey'),
       }),
     )
+    event.currentTarget.reset()
+  }
+
+  async function requestSecretReset() {
+    await run('Withdrawal code reset email sent. Check your inbox.', 'secret-reset-request', () =>
+      clientPostApi('/wallets/payouts/secret/reset/request', {}),
+    )
+  }
+
+  async function resetSecret(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    await run('Withdrawal code reset successfully.', 'secret-reset', () =>
+      clientPostApi('/wallets/payouts/secret/reset/confirm', {
+        token: form.get('token'),
+        secretKey: form.get('secretKey'),
+      }),
+    )
+    setSecretResetToken('')
+    window.history.replaceState(null, '', window.location.pathname)
     event.currentTarget.reset()
   }
 
@@ -330,6 +358,11 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAction('secret')}>
             <KeyRound size={14} /> {profile.profile.secretConfigured ? 'Change Secret' : 'Set Secret'}
           </button>
+          {profile.profile.secretConfigured && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={requestSecretReset} disabled={busy === 'secret-reset-request'}>
+              <KeyRound size={14} /> Forgot Code
+            </button>
+          )}
         </div>
       </div>
 
@@ -416,8 +449,10 @@ export default function VendorWithdrawalsPanel({ initialProfile }: { initialProf
         progress={progress}
         onClose={() => setAction(null)}
         onSecret={setSecret}
+        onResetSecret={resetSecret}
         onAddNumber={addNumber}
         onChangeNumber={requestChange}
+        secretResetToken={secretResetToken}
       />
     </div>
   )
@@ -577,8 +612,10 @@ function SetupModal({
   progress,
   onClose,
   onSecret,
+  onResetSecret,
   onAddNumber,
   onChangeNumber,
+  secretResetToken,
 }: {
   action: PanelAction
   profile: PayoutProfile
@@ -588,8 +625,10 @@ function SetupModal({
   progress: string
   onClose: () => void
   onSecret: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  onResetSecret: (event: FormEvent<HTMLFormElement>) => Promise<void>
   onAddNumber: (event: FormEvent<HTMLFormElement>) => Promise<void>
   onChangeNumber: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  secretResetToken: string
 }) {
   return (
     <Modal
@@ -597,9 +636,11 @@ function SetupModal({
       onClose={onClose}
       closeDisabled={Boolean(busy)}
       style={{ width: 'min(620px, 100%)' }}
-      kicker={action === 'secret' ? 'Security' : action === 'number' ? 'Payout setup' : 'Approval required'}
+      kicker={action === 'secret' || action === 'secret-reset' ? 'Security' : action === 'number' ? 'Payout setup' : 'Approval required'}
       title={
-        action === 'secret'
+        action === 'secret-reset'
+          ? 'Reset withdrawal code'
+          : action === 'secret'
           ? profile.profile.secretConfigured ? 'Change withdrawal code' : 'Set withdrawal code'
           : action === 'number'
             ? 'Register payout number'
@@ -627,6 +668,24 @@ function SetupModal({
               <FormProcessStatus busy={busy === 'secret'} error={modalError} text={progress || 'Saving withdrawal code and refreshing profile.'} />
             </div>
             <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'secret'}>{busy === 'secret' ? 'Saving withdrawal code...' : 'Save withdrawal code'}</button>
+          </div>
+        </form>
+      )}
+
+      {action === 'secret-reset' && (
+        <form onSubmit={onResetSecret}>
+          <div className="form-grid" style={{ marginTop: 22 }}>
+            <input type="hidden" name="token" value={secretResetToken} />
+            <label className="form-group form-span-2">
+              <span className="form-label">New withdrawal code</span>
+              <input name="secretKey" type="password" minLength={8} required placeholder="At least 8 characters" className="form-input" disabled={busy === 'secret-reset'} />
+            </label>
+            <div className="form-span-2">
+              <FormProcessStatus busy={busy === 'secret-reset'} error={modalError} text={progress || 'Saving the new withdrawal code and clearing failed attempts.'} />
+            </div>
+            <button className="btn btn-primary btn-block form-span-2" disabled={busy === 'secret-reset' || !secretResetToken}>
+              {busy === 'secret-reset' ? 'Resetting code...' : 'Reset withdrawal code'}
+            </button>
           </div>
         </form>
       )}

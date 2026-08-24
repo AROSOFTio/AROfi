@@ -479,6 +479,7 @@ model Tenant {
   voucherPrintLogs    VoucherPrintLog[]
   tenantSettings      TenantSetting?
   payoutProfile       TenantPayoutProfile?
+  withdrawalSecretResetTokens WithdrawalSecretResetToken[]
   payoutNumbers       TenantPayoutNumber[]
   payoutNumberChangeRequests TenantPayoutNumberChangeRequest[]
   disconnectionAttempts DisconnectionAttempt[]
@@ -655,6 +656,7 @@ model User {
   adminTrustedDevices    AdminTrustedDevice[]
   blogPosts              BlogPost[]
   passwordResetTokens    PasswordResetToken[]
+  withdrawalSecretResetTokens WithdrawalSecretResetToken[]
   emailChangeRequests    EmailChangeRequest[]
   sentNotifications      Notification[]      @relation("NotificationSender")
   notificationReads      NotificationRead[]
@@ -671,6 +673,21 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
+  @@index([userId, usedAt])
+}
+
+model WithdrawalSecretResetToken {
+  id        String    @id @default(uuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, usedAt])
   @@index([userId, usedAt])
 }
 

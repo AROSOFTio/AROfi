@@ -45,6 +45,25 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @Post('payouts/secret/reset/request')
+  requestPayoutSecretReset(@CurrentUser() user: AuthenticatedAdminUser) {
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
+    return this.walletsService.requestPayoutSecretReset(tenantId, user.id)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingWrite)
+  @Post('payouts/secret/reset/confirm')
+  confirmPayoutSecretReset(
+    @CurrentUser() user: AuthenticatedAdminUser,
+    @Body() dto: { token: string; secretKey: string },
+  ) {
+    const isSuper = this.accessScope.isSuperAdmin(user)
+    const tenantId = isSuper ? 'platform' : this.accessScope.requireTenantScope(user)
+    return this.walletsService.confirmPayoutSecretReset(tenantId, dto, user.id)
+  }
+
+  @RequirePermissions(PERMISSIONS.billingWrite)
   @Post('payouts/numbers')
   registerPayoutNumber(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RegisterPayoutNumberDto) {
     const isSuper = this.accessScope.isSuperAdmin(user)

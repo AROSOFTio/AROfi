@@ -15,7 +15,7 @@ import {
 } from '@prisma/client'
 import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import * as bcrypt from 'bcrypt'
-import { randomUUID } from 'crypto'
+import { createHash, randomBytes, randomUUID } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 import { PLATFORM_SETTINGS_ID } from '../billing/billing.constants'
 import { MailService } from '../mail/mail.service'
@@ -30,6 +30,7 @@ import { TopUpWalletDto } from './dto/topup-wallet.dto'
 @Injectable()
 export class WalletsService {
   private readonly logger = new Logger(WalletsService.name)
+  private readonly withdrawalSecretResetTtlMs = 60 * 60 * 1000
 
   constructor(
     private readonly prisma: PrismaService,
@@ -334,6 +335,107 @@ export class WalletsService {
     })
 
     return { secretConfigured: true }
+  }
+
+  async requestPayoutSecretReset(tenantId: string, userId: string) {
+    if (tenantId === 'platform') {
+      await this.ensurePlatformTenantExists()
+    }
+    const generic = {
+      ok: true,
+      message: 'If your account email can receive mail, a withdrawal code reset link has been sent.',
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, isActive: true, ...(tenantId === 'platform' ? {} : { tenantId }) },
+      select: { id: true, email: true, firstName: true, lastName: true, tenant: { select: { name: true } } },
+    })
+    if (!user) {
+      return generic
+    }
+
+    const rawToken = randomBytes(32).toString('hex')
+    await this.prisma.withdrawalSecretResetToken.create({
+      data: {
+        tenantId,
+        userId: user.id,
+        tokenHash: this.hashToken(rawToken),
+        expiresAt: new Date(Date.now() + this.withdrawalSecretResetTtlMs),
+      },
+    })
+
+    const baseUrl = process.env.ADMIN_BASE_URL || 'https://arofi.net'
+    const link = `${baseUrl}/earnings?withdrawalSecretReset=${rawToken}`
+    const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
+    const tenantName = user.tenant?.name ?? 'AROFi'
+    const delivered = await this.mailService.sendMail({
+      to: user.email,
+      subject: 'Reset your AROFi withdrawal code',
+      html: `<p>Hello ${this.escapeHtml(name)},</p>
+        <p>We received a request to reset the withdrawal code for <strong>${this.escapeHtml(tenantName)}</strong>.</p>
+        <p><a href="${link}">Reset withdrawal code</a></p>
+        <p>This link expires in 1 hour. If you did not request this, contact support@arofi.net immediately.</p>`,
+      text: `Reset your AROFi withdrawal code: ${link}\n\nThis link expires in 1 hour. If you did not request this, contact support@arofi.net immediately.`,
+    })
+
+    if (!delivered && process.env.NODE_ENV === 'production') {
+      this.logger.error(`Withdrawal code reset email delivery failed for user ${user.id}`)
+      throw new ServiceUnavailableException('Reset email could not be delivered. Please try again.')
+    }
+
+    await this.writeAudit({
+      tenantId,
+      userId,
+      action: 'withdrawal.secret_reset.requested',
+      entity: 'TenantPayoutProfile',
+      entityId: tenantId,
+      details: { email: user.email },
+    })
+    return generic
+  }
+
+  async confirmPayoutSecretReset(tenantId: string, dto: { token: string; secretKey: string }, userId: string) {
+    if (!dto.token?.trim()) {
+      throw new BadRequestException('Reset token is required')
+    }
+    if (!dto.secretKey || dto.secretKey.length < 8) {
+      throw new BadRequestException('Withdrawal code must be at least 8 characters')
+    }
+    const tokenHash = this.hashToken(dto.token.trim())
+    const record = await this.prisma.withdrawalSecretResetToken.findUnique({ where: { tokenHash } })
+    if (
+      !record ||
+      record.tenantId !== tenantId ||
+      record.userId !== userId ||
+      record.usedAt ||
+      record.expiresAt.getTime() < Date.now()
+    ) {
+      throw new BadRequestException('This withdrawal code reset link is invalid or has expired. Request a new one.')
+    }
+
+    const secretHash = await bcrypt.hash(dto.secretKey, 12)
+    await this.prisma.$transaction([
+      this.prisma.tenantPayoutProfile.upsert({
+        where: { tenantId },
+        update: { secretHash, failedSecretAttempts: 0, withdrawalLockedUntil: null, lastFailedSecretAt: null },
+        create: { tenantId, secretHash },
+      }),
+      this.prisma.withdrawalSecretResetToken.updateMany({
+        where: { tenantId, userId, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'withdrawal.secret_reset.completed',
+          entity: 'TenantPayoutProfile',
+          entityId: tenantId,
+          details: this.toJsonValue({ resetFailedAttempts: true }),
+        },
+      }),
+    ])
+
+    return { secretConfigured: true, message: 'Withdrawal code reset successfully.' }
   }
 
   async registerPayoutNumber(tenantId: string, dto: RegisterPayoutNumberDto) {
@@ -1582,6 +1684,22 @@ export class WalletsService {
 
   private objectMetadata(value: Prisma.JsonValue | null): Record<string, unknown> {
     return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  }
+
+  private hashToken(rawToken: string) {
+    return createHash('sha256').update(rawToken).digest('hex')
+  }
+
+  private escapeHtml(value: string) {
+    return value.replace(/[&<>"']/g, (char) => {
+      switch (char) {
+        case '&': return '&amp;'
+        case '<': return '&lt;'
+        case '>': return '&gt;'
+        case '"': return '&quot;'
+        default: return '&#39;'
+      }
+    })
   }
 
   private calculateWithdrawalFee(
