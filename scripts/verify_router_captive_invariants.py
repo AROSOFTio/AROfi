@@ -18,6 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK = ROOT / "apps/api/src/modules/routers/mikrotik.service.ts"
 CAPTIVE_FLOW = ROOT / "apps/api/src/modules/routers/router-captive-flow.initializer.ts"
+NGINX_SPLIT = ROOT / "config/nginx.split.conf"
+NGINX_COOLIFY = ROOT / "config/nginx.coolify.conf"
 
 FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
 FINAL_PERSISTENCE = (
@@ -105,6 +107,8 @@ def main() -> None:
 
     final = MIKROTIK.read_text(encoding="utf-8")
     flow = CAPTIVE_FLOW.read_text(encoding="utf-8")
+    nginx_split = NGINX_SPLIT.read_text(encoding="utf-8")
+    nginx_coolify = NGINX_COOLIFY.read_text(encoding="utf-8")
 
     required_mikrotik = {
         "trusted returning-device login modes": FINAL_LOGIN_BY,
@@ -133,6 +137,17 @@ def main() -> None:
         *[label for label, marker in required_mikrotik.items() if marker not in final],
         *[label for label, marker in required_flow.items() if marker not in flow],
     ]
+
+    required_captive_fallback = {
+        "HTTP fallback portal API": "location /api/portal/",
+        "HTTP fallback payment initiate API": "location /api/payments/portal/",
+        "HTTP fallback payment status API": "location ~ ^/api/payments/[^/]+/check-status$",
+    }
+    for label, marker in required_captive_fallback.items():
+        if marker not in nginx_split:
+            missing.append(f"{label} in nginx.split.conf")
+        if marker not in nginx_coolify:
+            missing.append(f"{label} in nginx.coolify.conf")
 
     # The stable 713e3f7 flow intentionally hides the document synchronously
     # between appending the native form and submitting it. That is still an

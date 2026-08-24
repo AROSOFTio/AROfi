@@ -17,6 +17,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 MIKROTIK_CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik.controller.ts"
 ALOGIN_CONTROLLER = ROOT / "apps/api/src/modules/routers/mikrotik-alogin.controller.ts"
+PORTAL_CHECKOUT = ROOT / "apps/portal-web/src/components/PortalCheckout.tsx"
 
 
 def main() -> None:
@@ -39,6 +40,7 @@ def main() -> None:
 
     main_text = MIKROTIK_CONTROLLER.read_text(encoding="utf-8")
     alogin_text = ALOGIN_CONTROLLER.read_text(encoding="utf-8")
+    portal_text = PORTAL_CHECKOUT.read_text(encoding="utf-8")
     combined = main_text + "\n" + alogin_text
 
     if combined.count("@Get('alogin-html/:key')") != 1:
@@ -61,10 +63,20 @@ def main() -> None:
         "www.msftconnecttest.com/connecttest.txt",
         "captive.apple.com/hotspot-detect.html",
     )
+    required_portal = (
+        "function autoSubmitHotspotLogin(",
+        "form.method = 'post'",
+        "form.action = target.toString()",
+        "add('username', reconnect.username)",
+        "add('password', reconnect.password)",
+        "add('dst', finishTarget())",
+        "form.submit()",
+    )
 
     missing = [
         *[f"status:{marker}" for marker in required_main if marker not in main_text],
         *[f"alogin:{marker}" for marker in required_alogin if marker not in alogin_text],
+        *[f"portal:{marker}" for marker in required_portal if marker not in portal_text],
     ]
     if missing:
         raise RuntimeError(
@@ -78,6 +90,15 @@ def main() -> None:
         "Connected. <a",
     )
     present = [marker for marker in forbidden if marker in combined]
+    forbidden_portal = (
+        "window.location.assign(target.toString())",
+        "target.searchParams.set('username'",
+        "target.searchParams.set('password'",
+        "target.searchParams.set('dst'",
+        "connectedDst.searchParams.set('connected'",
+        "requestAnimationFrame(() => autoSubmitHotspotLogin",
+    )
+    present.extend(f"portal:{marker}" for marker in forbidden_portal if marker in portal_text)
     if present:
         raise RuntimeError(
             "Captive completion build rejected; visible completion text remains: "
@@ -90,7 +111,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    for required in (MIKROTIK_CONTROLLER, ALOGIN_CONTROLLER):
+    for required in (MIKROTIK_CONTROLLER, ALOGIN_CONTROLLER, PORTAL_CHECKOUT):
         if not required.exists():
             raise RuntimeError(f"Required captive completion source missing: {required.relative_to(ROOT)}")
     main()

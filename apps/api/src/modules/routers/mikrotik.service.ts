@@ -705,9 +705,6 @@ export class MikrotikService {
     // HTTP fallback base URL (raw IP) so the page works when HTTPS fails in a
     // captive-portal mini-browser or when DNS hasn't resolved yet.
     const fallbackApiBaseUrl = this.escapeHtml(this.resolveHttpCallbackBaseUrl())
-    const connectedUrl = this.escapeHtml(
-      `${(portalBaseUrl || this.resolvePortalBaseUrl()).replace(/\/$/, '')}?connected=1`,
-    )
     const escapedKey = this.escapeHtml(registrationKey)
 
     // Self-contained white-themed static portal served directly from the router's
@@ -920,8 +917,11 @@ export class MikrotikService {
     var mac="$(mac)"||"",ip="$(ip)"||"",lo="$(link-login-only)"||"",srv="$(server-name)"||"",orig="$(link-orig)"||"";
     var pkgs=[],selId=null,selTv=false;
     // Try HTTPS API first; if the captive-portal mini-browser blocks it (clock
-    // wrong, cert issue, CORS), retry the same path over plain HTTP fallback IP.
-    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(e)ajax(m,APIFB+p,d,cb);else cb(null,r);});}
+    // wrong, cert issue, DNS), retry the same path over the plain HTTP fallback
+    // listener. Keep real JSON API errors, because "used", "expired", or
+    // "wrong business" voucher messages are more useful than a generic network
+    // failure.
+    function apiCall(m,p,d,cb){ajax(m,API+p,d,function(e,r){if(!e){cb(null,r);return;}ajax(m,APIFB+p,d,function(fe,fr){if(!fe){cb(null,fr);return;}cb(new Error((fe&&fe.message)||(e&&e.message)||'Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.'));});});}
 
     window.onload=function(){
       var search=window.location.search;
@@ -959,13 +959,20 @@ export class MikrotikService {
       x.open(method, url, true);
       if(data) x.setRequestHeader('Content-Type','application/json');
       x.onload=function(){
-        try{
-          var j=JSON.parse(x.responseText);
-          if(x.status>=200&&x.status<300) cb(null,j);
-          else cb(new Error(j.message||'HTTP '+x.status));
-        }catch(e){cb(new Error('Parse err'));}
+        var raw=x.responseText||'',j=null;
+        try{j=raw?JSON.parse(raw):{};}catch(e){}
+        if(x.status>=200&&x.status<300){cb(null,j||{});return;}
+        var msg=j&&j.message;
+        if(Object.prototype.toString.call(msg)==='[object Array]')msg=msg.join('. ');
+        if(!msg&&j&&j.error)msg=j.error;
+        if(!msg&&raw&&raw.charAt(0)!=='<')msg=raw.substring(0,240);
+        if(!msg&&x.status===429)msg='Too many attempts. Wait one minute and try again.';
+        if(!msg)msg='Request failed (HTTP '+x.status+').';
+        cb(new Error(String(msg)));
       };
-      x.onerror=function(){cb(new Error('Network err'));};
+      x.onerror=function(){cb(new Error('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.'));};
+      x.ontimeout=function(){cb(new Error('The AROFi service took too long to respond. Keep this WiFi connected and try again.'));};
+      x.timeout=12000;
       x.send(data?JSON.stringify(data):null);
     }
 
@@ -1134,30 +1141,37 @@ export class MikrotikService {
         if(err){ sst(err.message||'Failed','err');b.disabled=false;return; }
         if(pmt.status==='FAILED'){ sst(pmt.statusMessage||'Failed','err');b.disabled=false;return; }
         
-        var cu=pmt.checkoutUrl||(pmt.responsePayload&&(pmt.responsePayload.checkoutUrl||(pmt.responsePayload.gateway&&pmt.responsePayload.gateway.checkoutUrl)));
-        if(cu){window.location.href=cu;return;}
-        sst(selTv?'Enter your Mobile Money PIN. After approval, reconnect the Smart TV to WiFi.':'Enter your Mobile Money PIN on your phone. Waiting for approval...','info');
+        if(pmt.activation&&pmt.reconnect&&pmt.reconnect.username){closePay();conn(pmt.reconnect);return;}
+        closePay();
+        sst(selTv?'Approve the Mobile Money prompt. The Smart TV will activate automatically.':'Approve the Mobile Money prompt on your phone.','info');
         poll(pmt.id,pmt.statusToken);
       });
     }
 
     function poll(id,tok){
-      var n=0,iv=setInterval(function(){
-        if(++n>200){clearInterval(iv);sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
+      var n=0,stopped=false;
+      function stop(){stopped=true;}
+      function check(){
+        if(stopped)return;
+        if(++n>240){stop();sst('Timed out waiting for payment.','err');document.getElementById('pbtn').disabled=false;return;}
         apiCall('POST', '/api/payments/'+id+'/check-status'+(tok?'?token='+encodeURIComponent(tok):''), null, function(err, p){
-          if(err) return;
+          if(stopped)return;
+          if(err){setTimeout(check,500);return;}
           if(p.activation){
             if(selTv){
-              clearInterval(iv);
+              stop();
               document.getElementById('pbtn').disabled=false;
               closePay();
               var tvm=normMac(document.getElementById('tvmac').value);
-              sst('Payment approved. Smart TV '+tvm+' is active. On the TV, open WiFi settings and select this WiFi again. If it is already connected, forget/disconnect then reconnect.','ok');
-            }else if(p.reconnect&&p.reconnect.username){clearInterval(iv);sst('Payment Approved! Connecting...','ok');conn(p.reconnect);}else{sst('Payment approved. Finalizing login...','info');}
+              sst('Smart TV '+tvm+' is active. Reconnect the TV to this WiFi.','ok');
+              return;
+            }else if(p.reconnect&&p.reconnect.username){stop();conn(p.reconnect);return;}else{sst('Payment approved. Finalizing login...','info');}
           }
-          else if(p.status==='FAILED'){clearInterval(iv);sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;}
+          if(p.status==='FAILED'){stop();sst(p.statusMessage||'Payment Declined.','err');document.getElementById('pbtn').disabled=false;return;}
+          setTimeout(check,500);
         });
-      },600);
+      }
+      check();
     }
 
     function rec(){
@@ -1318,10 +1332,10 @@ export class MikrotikService {
       this.configService.get<string>('RADIUS_PUBLIC_HOST') ||
       '95.111.234.34'
 
-    // Strip scheme and any port suffix — use plain HTTP port 80 which is
-    // publicly accessible via the Coolify/Traefik reverse proxy layer.
-    // Port 4012 is the internal Docker nginx port and is NOT reachable externally.
-    return `http://${host.replace(/^https?:\/\//, '').replace(/:\d+$/, '').replace(/\/$/, '')}`
+    // Use the dedicated plain-HTTP captive fallback listener. Port 80 is owned
+    // by Coolify/Traefik and redirects to HTTPS or rejects IP-host requests,
+    // which is exactly what this fallback is meant to survive.
+    return `http://${host.replace(/^https?:\/\//, '').replace(/:\d+$/, '').replace(/\/$/, '')}:18080`
   }
 
   // excludeIface MUST be skipped here: AROFi's own remote-access SSTP tunnel

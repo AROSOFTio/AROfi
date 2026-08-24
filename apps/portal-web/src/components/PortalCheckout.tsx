@@ -49,11 +49,10 @@ const pendingStatuses = ['INITIATED', 'PENDING', 'INDETERMINATE']
 const COMPANION_VOUCHER_EXPIRY_LABEL = 'within 60 hours'
 const portalStorageKey = 'arofi.portal.access_token'
 const paymentReturnStorageKey = 'arofi.portal.payment_return'
-// Companion voucher codes survive the auto-connect page navigation here: the
-// device connects FIRST (top-level redirect through the MikroTik login), then
-// the router sends the browser back to the portal with ?connected=1 and the
-// codes are re-shown from this key. Showing them BEFORE connecting used to
-// block the buyer's own device from getting online.
+// Companion voucher codes survive the auto-connect navigation here. The device
+// connects FIRST through a top-level RouterOS POST, and the codes remain
+// available if the browser returns. Showing them before connecting blocks the
+// buyer's own device from getting online.
 const pendingCompanionCodesKey = 'arofi.portal.pending_companion_codes'
 
 function hasUsableReconnect(payment?: PortalPayment | null) {
@@ -356,6 +355,46 @@ async function readJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T
 }
 
+const PUBLIC_API_FALLBACKS = ['https://arofi.net/api', 'http://95.111.234.34:18080/api']
+
+function normalizeApiBase(value?: string | null) {
+  const trimmed = value?.trim().replace(/\/$/, '')
+  if (!trimmed || trimmed === '/api') return null
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
+}
+
+function isJsonResponse(response: Response) {
+  return response.headers.get('content-type')?.toLowerCase().includes('application/json')
+}
+
+async function portalApiFetch(apiPath: string, init?: RequestInit) {
+  const path = apiPath.startsWith('/api/') ? apiPath : `/api${apiPath.startsWith('/') ? apiPath : `/${apiPath}`}`
+  const suffix = path.slice('/api'.length)
+  const configuredBase = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL)
+  const candidates = [
+    path,
+    ...(configuredBase ? [`${configuredBase}${suffix}`] : []),
+    ...PUBLIC_API_FALLBACKS.map((base) => `${base}${suffix}`),
+  ].filter((url, index, all) => all.indexOf(url) === index)
+
+  let lastError: unknown
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, init)
+      if (isJsonResponse(response)) {
+        return response
+      }
+      lastError = new Error(`Non-JSON response from ${url} (HTTP ${response.status})`)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.')
+}
+
 function normalizePhone(value: string) {
   const digits = value.replace(/\D/g, '')
   if (digits.startsWith('256')) return digits
@@ -420,6 +459,14 @@ function getWhatsAppLink(phone?: string | null): string {
     clean = '256' + clean
   }
   return `https://wa.me/${clean}`
+}
+
+function finishTarget() {
+  if (typeof window === 'undefined') return 'http://connectivitycheck.gstatic.com/generate_204'
+  const ua = window.navigator.userAgent || ''
+  if (/Windows/i.test(ua)) return 'http://www.msftconnecttest.com/connecttest.txt'
+  if (/iPhone|iPad|Macintosh/i.test(ua)) return 'http://captive.apple.com/hotspot-detect.html'
+  return 'http://connectivitycheck.gstatic.com/generate_204'
 }
 
 export default function PortalCheckout({
@@ -512,9 +559,8 @@ export default function PortalCheckout({
     if (!isReturningDeviceReconnectPayload) return
 
     const params = new URLSearchParams(window.location.search)
-    // Already online: the router redirected back here with ?connected=1 after a
-    // successful login. Clear the loop timestamp so a genuine future reconnect
-    // can still work.
+    // Older router pages could return here after login. Clear the loop
+    // timestamp so a genuine future reconnect can still work.
     if (params.get('connected') === '1') {
       autoConnectSignatureRef.current = null
       try { sessionStorage.removeItem('arofiAutoConnectAt') } catch {}
@@ -563,7 +609,7 @@ export default function PortalCheckout({
     setIsVoucherLoading(true)
 
     try {
-      const response = await fetch('/api/portal/redeem-voucher', {
+      const response = await portalApiFetch('/api/portal/redeem-voucher', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -607,18 +653,13 @@ export default function PortalCheckout({
           readStoredLoginUrl()
         if (effectiveLoginUrl) {
           if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-          // Connect FIRST. Companion codes are stashed and re-shown when the
-          // router redirects back here (?connected=1) — the popup must never
-          // stand between the buyer's device and its internet access.
+          // Connect FIRST. The popup must never stand between the buyer's
+          // device and its internet access.
           stashCompanionCodes(companionCodes)
           setConnectionStatus('reconnecting')
           setStatusMessage(`Voucher ${redemption.voucher.code} redeemed. Connecting this device now...`)
           const reconnectPayload = { ...redemption.reconnect, loginUrl: effectiveLoginUrl }
-          if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-            window.requestAnimationFrame(() => autoSubmitHotspotLogin(reconnectPayload))
-          } else {
-            autoSubmitHotspotLogin(reconnectPayload)
-          }
+          autoSubmitHotspotLogin(reconnectPayload)
           return
         }
       }
@@ -866,7 +907,7 @@ export default function PortalCheckout({
     if (detectedParams.loginUrl) params.set('loginUrl', detectedParams.loginUrl)
     if (detectedParams.tenantDomain) params.set('tenantDomain', detectedParams.tenantDomain)
 
-    const response = await fetch(`/api/portal/context${params.toString() ? `?${params}` : ''}`, {
+    const response = await portalApiFetch(`/api/portal/context${params.toString() ? `?${params}` : ''}`, {
       cache: 'no-store',
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     })
@@ -903,7 +944,7 @@ export default function PortalCheckout({
   }
 
   async function loadPortalSession(accessToken: string) {
-    const response = await fetch('/api/portal/session', {
+    const response = await portalApiFetch('/api/portal/session', {
       cache: 'no-store',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -928,7 +969,7 @@ export default function PortalCheckout({
   }
 
   async function loginWithPhone(phone: string, navigateToSession = false, detectedParams = hotspotParams) {
-    const response = await fetch('/api/portal/login', {
+    const response = await portalApiFetch('/api/portal/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -960,7 +1001,7 @@ export default function PortalCheckout({
   async function handleCheckPaymentStatus(paymentId: string, statusToken?: string | null): Promise<PortalPayment | null> {
     try {
       const token = statusToken ?? currentPayment?.statusToken
-    const response = await fetch(`/api/payments/${paymentId}/check-status${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
+    const response = await portalApiFetch(`/api/payments/${paymentId}/check-status${token ? `?token=${encodeURIComponent(token)}` : ''}`, {
       method: 'POST',
     })
 
@@ -1068,7 +1109,7 @@ export default function PortalCheckout({
       const normalizedPhone = normalizePhone(phoneNumber)
       // Auto-detect network from phone number for Yo! Uganda (handles both MTN & Airtel)
       const detectedNetwork = detectNetwork(normalizedPhone) ?? selectedNetwork
-      const response = await fetch('/api/payments/portal/initiate', {
+      const response = await portalApiFetch('/api/payments/portal/initiate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1148,9 +1189,8 @@ export default function PortalCheckout({
 
     if (effectiveLoginUrl && hasCredentials) {
       if (typeof window !== 'undefined') sessionStorage.removeItem('arofi.autoConnectCount')
-      // Connect FIRST, show companion codes after the router redirects back
-      // here (?connected=1). The popup must never delay the paid device's
-      // internet access.
+      // Connect FIRST. The popup must never delay the paid device's internet
+      // access.
       stashCompanionCodes(companionCodes)
       setConnectionStatus('reconnecting')
       setStatusMessage('')
@@ -1273,28 +1313,28 @@ export default function PortalCheckout({
     }
 
     try {
-      // The portal is served over HTTPS but the MikroTik hotspot login is plain
-      // HTTP (e.g. http://10.55.0.1/login). A form POST from an HTTPS page to an
-      // HTTP target is blocked by browsers as mixed content, which silently
-      // breaks auto-connect. A top-level GET navigation is NOT blocked, and the
-      // AROFi hotspot profile uses login-by=http-pap, which accepts the
-      // username/password as query params. So navigate the whole page to the
-      // hotspot login URL — the router authenticates via RADIUS and then sends
-      // the device on to the destination.
+      // Submit credentials to RouterOS immediately with a top-level POST. The
+      // destination is an OS connectivity check so the captive browser closes
+      // as soon as the router accepts the session.
       const target = new URL(loginUrl, window.location.href)
-      target.searchParams.set('username', reconnect.username)
-      target.searchParams.set('password', reconnect.password)
-      // After a successful hotspot login, keep the customer on the router's
-      // own login host (tenantname.wifi / router gateway), never the public
-      // online portal. The local login page can then show connected state and
-      // avoids leaking users back to arofi.net/portal.
-      const connectedDst = new URL(target.toString())
-      connectedDst.search = ''
-      connectedDst.hash = ''
-      connectedDst.searchParams.set('connected', '1')
-      target.searchParams.set('dst', connectedDst.toString())
-      target.searchParams.set('popup', 'false')
-      window.location.assign(target.toString())
+      const form = document.createElement('form')
+      form.method = 'post'
+      form.action = target.toString()
+      form.style.display = 'none'
+      const add = (name: string, value: string) => {
+        const input = document.createElement('input')
+        input.type = 'hidden'
+        input.name = name
+        input.value = value
+        form.appendChild(input)
+      }
+      add('username', reconnect.username)
+      add('password', reconnect.password)
+      add('dst', finishTarget())
+      add('popup', 'false')
+      document.body.appendChild(form)
+      document.documentElement.style.visibility = 'hidden'
+      form.submit()
     } catch {
       setConnectionStatus('idle')
       setErrorMessage('')
@@ -1370,7 +1410,7 @@ export default function PortalCheckout({
     setIsPaymentLoading(true)
 
     try {
-      const response = await fetch('/api/portal/start-trial', {
+      const response = await portalApiFetch('/api/portal/start-trial', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
