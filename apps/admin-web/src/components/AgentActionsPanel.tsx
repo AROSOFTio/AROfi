@@ -112,13 +112,6 @@ export default function AgentActionsPanel({ agent, canManage }: { agent: AgentIt
                 <Field label="Agent Name" value={form.name} onChange={(value) => setForm((previous) => ({ ...previous, name: value }))} required />
                 <Field label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((previous) => ({ ...previous, phoneNumber: value }))} required />
                 <Field label="Email" type="email" value={form.email} onChange={(value) => setForm((previous) => ({ ...previous, email: value }))} />
-                <div className="form-group">
-                  <label className="form-label">Agent Type</label>
-                  <select className="form-input" value={form.type} onChange={(event) => setForm((previous) => ({ ...previous, type: event.target.value }))}>
-                    <option value="RESELLER">Reseller</option>
-                    <option value="FIELD_AGENT">Field Agent</option>
-                  </select>
-                </div>
                 <Field label="Territory" value={form.territory} onChange={(value) => setForm((previous) => ({ ...previous, territory: value }))} />
                 <Field label="Commission %" type="number" value={form.commissionPercent} onChange={(value) => setForm((previous) => ({ ...previous, commissionPercent: value }))} required />
               </div>

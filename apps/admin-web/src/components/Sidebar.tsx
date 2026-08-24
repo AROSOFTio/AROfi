@@ -60,7 +60,13 @@ const platformNavItems: NavGroup[] = [
       { href: '/businesses', label: 'All Businesses', required: ['tenants.read'], platformOnly: true },
       { href: '/sales-by-business', label: 'Business Performance', required: ['billing.read'], platformOnly: true },
       { href: '/admin/reviews', label: 'Reviews & Approvals', required: ['tenants.manage'], platformOnly: true },
-      { href: '/agents', label: 'Partners & Agents', required: ['agents.read'], platformOnly: true },
+    ],
+  },
+  {
+    label: 'Agents',
+    icon: <Store size={17} />,
+    items: [
+      { href: '/agents', label: 'Agents', required: ['agents.read'], platformOnly: true },
     ],
   },
   {
@@ -139,7 +145,14 @@ const tenantNavItems: NavGroup[] = [
       { href: '/reports?type=vouchers', label: 'Voucher Sales', required: ['reports.read'], tenantOnly: true },
       { href: '/reports?type=active-users', label: 'Active Users', required: ['sessions.read'], tenantOnly: true },
       { href: '/reports?type=collections', label: 'Total Collected', required: ['reports.read'], tenantOnly: true },
-      { href: '/reports?type=agent-vouchers', label: 'Agent Voucher Sales', required: ['reports.read'], tenantOnly: true },
+    ],
+  },
+  {
+    label: 'Agents',
+    icon: <Store size={17} />,
+    items: [
+      { href: '/agents', label: 'Agents', required: ['agents.read'], tenantOnly: true },
+      { href: '/agents/reports', label: 'Voucher Sales Report', required: ['reports.read'], tenantOnly: true },
     ],
   },
   {
@@ -157,7 +170,6 @@ const tenantNavItems: NavGroup[] = [
     icon: <Users size={17} />,
     items: [
       { href: '/users?tab=staff', label: 'Staff', required: ['users.read'], tenantOnly: true },
-      { href: '/agents', label: 'Agents', required: ['agents.read'], tenantOnly: true },
       { href: '/users?tab=customers', label: 'Customers', required: ['users.read'], tenantOnly: true },
     ],
   },

@@ -20,7 +20,7 @@ const initialForm: AgentFormState = {
   name: '',
   phoneNumber: '',
   email: '',
-  type: 'RESELLER',
+  type: 'FIELD_AGENT',
   territory: '',
   commissionPercent: '5',
   notes: '',
@@ -43,7 +43,6 @@ export default function RegisterAgentPanel() {
         name: form.name.trim(),
         phoneNumber: form.phoneNumber.trim(),
         email: form.email.trim() || undefined,
-        type: form.type,
         territory: form.territory.trim() || undefined,
         commissionRateBps: Math.round(Number(form.commissionPercent || 0) * 100),
         floatLimitUgx: 0,
@@ -80,13 +79,6 @@ export default function RegisterAgentPanel() {
                   <PhoneNumberField value={form.phoneNumber} onChange={(value) => setForm((previous) => ({ ...previous, phoneNumber: value }))} required ugandaOnly mobileOnly />
                 </div>
                 <Field label="Email" type="email" value={form.email} onChange={(value) => setForm((previous) => ({ ...previous, email: value }))} placeholder="agent@example.com" />
-                <div className="form-group">
-                  <label className="form-label">Agent Type</label>
-                  <select className="form-input" value={form.type} onChange={(event) => setForm((previous) => ({ ...previous, type: event.target.value }))}>
-                    <option value="RESELLER">Reseller</option>
-                    <option value="FIELD_AGENT">Field Agent</option>
-                  </select>
-                </div>
                 <Field label="Territory" value={form.territory} onChange={(value) => setForm((previous) => ({ ...previous, territory: value }))} placeholder="Kampala Central" />
                 <Field label="Voucher Pay %" type="number" value={form.commissionPercent} onChange={(value) => setForm((previous) => ({ ...previous, commissionPercent: value }))} placeholder="5" required />
               </div>

@@ -146,6 +146,56 @@ describe('PortalService returning-device auto-reconnect', () => {
     )
   })
 
+  it('reconnects a returning device from another router in the same business', async () => {
+    const activation = buildActivation({ routerId: 'router-1' })
+    const { service, prisma } = buildReconnectHarness(activation)
+
+    const result = await (service as any).detectReturningDevice('tenant-1', {
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      routerId: 'router-2',
+      ipAddress: '10.55.1.20',
+      loginUrl: 'http://10.55.1.1/login',
+    })
+
+    expect(result.existingActiveAccess).toBe(true)
+    expect(result.reconnect).toMatchObject({
+      loginUrl: 'http://10.55.1.1/login',
+      username: 'arofi-user',
+      password: 'secret-pass',
+    })
+    expect(prisma.packageActivation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant-1',
+          boundMacAddress: 'AA:BB:CC:DD:EE:FF',
+        }),
+      }),
+    )
+    expect(prisma.packageActivation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          OR: expect.arrayContaining([{ routerId: 'router-2' }]),
+        }),
+      }),
+    )
+  })
+
+  it('does not reconnect the same MAC across different businesses', async () => {
+    const activation = buildActivation({ tenantId: 'tenant-2', routerId: 'router-9' })
+    const { service, prisma } = buildReconnectHarness(null)
+    prisma.packageActivation.findFirst.mockImplementation(async (query: any) => {
+      return query.where.tenantId === activation.tenantId ? activation : null
+    })
+
+    const result = await (service as any).detectReturningDevice('tenant-1', {
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      routerId: 'router-2',
+      ipAddress: '10.55.1.20',
+    })
+
+    expect(result.existingActiveAccess).toBe(false)
+  })
+
   it('reports no access for a device without an active (non-expired) activation', async () => {
     const { service } = buildReconnectHarness(null)
 

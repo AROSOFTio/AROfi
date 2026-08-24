@@ -250,6 +250,28 @@ export class AgentsService {
     const normalizedPhone = this.normalizePhoneNumber(dto.phoneNumber)
 
     return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.agent.findFirst({
+        where: {
+          tenantId: dto.tenantId,
+          OR: [
+            { code: dto.code.trim().toUpperCase() },
+            { phoneNumber: normalizedPhone },
+          ],
+        },
+        select: {
+          code: true,
+          phoneNumber: true,
+        },
+      })
+
+      if (existing?.code === dto.code.trim().toUpperCase()) {
+        throw new BadRequestException('An agent with this code already exists for this business')
+      }
+
+      if (existing?.phoneNumber === normalizedPhone) {
+        throw new BadRequestException('An agent with this phone number already exists for this business')
+      }
+
       const agent = await tx.agent.create({
         data: {
           tenantId: dto.tenantId,
@@ -257,7 +279,7 @@ export class AgentsService {
           name: dto.name.trim(),
           phoneNumber: normalizedPhone,
           email: dto.email?.trim(),
-          type: dto.type,
+          type: dto.type ?? AgentType.FIELD_AGENT,
           territory: dto.territory?.trim(),
           commissionRateBps: dto.commissionRateBps,
           floatLimitUgx: dto.floatLimitUgx,
