@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useMemo, useState } from 'react'
-import { BriefcaseBusiness, Headphones, Network, ShieldCheck, WalletCards } from 'lucide-react'
+import { Briefcase, Headphones, Network, ShieldCheck, WalletCards } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { clientFetchApi, clientPatchApi, clientPostApi } from '@/lib/client-api'
 import { formatDate } from '@/lib/format'
@@ -101,7 +101,7 @@ export default function PlatformStaffManager({ initialData }: { initialData: Pla
     <div className="psm-head"><div><h1>Team & Roles</h1><p>Create real AROFi platform staff accounts and control exactly what each team member can access.</p></div><button className="btn btn-primary" type="button" onClick={() => {setError('');setAddOpen(true)}}>+ Add Staff</button></div>
     {(notice || error) && <div className={`psm-note ${error ? 'err':'ok'}`}>{error || notice}</div>}
     <div className="psm-stats">
-      <Stat icon={<ShieldCheck size={17}/>} name="Platform Staff" value={users.length}/><Stat icon={<BriefcaseBusiness size={17}/>} name="Active" value={users.filter(u=>u.isActive).length}/><Stat icon={<Headphones size={17}/>} name="Support" value={supportCount}/><Stat icon={<Network size={17}/>} name="Network" value={networkCount}/><Stat icon={<WalletCards size={17}/>} name="Finance" value={financeCount}/>
+      <Stat icon={<ShieldCheck size={17}/>} name="Platform Staff" value={users.length}/><Stat icon={<Briefcase size={17}/>} name="Active" value={users.filter(u=>u.isActive).length}/><Stat icon={<Headphones size={17}/>} name="Support" value={supportCount}/><Stat icon={<Network size={17}/>} name="Network" value={networkCount}/><Stat icon={<WalletCards size={17}/>} name="Finance" value={financeCount}/>
     </div>
     <section className="psm-card"><div className="psm-card-head"><strong>AROFi Staff Directory</strong><span style={{fontSize:11,color:'var(--text-3)'}}>{roles.length} roles available</span></div><div style={{overflow:'auto'}}><table><thead><tr><th>Staff member</th><th>Role</th><th>Access</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>{users.length===0&&<tr><td colSpan={6} style={{textAlign:'center',padding:30,color:'var(--text-3)'}}>No platform staff accounts yet.</td></tr>}{users.map(user=><tr key={user.id}><td><div className="psm-name">{user.displayName}</div><div className="psm-email">{user.email}</div></td><td><div className="psm-role">{roleLabel(user.role.name)}</div><div className="psm-desc">{roleMeta[user.role.name]?.description}</div></td><td>{user.role.permissions.includes('ALL')?'Full platform':`${user.role.permissions.length} scoped permissions`}</td><td><span className={`psm-status ${user.isActive?'on':'off'}`}>{user.isActive?'Active':'Inactive'}</span></td><td>{formatDate(user.createdAt)}</td><td><div className="psm-actions"><button type="button" className="btn btn-ghost" onClick={()=>beginEdit(user)}>Edit</button><button disabled={busy} type="button" className="btn btn-ghost" onClick={()=>void toggle(user)}>{user.isActive?'Deactivate':'Activate'}</button></div></td></tr>)}</tbody></table></div></section>
 
