@@ -574,10 +574,10 @@ export class MikrotikService {
   }
 
   private buildHeartbeatScheduler(heartbeatUrl: string, fallbackHeartbeatUrl: string) {
-    // 1s heartbeat: router-side /ip hotspot active is the fastest source of
+    // 5s heartbeat: router-side /ip hotspot active is the fastest source of
     // truth for "who is online right now", especially when accounting stop
     // rows arrive before the router has fully removed a client.
-    const intervalSeconds = 1
+    const intervalSeconds = 5
     const source =
       `:local arofiActiveUsers 0; ` +
       `:do { :set arofiActiveUsers [:len [/ip hotspot active find]] } on-error={}; ` +
