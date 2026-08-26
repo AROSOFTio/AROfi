@@ -141,7 +141,7 @@ export default async function AgentsPage() {
                         <><span className="badge badge-warning">Login Not Set</span><div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>{agent.email || 'Add agent email'}</div></>
                       )}
                       {canManageBusinessAgents && (
-                        <div style={{ marginTop: 7 }}><AgentLoginPanel agent={{ name: agent.name, email: agent.email }} loginReady={loginReady} /></div>
+                        <div style={{ marginTop: 7 }}><AgentLoginPanel agent={{ id: agent.id, name: agent.name, email: agent.email }} loginReady={loginReady} /></div>
                       )}
                     </td>
                     <td style={{ fontWeight: 700 }}>{(agent.commissionRateBps / 100).toFixed(1)}%<div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{formatCurrency(agent.commissionUgx)} earned</div></td>
