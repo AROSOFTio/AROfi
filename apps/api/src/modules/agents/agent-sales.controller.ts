@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { CurrentUser } from '../auth/current-user.decorator'
@@ -42,6 +43,7 @@ export class AgentSalesController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @RedisCache({ namespace: 'agent:dashboard', ttlSeconds: 8, scope: 'user' })
   @Get('me/dashboard')
   getMyDashboard(@CurrentUser() user: AuthenticatedAdminUser) {
     const tenantId = this.accessScope.requireTenantScope(user)
@@ -49,6 +51,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('me/cash-sale')
   recordCashSale(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: AgentCashSaleDto) {
     const tenantId = this.accessScope.requireTenantScope(user)
@@ -56,6 +59,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('me/mobile-money')
   initiateMobileMoneySale(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: AgentMobileMoneySaleDto) {
     const tenantId = this.accessScope.requireTenantScope(user)
@@ -63,6 +67,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('me/mobile-money/:paymentId/status')
   checkMobileMoneySale(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -73,6 +78,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
+  @RedisCache({ namespace: 'agents:overview', ttlSeconds: 8 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -80,6 +86,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Patch('agents/:agentId/policy')
   updatePolicy(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -92,6 +99,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('cash-settlements')
   recordCashSettlement(
     @CurrentUser() user: AuthenticatedAdminUser,
