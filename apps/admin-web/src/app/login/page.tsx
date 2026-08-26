@@ -39,32 +39,6 @@ export default function LoginPage() {
   const [resendCountdown, setResendCountdown] = useState(0)
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api'
   const nextPath = resolveNextPath()
-  const shouldAutoRedirectExistingSession = false
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function validateExistingSession() {
-      try {
-        const response = await fetch(`${apiBaseUrl}/auth/me`, {
-          credentials: 'include',
-          cache: 'no-store',
-        })
-
-        if (shouldAutoRedirectExistingSession && isMounted && response.ok) {
-          window.location.href = nextPath
-        }
-      } catch {
-        // Not signed in — stay on the login form.
-      }
-    }
-
-    void validateExistingSession()
-
-    return () => {
-      isMounted = false
-    }
-  }, [apiBaseUrl, nextPath, shouldAutoRedirectExistingSession])
 
   useEffect(() => {
     if (!resendAvailableAt) {
@@ -215,7 +189,6 @@ export default function LoginPage() {
             </div>
           )}
 
-
           {step === 'credentials' ? (
             <form onSubmit={handleCredentialsSubmit}>
               <div className="form-group">
@@ -271,7 +244,7 @@ export default function LoginPage() {
                 style={{ marginTop: 8 }}
                 disabled={loading}
               >
-                {loading ? 'Checking...' : 'Continue'}
+                {loading ? 'Signing in...' : 'Continue'}
               </button>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
                 <a href="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>Forgot password?</a>
