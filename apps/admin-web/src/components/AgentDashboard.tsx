@@ -71,12 +71,22 @@ export default async function AgentDashboard() {
         <div>
           <h1 className="page-title">Agent Dashboard</h1>
           <p className="page-subtitle">
-            Welcome {data?.agent.name ?? 'Agent'}. Sell internet, track Cash and Mobile Money separately, deposit outstanding cash, and withdraw eligible Mobile Money commission.
+            Welcome {data?.agent.name ?? 'Agent'}. This is your own selling account. Use Sell Internet for Cash or Mobile Money; never use the business owner login.
           </p>
         </div>
         <span className={`badge ${data?.agent.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
           {data?.agent.status?.toLowerCase() ?? 'agent'}
         </span>
+      </div>
+
+      <div className="card" style={{ margin: '0 0 14px', padding: 15, border: '1px solid var(--brand)' }}>
+        <div className="card-title">How to sell online</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 9, marginTop: 10 }}>
+          <MethodInfo title="1. Choose package" text="Tap Sell Internet and choose one of the packages your business owner allowed for you." />
+          <MethodInfo title="2. Choose delivery" text="Use Activate Now for a customer waiting on WiFi, or Voucher for Later to create one paid voucher." />
+          <MethodInfo title="3. Choose payment" text="Cash means you collect money and remit the balance later. Mobile Money sends payment directly through AROFi." />
+          <MethodInfo title="4. Mobile Money confirms first" text="Enter the paying MTN/Airtel number. The payer approves the prompt; access or voucher is issued only after provider confirmation." />
+        </div>
       </div>
 
       <AgentSalesAccountability />
@@ -85,7 +95,7 @@ export default async function AgentDashboard() {
         <div className="card" style={{ padding: 18, margin: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 14 }}>
             <div>
-              <div className="card-title">Sell Internet</div>
+              <div className="card-title">Sell Internet Online</div>
               <p style={{ margin: '5px 0 0', color: 'var(--text-muted)', fontSize: 12.5, lineHeight: 1.5 }}>
                 Choose an allowed package, then activate the customer now or create one voucher only after a completed sale.
               </p>
@@ -106,8 +116,8 @@ export default async function AgentDashboard() {
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 9, marginTop: 12 }}>
-            <MethodInfo title="Activate Now" text="The customer connects first and gives you the 6-digit activation number shown on their device." />
-            <MethodInfo title="Voucher for Later" text="A single voucher is created only after the Cash or Mobile Money sale completes. It starts when redeemed." />
+            <MethodInfo title="Activate Now" text="Customer opens the WiFi portal, taps Ask an Agent to Activate Me, then gives you the 6-digit activation number." />
+            <MethodInfo title="Voucher for Later" text="A single online voucher is created only after the Cash sale completes or Mobile Money is confirmed. It starts when redeemed." />
           </div>
         </div>
 
@@ -115,7 +125,7 @@ export default async function AgentDashboard() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Ticket size={17} /><strong>Assigned Offline Vouchers</strong></div>
           <div style={{ fontSize: 29, fontWeight: 850, marginTop: 9 }}>{data?.summary.availableOfflineVouchers ?? 0}</div>
           <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.5, margin: '3px 0 12px' }}>
-            Printed or PDF vouchers assigned to you by the business owner for offline selling. Agents cannot create templates or generate voucher batches.
+            Printed or PDF vouchers assigned to you by the business owner for offline selling. Agents cannot create templates or generate normal voucher batches.
           </p>
           <a href="/vouchers" className="btn btn-ghost btn-block">View Assigned Stock</a>
         </div>
