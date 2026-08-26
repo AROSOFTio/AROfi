@@ -5,18 +5,11 @@ import { clientPostApi } from '@/lib/client-api'
 
 type Props = {
   agent: {
+    id: string
     name: string
     email?: string | null
   }
   loginReady: boolean
-}
-
-function splitAgentName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  return {
-    firstName: parts[0] || 'Agent',
-    lastName: parts.slice(1).join(' ') || 'Agent',
-  }
 }
 
 export default function AgentLoginPanel({ agent, loginReady }: Props) {
@@ -34,13 +27,8 @@ export default function AgentLoginPanel({ agent, loginReady }: Props) {
     setBusy(true)
     setError('')
     try {
-      const names = splitAgentName(agent.name)
-      await clientPostApi('/users', {
-        email,
-        firstName: names.firstName,
-        lastName: names.lastName,
-        password,
-        roleName: 'VoucherAgent',
+      await clientPostApi(`/agents/${agent.id}/provision-login`, {
+        temporaryPassword: password,
       })
       setCreated(true)
     } catch (requestError) {
@@ -101,7 +89,7 @@ export default function AgentLoginPanel({ agent, loginReady }: Props) {
             ) : (
               <form onSubmit={createLogin}>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.55, marginTop: 0 }}>
-                  This Agent profile has an email but no active Voucher Agent user account. Create the login below so the Agent can sell online without using the business owner account.
+                  This Agent profile has an email but no active Voucher Agent login. AROFi will create or safely restore the login for this exact Agent and business.
                 </p>
                 <ReadOnlyField label="Agent Login Email" value={email} />
                 <div className="form-group" style={{ marginTop: 12 }}>
