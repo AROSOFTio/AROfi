@@ -7,6 +7,7 @@ import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { AgentDashboardService } from './agent-dashboard.service'
+import { AgentOverviewService } from './agent-overview.service'
 import { AgentSalesService } from './agent-sales.service'
 import {
   AgentCashSaleDto,
@@ -41,6 +42,7 @@ export class AgentSalesController {
   constructor(
     private readonly agentSales: AgentSalesService,
     private readonly agentDashboard: AgentDashboardService,
+    private readonly agentOverview: AgentOverviewService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -84,7 +86,7 @@ export class AgentSalesController {
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.agentSales.getOverview(scopedTenantId)
+    return this.agentOverview.getOverview(scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
