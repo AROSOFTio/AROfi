@@ -1,6 +1,6 @@
 import { AgentType } from '@prisma/client'
 import { Type } from 'class-transformer'
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
+import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator'
 
 export class CreateAgentDto {
   @IsOptional()
@@ -20,8 +20,16 @@ export class CreateAgentDto {
   phoneNumber: string
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
   email?: string
+
+  // When supplied with email, the API creates the VoucherAgent login in the
+  // same database transaction as the Agent profile. Existing API clients may
+  // omit it and keep creating profile-only Agents.
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  temporaryPassword?: string
 
   @IsOptional()
   @IsEnum(AgentType)
