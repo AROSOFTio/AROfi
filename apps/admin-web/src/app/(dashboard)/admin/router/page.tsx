@@ -27,6 +27,7 @@ export default function RouterObservabilityPage() {
     try {
       const result = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
       setData(result)
+      setError(null)
       if (result.routers.length > 0 && !selectedRouterId) {
         setSelectedRouterId(result.routers[0].id)
       }
@@ -37,9 +38,11 @@ export default function RouterObservabilityPage() {
     }
   }
 
-  // Primary update path: the realtime event stream (router heartbeats,
-  // session accounting, disconnects) — refreshes within ~0.5s of a change.
-  // The interval below is only the fallback when the stream is unavailable.
+  // Refresh only on events that materially change router/session state. RADIUS
+  // auth is deliberately excluded because it can fire very frequently and does
+  // not justify re-running the expensive full /routers/overview query.
+  // Bursts are coalesced for 5 seconds so one busy hotspot cannot create an API
+  // request storm in every open observability tab.
   useRealtimeRefresh(() => void loadRouters(), [
     'router.online',
     'router.stale',
@@ -47,13 +50,12 @@ export default function RouterObservabilityPage() {
     'session.started',
     'session.updated',
     'session.stopped',
-    'radius.auth',
     'disconnect.failed',
-  ])
+  ], 5_000)
 
   useEffect(() => {
     void loadRouters()
-    const interval = setInterval(() => { void loadRouters() }, 60_000)
+    const interval = setInterval(() => { void loadRouters() }, 120_000)
     return () => clearInterval(interval)
   }, [])
 
@@ -101,7 +103,6 @@ export default function RouterObservabilityPage() {
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'grid', gap: 4 }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -140,7 +141,6 @@ export default function RouterObservabilityPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div className="stat-card green">
           <div className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -185,11 +185,10 @@ export default function RouterObservabilityPage() {
         </div>
       </div>
 
-      {/* All Routers table */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">All Routers</span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Live updates, quiet fallback every 60s</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Realtime updates, fallback every 2 minutes</span>
         </div>
         <div className="table-wrap">
           <table>
@@ -245,7 +244,6 @@ export default function RouterObservabilityPage() {
         </div>
       </div>
 
-      {/* Recent Health Checks */}
       {recentHealthChecks.length > 0 && (
         <div className="card">
           <div className="card-header">
