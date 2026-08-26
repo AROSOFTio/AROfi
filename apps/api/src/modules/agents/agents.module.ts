@@ -5,6 +5,7 @@ import { PaymentsModule } from '../payments/payments.module'
 import { AgentAccountingController } from './agent-accounting.controller'
 import { AgentAccountingService } from './agent-accounting.service'
 import { AgentDashboardService } from './agent-dashboard.service'
+import { AgentOverviewService } from './agent-overview.service'
 import { AgentSalesController, AgentSalesPublicController } from './agent-sales.controller'
 import { AgentSalesService } from './agent-sales.service'
 import { AgentVoucherMetricsService } from './agent-voucher-metrics.service'
@@ -29,6 +30,7 @@ import { VoucherDashboardService } from './voucher-dashboard.service'
     AgentsService,
     AgentSalesService,
     AgentDashboardService,
+    AgentOverviewService,
     AgentAccountingService,
     AgentVoucherStockService,
     AgentVoucherMetricsService,
@@ -38,6 +40,7 @@ import { VoucherDashboardService } from './voucher-dashboard.service'
     AgentsService,
     AgentSalesService,
     AgentDashboardService,
+    AgentOverviewService,
     AgentAccountingService,
     AgentVoucherStockService,
     AgentVoucherMetricsService,
