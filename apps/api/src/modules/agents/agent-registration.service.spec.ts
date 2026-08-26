@@ -16,13 +16,11 @@ describe('AgentRegistrationService', () => {
         create: jest.fn().mockResolvedValue({ id: 'user-1' }),
         update: jest.fn().mockResolvedValue({ id: 'user-1' }),
       },
-      role: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'role-agent' }),
-      },
     }
 
     const prisma = {
       tenant: { findUnique: jest.fn().mockResolvedValue(tenant) },
+      role: { findUnique: jest.fn().mockResolvedValue({ id: 'role-agent' }) },
       agent: { findFirst: jest.fn() },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as any
@@ -44,10 +42,14 @@ describe('AgentRegistrationService', () => {
   }
 
   it('creates the Agent and VoucherAgent login in the same transaction', async () => {
-    const { service, tx } = createHarness()
+    const { service, prisma, tx } = createHarness()
 
     const result = await service.register(registration)
 
+    expect(prisma.role.findUnique).toHaveBeenCalledWith({
+      where: { name: 'VoucherAgent' },
+      select: { id: true },
+    })
     expect(tx.agent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -93,6 +95,10 @@ describe('AgentRegistrationService', () => {
 
     const result = await service.provisionLogin('agent-1', tenant.id, 'replacement-123')
 
+    expect(prisma.role.findUnique).toHaveBeenCalledWith({
+      where: { name: 'VoucherAgent' },
+      select: { id: true },
+    })
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'user-1' },
       data: expect.objectContaining({ isActive: true }),
