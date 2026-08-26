@@ -4,8 +4,9 @@
 The RouterOS command must never contain rich-text Markdown links or escaped
 command prefixes. The generated provisioning script must also preserve an owner
 management path, quote IP-prefix selectors, avoid deleting RouterOS dynamic DNS
-objects, and never use console row number 0 as a firewall move destination
-because that row can be a built-in rule.
+objects, keep legacy AP radios logically running before the first client joins,
+and never use console row number 0 as a firewall move destination because that
+row can be a built-in rule.
 """
 
 from pathlib import Path
@@ -95,6 +96,45 @@ def patch_mikrotik_service(text: str) -> str:
             "quoted default-route selector",
         )
 
+    # Legacy /interface wireless APs can withhold their running flag until the
+    # first station associates. DHCP bound to that radio (especially on routers
+    # migrated from older AROFi layouts) then becomes INVALID, so the phone joins
+    # the SSID but never receives a usable captive network. Keep AP-mode radios
+    # logically running; this is the normal RouterOS setting for this use-case.
+    old_v6_inner = '''    const v6Inner = (iface: string) =>
+      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
+'''
+    new_v6_inner = '''    const v6Inner = (iface: string) =>
+      `:if ([:len [/interface wireless find name="${iface}"]]>0) do={/interface wireless set [find name="${iface}"] disabled=no mode=ap-bridge disable-running-check=yes ssid="${escapedSsid}" security-profile=arofi-open; ${bridgePort(iface)}}`
+'''
+    if "disable-running-check=yes" not in text:
+        text = replace_once(
+            text,
+            old_v6_inner,
+            new_v6_inner,
+            "legacy wireless captive running check",
+        )
+
+    # Captive clients must use the MikroTik DNS proxy. Advertising public DNS
+    # alongside the gateway lets some devices bypass local tenant DNS and can
+    # turn a captive network into a generic "no internet" network instead of
+    # triggering the OS sign-in flow.
+    old_dhcp_dns = (
+        '      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} '
+        'dns-server=${gatewayIp},1.1.1.1,8.8.8.8`,'
+    )
+    new_dhcp_dns = (
+        '      `/ip dhcp-server network add address=${subnet} gateway=${gatewayIp} '
+        'dns-server=${gatewayIp}`,'
+    )
+    if old_dhcp_dns in text:
+        text = replace_once(
+            text,
+            old_dhcp_dns,
+            new_dhcp_dns,
+            "gateway-only captive DNS",
+        )
+
     old_wired_block = """      `# 3d-2. Put wired LAN ports on the captive hotspot bridge too`,
       `# Excludes the detected WAN and ether1 so upstream internet stays intact.`,
       `:foreach e in=[/interface ethernet find] do={`,
@@ -179,6 +219,8 @@ def patch_mikrotik_service(text: str) -> str:
 
     required = [
         'dst-address="0.0.0.0/0" active=yes',
+        "disable-running-check=yes",
+        "dns-server=${gatewayIp}`",
         "# 3d-2. Preserve owner management while assigning unused wired ports",
         '$ethName != "ether2"',
         "$ethRunning = false",
@@ -196,6 +238,7 @@ def patch_mikrotik_service(text: str) -> str:
     # Match executable RouterOS commands, not explanatory TypeScript comments.
     forbidden = [
         "dst-address=0.0.0.0/0 active=yes",
+        "dns-server=${gatewayIp},1.1.1.1,8.8.8.8",
         "# 3d-2. Put wired LAN ports on the captive hotspot bridge too",
         "/ip firewall filter move $r destination=0",
         '/ip dns static remove [find name="${this.escape(input.dnsName)}"]',
@@ -245,6 +288,24 @@ def patch_mikrotik_spec(text: str) -> str:
             "wired management and firewall safety tests",
         )
 
+    # Lock the two conditions that decide whether a fresh Wi-Fi join behaves as
+    # an actual captive network instead of merely "connected without internet".
+    if "legacy wireless AP running check" not in text:
+        marker = "    expect(script).toContain('security-profile=arofi-open')\n"
+        replacement = (
+            marker
+            + "    expect(script).toContain('disable-running-check=yes')\n"
+            + "    expect(script).toContain('dns-server=10.55.0.1')\n"
+            + "    expect(script).not.toContain('dns-server=10.55.0.1,1.1.1.1,8.8.8.8')\n"
+            + "    // legacy wireless AP running check + gateway-only captive DNS\n"
+        )
+        text = replace_once(
+            text,
+            marker,
+            replacement,
+            "captive detection radio/DNS tests",
+        )
+
     old_dns_expectations = """    expect(script).toContain('/ip dns static remove [find name="tenantname.wifi"]')
     expect(script).toContain('/ip dns static add name="tenantname.wifi" address=10.55.0.1')
 """
@@ -267,6 +328,9 @@ def patch_mikrotik_spec(text: str) -> str:
         "expect(script).toContain('$ethName != \"ether2\"')",
         "expect(script).toContain('$ethRunning = false')",
         "expect(script).not.toContain('destination=0')",
+        "legacy wireless AP running check",
+        "expect(script).toContain('disable-running-check=yes')",
+        "expect(script).toContain('dns-server=10.55.0.1')",
         "dynamic DNS row must never abort provisioning",
         'find comment="AROFi hotspot DNS gateway"',
         "expect(script).not.toContain('/ip dns static remove [find name=\"tenantname.wifi\"]')",
@@ -294,8 +358,8 @@ def main() -> None:
             path.write_text(updated, encoding="utf-8")
 
     print(
-        "MikroTik command output, dynamic-safe DNS cleanup, and provisioning "
-        "safety fixes applied."
+        "MikroTik captive detection hardened: AP running state, gateway-only DNS, "
+        "dynamic-safe DNS cleanup, and provisioning safety fixes applied."
     )
 
 
