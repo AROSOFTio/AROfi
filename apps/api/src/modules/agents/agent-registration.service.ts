@@ -31,32 +31,52 @@ export class AgentRegistrationService {
 
     await this.roleCatalogService.ensureStandardRoles()
 
-    const [tenant, passwordHash] = await Promise.all([
+    // Keep password hashing and lookup-only work outside the write transaction.
+    // Bcrypt is intentionally expensive; holding a DB transaction open while it
+    // runs or while static tenant/role rows are fetched only increases contention.
+    const [tenant, loginRole, passwordHash] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: tenantId },
         select: { id: true, name: true },
       }),
+      email && temporaryPassword
+        ? this.prisma.role.findUnique({
+            where: { name: AGENT_LOGIN_ROLE },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
       temporaryPassword ? bcrypt.hash(temporaryPassword, 10) : Promise.resolve(null),
     ])
 
     if (!tenant) throw new NotFoundException('Business not found')
+    if (email && passwordHash && !loginRole) {
+      throw new BadRequestException('VoucherAgent login role is not configured')
+    }
 
     const normalizedPhone = this.normalizePhoneNumber(dto.phoneNumber)
     const code = dto.code.trim().toUpperCase()
     const names = this.splitName(dto.name)
 
     return this.prisma.$transaction(async (tx) => {
-      const duplicateAgent = await tx.agent.findFirst({
-        where: {
-          tenantId,
-          OR: [
-            { code },
-            { phoneNumber: normalizedPhone },
-            ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
-          ],
-        },
-        select: { code: true, phoneNumber: true, email: true },
-      })
+      const [duplicateAgent, existingUser] = await Promise.all([
+        tx.agent.findFirst({
+          where: {
+            tenantId,
+            OR: [
+              { code },
+              { phoneNumber: normalizedPhone },
+              ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+            ],
+          },
+          select: { code: true, phoneNumber: true, email: true },
+        }),
+        email && passwordHash
+          ? tx.user.findUnique({
+              where: { email },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+      ])
 
       if (duplicateAgent?.code === code) {
         throw new BadRequestException('An agent with this code already exists for this business')
@@ -67,21 +87,8 @@ export class AgentRegistrationService {
       if (email && duplicateAgent?.email?.trim().toLowerCase() === email) {
         throw new BadRequestException('An agent with this login email already exists for this business')
       }
-
-      let loginRole: { id: string } | null = null
-      if (email && passwordHash) {
-        const existingUser = await tx.user.findUnique({ where: { email } })
-        if (existingUser) {
-          throw new BadRequestException('A user with this email already exists')
-        }
-
-        loginRole = await tx.role.findUnique({
-          where: { name: AGENT_LOGIN_ROLE },
-          select: { id: true },
-        })
-        if (!loginRole) {
-          throw new BadRequestException('VoucherAgent login role is not configured')
-        }
+      if (existingUser) {
+        throw new BadRequestException('A user with this email already exists')
       }
 
       const agent = await tx.agent.create({
@@ -124,27 +131,32 @@ export class AgentRegistrationService {
   async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
     await this.roleCatalogService.ensureStandardRoles()
 
-    const agent = await this.prisma.agent.findFirst({
-      where: { id: agentId, tenantId },
-      select: { id: true, tenantId: true, name: true, email: true },
-    })
+    // Resolve immutable inputs and perform bcrypt work before opening the write
+    // transaction. The transaction then contains only conflict detection plus
+    // the user create/update, which shortens lock/connection hold time.
+    const [agent, role, passwordHash] = await Promise.all([
+      this.prisma.agent.findFirst({
+        where: { id: agentId, tenantId },
+        select: { id: true, tenantId: true, name: true, email: true },
+      }),
+      this.prisma.role.findUnique({
+        where: { name: AGENT_LOGIN_ROLE },
+        select: { id: true },
+      }),
+      bcrypt.hash(temporaryPassword, 10),
+    ])
+
     if (!agent) throw new NotFoundException('Agent not found')
+    if (!role) throw new BadRequestException('VoucherAgent login role is not configured')
 
     const email = agent.email?.trim().toLowerCase()
     if (!email) {
       throw new BadRequestException('Add a login email to this Agent before creating the login')
     }
 
-    const passwordHash = await bcrypt.hash(temporaryPassword, 10)
     const names = this.splitName(agent.name)
 
     return this.prisma.$transaction(async (tx) => {
-      const role = await tx.role.findUnique({
-        where: { name: AGENT_LOGIN_ROLE },
-        select: { id: true },
-      })
-      if (!role) throw new BadRequestException('VoucherAgent login role is not configured')
-
       const existing = await tx.user.findUnique({
         where: { email },
         select: { id: true, tenantId: true, roleId: true },
