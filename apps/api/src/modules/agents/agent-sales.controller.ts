@@ -6,6 +6,7 @@ import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { AgentDashboardService } from './agent-dashboard.service'
 import { AgentSalesService } from './agent-sales.service'
 import {
   AgentCashSaleDto,
@@ -39,6 +40,7 @@ export class AgentSalesPublicController {
 export class AgentSalesController {
   constructor(
     private readonly agentSales: AgentSalesService,
+    private readonly agentDashboard: AgentDashboardService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -47,7 +49,7 @@ export class AgentSalesController {
   @Get('me/dashboard')
   getMyDashboard(@CurrentUser() user: AuthenticatedAdminUser) {
     const tenantId = this.accessScope.requireTenantScope(user)
-    return this.agentSales.getMyDashboard(user.email, tenantId)
+    return this.agentDashboard.getMyDashboard(user.email, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
