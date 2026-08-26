@@ -34,7 +34,7 @@ export class RedisCacheInterceptor implements NestInterceptor {
       if (request.method !== 'GET') {
         return next.handle()
       }
-      const key = this.cache.buildHttpKey(cacheOptions.namespace, request)
+      const key = this.cache.buildHttpKey(cacheOptions.namespace, request, cacheOptions.scope)
       return from(
         this.cache.remember(key, cacheOptions.ttlSeconds, () => lastValueFrom(next.handle())),
       )
