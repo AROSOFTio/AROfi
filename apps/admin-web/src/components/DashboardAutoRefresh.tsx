@@ -2,21 +2,37 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useRealtimeRefresh, type RealtimeEventType, REALTIME_EVENT_TYPES } from '@/lib/realtime'
+import { useRealtimeRefresh, type RealtimeEventType } from '@/lib/realtime'
 
-// Router heartbeats are intentionally excluded from full dashboard refreshes.
-// The heartbeat already updates router/session state server-side, and refreshing
-// every dashboard for unchanged beats creates avoidable API/database pressure.
-const DASHBOARD_EVENT_TYPES = REALTIME_EVENT_TYPES.filter(
-  (type): type is RealtimeEventType => type !== 'router.heartbeat',
-)
+// Only events that materially change dashboard-level information should trigger
+// a full server render. High-frequency telemetry such as router heartbeats,
+// RADIUS auth and session.updated is intentionally excluded; those signals are
+// handled by their focused pages and would otherwise fan out into many API/DB
+// calls for every open dashboard.
+const DASHBOARD_EVENT_TYPES: readonly RealtimeEventType[] = [
+  'payment.completed',
+  'payment.failed',
+  'payment.amount_mismatch',
+  'activation.created',
+  'activation.expired',
+  'activation.quota_exhausted',
+  'voucher.redeemed',
+  'session.started',
+  'session.stopped',
+  'router.online',
+  'router.stale',
+  'router.offline',
+  'disconnect.succeeded',
+  'disconnect.failed',
+  'alert',
+]
 
-// Server-rendered dashboard pages refresh from meaningful realtime events.
-// Coalesce bursts for 5 seconds so a busy hotspot does not trigger overlapping
-// expensive server renders, while live counts still update on a near-live cadence.
-// The interval refresh remains only as a fallback when the event stream is unavailable.
+// Server-rendered dashboard pages are deliberately quiet. Realtime bursts are
+// coalesced for 10 seconds, and the timer is only a low-frequency safety net.
+// This keeps dashboards useful without continuously re-running their expensive
+// server-side API fan-out.
 export function DashboardAutoRefresh({
-  intervalMs = 60_000,
+  intervalMs = 180_000,
   eventTypes = DASHBOARD_EVENT_TYPES,
 }: {
   intervalMs?: number
@@ -24,7 +40,7 @@ export function DashboardAutoRefresh({
 }) {
   const router = useRouter()
 
-  useRealtimeRefresh(() => router.refresh(), eventTypes, 5_000)
+  useRealtimeRefresh(() => router.refresh(), eventTypes, 10_000)
 
   useEffect(() => {
     const id = setInterval(() => {
