@@ -54,52 +54,74 @@ export class AgentOverviewService {
       }
     }
 
+    const agentEmails = agents
+      .map((agent) => agent.email?.trim())
+      .filter((email): email is string => Boolean(email))
+    const tenantIds = Array.from(new Set(agents.map((agent) => agent.tenantId)))
+
     const completedSalesWhere = {
       agentId: { in: ids },
       status: BillingTransactionStatus.COMPLETED,
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
     }
 
-    const [salesByChannel, commissionsByAgent, cashCommissionsByAgent, settlementsByAgent, batches] =
-      await Promise.all([
-        this.prisma.billingTransaction.groupBy({
-          by: ['agentId', 'channel'],
-          where: completedSalesWhere,
-          _sum: { grossAmountUgx: true },
-        }),
-        this.prisma.agentCommission.groupBy({
-          by: ['agentId'],
-          where: {
-            agentId: { in: ids },
-            status: { not: CommissionStatus.REVERSED },
+    const [
+      salesByChannel,
+      commissionsByAgent,
+      cashCommissionsByAgent,
+      settlementsByAgent,
+      batches,
+      loginUsers,
+    ] = await Promise.all([
+      this.prisma.billingTransaction.groupBy({
+        by: ['agentId', 'channel'],
+        where: completedSalesWhere,
+        _sum: { grossAmountUgx: true },
+      }),
+      this.prisma.agentCommission.groupBy({
+        by: ['agentId'],
+        where: {
+          agentId: { in: ids },
+          status: { not: CommissionStatus.REVERSED },
+        },
+        _sum: { amountUgx: true },
+      }),
+      this.prisma.agentCommission.groupBy({
+        by: ['agentId'],
+        where: {
+          agentId: { in: ids },
+          sourceTransaction: {
+            status: BillingTransactionStatus.COMPLETED,
+            type: BillingTransactionType.VOUCHER_SALE,
           },
-          _sum: { amountUgx: true },
-        }),
-        this.prisma.agentCommission.groupBy({
-          by: ['agentId'],
-          where: {
-            agentId: { in: ids },
-            sourceTransaction: {
-              status: BillingTransactionStatus.COMPLETED,
-              type: BillingTransactionType.VOUCHER_SALE,
+        },
+        _sum: { amountUgx: true },
+      }),
+      this.prisma.settlement.groupBy({
+        by: ['agentId'],
+        where: {
+          agentId: { in: ids },
+          status: SettlementStatus.COMPLETED,
+          notes: { startsWith: CASH_SETTLEMENT_MARKER },
+        },
+        _sum: { payableAmountUgx: true },
+      }),
+      this.prisma.voucherBatch.findMany({
+        where: { agentId: { in: ids } },
+        select: { id: true, agentId: true },
+      }),
+      agentEmails.length
+        ? this.prisma.user.findMany({
+            where: {
+              isActive: true,
+              tenantId: { in: tenantIds },
+              email: { in: agentEmails, mode: 'insensitive' },
+              role: { name: 'VoucherAgent' },
             },
-          },
-          _sum: { amountUgx: true },
-        }),
-        this.prisma.settlement.groupBy({
-          by: ['agentId'],
-          where: {
-            agentId: { in: ids },
-            status: SettlementStatus.COMPLETED,
-            notes: { startsWith: CASH_SETTLEMENT_MARKER },
-          },
-          _sum: { payableAmountUgx: true },
-        }),
-        this.prisma.voucherBatch.findMany({
-          where: { agentId: { in: ids } },
-          select: { id: true, agentId: true },
-        }),
-      ])
+            select: { tenantId: true, email: true },
+          })
+        : Promise.resolve([]),
+    ])
 
     const batchIds = batches.map((batch) => batch.id)
     const availableVoucherCounts = batchIds.length
@@ -151,12 +173,19 @@ export class AgentOverviewService {
       voucherStock.set(agentId, (voucherStock.get(agentId) ?? 0) + row._count._all)
     }
 
+    const loginKeys = new Set(
+      loginUsers
+        .filter((user) => user.tenantId)
+        .map((user) => `${user.tenantId}:${user.email.trim().toLowerCase()}`),
+    )
+
     const result = agents.map((agent) => {
       const sales = saleTotals.get(agent.id) ?? { total: 0, cash: 0, mobileMoney: 0 }
       const commissionUgx = commissionTotals.get(agent.id) ?? 0
       const cashLiability = Math.max(0, sales.cash - (cashCommissionTotals.get(agent.id) ?? 0))
       const cashToCollectUgx = Math.max(0, cashLiability - (settlementTotals.get(agent.id) ?? 0))
       const parsedPolicy = this.readPolicy(agent.notes)
+      const normalizedEmail = agent.email?.trim().toLowerCase()
 
       return {
         id: agent.id,
@@ -178,7 +207,7 @@ export class AgentOverviewService {
         commissionUgx,
         cashToCollectUgx,
         availableVoucherStock: voucherStock.get(agent.id) ?? 0,
-        loginReady: Boolean(agent.email),
+        loginReady: Boolean(normalizedEmail && loginKeys.has(`${agent.tenantId}:${normalizedEmail}`)),
       }
     })
 
