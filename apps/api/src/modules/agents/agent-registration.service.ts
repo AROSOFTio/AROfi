@@ -8,12 +8,9 @@ import { CreateAgentDto } from './dto/create-agent.dto'
 const AGENT_LOGIN_ROLE = 'VoucherAgent'
 
 /**
- * Registers the Agent seller profile and its VoucherAgent login as one unit.
- *
- * The old UI performed POST /agents and POST /users separately, then tried to
- * delete the Agent when user creation failed. A network error between those
- * requests could leave a half-created Agent. Keeping both writes in one Prisma
- * transaction makes registration all-or-nothing.
+ * Owns the link between an Agent seller profile and its VoucherAgent login.
+ * New registrations are all-or-nothing, and older profile-only Agents can be
+ * provisioned without exposing the generic /users endpoint to this workflow.
  */
 @Injectable()
 export class AgentRegistrationService {
@@ -121,6 +118,67 @@ export class AgentRegistrationService {
         tenant,
         loginReady: Boolean(email && passwordHash && loginRole),
       }
+    })
+  }
+
+  async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
+    await this.roleCatalogService.ensureStandardRoles()
+
+    const agent = await this.prisma.agent.findFirst({
+      where: { id: agentId, tenantId },
+      select: { id: true, tenantId: true, name: true, email: true },
+    })
+    if (!agent) throw new NotFoundException('Agent not found')
+
+    const email = agent.email?.trim().toLowerCase()
+    if (!email) {
+      throw new BadRequestException('Add a login email to this Agent before creating the login')
+    }
+
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10)
+    const names = this.splitName(agent.name)
+
+    return this.prisma.$transaction(async (tx) => {
+      const role = await tx.role.findUnique({
+        where: { name: AGENT_LOGIN_ROLE },
+        select: { id: true },
+      })
+      if (!role) throw new BadRequestException('VoucherAgent login role is not configured')
+
+      const existing = await tx.user.findUnique({
+        where: { email },
+        select: { id: true, tenantId: true, roleId: true },
+      })
+
+      if (existing && (existing.tenantId !== tenantId || existing.roleId !== role.id)) {
+        throw new BadRequestException('This email already belongs to another AROFi user account')
+      }
+
+      if (existing) {
+        await tx.user.update({
+          where: { id: existing.id },
+          data: {
+            firstName: names.firstName,
+            lastName: names.lastName,
+            password: passwordHash,
+            isActive: true,
+          },
+        })
+        return { agentId: agent.id, email, loginReady: true, restored: true }
+      }
+
+      await tx.user.create({
+        data: {
+          email,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          password: passwordHash,
+          roleId: role.id,
+          tenantId,
+        },
+      })
+
+      return { agentId: agent.id, email, loginReady: true, restored: false }
     })
   }
 
