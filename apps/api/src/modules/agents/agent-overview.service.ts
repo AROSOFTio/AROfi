@@ -109,6 +109,7 @@ export class AgentOverviewService {
         by: ['agentId'],
         where: {
           agentId: { in: ids },
+          status: { not: CommissionStatus.REVERSED },
           sourceTransaction: {
             status: BillingTransactionStatus.COMPLETED,
             type: BillingTransactionType.VOUCHER_SALE,
