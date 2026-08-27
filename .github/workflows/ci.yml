@@ -12,7 +12,7 @@ on:
 jobs:
   build-verify:
     name: Verify Builds Pass
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,6 +22,11 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
       - name: Cache Turborepo
         uses: actions/cache@v4
@@ -39,34 +44,34 @@ jobs:
       # so branch CI catches patch interactions before deployment.
       - name: Apply guarded production source patches
         run: |
-          python3 scripts/apply_iotec_source_patches.py
-          python3 scripts/apply_unified_gateway_patches.py
-          python3 scripts/apply_gateway_webhook_patches.py
-          python3 scripts/hide_pesapal_gateway.py
-          python3 scripts/apply_live_gateway_activation.py
-          python3 scripts/preserve_yo_uganda_gateway.py
-          python3 scripts/apply_voucher_preview_patches.py
-          python3 scripts/apply_voucher_dashboard_patches.py
-          python3 scripts/finalize_voucher_dashboard.py
-          python3 scripts/fix_lucide_icon_compat.py
-          python3 scripts/apply_public_content_patches.py
-          python3 scripts/apply_portal_tv_package_patches_v2.py
-          python3 scripts/apply_router_compensation_review.py
-          python3 scripts/apply_router_compensation_ui.py
-          python3 scripts/fix_support_ticket_workspace.py
-          python3 scripts/apply_router_wan_port_support.py
-          python3 scripts/sanitize_mikrotik_command_output.py
-          python3 scripts/fix_routeros6_7_provisioning.py
-          python3 scripts/apply_mikrotik_background_install.py
-          python3 scripts/enforce_no_idle_bundle_logout.py
-          python3 scripts/fix_router_presence_and_access_lifecycle.py
-          python3 scripts/stabilize_router_status_hysteresis.py
-          python3 scripts/fix_iotec_live_gateway_diagnostics.py
-          python3 scripts/fix_iotec_oauth_compatibility.py
-          python3 scripts/finalize_gateway_compile.py
-          python3 scripts/verify_router_captive_invariants.py
-          python3 scripts/apply_arofi_brand_and_three_plan_patches.py
-          python3 scripts/forbid_mikrotik_auto_mac_auth.py
+          python scripts/apply_iotec_source_patches.py
+          python scripts/apply_unified_gateway_patches.py
+          python scripts/apply_gateway_webhook_patches.py
+          python scripts/hide_pesapal_gateway.py
+          python scripts/apply_live_gateway_activation.py
+          python scripts/preserve_yo_uganda_gateway.py
+          python scripts/apply_voucher_preview_patches.py
+          python scripts/apply_voucher_dashboard_patches.py
+          python scripts/finalize_voucher_dashboard.py
+          python scripts/fix_lucide_icon_compat.py
+          python scripts/apply_public_content_patches.py
+          python scripts/apply_portal_tv_package_patches_v2.py
+          python scripts/apply_router_compensation_review.py
+          python scripts/apply_router_compensation_ui.py
+          python scripts/fix_support_ticket_workspace.py
+          python scripts/apply_router_wan_port_support.py
+          python scripts/sanitize_mikrotik_command_output.py
+          python scripts/fix_routeros6_7_provisioning.py
+          python scripts/apply_mikrotik_background_install.py
+          python scripts/enforce_no_idle_bundle_logout.py
+          python scripts/fix_router_presence_and_access_lifecycle.py
+          python scripts/stabilize_router_status_hysteresis.py
+          python scripts/fix_iotec_live_gateway_diagnostics.py
+          python scripts/fix_iotec_oauth_compatibility.py
+          python scripts/finalize_gateway_compile.py
+          python scripts/verify_router_captive_invariants.py
+          python scripts/apply_arofi_brand_and_three_plan_patches.py
+          python scripts/forbid_mikrotik_auto_mac_auth.py
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=apps/api/prisma/schema.prisma
