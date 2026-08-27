@@ -20,6 +20,12 @@ CREATE INDEX IF NOT EXISTS idx_networksession_router_status_accounting
 CREATE INDEX IF NOT EXISTS idx_voucher_batch_status
   ON "Voucher"("batchId", status);
 
+-- Agent dashboard/login resolution uses a tenant-scoped case-insensitive email
+-- lookup. Prisma translates `mode: 'insensitive'` to LOWER(email), so a normal
+-- btree on email cannot service that predicate efficiently as Agent volume grows.
+CREATE INDEX IF NOT EXISTS idx_agent_tenant_email_lower
+  ON "Agent"("tenantId", LOWER(email));
+
 -- Agent overview aggregates completed sales by Agent/channel. Keeping the
 -- equality predicates together avoids scanning unrelated historical billing
 -- rows before PostgreSQL performs the group-by.
