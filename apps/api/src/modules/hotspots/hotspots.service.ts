@@ -72,94 +72,88 @@ export class HotspotsService {
 
     const hotspotIds = hotspots.map((hotspot) => hotspot.id)
 
-    const [
-      activeSessionGroups,
-      activationGroups,
-      activeActivationGroups,
-      redemptionGroups,
-      sessionActivityGroups,
-    ] = await Promise.all([
-      this.prisma.networkSession.groupBy({
-        by: ['hotspotId'],
-        where: {
-          hotspotId: {
-            in: hotspotIds,
+    const [activeSessionGroups, activationGroups, redemptionGroups, sessionActivityGroups] =
+      await Promise.all([
+        this.prisma.networkSession.groupBy({
+          by: ['hotspotId'],
+          where: {
+            hotspotId: {
+              in: hotspotIds,
+            },
+            status: SessionStatus.ACTIVE,
           },
-          status: SessionStatus.ACTIVE,
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-      this.prisma.packageActivation.groupBy({
-        by: ['hotspotId'],
-        where: {
-          hotspotId: {
-            in: hotspotIds,
+          _count: {
+            _all: true,
           },
-        },
-        _count: {
-          _all: true,
-        },
-        _max: {
-          startedAt: true,
-        },
-      }),
-      this.prisma.packageActivation.groupBy({
-        by: ['hotspotId'],
-        where: {
-          hotspotId: {
-            in: hotspotIds,
+        }),
+        this.prisma.packageActivation.groupBy({
+          by: ['hotspotId', 'status'],
+          where: {
+            hotspotId: {
+              in: hotspotIds,
+            },
           },
-          status: PackageActivationStatus.ACTIVE,
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-      this.prisma.voucherRedemption.groupBy({
-        by: ['hotspotId'],
-        where: {
-          hotspotId: {
-            in: hotspotIds,
+          _count: {
+            _all: true,
           },
-        },
-        _count: {
-          _all: true,
-        },
-        _max: {
-          createdAt: true,
-        },
-      }),
-      this.prisma.networkSession.groupBy({
-        by: ['hotspotId'],
-        where: {
-          hotspotId: {
-            in: hotspotIds,
+          _max: {
+            startedAt: true,
           },
-        },
-        _max: {
-          startedAt: true,
-          lastAccountingAt: true,
-        },
-      }),
-    ])
+        }),
+        this.prisma.voucherRedemption.groupBy({
+          by: ['hotspotId'],
+          where: {
+            hotspotId: {
+              in: hotspotIds,
+            },
+          },
+          _count: {
+            _all: true,
+          },
+          _max: {
+            createdAt: true,
+          },
+        }),
+        this.prisma.networkSession.groupBy({
+          by: ['hotspotId'],
+          where: {
+            hotspotId: {
+              in: hotspotIds,
+            },
+          },
+          _max: {
+            startedAt: true,
+            lastAccountingAt: true,
+          },
+        }),
+      ])
 
     const activeSessionsByHotspot = new Map(
       activeSessionGroups
         .filter((group) => Boolean(group.hotspotId))
         .map((group) => [group.hotspotId as string, group._count._all]),
     )
-    const activationsByHotspot = new Map(
-      activationGroups
-        .filter((group) => Boolean(group.hotspotId))
-        .map((group) => [group.hotspotId as string, group._count._all]),
-    )
-    const activeActivationsByHotspot = new Map(
-      activeActivationGroups
-        .filter((group) => Boolean(group.hotspotId))
-        .map((group) => [group.hotspotId as string, group._count._all]),
-    )
+    const activationsByHotspot = new Map<string, number>()
+    const activeActivationsByHotspot = new Map<string, number>()
+    const activationActivityByHotspot = new Map<string, Date | null>()
+    for (const group of activationGroups) {
+      if (!group.hotspotId) continue
+      const hotspotId = group.hotspotId
+      activationsByHotspot.set(
+        hotspotId,
+        (activationsByHotspot.get(hotspotId) ?? 0) + group._count._all,
+      )
+      if (group.status === PackageActivationStatus.ACTIVE) {
+        activeActivationsByHotspot.set(hotspotId, group._count._all)
+      }
+      activationActivityByHotspot.set(
+        hotspotId,
+        this.pickLatestDate(
+          activationActivityByHotspot.get(hotspotId) ?? null,
+          group._max.startedAt,
+        ),
+      )
+    }
     const redemptionsByHotspot = new Map(
       redemptionGroups
         .filter((group) => Boolean(group.hotspotId))
@@ -172,11 +166,6 @@ export class HotspotsService {
           group.hotspotId as string,
           this.pickLatestDate(group._max.startedAt, group._max.lastAccountingAt),
         ]),
-    )
-    const activationActivityByHotspot = new Map(
-      activationGroups
-        .filter((group) => Boolean(group.hotspotId))
-        .map((group) => [group.hotspotId as string, group._max.startedAt ?? null]),
     )
     const redemptionActivityByHotspot = new Map(
       redemptionGroups
