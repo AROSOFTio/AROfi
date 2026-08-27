@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { AgentType } from '@prisma/client'
+import { AgentType, Prisma } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { PrismaService } from '../../prisma.service'
 import { RoleCatalogService } from '../auth/role-catalog.service'
@@ -59,75 +59,86 @@ export class AgentRegistrationService {
     const code = dto.code.trim().toUpperCase()
     const names = this.splitName(dto.name)
 
-    return this.prisma.$transaction(async (tx) => {
-      const [duplicateAgent, existingUser] = await Promise.all([
-        tx.agent.findFirst({
-          where: {
-            tenantId,
-            OR: [
-              { code },
-              { phoneNumber: normalizedPhone },
-              ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
-            ],
-          },
-          select: { code: true, phoneNumber: true, email: true },
-        }),
-        email && passwordHash
-          ? tx.user.findUnique({
-              where: { email },
-              select: { id: true },
-            })
-          : Promise.resolve(null),
-      ])
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const [duplicateAgent, existingUser] = await Promise.all([
+          tx.agent.findFirst({
+            where: {
+              tenantId,
+              OR: [
+                { code },
+                { phoneNumber: normalizedPhone },
+                ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+              ],
+            },
+            select: { code: true, phoneNumber: true, email: true },
+          }),
+          email && passwordHash
+            ? tx.user.findUnique({
+                where: { email },
+                select: { id: true },
+              })
+            : Promise.resolve(null),
+        ])
 
-      if (duplicateAgent?.code === code) {
-        throw new BadRequestException('An agent with this code already exists for this business')
-      }
-      if (duplicateAgent?.phoneNumber === normalizedPhone) {
-        throw new BadRequestException('An agent with this phone number already exists for this business')
-      }
-      if (email && duplicateAgent?.email?.trim().toLowerCase() === email) {
-        throw new BadRequestException('An agent with this login email already exists for this business')
-      }
-      if (existingUser) {
-        throw new BadRequestException('A user with this email already exists')
-      }
+        if (duplicateAgent?.code === code) {
+          throw new BadRequestException('An agent with this code already exists for this business')
+        }
+        if (duplicateAgent?.phoneNumber === normalizedPhone) {
+          throw new BadRequestException('An agent with this phone number already exists for this business')
+        }
+        if (email && duplicateAgent?.email?.trim().toLowerCase() === email) {
+          throw new BadRequestException('An agent with this login email already exists for this business')
+        }
+        if (existingUser) {
+          throw new BadRequestException('A user with this email already exists')
+        }
 
-      const agent = await tx.agent.create({
-        data: {
-          tenantId,
-          code,
-          name: dto.name.trim(),
-          phoneNumber: normalizedPhone,
-          email,
-          type: dto.type ?? AgentType.FIELD_AGENT,
-          territory: dto.territory?.trim() || null,
-          commissionRateBps: dto.commissionRateBps,
-          floatLimitUgx: dto.floatLimitUgx,
-          notes: dto.notes?.trim() || null,
-        },
-      })
-
-      if (email && passwordHash && loginRole) {
-        await tx.user.create({
+        const agent = await tx.agent.create({
           data: {
-            email,
-            firstName: names.firstName,
-            lastName: names.lastName,
-            password: passwordHash,
-            roleId: loginRole.id,
             tenantId,
+            code,
+            name: dto.name.trim(),
+            phoneNumber: normalizedPhone,
+            email,
+            type: dto.type ?? AgentType.FIELD_AGENT,
+            territory: dto.territory?.trim() || null,
+            commissionRateBps: dto.commissionRateBps,
+            floatLimitUgx: dto.floatLimitUgx,
+            notes: dto.notes?.trim() || null,
           },
         })
-      }
 
-      return {
-        ...agent,
-        wallet: null,
-        tenant,
-        loginReady: Boolean(email && passwordHash && loginRole),
+        if (email && passwordHash && loginRole) {
+          await tx.user.create({
+            data: {
+              email,
+              firstName: names.firstName,
+              lastName: names.lastName,
+              password: passwordHash,
+              roleId: loginRole.id,
+              tenantId,
+            },
+          })
+        }
+
+        return {
+          ...agent,
+          wallet: null,
+          tenant,
+          loginReady: Boolean(email && passwordHash && loginRole),
+        }
+      })
+    } catch (error) {
+      // Preflight duplicate checks give specific messages in the normal path.
+      // Keep the transaction race-safe as well: if another request inserts the
+      // same unique Agent/User value between our check and create, return a
+      // controlled client error instead of leaking a Prisma P2002 as a 500.
+      if (this.isUniqueConstraintError(error)) {
+        throw new BadRequestException('Agent code, phone number, or login email is already in use')
       }
-    })
+      throw error
+    }
   }
 
   async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
@@ -167,30 +178,59 @@ export class AgentRegistrationService {
     const passwordHash = await bcrypt.hash(temporaryPassword, 10)
 
     if (existing) {
-      await this.prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          firstName: names.firstName,
-          lastName: names.lastName,
-          password: passwordHash,
-          isActive: true,
-        },
-      })
+      await this.restoreLogin(existing.id, names, passwordHash)
       return { agentId: agent.id, email, loginReady: true, restored: true }
     }
 
-    await this.prisma.user.create({
+    try {
+      await this.prisma.user.create({
+        data: {
+          email,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          password: passwordHash,
+          roleId: role.id,
+          tenantId,
+        },
+      })
+      return { agentId: agent.id, email, loginReady: true, restored: false }
+    } catch (error) {
+      if (!this.isUniqueConstraintError(error)) throw error
+
+      // Another provisioning request may have created this email after the
+      // initial lookup. Re-read it and only restore it when it is the exact
+      // same tenant + VoucherAgent identity; never overwrite another account.
+      const concurrentUser = await this.prisma.user.findUnique({
+        where: { email },
+        select: { id: true, tenantId: true, roleId: true },
+      })
+      if (!concurrentUser || concurrentUser.tenantId !== tenantId || concurrentUser.roleId !== role.id) {
+        throw new BadRequestException('This email already belongs to another AROFi user account')
+      }
+
+      await this.restoreLogin(concurrentUser.id, names, passwordHash)
+      return { agentId: agent.id, email, loginReady: true, restored: true }
+    }
+  }
+
+  private restoreLogin(
+    userId: string,
+    names: { firstName: string; lastName: string },
+    passwordHash: string,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
       data: {
-        email,
         firstName: names.firstName,
         lastName: names.lastName,
         password: passwordHash,
-        roleId: role.id,
-        tenantId,
+        isActive: true,
       },
     })
+  }
 
-    return { agentId: agent.id, email, loginReady: true, restored: false }
+  private isUniqueConstraintError(error: unknown) {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
   }
 
   private splitName(name: string) {
