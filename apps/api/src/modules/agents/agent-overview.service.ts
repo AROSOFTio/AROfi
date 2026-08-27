@@ -5,8 +5,8 @@ import {
   BillingTransactionStatus,
   BillingTransactionType,
   CommissionStatus,
+  Prisma,
   SettlementStatus,
-  VoucherStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
@@ -17,6 +17,11 @@ type AgentSalesPolicy = {
   cashEnabled: boolean
   mobileMoneyEnabled: boolean
   allowedPackageIds: string[]
+}
+
+type AgentVoucherStockRow = {
+  agentId: string
+  availableCount: bigint
 }
 
 /**
@@ -84,7 +89,7 @@ export class AgentOverviewService {
       commissionsByAgent,
       cashCommissionsByAgent,
       settlementsByAgent,
-      voucherStockByBatch,
+      voucherStockByAgent,
       loginUsers,
     ] = await Promise.all([
       this.prisma.billingTransaction.groupBy({
@@ -120,19 +125,16 @@ export class AgentOverviewService {
         },
         _sum: { payableAmountUgx: true },
       }),
-      this.prisma.voucherBatch.findMany({
-        where: { agentId: { in: ids } },
-        select: {
-          agentId: true,
-          _count: {
-            select: {
-              vouchers: {
-                where: { status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] } },
-              },
-            },
-          },
-        },
-      }),
+      this.prisma.$queryRaw<AgentVoucherStockRow[]>(Prisma.sql`
+        SELECT
+          batches."agentId" AS "agentId",
+          COUNT(vouchers.id)::bigint AS "availableCount"
+        FROM "VoucherBatch" AS batches
+        INNER JOIN "Voucher" AS vouchers ON vouchers."batchId" = batches.id
+        WHERE batches."agentId" IN (${Prisma.join(ids)})
+          AND vouchers.status IN ('GENERATED', 'PRINTED')
+        GROUP BY batches."agentId"
+      `),
       agentEmails.length
         ? this.prisma.user.findMany({
             where: {
@@ -173,9 +175,8 @@ export class AgentOverviewService {
     }
 
     const voucherStock = new Map<string, number>()
-    for (const batch of voucherStockByBatch) {
-      if (!batch.agentId || batch._count.vouchers === 0) continue
-      voucherStock.set(batch.agentId, (voucherStock.get(batch.agentId) ?? 0) + batch._count.vouchers)
+    for (const row of voucherStockByAgent) {
+      voucherStock.set(row.agentId, Number(row.availableCount))
     }
 
     const loginKeys = new Set(
