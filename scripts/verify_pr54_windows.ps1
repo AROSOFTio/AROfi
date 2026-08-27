@@ -62,46 +62,67 @@ if ($LASTEXITCODE -ne 0) {
   throw 'Unable to inspect the Git working tree.'
 }
 if ($dirty) {
-  throw 'Working tree is not clean. Commit/stash local changes before verification.'
+  throw 'Working tree is not clean. Restore the previous failed verification changes before rerunning.'
 }
 
+$verifiedCommit = (git rev-parse --short HEAD).Trim()
 Write-Host 'AROFi PR #54 local verification' -ForegroundColor Green
 Write-Host "Branch: $currentBranch"
-Write-Host "Commit: $((git rev-parse --short HEAD).Trim())"
+Write-Host "Commit: $verifiedCommit"
 
-Invoke-Step 'Node.js check' { node --version }
-Invoke-Step 'npm check' { npm --version }
+try {
+  Invoke-Step 'Node.js check' { node --version }
+  Invoke-Step 'npm check' { npm --version }
 
-$python = $null
-$pythonArgs = @()
-if (Get-Command python -ErrorAction SilentlyContinue) {
-  $python = 'python'
-} elseif (Get-Command py -ErrorAction SilentlyContinue) {
-  $python = 'py'
-  $pythonArgs = @('-3')
-} else {
-  throw 'Python 3 is required but was not found in PATH.'
+  $nodeMajor = [int]((node -p "process.versions.node.split('.')[0]").Trim())
+  if ($nodeMajor -ne 20) {
+    Write-Warning "Repository production/CI uses Node 20; this local run is using Node $nodeMajor. The build/test result is still useful, but Node 20 remains the reference runtime."
+  }
+
+  $python = $null
+  $pythonArgs = @()
+  if (Get-Command python -ErrorAction SilentlyContinue) {
+    $python = 'python'
+  } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+    $python = 'py'
+    $pythonArgs = @('-3')
+  } else {
+    throw 'Python 3 is required but was not found in PATH.'
+  }
+
+  Invoke-Step 'Python check' { & $python @pythonArgs --version }
+  Invoke-Step 'Install root dependencies' { npm ci }
+
+  Write-Host "`n=== Apply guarded production source patches ===" -ForegroundColor Cyan
+  foreach ($patch in $patches) {
+    Write-Host "Running $patch"
+    & $python @pythonArgs "scripts/$patch"
+    if ($LASTEXITCODE -ne 0) {
+      throw "Production source patch failed: $patch"
+    }
+  }
+
+  Invoke-Step 'Generate Prisma Client' { npx prisma generate --schema=apps/api/prisma/schema.prisma }
+  Invoke-Step 'Build all apps' { npx turbo run build --cache-dir=.turbo }
+  Invoke-Step 'Run tests' { npx turbo run test --cache-dir=.turbo }
+
+  Write-Host "`n==========================================" -ForegroundColor Green
+  Write-Host 'AROFi FINAL VERIFICATION PASSED' -ForegroundColor Green
+  Write-Host 'BUILD: PASS' -ForegroundColor Green
+  Write-Host 'TESTS: PASS' -ForegroundColor Green
+  Write-Host '==========================================' -ForegroundColor Green
+  Write-Host "Verified commit: $verifiedCommit"
 }
-
-Invoke-Step 'Python check' { & $python @pythonArgs --version }
-Invoke-Step 'Install root dependencies' { npm ci }
-
-Write-Host "`n=== Apply guarded production source patches ===" -ForegroundColor Cyan
-foreach ($patch in $patches) {
-  Write-Host "Running $patch"
-  & $python @pythonArgs "scripts/$patch"
+finally {
+  # Production patch scripts intentionally rewrite tracked source files. Always
+  # return a verification checkout that started clean back to its exact commit,
+  # even when a guarded patch/build/test fails midway.
+  Write-Host "`n=== Restore verification checkout ===" -ForegroundColor DarkGray
+  git reset --hard HEAD | Out-Null
+  git clean -fd | Out-Null
   if ($LASTEXITCODE -ne 0) {
-    throw "Production source patch failed: $patch"
+    Write-Warning 'Automatic verification cleanup did not complete. Run git status before the next attempt.'
+  } else {
+    Write-Host 'Working tree restored to the verified commit.' -ForegroundColor DarkGray
   }
 }
-
-Invoke-Step 'Generate Prisma Client' { npx prisma generate --schema=apps/api/prisma/schema.prisma }
-Invoke-Step 'Build all apps' { npx turbo run build --cache-dir=.turbo }
-Invoke-Step 'Run tests' { npx turbo run test --cache-dir=.turbo }
-
-Write-Host "`n==========================================" -ForegroundColor Green
-Write-Host 'AROFi FINAL VERIFICATION PASSED' -ForegroundColor Green
-Write-Host 'BUILD: PASS' -ForegroundColor Green
-Write-Host 'TESTS: PASS' -ForegroundColor Green
-Write-Host '==========================================' -ForegroundColor Green
-Write-Host "Verified commit: $((git rev-parse --short HEAD).Trim())"
