@@ -26,7 +26,7 @@ type AgentSalesPolicy = {
  * settlement and every voucher row for as many as 500 Agents, then repeatedly
  * filtered those arrays once per Agent. This service keeps the response shape
  * but lets PostgreSQL group/sum the large tables and only materializes Agent
- * rows, voucher-batch identifiers and small aggregate result sets in Node.
+ * rows and small aggregate result sets in Node.
  */
 @Injectable()
 export class AgentOverviewService {
@@ -84,7 +84,7 @@ export class AgentOverviewService {
       commissionsByAgent,
       cashCommissionsByAgent,
       settlementsByAgent,
-      batches,
+      voucherStockByBatch,
       loginUsers,
     ] = await Promise.all([
       this.prisma.billingTransaction.groupBy({
@@ -122,7 +122,16 @@ export class AgentOverviewService {
       }),
       this.prisma.voucherBatch.findMany({
         where: { agentId: { in: ids } },
-        select: { id: true, agentId: true },
+        select: {
+          agentId: true,
+          _count: {
+            select: {
+              vouchers: {
+                where: { status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] } },
+              },
+            },
+          },
+        },
       }),
       agentEmails.length
         ? this.prisma.user.findMany({
@@ -136,18 +145,6 @@ export class AgentOverviewService {
           })
         : Promise.resolve([]),
     ])
-
-    const batchIds = batches.map((batch) => batch.id)
-    const availableVoucherCounts = batchIds.length
-      ? await this.prisma.voucher.groupBy({
-          by: ['batchId'],
-          where: {
-            batchId: { in: batchIds },
-            status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] },
-          },
-          _count: { _all: true },
-        })
-      : []
 
     const saleTotals = new Map<string, { total: number; cash: number; mobileMoney: number }>()
     for (const row of salesByChannel) {
@@ -175,16 +172,10 @@ export class AgentOverviewService {
       if (row.agentId) settlementTotals.set(row.agentId, row._sum.payableAmountUgx ?? 0)
     }
 
-    const batchAgent = new Map<string, string>()
-    for (const batch of batches) {
-      if (batch.agentId) batchAgent.set(batch.id, batch.agentId)
-    }
-
     const voucherStock = new Map<string, number>()
-    for (const row of availableVoucherCounts) {
-      const agentId = batchAgent.get(row.batchId)
-      if (!agentId) continue
-      voucherStock.set(agentId, (voucherStock.get(agentId) ?? 0) + row._count._all)
+    for (const batch of voucherStockByBatch) {
+      if (!batch.agentId || batch._count.vouchers === 0) continue
+      voucherStock.set(batch.agentId, (voucherStock.get(batch.agentId) ?? 0) + batch._count.vouchers)
     }
 
     const loginKeys = new Set(
