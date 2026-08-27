@@ -31,6 +31,21 @@ def replace_once(path: str, old: str, new: str, *, sentinel: str | None = None) 
     write(path, text.replace(old, new, 1))
 
 
+def ensure_crypto_import(path: str, name: str) -> None:
+    """Add a named crypto import without assuming the rest of the import list."""
+    text = read(path)
+    crypto_lines = [line for line in text.splitlines() if line.startswith("import {") and line.endswith("from 'crypto'")]
+    if len(crypto_lines) != 1:
+        raise RuntimeError(f"{path}: expected one named crypto import, found {len(crypto_lines)}")
+    current = crypto_lines[0]
+    names = [part.strip() for part in current[len("import {") : current.index("} from 'crypto'")].split(',')]
+    if name in names:
+        return
+    names.append(name)
+    replacement = f"import {{ {', '.join(names)} }} from 'crypto'"
+    write(path, text.replace(current, replacement, 1))
+
+
 def insert_before(path: str, marker: str, block: str, sentinel: str) -> None:
     text = read(path)
     if sentinel in text:
@@ -246,7 +261,7 @@ replace_once(
     "import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common'",
     "import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common'",
 )
-replace_once(wallets, "import { randomUUID } from 'crypto'", "import { randomUUID, timingSafeEqual } from 'crypto'")
+ensure_crypto_import(wallets, "timingSafeEqual")
 replace_once(
     wallets,
     """    const provider = this.paymentRouterService.resolveDisbursement(payoutNumber.network)
