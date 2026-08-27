@@ -54,11 +54,13 @@ export default async function AgentsPage() {
   const session = await getAdminSession()
   if (session?.user.role === 'VoucherAgent') redirect('/dashboard')
 
+  const canManageBusinessAgents = isVendorWorkspace(session?.user)
   const [overview, packages] = await Promise.all([
     fetchApi<HybridOverview>('/agent-sales/overview'),
-    fetchApi<PackageCatalogResponse>('/packages').catch(() => null),
+    canManageBusinessAgents
+      ? fetchApi<PackageCatalogResponse>('/packages').catch(() => null)
+      : Promise.resolve<PackageCatalogResponse | null>(null),
   ])
-  const canManageBusinessAgents = isVendorWorkspace(session?.user)
   const activePackages = (packages?.items ?? []).filter((pkg) => pkg.status === 'ACTIVE' && !isTrialPackage(pkg))
 
   return (
