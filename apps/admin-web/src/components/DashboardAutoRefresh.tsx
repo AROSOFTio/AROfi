@@ -29,8 +29,8 @@ const DASHBOARD_EVENT_TYPES: readonly RealtimeEventType[] = [
 
 // Server-rendered dashboard pages are deliberately quiet. Realtime bursts are
 // coalesced for 10 seconds, and the timer is only a low-frequency safety net.
-// This keeps dashboards useful without continuously re-running their expensive
-// server-side API fan-out.
+// Hidden tabs do not keep a polling timer alive; when a tab becomes visible
+// again we refresh once and restart the fallback timer from that point.
 export function DashboardAutoRefresh({
   intervalMs = 180_000,
   eventTypes = DASHBOARD_EVENT_TYPES,
@@ -43,12 +43,41 @@ export function DashboardAutoRefresh({
   useRealtimeRefresh(() => router.refresh(), eventTypes, 10_000)
 
   useEffect(() => {
-    const id = setInterval(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const clearRefreshTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+    }
+
+    const scheduleRefresh = () => {
+      clearRefreshTimer()
+      if (document.visibilityState !== 'visible') return
+
+      timeoutId = setTimeout(() => {
+        router.refresh()
+        scheduleRefresh()
+      }, intervalMs)
+    }
+
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         router.refresh()
+        scheduleRefresh()
+      } else {
+        clearRefreshTimer()
       }
-    }, intervalMs)
-    return () => clearInterval(id)
+    }
+
+    scheduleRefresh()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      clearRefreshTimer()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [router, intervalMs])
 
   return null
