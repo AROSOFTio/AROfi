@@ -131,15 +131,6 @@ export class AgentVoucherMetricsService {
         select: {
           id: true,
           agentId: true,
-          agent: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              phoneNumber: true,
-              territory: true,
-            },
-          },
         },
       }),
       this.prisma.voucher.groupBy({
@@ -168,7 +159,6 @@ export class AgentVoucherMetricsService {
       this.prisma.billingTransaction.findMany({
         where: saleWhere,
         select: {
-          id: true,
           agentId: true,
           grossAmountUgx: true,
           feeAmountUgx: true,
@@ -213,8 +203,8 @@ export class AgentVoucherMetricsService {
 
     const metricByBatch = new Map<string, VoucherMetric>()
     for (const batch of batches) {
-      const target = batch.agent && batch.agentId
-        ? ensureMetric(batch.agent)
+      const target = batch.agentId
+        ? metrics.get(batch.agentId) ?? null
         : includeMain
           ? main
           : null
@@ -274,6 +264,27 @@ export class AgentVoucherMetricsService {
       ...(includeMain ? [main] : []),
     ]
 
+    const summaryTotals = this.emptyMetric()
+    let agentsWithStock = 0
+    let agentSalesUgx = 0
+    for (const item of items) {
+      if (item.totalAssigned > 0) agentsWithStock += 1
+      agentSalesUgx += item.recordedSalesUgx
+    }
+    for (const item of allMetrics) {
+      summaryTotals.totalAssigned += item.totalAssigned
+      summaryTotals.unsold += item.unsold
+      summaryTotals.soldAwaitingUse += item.soldAwaitingUse
+      summaryTotals.redeemed += item.redeemed
+      summaryTotals.expired += item.expired
+      summaryTotals.voided += item.voided
+      summaryTotals.unsoldValueUgx += item.unsoldValueUgx
+      summaryTotals.recordedSales += item.recordedSales
+      summaryTotals.recordedSalesUgx += item.recordedSalesUgx
+      summaryTotals.recordedFeesUgx += item.recordedFeesUgx
+      summaryTotals.recordedNetUgx += item.recordedNetUgx
+    }
+
     return {
       filters: {
         ...filters,
@@ -281,22 +292,22 @@ export class AgentVoucherMetricsService {
       },
       summary: {
         totalAgentsTracked: items.length,
-        agentsWithStock: items.filter((item) => item.totalAssigned > 0).length,
-        totalAssigned: allMetrics.reduce((total, item) => total + item.totalAssigned, 0),
-        unsold: allMetrics.reduce((total, item) => total + item.unsold, 0),
-        soldAwaitingUse: allMetrics.reduce((total, item) => total + item.soldAwaitingUse, 0),
-        redeemed: allMetrics.reduce((total, item) => total + item.redeemed, 0),
-        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
-        voided: allMetrics.reduce((total, item) => total + item.voided, 0),
-        unsoldValueUgx: allMetrics.reduce((total, item) => total + item.unsoldValueUgx, 0),
-        recordedSales: allMetrics.reduce((total, item) => total + item.recordedSales, 0),
-        recordedSalesUgx: allMetrics.reduce((total, item) => total + item.recordedSalesUgx, 0),
-        recordedFeesUgx: allMetrics.reduce((total, item) => total + item.recordedFeesUgx, 0),
-        recordedNetUgx: allMetrics.reduce((total, item) => total + item.recordedNetUgx, 0),
+        agentsWithStock,
+        totalAssigned: summaryTotals.totalAssigned,
+        unsold: summaryTotals.unsold,
+        soldAwaitingUse: summaryTotals.soldAwaitingUse,
+        redeemed: summaryTotals.redeemed,
+        expired: summaryTotals.expired,
+        voided: summaryTotals.voided,
+        unsoldValueUgx: summaryTotals.unsoldValueUgx,
+        recordedSales: summaryTotals.recordedSales,
+        recordedSalesUgx: summaryTotals.recordedSalesUgx,
+        recordedFeesUgx: summaryTotals.recordedFeesUgx,
+        recordedNetUgx: summaryTotals.recordedNetUgx,
         mainAssigned: main.totalAssigned,
         mainSales: main.recordedSales,
         mainSalesUgx: main.recordedSalesUgx,
-        agentSalesUgx: items.reduce((total, item) => total + item.recordedSalesUgx, 0),
+        agentSalesUgx,
       },
       main: includeMain
         ? {
