@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { clientFetchApi } from '@/lib/client-api'
 import { useRealtimeRefresh } from '@/lib/realtime'
 import type { RouterOverviewResponse } from '@/lib/admin-types'
@@ -22,27 +22,24 @@ export default function RouterObservabilityPage() {
   const [data, setData] = useState<RouterOverviewResponse | null>(null)
   const [selectedRouterId, setSelectedRouterId] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const requestInFlight = useRef(false)
 
   async function loadRouters() {
+    if (requestInFlight.current) return
+    requestInFlight.current = true
     try {
       const result = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
       setData(result)
       setError(null)
-      if (result.routers.length > 0 && !selectedRouterId) {
-        setSelectedRouterId(result.routers[0].id)
-      }
+      setSelectedRouterId((current) => current || result.routers[0]?.id || '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch routers')
     } finally {
+      requestInFlight.current = false
       setLoading(false)
     }
   }
 
-  // Refresh only on events that materially change router/session state. RADIUS
-  // auth is deliberately excluded because it can fire very frequently and does
-  // not justify re-running the expensive full /routers/overview query.
-  // Bursts are coalesced for 5 seconds so one busy hotspot cannot create an API
-  // request storm in every open observability tab.
   useRealtimeRefresh(() => void loadRouters(), [
     'router.online',
     'router.stale',
@@ -55,7 +52,11 @@ export default function RouterObservabilityPage() {
 
   useEffect(() => {
     void loadRouters()
-    const interval = setInterval(() => { void loadRouters() }, 120_000)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadRouters()
+      }
+    }, 120_000)
     return () => clearInterval(interval)
   }, [])
 

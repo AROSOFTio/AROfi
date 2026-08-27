@@ -2,9 +2,6 @@
 
 import { useEffect, useRef } from 'react'
 
-// All event types published by the API realtime bus
-// (apps/api/src/modules/events/realtime-events.service.ts). SSE named events
-// require one listener per type on the EventSource.
 export const REALTIME_EVENT_TYPES = [
   'payment.completed',
   'payment.failed',
@@ -41,10 +38,68 @@ export type RealtimeEvent = {
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
-// Subscribes to the admin realtime event stream. Authentication is the
-// HttpOnly admin session cookie, which EventSource sends automatically on
-// same-origin requests. EventSource reconnects on its own (resuming from
-// Last-Event-ID), so a network blip self-heals.
+type SharedSubscriber = {
+  types: Set<RealtimeEventType>
+  onEvent: (event: RealtimeEvent) => void
+  onStatus?: (state: RealtimeConnectionState) => void
+}
+
+const sharedSubscribers = new Set<SharedSubscriber>()
+let sharedSource: EventSource | null = null
+let sharedState: RealtimeConnectionState = 'connecting'
+
+function publishSharedStatus(state: RealtimeConnectionState) {
+  sharedState = state
+  for (const subscriber of sharedSubscribers) {
+    subscriber.onStatus?.(state)
+  }
+}
+
+function publishSharedEvent(raw: MessageEvent) {
+  try {
+    const event = JSON.parse(raw.data) as RealtimeEvent
+    for (const subscriber of sharedSubscribers) {
+      if (subscriber.types.has(event.type)) {
+        subscriber.onEvent(event)
+      }
+    }
+  } catch {
+    // Malformed frame — skip.
+  }
+}
+
+function ensureSharedSource() {
+  if (sharedSource || typeof window === 'undefined') return
+
+  publishSharedStatus('connecting')
+  const source = new EventSource(`${apiBase}/events/stream`, { withCredentials: true })
+  sharedSource = source
+  source.onopen = () => publishSharedStatus('open')
+  source.onerror = () => publishSharedStatus('error')
+
+  for (const type of REALTIME_EVENT_TYPES) {
+    source.addEventListener(type, publishSharedEvent)
+  }
+}
+
+function subscribeSharedRealtime(subscriber: SharedSubscriber) {
+  sharedSubscribers.add(subscriber)
+  ensureSharedSource()
+  subscriber.onStatus?.(sharedState)
+
+  return () => {
+    sharedSubscribers.delete(subscriber)
+    if (sharedSubscribers.size === 0 && sharedSource) {
+      sharedSource.close()
+      sharedSource = null
+      sharedState = 'connecting'
+    }
+  }
+}
+
+// All realtime consumers in a browser tab share one authenticated EventSource.
+// Subscribers still receive only the event types they requested, but opening a
+// focused page no longer creates another SSE connection and another auth path.
 export function useRealtimeEvents(
   onEvent: (event: RealtimeEvent) => void,
   types: readonly RealtimeEventType[] = REALTIME_EVENT_TYPES,
@@ -54,40 +109,18 @@ export function useRealtimeEvents(
   const statusRef = useRef(onStatus)
   handlerRef.current = onEvent
   statusRef.current = onStatus
-
-  // Keying the effect on the type LIST content (not array identity) avoids
-  // tearing the connection down every render when callers pass literals.
   const typesKey = types.join(',')
 
   useEffect(() => {
-    statusRef.current?.('connecting')
-    const source = new EventSource(`${apiBase}/events/stream`, { withCredentials: true })
-
-    const listener = (raw: MessageEvent) => {
-      try {
-        const event = JSON.parse(raw.data) as RealtimeEvent
-        handlerRef.current(event)
-      } catch {
-        // Malformed frame — skip.
-      }
+    const subscriber: SharedSubscriber = {
+      types: new Set(typesKey.split(',').filter(Boolean) as RealtimeEventType[]),
+      onEvent: (event) => handlerRef.current(event),
+      onStatus: (state) => statusRef.current?.(state),
     }
-
-    source.onopen = () => statusRef.current?.('open')
-    source.onerror = () => statusRef.current?.('error')
-
-    for (const type of typesKey.split(',').filter(Boolean)) {
-      source.addEventListener(type, listener)
-    }
-
-    return () => {
-      source.close()
-    }
+    return subscribeSharedRealtime(subscriber)
   }, [typesKey])
 }
 
-// Convenience wrapper for pages that just re-fetch server data when anything
-// relevant changes: invokes `refresh` debounced so an event burst (e.g. one
-// accounting sweep touching 30 sessions) causes one refresh, not 30.
 export function useRealtimeRefresh(
   refresh: () => void,
   types: readonly RealtimeEventType[] = REALTIME_EVENT_TYPES,
