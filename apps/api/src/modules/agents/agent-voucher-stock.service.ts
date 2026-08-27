@@ -14,21 +14,43 @@ export class AgentVoucherStockService {
     if (!agent) throw new ForbiddenException('This login is not linked to an Agent profile.')
     if (agent.status !== AgentStatus.ACTIVE) throw new ForbiddenException('This Agent account is not active.')
 
-    const batches = await this.prisma.voucherBatch.findMany({
-      where: { tenantId, agentId: agent.id },
-      select: {
-        id: true,
-        batchNumber: true,
-        package: { select: { id: true, name: true, code: true } },
-        quantity: true,
-        faceValueUgx: true,
-        status: true,
-        createdAt: true,
-        expiresAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    })
+    const [batches, batchTotals, stockCounts] = await Promise.all([
+      this.prisma.voucherBatch.findMany({
+        where: { tenantId, agentId: agent.id },
+        select: {
+          id: true,
+          batchNumber: true,
+          package: { select: { id: true, name: true, code: true } },
+          quantity: true,
+          faceValueUgx: true,
+          status: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.voucherBatch.aggregate({
+        where: { tenantId, agentId: agent.id },
+        _sum: { quantity: true },
+      }),
+      this.prisma.voucher.groupBy({
+        by: ['status'],
+        where: {
+          tenantId,
+          batch: { agentId: agent.id },
+          status: {
+            in: [
+              VoucherStatus.GENERATED,
+              VoucherStatus.PRINTED,
+              VoucherStatus.SOLD,
+              VoucherStatus.REDEEMED,
+            ],
+          },
+        },
+        _count: { _all: true },
+      }),
+    ])
 
     const batchIds = batches.map((batch) => batch.id)
     const voucherCounts = batchIds.length
@@ -65,18 +87,24 @@ export class AgentVoucherStockService {
     }
 
     const summary = {
-      assigned: 0,
+      assigned: batchTotals._sum.quantity ?? 0,
       available: 0,
       sold: 0,
       redeemed: 0,
     }
 
+    for (const row of stockCounts) {
+      if (row.status === VoucherStatus.GENERATED || row.status === VoucherStatus.PRINTED) {
+        summary.available += row._count._all
+      } else if (row.status === VoucherStatus.SOLD) {
+        summary.sold += row._count._all
+      } else if (row.status === VoucherStatus.REDEEMED) {
+        summary.redeemed += row._count._all
+      }
+    }
+
     const items = batches.map((batch) => {
       const counts = countsByBatch.get(batch.id) ?? { available: 0, sold: 0, redeemed: 0 }
-      summary.assigned += batch.quantity
-      summary.available += counts.available
-      summary.sold += counts.sold
-      summary.redeemed += counts.redeemed
 
       return {
         id: batch.id,
