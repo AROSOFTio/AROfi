@@ -93,6 +93,26 @@ try {
   Invoke-Step 'Python check' { & $python @pythonArgs --version }
   Invoke-Step 'Install root dependencies' { npm ci }
 
+  # Git for Windows can materialize tracked source as CRLF. The production
+  # patch scripts intentionally match guarded LF source blocks because Docker
+  # builds on Linux. Normalize only text inputs inside this disposable
+  # verification checkout, then the finally block restores the exact commit.
+  Write-Host "`n=== Normalize verification source line endings ===" -ForegroundColor Cyan
+  $lfExtensions = @('.py', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.prisma', '.sql', '.sh', '.example')
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  $trackedFiles = & git ls-files
+  if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate tracked files for LF normalization.' }
+  foreach ($relativePath in $trackedFiles) {
+    $extension = [IO.Path]::GetExtension($relativePath).ToLowerInvariant()
+    if ($lfExtensions -notcontains $extension) { continue }
+    $fullPath = Join-Path (Get-Location) $relativePath
+    if (-not (Test-Path $fullPath -PathType Leaf)) { continue }
+    $text = [IO.File]::ReadAllText($fullPath)
+    if ($text.Contains("`r`n")) {
+      [IO.File]::WriteAllText($fullPath, $text.Replace("`r`n", "`n"), $utf8NoBom)
+    }
+  }
+
   Write-Host "`n=== Apply guarded production source patches ===" -ForegroundColor Cyan
   foreach ($patch in $patches) {
     Write-Host "Running $patch"
