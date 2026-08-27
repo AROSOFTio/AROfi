@@ -31,10 +31,10 @@ export class AgentRegistrationService {
 
     await this.roleCatalogService.ensureStandardRoles()
 
-    // Keep password hashing and lookup-only work outside the write transaction.
-    // Bcrypt is intentionally expensive; holding a DB transaction open while it
-    // runs or while static tenant/role rows are fetched only increases contention.
-    const [tenant, loginRole, passwordHash] = await Promise.all([
+    // Resolve cheap lookup-only inputs first. Do not spend bcrypt CPU for a
+    // registration that will immediately fail because the business or login
+    // role does not exist.
+    const [tenant, loginRole] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: tenantId },
         select: { id: true, name: true },
@@ -45,14 +45,16 @@ export class AgentRegistrationService {
             select: { id: true },
           })
         : Promise.resolve(null),
-      temporaryPassword ? bcrypt.hash(temporaryPassword, 10) : Promise.resolve(null),
     ])
 
     if (!tenant) throw new NotFoundException('Business not found')
-    if (email && passwordHash && !loginRole) {
+    if (email && temporaryPassword && !loginRole) {
       throw new BadRequestException('VoucherAgent login role is not configured')
     }
 
+    // Bcrypt remains outside the write transaction, but only runs after the
+    // registration has passed the cheap existence/configuration checks above.
+    const passwordHash = temporaryPassword ? await bcrypt.hash(temporaryPassword, 10) : null
     const normalizedPhone = this.normalizePhoneNumber(dto.phoneNumber)
     const code = dto.code.trim().toUpperCase()
     const names = this.splitName(dto.name)
@@ -131,10 +133,10 @@ export class AgentRegistrationService {
   async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
     await this.roleCatalogService.ensureStandardRoles()
 
-    // Resolve immutable inputs and perform bcrypt work before opening the write
-    // transaction. The transaction then contains only conflict detection plus
-    // the user create/update, which shortens lock/connection hold time.
-    const [agent, role, passwordHash] = await Promise.all([
+    // First resolve the Agent and role. Missing/invalid Agent IDs are cheap to
+    // reject and should not consume bcrypt CPU before we know there is a login
+    // that can actually be provisioned.
+    const [agent, role] = await Promise.all([
       this.prisma.agent.findFirst({
         where: { id: agentId, tenantId },
         select: { id: true, tenantId: true, name: true, email: true },
@@ -143,7 +145,6 @@ export class AgentRegistrationService {
         where: { name: AGENT_LOGIN_ROLE },
         select: { id: true },
       }),
-      bcrypt.hash(temporaryPassword, 10),
     ])
 
     if (!agent) throw new NotFoundException('Agent not found')
@@ -155,6 +156,8 @@ export class AgentRegistrationService {
     }
 
     const names = this.splitName(agent.name)
+    // Keep bcrypt outside the write transaction, after all cheap validation.
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10)
 
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({
