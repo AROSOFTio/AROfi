@@ -133,9 +133,8 @@ export class AgentRegistrationService {
   async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
     await this.roleCatalogService.ensureStandardRoles()
 
-    // First resolve the Agent and role. Missing/invalid Agent IDs are cheap to
-    // reject and should not consume bcrypt CPU before we know there is a login
-    // that can actually be provisioned.
+    // Resolve all cheap prerequisites before bcrypt. Provisioning changes only
+    // one User row, so it does not need to hold a database transaction open.
     const [agent, role] = await Promise.all([
       this.prisma.agent.findFirst({
         where: { id: agentId, tenantId },
@@ -155,46 +154,43 @@ export class AgentRegistrationService {
       throw new BadRequestException('Add a login email to this Agent before creating the login')
     }
 
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, tenantId: true, roleId: true },
+    })
+
+    if (existing && (existing.tenantId !== tenantId || existing.roleId !== role.id)) {
+      throw new BadRequestException('This email already belongs to another AROFi user account')
+    }
+
     const names = this.splitName(agent.name)
-    // Keep bcrypt outside the write transaction, after all cheap validation.
     const passwordHash = await bcrypt.hash(temporaryPassword, 10)
 
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.user.findUnique({
-        where: { email },
-        select: { id: true, tenantId: true, roleId: true },
-      })
-
-      if (existing && (existing.tenantId !== tenantId || existing.roleId !== role.id)) {
-        throw new BadRequestException('This email already belongs to another AROFi user account')
-      }
-
-      if (existing) {
-        await tx.user.update({
-          where: { id: existing.id },
-          data: {
-            firstName: names.firstName,
-            lastName: names.lastName,
-            password: passwordHash,
-            isActive: true,
-          },
-        })
-        return { agentId: agent.id, email, loginReady: true, restored: true }
-      }
-
-      await tx.user.create({
+    if (existing) {
+      await this.prisma.user.update({
+        where: { id: existing.id },
         data: {
-          email,
           firstName: names.firstName,
           lastName: names.lastName,
           password: passwordHash,
-          roleId: role.id,
-          tenantId,
+          isActive: true,
         },
       })
+      return { agentId: agent.id, email, loginReady: true, restored: true }
+    }
 
-      return { agentId: agent.id, email, loginReady: true, restored: false }
+    await this.prisma.user.create({
+      data: {
+        email,
+        firstName: names.firstName,
+        lastName: names.lastName,
+        password: passwordHash,
+        roleId: role.id,
+        tenantId,
+      },
     })
+
+    return { agentId: agent.id, email, loginReady: true, restored: false }
   }
 
   private splitName(name: string) {
