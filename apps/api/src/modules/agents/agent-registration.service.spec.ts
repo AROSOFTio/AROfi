@@ -14,7 +14,6 @@ describe('AgentRegistrationService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'user-1' }),
-        update: jest.fn().mockResolvedValue({ id: 'user-1' }),
       },
     }
 
@@ -22,6 +21,11 @@ describe('AgentRegistrationService', () => {
       tenant: { findUnique: jest.fn().mockResolvedValue(tenant) },
       role: { findUnique: jest.fn().mockResolvedValue({ id: 'role-agent' }) },
       agent: { findFirst: jest.fn() },
+      user: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'user-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'user-1' }),
+      },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as any
     const roleCatalog = { ensureStandardRoles: jest.fn().mockResolvedValue(undefined) } as any
@@ -80,14 +84,14 @@ describe('AgentRegistrationService', () => {
   })
 
   it('restores an existing matching VoucherAgent login for a legacy Agent profile', async () => {
-    const { service, prisma, tx } = createHarness()
+    const { service, prisma } = createHarness()
     prisma.agent.findFirst.mockResolvedValue({
       id: 'agent-1',
       tenantId: tenant.id,
       name: 'Kampala Agent',
       email: 'agent@example.com',
     })
-    tx.user.findUnique.mockResolvedValue({
+    prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
       tenantId: tenant.id,
       roleId: 'role-agent',
@@ -99,11 +103,11 @@ describe('AgentRegistrationService', () => {
       where: { name: 'VoucherAgent' },
       select: { id: true },
     })
-    expect(tx.user.update).toHaveBeenCalledWith({
+    expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'user-1' },
       data: expect.objectContaining({ isActive: true }),
     })
-    expect(tx.user.create).not.toHaveBeenCalled()
+    expect(prisma.user.create).not.toHaveBeenCalled()
     expect(result).toEqual(expect.objectContaining({ loginReady: true, restored: true }))
   })
 })
