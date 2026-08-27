@@ -19,24 +19,41 @@ export class DashboardSummaryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSummary() {
-    const [openSupportTickets, criticalSupportTickets, criticalAudits, pendingComplianceReviews] =
-      await Promise.all([
-        this.prisma.supportTicket.count({
-          where: { status: SupportTicketStatus.OPEN },
-        }),
-        this.prisma.supportTicket.count({
-          where: {
-            priority: SupportTicketPriority.CRITICAL,
-            status: { not: SupportTicketStatus.RESOLVED },
-          },
-        }),
-        this.prisma.auditLog.count({
-          where: { severity: AuditSeverity.CRITICAL },
-        }),
-        this.prisma.complianceProfile.count({
-          where: { status: ComplianceStatus.PENDING_REVIEW },
-        }),
-      ])
+    const [supportTicketGroups, criticalAudits, pendingComplianceReviews] = await Promise.all([
+      this.prisma.supportTicket.groupBy({
+        by: ['status', 'priority'],
+        where: {
+          OR: [
+            { status: SupportTicketStatus.OPEN },
+            {
+              priority: SupportTicketPriority.CRITICAL,
+              status: { not: SupportTicketStatus.RESOLVED },
+            },
+          ],
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.auditLog.count({
+        where: { severity: AuditSeverity.CRITICAL },
+      }),
+      this.prisma.complianceProfile.count({
+        where: { status: ComplianceStatus.PENDING_REVIEW },
+      }),
+    ])
+
+    let openSupportTickets = 0
+    let criticalSupportTickets = 0
+    for (const group of supportTicketGroups) {
+      if (group.status === SupportTicketStatus.OPEN) {
+        openSupportTickets += group._count._all
+      }
+      if (
+        group.priority === SupportTicketPriority.CRITICAL &&
+        group.status !== SupportTicketStatus.RESOLVED
+      ) {
+        criticalSupportTickets += group._count._all
+      }
+    }
 
     return {
       support: {
