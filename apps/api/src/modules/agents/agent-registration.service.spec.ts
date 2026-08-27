@@ -8,11 +8,9 @@ describe('AgentRegistrationService', () => {
   function createHarness() {
     const tx = {
       agent: {
-        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'agent-1', status: 'ACTIVE', ...data })),
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'user-1' }),
       },
     }
@@ -20,7 +18,7 @@ describe('AgentRegistrationService', () => {
     const prisma = {
       tenant: { findUnique: jest.fn().mockResolvedValue(tenant) },
       role: { findUnique: jest.fn().mockResolvedValue({ id: 'role-agent' }) },
-      agent: { findFirst: jest.fn() },
+      agent: { findFirst: jest.fn().mockResolvedValue(null) },
       user: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'user-1' }),
@@ -54,6 +52,11 @@ describe('AgentRegistrationService', () => {
       where: { name: 'VoucherAgent' },
       select: { id: true },
     })
+    expect(prisma.agent.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenantId: tenant.id }),
+      }),
+    )
     expect(tx.agent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -75,12 +78,25 @@ describe('AgentRegistrationService', () => {
   })
 
   it('does not create an Agent when the login email already belongs to a user', async () => {
-    const { service, tx } = createHarness()
-    tx.user.findUnique.mockResolvedValue({ id: 'existing-user' })
+    const { service, prisma, tx } = createHarness()
+    prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' })
 
     await expect(service.register(registration)).rejects.toBeInstanceOf(BadRequestException)
     expect(tx.agent.create).not.toHaveBeenCalled()
     expect(tx.user.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate Agent data before opening the write transaction', async () => {
+    const { service, prisma, tx } = createHarness()
+    prisma.agent.findFirst.mockResolvedValue({
+      code: 'KLA-01',
+      phoneNumber: '256772123456',
+      email: 'agent@example.com',
+    })
+
+    await expect(service.register(registration)).rejects.toBeInstanceOf(BadRequestException)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(tx.agent.create).not.toHaveBeenCalled()
   })
 
   it('restores an existing matching VoucherAgent login for a legacy Agent profile', async () => {

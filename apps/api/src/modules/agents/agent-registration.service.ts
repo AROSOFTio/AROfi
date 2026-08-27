@@ -31,10 +31,14 @@ export class AgentRegistrationService {
 
     await this.roleCatalogService.ensureStandardRoles()
 
-    // Resolve cheap lookup-only inputs first. Do not spend bcrypt CPU for a
-    // registration that will immediately fail because the business or login
-    // role does not exist.
-    const [tenant, loginRole] = await Promise.all([
+    const normalizedPhone = this.normalizePhoneNumber(dto.phoneNumber)
+    const code = dto.code.trim().toUpperCase()
+    const names = this.splitName(dto.name)
+
+    // Resolve all cheap prerequisites and conflicts before spending bcrypt CPU
+    // or opening the write transaction. Database unique constraints below still
+    // protect the race between this preflight and the actual create.
+    const [tenant, loginRole, duplicateAgent, existingUser] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: tenantId },
         select: { id: true, name: true },
@@ -45,55 +49,46 @@ export class AgentRegistrationService {
             select: { id: true },
           })
         : Promise.resolve(null),
+      this.prisma.agent.findFirst({
+        where: {
+          tenantId,
+          OR: [
+            { code },
+            { phoneNumber: normalizedPhone },
+            ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+          ],
+        },
+        select: { code: true, phoneNumber: true, email: true },
+      }),
+      email && temporaryPassword
+        ? this.prisma.user.findUnique({
+            where: { email },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
     ])
 
     if (!tenant) throw new NotFoundException('Business not found')
     if (email && temporaryPassword && !loginRole) {
       throw new BadRequestException('VoucherAgent login role is not configured')
     }
+    if (duplicateAgent?.code === code) {
+      throw new BadRequestException('An agent with this code already exists for this business')
+    }
+    if (duplicateAgent?.phoneNumber === normalizedPhone) {
+      throw new BadRequestException('An agent with this phone number already exists for this business')
+    }
+    if (email && duplicateAgent?.email?.trim().toLowerCase() === email) {
+      throw new BadRequestException('An agent with this login email already exists for this business')
+    }
+    if (existingUser) {
+      throw new BadRequestException('A user with this email already exists')
+    }
 
-    // Bcrypt remains outside the write transaction, but only runs after the
-    // registration has passed the cheap existence/configuration checks above.
     const passwordHash = temporaryPassword ? await bcrypt.hash(temporaryPassword, 10) : null
-    const normalizedPhone = this.normalizePhoneNumber(dto.phoneNumber)
-    const code = dto.code.trim().toUpperCase()
-    const names = this.splitName(dto.name)
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const [duplicateAgent, existingUser] = await Promise.all([
-          tx.agent.findFirst({
-            where: {
-              tenantId,
-              OR: [
-                { code },
-                { phoneNumber: normalizedPhone },
-                ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
-              ],
-            },
-            select: { code: true, phoneNumber: true, email: true },
-          }),
-          email && passwordHash
-            ? tx.user.findUnique({
-                where: { email },
-                select: { id: true },
-              })
-            : Promise.resolve(null),
-        ])
-
-        if (duplicateAgent?.code === code) {
-          throw new BadRequestException('An agent with this code already exists for this business')
-        }
-        if (duplicateAgent?.phoneNumber === normalizedPhone) {
-          throw new BadRequestException('An agent with this phone number already exists for this business')
-        }
-        if (email && duplicateAgent?.email?.trim().toLowerCase() === email) {
-          throw new BadRequestException('An agent with this login email already exists for this business')
-        }
-        if (existingUser) {
-          throw new BadRequestException('A user with this email already exists')
-        }
-
         const agent = await tx.agent.create({
           data: {
             tenantId,
@@ -130,10 +125,6 @@ export class AgentRegistrationService {
         }
       })
     } catch (error) {
-      // Preflight duplicate checks give specific messages in the normal path.
-      // Keep the transaction race-safe as well: if another request inserts the
-      // same unique Agent/User value between our check and create, return a
-      // controlled client error instead of leaking a Prisma P2002 as a 500.
       if (this.isUniqueConstraintError(error)) {
         throw new BadRequestException('Agent code, phone number, or login email is already in use')
       }
@@ -144,8 +135,6 @@ export class AgentRegistrationService {
   async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
     await this.roleCatalogService.ensureStandardRoles()
 
-    // Resolve all cheap prerequisites before bcrypt. Provisioning changes only
-    // one User row, so it does not need to hold a database transaction open.
     const [agent, role] = await Promise.all([
       this.prisma.agent.findFirst({
         where: { id: agentId, tenantId },
@@ -197,9 +186,6 @@ export class AgentRegistrationService {
     } catch (error) {
       if (!this.isUniqueConstraintError(error)) throw error
 
-      // Another provisioning request may have created this email after the
-      // initial lookup. Re-read it and only restore it when it is the exact
-      // same tenant + VoucherAgent identity; never overwrite another account.
       const concurrentUser = await this.prisma.user.findUnique({
         where: { email },
         select: { id: true, tenantId: true, roleId: true },
