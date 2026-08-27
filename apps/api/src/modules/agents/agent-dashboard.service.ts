@@ -132,6 +132,7 @@ export class AgentDashboardService {
         where: {
           tenantId,
           agentId: agent.id,
+          status: { not: CommissionStatus.REVERSED },
           sourceTransaction: {
             tenantId,
             agentId: agent.id,
