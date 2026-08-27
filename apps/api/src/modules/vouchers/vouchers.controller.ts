@@ -11,6 +11,7 @@ import { CreateVoucherBatchDto } from './dto/create-voucher-batch.dto'
 import { CreateVoucherTemplateDto } from './dto/create-voucher-template.dto'
 import { RedeemVoucherDto } from './dto/redeem-voucher.dto'
 import { UpdateVoucherTemplateDto } from './dto/update-voucher-template.dto'
+import { VoucherOverviewService } from './voucher-overview.service'
 import { VoucherRedemptionSaleService } from './voucher-redemption-sale.service'
 import { VouchersService } from './vouchers.service'
 
@@ -19,6 +20,7 @@ import { VouchersService } from './vouchers.service'
 export class VouchersController {
   constructor(
     private readonly vouchersService: VouchersService,
+    private readonly voucherOverview: VoucherOverviewService,
     private readonly voucherRedemptionSales: VoucherRedemptionSaleService,
     private readonly accessScope: AccessScopeService,
   ) {}
@@ -28,7 +30,7 @@ export class VouchersController {
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.vouchersService.getOverview(scopedTenantId)
+    return this.voucherOverview.getOverview(scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.vouchersRead)
@@ -71,6 +73,13 @@ export class VouchersController {
       ...dto,
       tenantId,
     })
+  }
+
+  @RequirePermissions(PERMISSIONS.vouchersRead)
+  @Get('batches/:batchId/preview')
+  getBatchPreview(@CurrentUser() user: AuthenticatedAdminUser, @Param('batchId') batchId: string) {
+    const tenantId = this.accessScope.resolveTenantScope(user)
+    return this.voucherOverview.getBatchPreview(batchId, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.vouchersRead)
