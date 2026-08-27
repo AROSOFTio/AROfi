@@ -34,10 +34,22 @@ export class AgentDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMyDashboard(email: string, tenantId: string) {
+    const normalizedEmail = email.trim()
     const agent = await this.prisma.agent.findFirst({
       where: {
         tenantId,
-        email: { equals: email.trim(), mode: 'insensitive' },
+        email: { equals: normalizedEmail, mode: 'insensitive' },
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        status: true,
+        commissionRateBps: true,
+        floatLimitUgx: true,
+        notes: true,
       },
       orderBy: { createdAt: 'asc' },
     })
