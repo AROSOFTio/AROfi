@@ -10,6 +10,7 @@ import { CreateRouterDto } from './dto/create-router.dto'
 import { CreateRouterGroupDto } from './dto/create-router-group.dto'
 import { UpdateRouterDto } from './dto/update-router.dto'
 import { RouterLifecycleService } from './router-lifecycle.service'
+import { RouterOverviewService } from './router-overview.service'
 import { RoutersService } from './routers.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -17,6 +18,7 @@ import { RoutersService } from './routers.service'
 export class RoutersController {
   constructor(
     private readonly routersService: RoutersService,
+    private readonly routerOverviewService: RouterOverviewService,
     private readonly routerLifecycleService: RouterLifecycleService,
     private readonly accessScope: AccessScopeService,
   ) {}
@@ -26,7 +28,7 @@ export class RoutersController {
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.routersService.getOverview(scopedTenantId)
+    return this.routerOverviewService.getOverview(scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
@@ -125,8 +127,6 @@ export class RoutersController {
       return this.routersService.manuallyCompensateSelectedOutage(routerId, activationIds, tenantId)
     }
 
-    // Preserve the existing endpoint behavior for older dashboard builds:
-    // a request without activationIds still compensates the latest outage.
     return this.routersService.manuallyCompensateLatestOutage(routerId, tenantId)
   }
 

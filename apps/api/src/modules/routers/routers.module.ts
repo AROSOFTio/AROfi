@@ -11,6 +11,7 @@ import { MikrotikService } from './mikrotik.service'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RouterLifecycleService } from './router-lifecycle.service'
+import { RouterOverviewService } from './router-overview.service'
 import { MikrotikController } from './mikrotik.controller'
 import { RoutersController } from './routers.controller'
 import { RoutersService } from './routers.service'
@@ -23,6 +24,7 @@ import { RemoteProxyService } from './remote-proxy.service'
     RouterCredentialsService,
     MikrotikService,
     RoutersService,
+    RouterOverviewService,
     RouterLifecycleService,
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
