@@ -35,7 +35,21 @@ export class AgentOverviewService {
   async getOverview(tenantId?: string) {
     const agents = await this.prisma.agent.findMany({
       where: tenantId ? { tenantId } : undefined,
-      include: { tenant: { select: { id: true, name: true } } },
+      select: {
+        id: true,
+        tenantId: true,
+        code: true,
+        name: true,
+        phoneNumber: true,
+        email: true,
+        type: true,
+        status: true,
+        territory: true,
+        commissionRateBps: true,
+        floatLimitUgx: true,
+        notes: true,
+        tenant: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 500,
     })
