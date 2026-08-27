@@ -179,6 +179,14 @@ export class AgentOverviewService {
         .map((user) => `${user.tenantId}:${user.email.trim().toLowerCase()}`),
     )
 
+    const summary = {
+      activeAgents: 0,
+      totalSalesUgx: 0,
+      mobileMoneySalesUgx: 0,
+      totalCommissionUgx: 0,
+      cashToCollectUgx: 0,
+    }
+
     const result = agents.map((agent) => {
       const sales = saleTotals.get(agent.id) ?? { total: 0, cash: 0, mobileMoney: 0 }
       const commissionUgx = commissionTotals.get(agent.id) ?? 0
@@ -186,6 +194,12 @@ export class AgentOverviewService {
       const cashToCollectUgx = Math.max(0, cashLiability - (settlementTotals.get(agent.id) ?? 0))
       const parsedPolicy = this.readPolicy(agent.notes)
       const normalizedEmail = agent.email?.trim().toLowerCase()
+
+      if (agent.status === AgentStatus.ACTIVE) summary.activeAgents += 1
+      summary.totalSalesUgx += sales.total
+      summary.mobileMoneySalesUgx += sales.mobileMoney
+      summary.totalCommissionUgx += commissionUgx
+      summary.cashToCollectUgx += cashToCollectUgx
 
       return {
         id: agent.id,
@@ -212,13 +226,7 @@ export class AgentOverviewService {
     })
 
     return {
-      summary: {
-        activeAgents: agents.filter((agent) => agent.status === AgentStatus.ACTIVE).length,
-        totalSalesUgx: result.reduce((sum, item) => sum + item.totalSalesUgx, 0),
-        mobileMoneySalesUgx: result.reduce((sum, item) => sum + item.mobileMoneySalesUgx, 0),
-        totalCommissionUgx: result.reduce((sum, item) => sum + item.commissionUgx, 0),
-        cashToCollectUgx: result.reduce((sum, item) => sum + item.cashToCollectUgx, 0),
-      },
+      summary,
       agents: result,
     }
   }
