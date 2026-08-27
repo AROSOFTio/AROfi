@@ -19,3 +19,18 @@ CREATE INDEX IF NOT EXISTS idx_networksession_router_status_accounting
 -- materializing every voucher row.
 CREATE INDEX IF NOT EXISTS idx_voucher_batch_status
   ON "Voucher"("batchId", status);
+
+-- Agent overview aggregates completed sales by Agent/channel. Keeping the
+-- equality predicates together avoids scanning unrelated historical billing
+-- rows before PostgreSQL performs the group-by.
+CREATE INDEX IF NOT EXISTS idx_billing_agent_status_type_channel
+  ON "BillingTransaction"("agentId", status, type, channel);
+
+-- Commission totals are grouped per Agent and exclude reversed rows. This
+-- index keeps Agent + status adjacent for the aggregate read path.
+CREATE INDEX IF NOT EXISTS idx_agentcommission_agent_status
+  ON "AgentCommission"("agentId", status);
+
+-- Cash accountability totals only consider completed Agent settlements.
+CREATE INDEX IF NOT EXISTS idx_settlement_agent_status
+  ON "Settlement"("agentId", status);
