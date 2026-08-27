@@ -45,7 +45,6 @@ export default function RouterObservabilityPage() {
     'router.stale',
     'router.offline',
     'session.started',
-    'session.updated',
     'session.stopped',
     'disconnect.failed',
   ], 5_000)
