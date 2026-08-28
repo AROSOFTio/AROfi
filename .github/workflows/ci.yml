@@ -153,7 +153,30 @@ jobs:
 
       - name: Generate Prisma Client
         shell: powershell
-        run: npx prisma generate --schema=apps/api/prisma/schema.prisma
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $schemaPath = 'apps/api/prisma/schema.prisma'
+          $ciSchemaPath = 'apps/api/prisma/schema.ci.prisma'
+          $schema = Get-Content -LiteralPath $schemaPath -Raw
+          $productionTargets = 'binaryTargets = ["native", "linux-musl-openssl-3.0.x"]'
+
+          if (-not $schema.Contains($productionTargets)) {
+            throw 'Expected Prisma production binaryTargets were not found; refusing to generate from an unexpected schema.'
+          }
+
+          # This verification job runs on Windows. Keep the real schema unchanged for
+          # Linux production, but do not make PR CI depend on binaries.prisma.sh just
+          # to download a Linux engine that cannot be used on this runner.
+          $schema = $schema.Replace($productionTargets, 'binaryTargets = ["native"]')
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [System.IO.File]::WriteAllText($ciSchemaPath, $schema, $utf8NoBom)
+
+          try {
+            & npx.cmd prisma generate --schema=$ciSchemaPath
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-Item -LiteralPath $ciSchemaPath -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Build all apps
         shell: powershell
