@@ -72,67 +72,70 @@ export class HotspotsService {
 
     const hotspotIds = hotspots.map((hotspot) => hotspot.id)
 
-    const [activeSessionGroups, activationGroups, redemptionGroups, sessionActivityGroups] =
-      await Promise.all([
-        this.prisma.networkSession.groupBy({
-          by: ['hotspotId'],
-          where: {
-            hotspotId: {
-              in: hotspotIds,
-            },
-            status: SessionStatus.ACTIVE,
+    const [sessionGroups, activationGroups, redemptionGroups] = await Promise.all([
+      this.prisma.networkSession.groupBy({
+        by: ['hotspotId', 'status'],
+        where: {
+          hotspotId: {
+            in: hotspotIds,
           },
-          _count: {
-            _all: true,
+        },
+        _count: {
+          _all: true,
+        },
+        _max: {
+          startedAt: true,
+          lastAccountingAt: true,
+        },
+      }),
+      this.prisma.packageActivation.groupBy({
+        by: ['hotspotId', 'status'],
+        where: {
+          hotspotId: {
+            in: hotspotIds,
           },
-        }),
-        this.prisma.packageActivation.groupBy({
-          by: ['hotspotId', 'status'],
-          where: {
-            hotspotId: {
-              in: hotspotIds,
-            },
+        },
+        _count: {
+          _all: true,
+        },
+        _max: {
+          startedAt: true,
+        },
+      }),
+      this.prisma.voucherRedemption.groupBy({
+        by: ['hotspotId'],
+        where: {
+          hotspotId: {
+            in: hotspotIds,
           },
-          _count: {
-            _all: true,
-          },
-          _max: {
-            startedAt: true,
-          },
-        }),
-        this.prisma.voucherRedemption.groupBy({
-          by: ['hotspotId'],
-          where: {
-            hotspotId: {
-              in: hotspotIds,
-            },
-          },
-          _count: {
-            _all: true,
-          },
-          _max: {
-            createdAt: true,
-          },
-        }),
-        this.prisma.networkSession.groupBy({
-          by: ['hotspotId'],
-          where: {
-            hotspotId: {
-              in: hotspotIds,
-            },
-          },
-          _max: {
-            startedAt: true,
-            lastAccountingAt: true,
-          },
-        }),
-      ])
+        },
+        _count: {
+          _all: true,
+        },
+        _max: {
+          createdAt: true,
+        },
+      }),
+    ])
 
-    const activeSessionsByHotspot = new Map(
-      activeSessionGroups
-        .filter((group) => Boolean(group.hotspotId))
-        .map((group) => [group.hotspotId as string, group._count._all]),
-    )
+    const activeSessionsByHotspot = new Map<string, number>()
+    const sessionActivityByHotspot = new Map<string, Date | null>()
+    for (const group of sessionGroups) {
+      if (!group.hotspotId) continue
+      const hotspotId = group.hotspotId
+      if (group.status === SessionStatus.ACTIVE) {
+        activeSessionsByHotspot.set(hotspotId, group._count._all)
+      }
+      sessionActivityByHotspot.set(
+        hotspotId,
+        this.pickLatestDate(
+          sessionActivityByHotspot.get(hotspotId) ?? null,
+          group._max.startedAt,
+          group._max.lastAccountingAt,
+        ),
+      )
+    }
+
     const activationsByHotspot = new Map<string, number>()
     const activeActivationsByHotspot = new Map<string, number>()
     const activationActivityByHotspot = new Map<string, Date | null>()
@@ -154,18 +157,11 @@ export class HotspotsService {
         ),
       )
     }
+
     const redemptionsByHotspot = new Map(
       redemptionGroups
         .filter((group) => Boolean(group.hotspotId))
         .map((group) => [group.hotspotId as string, group._count._all]),
-    )
-    const sessionActivityByHotspot = new Map(
-      sessionActivityGroups
-        .filter((group) => Boolean(group.hotspotId))
-        .map((group) => [
-          group.hotspotId as string,
-          this.pickLatestDate(group._max.startedAt, group._max.lastAccountingAt),
-        ]),
     )
     const redemptionActivityByHotspot = new Map(
       redemptionGroups
