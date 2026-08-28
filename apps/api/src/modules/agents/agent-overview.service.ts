@@ -24,6 +24,11 @@ type AgentVoucherStockRow = {
   availableCount: bigint
 }
 
+type AgentLoginGroup = {
+  tenantId: string
+  emails: string[]
+}
+
 /**
  * Read-only management overview for Agents.
  *
@@ -153,19 +158,7 @@ export class AgentOverviewService {
           AND vouchers.status IN ('GENERATED', 'PRINTED')
         GROUP BY batches."agentId"
       `),
-      loginGroups.length
-        ? this.prisma.user.findMany({
-            where: {
-              isActive: true,
-              role: { name: 'VoucherAgent' },
-              OR: loginGroups.map((group) => ({
-                tenantId: group.tenantId,
-                email: { in: group.emails, mode: 'insensitive' as const },
-              })),
-            },
-            select: { tenantId: true, email: true },
-          })
-        : Promise.resolve([]),
+      this.findLoginUsers(loginGroups),
     ])
 
     const saleTotals = new Map<string, { total: number; cash: number; mobileMoney: number }>()
@@ -255,6 +248,59 @@ export class AgentOverviewService {
       summary,
       agents: result,
     }
+  }
+
+  private async findLoginUsers(loginGroups: AgentLoginGroup[]) {
+    if (loginGroups.length === 0) return []
+
+    const select = { tenantId: true, email: true } as const
+    const baseWhere = {
+      isActive: true,
+      role: { name: 'VoucherAgent' },
+    } satisfies Prisma.UserWhereInput
+
+    // Normal Agent accounts are provisioned with the exact profile email. Keep
+    // the common path index-friendly and only use case-insensitive matching for
+    // legacy rows whose stored casing differs from the Agent profile.
+    const exactUsers = await this.prisma.user.findMany({
+      where: {
+        ...baseWhere,
+        OR: loginGroups.map((group) => ({
+          tenantId: group.tenantId,
+          email: { in: group.emails },
+        })),
+      },
+      select,
+    })
+
+    const exactKeys = new Set(
+      exactUsers
+        .filter((user) => user.tenantId)
+        .map((user) => `${user.tenantId}:${user.email.trim().toLowerCase()}`),
+    )
+    const legacyGroups = loginGroups
+      .map((group) => ({
+        tenantId: group.tenantId,
+        emails: group.emails.filter(
+          (email) => !exactKeys.has(`${group.tenantId}:${email.trim().toLowerCase()}`),
+        ),
+      }))
+      .filter((group) => group.emails.length > 0)
+
+    if (legacyGroups.length === 0) return exactUsers
+
+    const legacyUsers = await this.prisma.user.findMany({
+      where: {
+        ...baseWhere,
+        OR: legacyGroups.map((group) => ({
+          tenantId: group.tenantId,
+          email: { in: group.emails, mode: 'insensitive' as const },
+        })),
+      },
+      select,
+    })
+
+    return [...exactUsers, ...legacyUsers]
   }
 
   private readPolicy(notes?: string | null): { humanNotes: string; policy: AgentSalesPolicy } {
