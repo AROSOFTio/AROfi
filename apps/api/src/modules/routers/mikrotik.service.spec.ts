@@ -157,7 +157,7 @@ describe('MikrotikService', () => {
     const html = service.buildLoginHtml('router-key-123', 'http://tenantname.wifi/login')
 
     expect(html).toContain('var API="https://wifi.example.com"')
-    expect(html).toContain('APIFB="http://95.111.234.34:18080"')
+    expect(html).toContain('APIFB="http://wifi.example.com:18080"')
     expect(html).toContain('function apiCall(m,p,d,cb)')
     expect(html).toContain('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.')
     expect(html).toContain('RKEY="router-key-123"')
