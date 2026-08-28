@@ -1,8 +1,6 @@
 import { RouterStatus } from '@prisma/client'
 import { RoutersService } from './routers.service'
 
-// resolveRouterLiveState is private; exercised via `as any` the same way the
-// existing routers.service.spec.ts does for other private methods.
 function buildService() {
   return new RoutersService({} as never, {} as never, {} as never, {} as never, { publish: jest.fn() } as never, {} as never, {} as never, { sendText: jest.fn() } as never)
 }
@@ -18,7 +16,9 @@ describe('RoutersService router liveness state machine', () => {
 
   afterAll(() => {
     if (previousLive !== undefined) process.env.ROUTER_LIVE_WINDOW_SECONDS = previousLive
+    else delete process.env.ROUTER_LIVE_WINDOW_SECONDS
     if (previousStale !== undefined) process.env.ROUTER_STALE_WINDOW_SECONDS = previousStale
+    else delete process.env.ROUTER_STALE_WINDOW_SECONDS
   })
 
   function resolve(secondsAgo: number | null, status: RouterStatus = RouterStatus.HEALTHY) {
@@ -38,18 +38,18 @@ describe('RoutersService router liveness state machine', () => {
     )
   }
 
-  it('reports LIVE within the live window (~2 missed 5s heartbeats)', () => {
+  it('reports LIVE within the effective anti-flap live window', () => {
     expect(resolve(5).liveState).toBe('LIVE')
-    expect(resolve(11).liveState).toBe('LIVE')
+    expect(resolve(59).liveState).toBe('LIVE')
   })
 
-  it('reports STALE (suspected offline) between the live and stale windows', () => {
-    expect(resolve(15).liveState).toBe('STALE')
-    expect(resolve(29).liveState).toBe('STALE')
+  it('reports STALE between the effective 60s live and 300s offline windows', () => {
+    expect(resolve(61).liveState).toBe('STALE')
+    expect(resolve(299).liveState).toBe('STALE')
   })
 
-  it('reports OFFLINE (confirmed) beyond the stale window', () => {
-    expect(resolve(31).liveState).toBe('OFFLINE')
+  it('reports OFFLINE only after the five-minute confirmation window', () => {
+    expect(resolve(301).liveState).toBe('OFFLINE')
     expect(resolve(600).liveState).toBe('OFFLINE')
   })
 
@@ -63,14 +63,14 @@ describe('RoutersService router liveness state machine', () => {
 })
 
 describe('RoutersService heartbeat publishes realtime events', () => {
-  it('publishes router.heartbeat on every beat and router.online after a gap', async () => {
+  it('publishes router.heartbeat on every beat and router.online after a confirmed signal gap', async () => {
     const router = {
       id: 'router-1',
       tenantId: 'tenant-1',
       status: RouterStatus.DEGRADED,
       onboardingStatus: 'WAITING_FOR_RADIUS',
       radiusNasIpAddress: '203.0.113.10',
-      lastSeenAt: new Date(Date.now() - 60_000), // stale beyond live window
+      lastSeenAt: new Date(Date.now() - 120_000),
     }
     const prisma = {
       router: {
@@ -95,7 +95,7 @@ describe('RoutersService heartbeat publishes realtime events', () => {
       status: RouterStatus.HEALTHY,
       onboardingStatus: 'WAITING_FOR_RADIUS',
       radiusNasIpAddress: '203.0.113.10',
-      lastSeenAt: new Date(Date.now() - 5_000), // fresh, within live window
+      lastSeenAt: new Date(Date.now() - 5_000),
     }
     const prisma = {
       router: {

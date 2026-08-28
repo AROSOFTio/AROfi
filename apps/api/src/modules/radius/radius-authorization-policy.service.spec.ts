@@ -28,6 +28,9 @@ describe('RadiusAuthorizationPolicyService', () => {
       packageActivation: {
         update: jest.fn(),
       },
+      radAcct: {
+        findFirst: jest.fn().mockResolvedValue({ radacctid: BigInt(1) }),
+      },
       networkSession: {
         findFirst: jest.fn().mockResolvedValue(overrides.activeSession ?? null),
       },

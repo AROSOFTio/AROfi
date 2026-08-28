@@ -38,7 +38,7 @@ describe('BillingPostingService', () => {
 
     expect(posting.feeAmountUgx).toBe(20)
     expect(posting.netAmountUgx).toBe(980)
-    expect(posting.walletDeltaUgx).toBe(980)
+    expect(posting.walletDeltaUgx).toBe(-20)
     expect(posting.feeBasisPoints).toBe(200)
     expect(posting.feeSource).toBe('GLOBAL_DEFAULT')
     expect(totalDebits).toBe(totalCredits)

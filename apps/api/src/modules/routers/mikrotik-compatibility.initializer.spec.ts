@@ -41,7 +41,7 @@ function baseGeneratedScript() {
 describe('MikrotikCompatibilityInitializer', () => {
   it('keeps the proven base radio block and appends compatibility after it', () => {
     const mutableService = {
-      buildProvisioningScript: jest.fn(() => baseGeneratedScript()),
+      buildProvisioningScript: jest.fn((_input?: unknown) => baseGeneratedScript()),
     }
     const initializer = new MikrotikCompatibilityInitializer(
       mutableService as unknown as MikrotikService,
@@ -69,7 +69,7 @@ describe('MikrotikCompatibilityInitializer', () => {
 
   it('uses the selected WAN and preserves only one management port on wired routers', () => {
     const mutableService = {
-      buildProvisioningScript: jest.fn(() => baseGeneratedScript()),
+      buildProvisioningScript: jest.fn((_input?: unknown) => baseGeneratedScript()),
     }
     const initializer = new MikrotikCompatibilityInitializer(
       mutableService as unknown as MikrotikService,
@@ -93,7 +93,7 @@ describe('MikrotikCompatibilityInitializer', () => {
 
   it('adds WAN and callback fallbacks without making setup fatal', () => {
     const mutableService = {
-      buildProvisioningScript: jest.fn(() => baseGeneratedScript()),
+      buildProvisioningScript: jest.fn((_input?: unknown) => baseGeneratedScript()),
     }
     const initializer = new MikrotikCompatibilityInitializer(
       mutableService as unknown as MikrotikService,
