@@ -52,7 +52,6 @@ export class AgentDashboardService {
         floatLimitUgx: true,
         notes: true,
       },
-      orderBy: { createdAt: 'asc' },
     })
 
     if (!agent) {
