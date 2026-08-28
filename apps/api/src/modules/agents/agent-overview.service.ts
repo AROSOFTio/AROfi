@@ -73,10 +73,10 @@ export class AgentOverviewService {
       }
     }
 
-    const agentEmails = agents
-      .map((agent) => agent.email?.trim())
-      .filter((email): email is string => Boolean(email))
-    const tenantIds = Array.from(new Set(agents.map((agent) => agent.tenantId)))
+    const loginPairs = agents.flatMap((agent) => {
+      const email = agent.email?.trim()
+      return email ? [{ tenantId: agent.tenantId, email }] : []
+    })
 
     const completedSalesWhere = {
       agentId: { in: ids },
@@ -136,13 +136,15 @@ export class AgentOverviewService {
           AND vouchers.status IN ('GENERATED', 'PRINTED')
         GROUP BY batches."agentId"
       `),
-      agentEmails.length
+      loginPairs.length
         ? this.prisma.user.findMany({
             where: {
               isActive: true,
-              tenantId: { in: tenantIds },
-              email: { in: agentEmails, mode: 'insensitive' },
               role: { name: 'VoucherAgent' },
+              OR: loginPairs.map((pair) => ({
+                tenantId: pair.tenantId,
+                email: { equals: pair.email, mode: 'insensitive' as const },
+              })),
             },
             select: { tenantId: true, email: true },
           })
