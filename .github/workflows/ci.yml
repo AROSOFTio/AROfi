@@ -79,8 +79,6 @@ jobs:
         shell: powershell
         run: npm ci
 
-      # Keep this list in the same order as deploy.yml and Dockerfile.components.
-      # CI must verify the same source-patch pipeline that production builds use.
       - name: Apply guarded production source patches
         shell: powershell
         run: |
