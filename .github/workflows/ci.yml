@@ -92,34 +92,8 @@ jobs:
           NPM_CONFIG_FETCH_TIMEOUT: '60000'
         run: |
           $ErrorActionPreference = 'Stop'
-          $npm = (Get-Command npm.cmd).Source
-
-          for ($attempt = 1; $attempt -le 2; $attempt++) {
-            Write-Host "npm ci attempt $attempt of 2"
-            $command = "`"$npm`" ci --prefer-offline --no-audit --no-fund --progress=false"
-            $process = Start-Process -FilePath $env:ComSpec `
-              -ArgumentList @('/d', '/s', '/c', $command) `
-              -NoNewWindow -PassThru
-
-            if ($process.WaitForExit(360000)) {
-              $process.Refresh()
-              $exitCode = $process.ExitCode
-              if ($exitCode -eq 0) {
-                Write-Host "npm ci completed successfully"
-                exit 0
-              }
-              Write-Warning "npm ci attempt $attempt failed with exit code $exitCode"
-            } else {
-              Write-Warning "npm ci attempt $attempt produced no completion within 6 minutes; terminating process tree"
-              & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
-            }
-
-            if ($attempt -lt 2) {
-              Start-Sleep -Seconds 10
-            }
-          }
-
-          throw 'npm ci failed or stalled twice'
+          & npm.cmd ci --prefer-offline --no-audit --no-fund --progress=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Apply guarded production source patches
         shell: powershell
