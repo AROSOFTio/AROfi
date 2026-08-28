@@ -33,10 +33,39 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Setup portable Python 3.12
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pythonVersion = '3.12.10'
+          $pythonDir = Join-Path $env:RUNNER_TEMP "python-$pythonVersion-portable"
+          $pythonExe = Join-Path $pythonDir 'python.exe'
+
+          if (-not (Test-Path $pythonExe)) {
+            $archive = Join-Path $env:RUNNER_TEMP "python-$pythonVersion-embed-amd64.zip"
+            if (Test-Path $pythonDir) {
+              Remove-Item $pythonDir -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $pythonDir -Force | Out-Null
+
+            & curl.exe -fL --retry 3 --retry-delay 2 `
+              "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip" `
+              -o $archive
+            if ($LASTEXITCODE -ne 0) {
+              throw "Portable Python download failed with exit code $LASTEXITCODE"
+            }
+
+            Expand-Archive -LiteralPath $archive -DestinationPath $pythonDir -Force
+          }
+
+          if (-not (Test-Path $pythonExe)) {
+            throw "Portable Python executable was not found at $pythonExe"
+          }
+
+          $pythonDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PYTHONUTF8=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $pythonExe --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Cache Turborepo
         uses: actions/cache@v4
