@@ -4,9 +4,7 @@ import {
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
-  CommissionStatus,
   Prisma,
-  SettlementStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
@@ -22,6 +20,13 @@ type AgentSalesPolicy = {
 type AgentVoucherStockRow = {
   agentId: string
   availableCount: bigint
+}
+
+type AgentFinancialAggregateRow = {
+  agentId: string
+  totalCommissionUgx: bigint
+  cashCommissionUgx: bigint
+  cashSettledUgx: bigint
 }
 
 type AgentLoginGroup = {
@@ -99,52 +104,60 @@ export class AgentOverviewService {
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
     }
 
-    const [
-      salesByChannel,
-      commissionsByAgent,
-      cashCommissionsByAgent,
-      settlementsByAgent,
-      voucherStockByAgent,
-      loginUsers,
-    ] = await Promise.all([
+    const [salesByChannel, financialsByAgent, voucherStockByAgent, loginUsers] = await Promise.all([
       this.prisma.billingTransaction.groupBy({
         by: ['agentId', 'channel'],
         where: completedSalesWhere,
         _sum: { grossAmountUgx: true },
       }),
-      this.prisma.agentCommission.groupBy({
-        by: ['agentId'],
-        where: {
-          ...tenantScope,
-          agentId: { in: ids },
-          status: { not: CommissionStatus.REVERSED },
-        },
-        _sum: { amountUgx: true },
-      }),
-      this.prisma.agentCommission.groupBy({
-        by: ['agentId'],
-        where: {
-          ...tenantScope,
-          agentId: { in: ids },
-          status: { not: CommissionStatus.REVERSED },
-          sourceTransaction: {
-            ...tenantScope,
-            status: BillingTransactionStatus.COMPLETED,
-            type: BillingTransactionType.VOUCHER_SALE,
-          },
-        },
-        _sum: { amountUgx: true },
-      }),
-      this.prisma.settlement.groupBy({
-        by: ['agentId'],
-        where: {
-          ...tenantScope,
-          agentId: { in: ids },
-          status: SettlementStatus.COMPLETED,
-          notes: { startsWith: CASH_SETTLEMENT_MARKER },
-        },
-        _sum: { payableAmountUgx: true },
-      }),
+      // Commission totals, cash-only commission and completed cash remittances
+      // all cover the same Agent set. Fetch the three rollups in one database
+      // round-trip instead of issuing three independent groupBy queries on
+      // every management overview refresh.
+      this.prisma.$queryRaw<AgentFinancialAggregateRow[]>(Prisma.sql`
+        SELECT
+          financial."agentId" AS "agentId",
+          SUM(financial."totalCommissionUgx")::bigint AS "totalCommissionUgx",
+          SUM(financial."cashCommissionUgx")::bigint AS "cashCommissionUgx",
+          SUM(financial."cashSettledUgx")::bigint AS "cashSettledUgx"
+        FROM (
+          SELECT
+            commissions."agentId" AS "agentId",
+            COALESCE(SUM(commissions."amountUgx"), 0)::bigint AS "totalCommissionUgx",
+            COALESCE(SUM(
+              CASE
+                WHEN transactions.type = 'VOUCHER_SALE' AND transactions.status = 'COMPLETED'
+                  THEN commissions."amountUgx"
+                ELSE 0
+              END
+            ), 0)::bigint AS "cashCommissionUgx",
+            0::bigint AS "cashSettledUgx"
+          FROM "AgentCommission" AS commissions
+          INNER JOIN "BillingTransaction" AS transactions
+            ON transactions.id = commissions."sourceTransactionId"
+          WHERE commissions."agentId" IN (${Prisma.join(ids)})
+            AND commissions.status <> 'REVERSED'
+            ${tenantId
+              ? Prisma.sql`AND commissions."tenantId" = ${tenantId} AND transactions."tenantId" = ${tenantId}`
+              : Prisma.empty}
+          GROUP BY commissions."agentId"
+
+          UNION ALL
+
+          SELECT
+            settlements."agentId" AS "agentId",
+            0::bigint AS "totalCommissionUgx",
+            0::bigint AS "cashCommissionUgx",
+            COALESCE(SUM(settlements."payableAmountUgx"), 0)::bigint AS "cashSettledUgx"
+          FROM "Settlement" AS settlements
+          WHERE settlements."agentId" IN (${Prisma.join(ids)})
+            AND settlements.status = 'COMPLETED'
+            AND settlements.notes LIKE ${`${CASH_SETTLEMENT_MARKER}%`}
+            ${tenantId ? Prisma.sql`AND settlements."tenantId" = ${tenantId}` : Prisma.empty}
+          GROUP BY settlements."agentId"
+        ) AS financial
+        GROUP BY financial."agentId"
+      `),
       this.prisma.$queryRaw<AgentVoucherStockRow[]>(Prisma.sql`
         SELECT
           batches."agentId" AS "agentId",
@@ -173,18 +186,12 @@ export class AgentOverviewService {
     }
 
     const commissionTotals = new Map<string, number>()
-    for (const row of commissionsByAgent) {
-      if (row.agentId) commissionTotals.set(row.agentId, row._sum.amountUgx ?? 0)
-    }
-
     const cashCommissionTotals = new Map<string, number>()
-    for (const row of cashCommissionsByAgent) {
-      if (row.agentId) cashCommissionTotals.set(row.agentId, row._sum.amountUgx ?? 0)
-    }
-
     const settlementTotals = new Map<string, number>()
-    for (const row of settlementsByAgent) {
-      if (row.agentId) settlementTotals.set(row.agentId, row._sum.payableAmountUgx ?? 0)
+    for (const row of financialsByAgent) {
+      commissionTotals.set(row.agentId, Number(row.totalCommissionUgx))
+      cashCommissionTotals.set(row.agentId, Number(row.cashCommissionUgx))
+      settlementTotals.set(row.agentId, Number(row.cashSettledUgx))
     }
 
     const voucherStock = new Map<string, number>()
