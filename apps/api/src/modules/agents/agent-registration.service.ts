@@ -24,7 +24,7 @@ export class AgentRegistrationService {
     if (!tenantId) throw new BadRequestException('Business is required')
 
     const email = dto.email?.trim().toLowerCase() || null
-    const temporaryPassword = dto.temporaryPassword?.trim() || null
+    const temporaryPassword = this.normalizeTemporaryPassword(dto.temporaryPassword)
     if (temporaryPassword && !email) {
       throw new BadRequestException('Agent login email is required when a temporary password is supplied')
     }
@@ -133,6 +133,11 @@ export class AgentRegistrationService {
   }
 
   async provisionLogin(agentId: string, tenantId: string, temporaryPassword: string) {
+    const normalizedTemporaryPassword = this.normalizeTemporaryPassword(temporaryPassword)
+    if (!normalizedTemporaryPassword) {
+      throw new BadRequestException('Temporary password is required')
+    }
+
     await this.roleCatalogService.ensureStandardRoles()
 
     const [agent, role] = await Promise.all([
@@ -164,7 +169,7 @@ export class AgentRegistrationService {
     }
 
     const names = this.splitName(agent.name)
-    const passwordHash = await bcrypt.hash(temporaryPassword, 10)
+    const passwordHash = await bcrypt.hash(normalizedTemporaryPassword, 10)
 
     if (existing) {
       await this.restoreLogin(existing.id, names, passwordHash)
@@ -212,7 +217,17 @@ export class AgentRegistrationService {
         password: passwordHash,
         isActive: true,
       },
+      select: { id: true },
     })
+  }
+
+  private normalizeTemporaryPassword(password?: string) {
+    if (password === undefined) return null
+    const normalized = password.trim()
+    if (normalized.length < 8) {
+      throw new BadRequestException('Temporary password must be at least 8 characters')
+    }
+    return normalized
   }
 
   private isUniqueConstraintError(error: unknown) {
