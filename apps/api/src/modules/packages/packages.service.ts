@@ -142,23 +142,28 @@ export class PackagesService {
       ? [tenantId]
       : (await this.prisma.tenant.findMany({ select: { id: true } })).map((tenant) => tenant.id)
 
+    if (tenantIds.length === 0) return
+
+    // The admin catalog can span every tenant. Checking one tenant at a time
+    // turned this into an N+1 read path, so discover all existing trials in one
+    // query and only create rows for the missing tenants.
+    const existingTrials = await this.prisma.package.findMany({
+      where: {
+        tenantId: { in: tenantIds },
+        status: { not: PackageStatus.ARCHIVED },
+        OR: [
+          { isTrialEnabled: true },
+          { code: this.defaultTrialCode },
+          { name: { contains: 'trial', mode: 'insensitive' } },
+        ],
+      },
+      select: { tenantId: true },
+    })
+    const tenantIdsWithTrial = new Set(existingTrials.map((pkg) => pkg.tenantId))
+    const missingTenantIds = tenantIds.filter((id) => !tenantIdsWithTrial.has(id))
+
     await Promise.all(
-      tenantIds.map(async (id) => {
-        const existingTrial = await this.prisma.package.findFirst({
-          where: {
-            tenantId: id,
-            status: { not: PackageStatus.ARCHIVED },
-            OR: [
-              { isTrialEnabled: true },
-              { code: this.defaultTrialCode },
-              { name: { contains: 'trial', mode: 'insensitive' } },
-            ],
-          },
-          select: { id: true },
-        })
-
-        if (existingTrial) return
-
+      missingTenantIds.map(async (id) => {
         try {
           await this.prisma.package.create({
             data: {
