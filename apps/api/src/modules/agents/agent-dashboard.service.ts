@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common'
 import {
+  AgentStatus,
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
@@ -56,6 +57,9 @@ export class AgentDashboardService {
 
     if (!agent) {
       throw new ForbiddenException('Your login is not linked to an agent profile.')
+    }
+    if (agent.status !== AgentStatus.ACTIVE) {
+      throw new ForbiddenException('Your Agent account is not active.')
     }
 
     const startOfToday = new Date()
