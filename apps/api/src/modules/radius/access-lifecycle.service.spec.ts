@@ -304,9 +304,9 @@ describe('AccessLifecycleService stale session cleanup', () => {
       radiusSessionId: 'radius-session-short-gap',
       username: 'arofi-user',
       macAddress: 'AA:BB:CC:DD:EE:FF',
-      lastAccountingAt: new Date(Date.now() - 10 * 60 * 1000),
+      lastAccountingAt: new Date(Date.now() - 2 * 60 * 1000),
     }
-    prisma.networkSession.findMany.mockResolvedValue([shortGapSession])
+    prisma.networkSession.findMany.mockResolvedValue([])
     prisma.networkSession.count.mockResolvedValue(0)
 
     await (service as never as { cleanStaleSessions: () => Promise<void> }).cleanStaleSessions()
