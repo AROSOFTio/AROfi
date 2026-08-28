@@ -232,8 +232,17 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
         where: expect.objectContaining({ id: 'router-1' }),
       }),
     )
+    expect(prisma.networkSession.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          routerId: 'router-1',
+          status: SessionStatus.STALE,
+          activationId: null,
+        }),
+      }),
+    )
     expect(realtimeEvents.publish).toHaveBeenCalledWith(
-      'session.started',
+      'session.updated',
       expect.objectContaining({ routerId: 'router-1' }),
     )
   })
