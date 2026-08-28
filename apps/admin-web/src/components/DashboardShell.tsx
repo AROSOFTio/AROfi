@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { Headphones } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
@@ -27,7 +27,6 @@ type DashboardShellProps = {
 
 export default function DashboardShell({ children, initials, session, workspaceTitle }: DashboardShellProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -51,16 +50,6 @@ export default function DashboardShell({ children, initials, session, workspaceT
     }, ACCESS_TOKEN_REFRESH_INTERVAL_MS)
     return () => window.clearInterval(interval)
   }, [])
-
-  useEffect(() => {
-    const routes = isVendorWorkspace(session.user)
-      ? ['/admin/settings/routers', '/packages', '/vouchers', '/sales', '/sessions', '/earnings', '/admin/remote-access', '/support']
-      : ['/businesses', '/admin/router', '/sales-by-business', '/disbursements', '/admin/settings', '/sessions', '/support', '/users?tab=staff']
-    const id = window.setTimeout(() => {
-      for (const route of routes) router.prefetch(route)
-    }, 600)
-    return () => window.clearTimeout(id)
-  }, [router, session.user])
 
   return (
     <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
