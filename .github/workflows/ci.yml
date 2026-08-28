@@ -198,7 +198,7 @@ jobs:
   merge-after-green:
     name: Merge PR to main after green verification
     needs: build-verify
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Merge exact verified PR head
