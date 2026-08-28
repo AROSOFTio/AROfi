@@ -70,7 +70,7 @@ describe('RouterCaptiveFlowInitializer', () => {
     expect(html).toContain('var autoReady=d.returningDevice&&d.returningDevice.existingActiveAccess&&d.returningDevice.reconnect;')
     expect(html).toContain('(Date.now()-_lastAuto)<2500')
     expect(html).toContain("f.method='post';f.action=target;f.style.display='none'")
-    expect(html).toContain('document.body.appendChild(f);f.submit();}')
+    expect(html).toContain("document.body.appendChild(f);document.documentElement.style.visibility='hidden';f.submit();}")
     expect(html).not.toContain('window.location.href=target+\'?username=')
     expect(html).not.toContain('window.setTimeout')
     expect(html).not.toContain('arofiLoginFrame')
