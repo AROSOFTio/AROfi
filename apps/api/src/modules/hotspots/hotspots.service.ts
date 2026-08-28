@@ -32,7 +32,13 @@ export class HotspotsService {
   async getOverview(tenantId?: string) {
     const hotspots = await this.prisma.hotspot.findMany({
       where: tenantId ? { tenantId } : undefined,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        nasIpAddress: true,
+        secret: true,
+        createdAt: true,
+        updatedAt: true,
         tenant: {
           select: {
             id: true,
