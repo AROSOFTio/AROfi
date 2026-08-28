@@ -38,6 +38,11 @@ type BatchFormState = {
   notes: string
 }
 
+type BatchPreviewResponse = {
+  batchId: string
+  previewVouchers: VouchersOverviewResponse['batches'][number]['previewVouchers']
+}
+
 const initialTemplateForm: TemplateFormState = {
   tenantId: '',
   packageId: '',
@@ -368,6 +373,17 @@ export default function VouchersManager() {
 
   const [deleteBatchTarget, setDeleteBatchTarget] = useState<VouchersOverviewResponse['batches'][number] | null>(null)
 
+  async function openPrintPreview(batch: VouchersOverviewResponse['batches'][number]) {
+    setError(null)
+    setSelectedPrintTemplateId(printTemplates[0].id)
+    try {
+      const preview = await clientFetchApi<BatchPreviewResponse>(`/vouchers/batches/${batch.id}/preview`)
+      setPrintBatch({ ...batch, previewVouchers: preview.previewVouchers })
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to load voucher print preview')
+    }
+  }
+
   async function handleDeleteBatch(batch: VouchersOverviewResponse['batches'][number]) {
     setError(null)
     setSuccess(null)
@@ -405,7 +421,6 @@ export default function VouchersManager() {
 
   const voucherBatches = overview?.batches ?? []
   const recentRedemptions = overview?.recentRedemptions ?? []
-  const templateItems = templates?.items ?? []
 
   return (
     <>
@@ -678,10 +693,7 @@ export default function VouchersManager() {
                       <button
                         type="button"
                         className="btn btn-ghost"
-                        onClick={() => {
-                          setSelectedPrintTemplateId(printTemplates[0].id)
-                          setPrintBatch(batch)
-                        }}
+                        onClick={() => void openPrintPreview(batch)}
                       >
                         Print PDF
                       </button>

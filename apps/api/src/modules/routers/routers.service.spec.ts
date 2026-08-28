@@ -140,6 +140,9 @@ describe('RoutersService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      platformSetting: {
+        upsert: jest.fn().mockResolvedValue({ smsNotificationTemplates: null }),
+      },
       $transaction: jest.fn((callback) => callback(tx)),
     }
     const credentials = {

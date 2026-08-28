@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Insert voucher intelligence without changing the existing dashboard top.
 
-This guarded pass also normalizes build imports, adds expiring-stock metrics,
-and makes dashboard links open a pre-filtered professional report.
+This guarded pass also normalizes build imports, adds expiring-stock metrics on
+legacy voucher-metric implementations, and makes dashboard links open a
+pre-filtered professional report.
+
+The Agent voucher metrics service has since been optimized to use grouped
+queries instead of materializing voucher rows.  The older expiring-soon source
+rewrite depended on that materialized-row implementation, so this script now
+applies that optional rewrite only when the legacy shape is present.  The
+remaining dashboard/report patches stay idempotent on both source layouts.
 """
 
 from pathlib import Path
@@ -63,74 +70,84 @@ service_text = service_text.replace(
 )
 SERVICE.write_text(service_text)
 
-# Add expiring-soon stock to the detailed accountability report. This lets a
-# dashboard alert open a truly filtered report instead of a generic page.
+# The original expiring-soon accountability rewrite operated on an older
+# service implementation that materialized voucher rows and reduced them in
+# Node.  The current optimized service groups voucher status/value in
+# PostgreSQL, so those exact source markers no longer exist.  Keep the legacy
+# transformation for older source states, but never fail a modern optimized
+# build merely because the implementation has intentionally changed.
 metrics_text = METRICS.read_text()
-metrics_text = replace_once(
-    metrics_text,
-    """  redeemed: number
+legacy_expiring_shape = (
+    "allMetrics.reduce((total, item) => total + item.expired, 0)" in metrics_text
+    and "if (voucher.status === VoucherStatus.GENERATED)" in metrics_text
+)
+
+if legacy_expiring_shape:
+    metrics_text = replace_once(
+        metrics_text,
+        """  redeemed: number
   expired: number
   voided: number""",
-    """  redeemed: number
+        """  redeemed: number
   expired: number
   expiringSoon: number
   voided: number""",
-    'metric expiring type',
-)
-metrics_text = replace_once(
-    metrics_text,
-    """        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
+        'metric expiring type',
+    )
+    metrics_text = replace_once(
+        metrics_text,
+        """        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
         voided: allMetrics.reduce((total, item) => total + item.voided, 0),""",
-    """        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
+        """        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
         expiringSoon: allMetrics.reduce((total, item) => total + item.expiringSoon, 0),
         voided: allMetrics.reduce((total, item) => total + item.voided, 0),""",
-    'summary expiring value',
-)
-metrics_text = replace_once(
-    metrics_text,
-    """        'redeemed',
+        'summary expiring value',
+    )
+    metrics_text = replace_once(
+        metrics_text,
+        """        'redeemed',
         'expired',
         'voided',""",
-    """        'redeemed',
+        """        'redeemed',
         'expired',
         'expiringSoon',
         'voided',""",
-    'csv expiring header',
-)
-metrics_text = metrics_text.replace(
-    """        report.main.redeemed,
+        'csv expiring header',
+    )
+    metrics_text = metrics_text.replace(
+        """        report.main.redeemed,
         report.main.expired,
         report.main.voided,""",
-    """        report.main.redeemed,
+        """        report.main.redeemed,
         report.main.expired,
         report.main.expiringSoon,
         report.main.voided,""",
-)
-metrics_text = metrics_text.replace(
-    """        item.redeemed,
+    )
+    metrics_text = metrics_text.replace(
+        """        item.redeemed,
         item.expired,
         item.voided,""",
-    """        item.redeemed,
+        """        item.redeemed,
         item.expired,
         item.expiringSoon,
         item.voided,""",
-)
-metrics_text = replace_once(
-    metrics_text,
-    """      redeemed: 0,
+    )
+    metrics_text = replace_once(
+        metrics_text,
+        """      redeemed: 0,
       expired: 0,
       voided: 0,""",
-    """      redeemed: 0,
+        """      redeemed: 0,
       expired: 0,
       expiringSoon: 0,
       voided: 0,""",
-    'empty metric expiring value',
-)
-metrics_text = replace_once(
-    metrics_text,
-    """    if (voucher.status === VoucherStatus.GENERATED) {
+        'empty metric expiring value',
+    )
+    metrics_text = replace_once(
+        metrics_text,
+        """    if (voucher.status === VoucherStatus.GENERATED) {
       metric.generated += 1""",
-    """    const expiringSoonByDate =
+        """    const expiringSoonByDate =
       voucher.expiresAt !== null &&
       voucher.expiresAt > now &&
       voucher.expiresAt <= new Date(now.getTime() + 7 * 86400000) &&
@@ -142,12 +159,14 @@ metrics_text = replace_once(
 
     if (voucher.status === VoucherStatus.GENERATED) {
       metric.generated += 1""",
-    'accumulate expiring stock',
-)
-METRICS.write_text(metrics_text)
+        'accumulate expiring stock',
+    )
+    METRICS.write_text(metrics_text)
+else:
+    print('Voucher metrics already use the optimized grouped implementation; skipping legacy expiring-soon rewrite.')
 
 # Read dashboard query parameters in the full report, open it immediately when
-# deep-linked, filter exception rows, and expose all export formats.
+# deep-linked, filter supported exception rows, and expose all export formats.
 report_text = REPORT.read_text()
 report_text = replace_once(
     report_text,
@@ -155,28 +174,31 @@ report_text = replace_once(
     "import { FormEvent, useEffect, useMemo, useState } from 'react'\nimport { useSearchParams } from 'next/navigation'",
     'report search params import',
 )
-report_text = replace_once(
-    report_text,
-    """  redeemed: number
+
+if legacy_expiring_shape:
+    report_text = replace_once(
+        report_text,
+        """  redeemed: number
   expired: number
   voided: number""",
-    """  redeemed: number
+        """  redeemed: number
   expired: number
   expiringSoon: number
   voided: number""",
-    'report metric expiring type',
-)
-report_text = replace_once(
-    report_text,
-    """    redeemed: number
+        'report metric expiring type',
+    )
+    report_text = replace_once(
+        report_text,
+        """    redeemed: number
     expired: number
     voided: number""",
-    """    redeemed: number
+        """    redeemed: number
     expired: number
     expiringSoon: number
     voided: number""",
-    'report summary expiring type',
-)
+        'report summary expiring type',
+    )
+
 report_text = replace_once(
     report_text,
     """export default function AgentVoucherAccountabilityReport() {
@@ -226,12 +248,9 @@ report_text = replace_once(
       await loadReport(startFilters)""",
     'report initial filtered request',
 )
-report_text = replace_once(
-    report_text,
-    """    for (const item of report?.items ?? []) output.push({ key: item.agentId, owner: 'Agent', code: item.agent.code, name: item.agent.name, territory: item.agent.territory ?? 'Unassigned', metric: item })
-    return output
-  }, [report])""",
-    """    for (const item of report?.items ?? []) output.push({ key: item.agentId, owner: 'Agent', code: item.agent.code, name: item.agent.name, territory: item.agent.territory ?? 'Unassigned', metric: item })
+
+if legacy_expiring_shape:
+    filtered_rows = """    for (const item of report?.items ?? []) output.push({ key: item.agentId, owner: 'Agent', code: item.agent.code, name: item.agent.name, territory: item.agent.territory ?? 'Unassigned', metric: item })
     return output.filter((row) => {
       if (statusFilter === 'EXPIRED') return row.metric.expired > 0
       if (statusFilter === 'EXPIRING') return row.metric.expiringSoon > 0
@@ -239,7 +258,23 @@ report_text = replace_once(
       if (statusFilter === 'UNSOLD') return row.metric.unsold > 0
       return true
     })
-  }, [report, statusFilter])""",
+  }, [report, statusFilter])"""
+else:
+    filtered_rows = """    for (const item of report?.items ?? []) output.push({ key: item.agentId, owner: 'Agent', code: item.agent.code, name: item.agent.name, territory: item.agent.territory ?? 'Unassigned', metric: item })
+    return output.filter((row) => {
+      if (statusFilter === 'EXPIRED') return row.metric.expired > 0
+      if (statusFilter === 'VOIDED') return row.metric.voided > 0
+      if (statusFilter === 'UNSOLD') return row.metric.unsold > 0
+      return true
+    })
+  }, [report, statusFilter])"""
+
+report_text = replace_once(
+    report_text,
+    """    for (const item of report?.items ?? []) output.push({ key: item.agentId, owner: 'Agent', code: item.agent.code, name: item.agent.name, territory: item.agent.territory ?? 'Unassigned', metric: item })
+    return output
+  }, [report])""",
+    filtered_rows,
     'report exception filtering',
 )
 report_text = replace_once(

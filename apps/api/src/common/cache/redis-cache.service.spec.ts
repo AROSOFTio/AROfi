@@ -41,6 +41,24 @@ describe('RedisCacheService', () => {
     )
   })
 
+  it('isolates user-scoped reads inside the same tenant', () => {
+    const cache = new RedisCacheService()
+    const request = (userId: string, email: string) => ({
+      method: 'GET',
+      route: { path: '/agent-sales/me/dashboard' },
+      params: {},
+      query: {},
+      user: { id: userId, email, tenantId: 'tenant-1', role: 'AGENT' },
+    })
+
+    expect(cache.buildHttpKey('agent:dashboard', request('agent-a', 'a@example.com'), 'user')).not.toBe(
+      cache.buildHttpKey('agent:dashboard', request('agent-b', 'b@example.com'), 'user'),
+    )
+    expect(cache.buildHttpKey('agent:dashboard', request('agent-a', 'a@example.com'), 'user')).toBe(
+      cache.buildHttpKey('agent:dashboard', request('agent-a', 'a@example.com'), 'user'),
+    )
+  })
+
   it('coalesces concurrent cache misses into one calculation', async () => {
     const cache = new RedisCacheService()
     let resolveLoader: (value: { total: number }) => void = () => undefined

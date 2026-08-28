@@ -1,39 +1,104 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useRealtimeRefresh, type RealtimeEventType, REALTIME_EVENT_TYPES } from '@/lib/realtime'
+import { useRealtimeRefresh, type RealtimeEventType } from '@/lib/realtime'
 
-// Router heartbeats are intentionally excluded from full dashboard refreshes.
-// The heartbeat already updates router/session state server-side, and refreshing
-// every dashboard for unchanged beats creates avoidable API/database pressure.
-const DASHBOARD_EVENT_TYPES = REALTIME_EVENT_TYPES.filter(
-  (type): type is RealtimeEventType => type !== 'router.heartbeat',
-)
+// Only events that materially change dashboard-level information should trigger
+// a full server render. High-frequency telemetry such as router heartbeats,
+// RADIUS auth and session.updated is intentionally excluded; those signals are
+// handled by their focused pages and would otherwise fan out into many API/DB
+// calls for every open dashboard.
+const DASHBOARD_EVENT_TYPES: readonly RealtimeEventType[] = [
+  'payment.completed',
+  'payment.failed',
+  'payment.amount_mismatch',
+  'activation.created',
+  'activation.expired',
+  'activation.quota_exhausted',
+  'voucher.redeemed',
+  'session.started',
+  'session.stopped',
+  'router.online',
+  'router.stale',
+  'router.offline',
+  'disconnect.succeeded',
+  'disconnect.failed',
+  'alert',
+]
 
-// Server-rendered dashboard pages refresh from meaningful realtime events.
-// Coalesce bursts for 5 seconds so a busy hotspot does not trigger overlapping
-// expensive server renders, while live counts still update on a near-live cadence.
-// The interval refresh remains only as a fallback when the event stream is unavailable.
+const MIN_REFRESH_GAP_MS = 5_000
+
+// Server-rendered dashboard pages are deliberately quiet. Realtime bursts are
+// coalesced for 10 seconds, and the timer is only a low-frequency safety net.
+// Hidden tabs do not keep a polling timer alive or execute realtime-triggered
+// refreshes. When a tab becomes visible again we refresh once and restart the
+// fallback timer from that point.
 export function DashboardAutoRefresh({
-  intervalMs = 60_000,
+  intervalMs = 180_000,
   eventTypes = DASHBOARD_EVENT_TYPES,
 }: {
   intervalMs?: number
   eventTypes?: readonly RealtimeEventType[]
 }) {
   const router = useRouter()
+  const lastRefreshAtRef = useRef(0)
 
-  useRealtimeRefresh(() => router.refresh(), eventTypes, 5_000)
+  const refreshIfVisible = useCallback(
+    (force = false) => {
+      if (document.visibilityState !== 'visible') return false
+
+      const now = Date.now()
+      if (!force && now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) return false
+
+      lastRefreshAtRef.current = now
+      router.refresh()
+      return true
+    },
+    [router],
+  )
+
+  useRealtimeRefresh(() => refreshIfVisible(), eventTypes, 10_000)
 
   useEffect(() => {
-    const id = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        router.refresh()
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const clearRefreshTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
       }
-    }, intervalMs)
-    return () => clearInterval(id)
-  }, [router, intervalMs])
+    }
+
+    const scheduleRefresh = () => {
+      clearRefreshTimer()
+      if (document.visibilityState !== 'visible') return
+
+      timeoutId = setTimeout(() => {
+        refreshIfVisible()
+        scheduleRefresh()
+      }, intervalMs)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Force one catch-up render after a hidden period. The timestamp also
+        // suppresses a realtime callback that may already be waiting to fire.
+        refreshIfVisible(true)
+        scheduleRefresh()
+      } else {
+        clearRefreshTimer()
+      }
+    }
+
+    scheduleRefresh()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      clearRefreshTimer()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [intervalMs, refreshIfVisible])
 
   return null
 }

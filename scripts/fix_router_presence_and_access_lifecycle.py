@@ -122,6 +122,38 @@ replace_once(
 """,
 )
 
+# Router provisioning callbacks must stay successful even if the optional
+# notification-settings read fails. Notifications fall back to the default
+# template instead of creating an unhandled rejection after onboarding.
+replace_once(
+    ROUTERS,
+    """    const platformSettings = await this.prisma.platformSetting.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global' },
+      select: { smsNotificationTemplates: true },
+    })
+    const smsTemplates = normalizeSmsNotificationTemplates(platformSettings.smsNotificationTemplates)
+""",
+    """    let smsTemplates = normalizeSmsNotificationTemplates(null)
+    try {
+      const platformSettings = await this.prisma.platformSetting.upsert({
+        where: { id: 'global' },
+        update: {},
+        create: { id: 'global' },
+        select: { smsNotificationTemplates: true },
+      })
+      smsTemplates = normalizeSmsNotificationTemplates(platformSettings.smsNotificationTemplates)
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load router onboarding SMS settings for ${input.router.name}; using the default template. ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    }
+""",
+)
+
 # MikroTik heartbeat: use a sane cadence, explicitly keep it enabled, and add
 # a watchdog that restores the scheduler after reboot or accidental changes.
 regex_once(
@@ -251,4 +283,4 @@ require(
     "Expiry fallback disconnect target was not installed.",
 )
 
-print("Router presence, 31-day idle timeout, and expiry logout hardened.")
+print("Router presence, 31-day idle timeout, expiry logout, and onboarding notification fallback hardened.")

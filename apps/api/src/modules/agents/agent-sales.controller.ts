@@ -1,10 +1,13 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { AccessScopeService } from '../auth/access-scope.service'
 import { AuthenticatedAdminUser, JwtAuthGuard } from '../auth/auth.module'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { AgentDashboardService } from './agent-dashboard.service'
+import { AgentOverviewService } from './agent-overview.service'
 import { AgentSalesService } from './agent-sales.service'
 import {
   AgentCashSaleDto,
@@ -38,17 +41,21 @@ export class AgentSalesPublicController {
 export class AgentSalesController {
   constructor(
     private readonly agentSales: AgentSalesService,
+    private readonly agentDashboard: AgentDashboardService,
+    private readonly agentOverview: AgentOverviewService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @RedisCache({ namespace: 'agent:dashboard', ttlSeconds: 8, scope: 'user' })
   @Get('me/dashboard')
   getMyDashboard(@CurrentUser() user: AuthenticatedAdminUser) {
     const tenantId = this.accessScope.requireTenantScope(user)
-    return this.agentSales.getMyDashboard(user.email, tenantId)
+    return this.agentDashboard.getMyDashboard(user.email, tenantId)
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('me/cash-sale')
   recordCashSale(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: AgentCashSaleDto) {
     const tenantId = this.accessScope.requireTenantScope(user)
@@ -56,6 +63,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('me/mobile-money')
   initiateMobileMoneySale(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: AgentMobileMoneySaleDto) {
     const tenantId = this.accessScope.requireTenantScope(user)
@@ -63,6 +71,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsRead)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('me/mobile-money/:paymentId/status')
   checkMobileMoneySale(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -73,13 +82,15 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
+  @RedisCache({ namespace: 'agents:overview', ttlSeconds: 8 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
-    return this.agentSales.getOverview(scopedTenantId)
+    return this.agentOverview.getOverview(scopedTenantId)
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Patch('agents/:agentId/policy')
   updatePolicy(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -92,6 +103,7 @@ export class AgentSalesController {
   }
 
   @RequirePermissions(PERMISSIONS.agentsManage)
+  @InvalidateRedisCache('agent:dashboard', 'agents:overview')
   @Post('cash-settlements')
   recordCashSettlement(
     @CurrentUser() user: AuthenticatedAdminUser,

@@ -157,7 +157,7 @@ describe('MikrotikService', () => {
     const html = service.buildLoginHtml('router-key-123', 'http://tenantname.wifi/login')
 
     expect(html).toContain('var API="https://wifi.example.com"')
-    expect(html).toContain('APIFB="http://95.111.234.34:18080"')
+    expect(html).toContain('APIFB="http://wifi.example.com:18080"')
     expect(html).toContain('function apiCall(m,p,d,cb)')
     expect(html).toContain('Cannot reach the AROFi voucher service. Keep this WiFi connected and try again.')
     expect(html).toContain('RKEY="router-key-123"')
@@ -210,7 +210,7 @@ describe('MikrotikService', () => {
     expect(script).toContain('dst-host="pay.pesapal.com"')
     expect(script).toContain('dst-host="*.pesapal.com"')
     expect(script).toContain('/ip hotspot walled-garden add dst-host="arofi.net" action=allow comment="AROFi core portal"')
-    expect(script).toContain('/ip hotspot walled-garden ip add dst-address=95.111.234.34/32 action=accept comment="AROFi portal ip"')
+    expect(script).not.toContain('dst-address=95.111.234.34/32')
     expect(script).toContain('/ip firewall mangle remove [find comment="AROFi anti-tether"]')
     expect(script).toContain('new-ttl=set:1')
     expect(script).toContain('AROFi anti-tether')
@@ -233,11 +233,9 @@ describe('MikrotikService', () => {
     })
 
     expect(script).toContain('dns-name="tenantname.wifi"')
-    // A RouterOS HotSpot may own a dynamic dns-name row; only AROFi's static row is removable.
     expect(script).toContain(':do { /ip dns static remove [find comment="AROFi hotspot DNS gateway"] } on-error={}')
     expect(script).toContain(':do { /ip dns static add name="tenantname.wifi" address=10.55.0.1 comment="AROFi hotspot DNS gateway" } on-error={}')
     expect(script).not.toContain('/ip dns static remove [find name="tenantname.wifi"]')
-    // dynamic DNS row must never abort provisioning
   })
 
   it('buildOneRunCommand: tries plain HTTP fallback FIRST, then HTTPS, and includes NTP sync', () => {

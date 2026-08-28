@@ -5,31 +5,50 @@ import { adminAuthCookieName } from './admin-session'
 
 const API_SERVER_URL = process.env.API_SERVER_URL ?? 'http://127.0.0.1:3000/api'
 
-export async function fetchApi<T>(path: string): Promise<T | null> {
-  try {
-    const token = (await cookies()).get(adminAuthCookieName)?.value
-    const response = await fetch(`${API_SERVER_URL}${path}`, {
-      cache: 'no-store',
-      headers: token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    })
+// Resolve the authenticated admin token once per server render/request. Many
+// dashboard pages call fetchApi several times; repeatedly awaiting cookies()
+// and re-reading the same cookie adds avoidable auth/request work before every
+// backend call. React cache keeps this request-scoped, so tokens never cross
+// users or renders.
+const getAdminAuthToken = cache(async (): Promise<string | undefined> => {
+  return (await cookies()).get(adminAuthCookieName)?.value
+})
 
-    if (!response.ok) {
+// React cache is scoped to the server render/request. Include the auth token in
+// the cache key so identical reads inside one render collapse to one API call
+// without ever sharing authenticated data between users.
+const fetchAuthenticatedApi = cache(
+  async (path: string, token?: string): Promise<unknown | null> => {
+    try {
+      const response = await fetch(`${API_SERVER_URL}${path}`, {
+        cache: 'no-store',
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : undefined,
+      })
+
+      if (!response.ok) {
+        return null
+      }
+
+      return await response.json()
+    } catch {
       return null
     }
+  },
+)
 
-    return (await response.json()) as T
-  } catch {
-    return null
-  }
+export async function fetchApi<T>(path: string): Promise<T | null> {
+  const token = await getAdminAuthToken()
+  return (await fetchAuthenticatedApi(path, token)) as T | null
 }
 
 // A dashboard render can ask for the current session from both its shared
-// layout and its page. React cache deduplicates those identical calls inside
-// one server render, preventing an unnecessary second API/database round trip.
+// layout and its page. Keep the named helper for call-site clarity; the lower
+// level authenticated fetch cache also protects any other duplicate endpoint
+// reads in the same render.
 export const getAdminSession = cache(
   async (): Promise<AdminSessionResponse | null> => fetchApi<AdminSessionResponse>('/auth/me'),
 )

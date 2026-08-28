@@ -4,9 +4,12 @@ import { PhoneNumberService } from './phone-number.service'
 import { PaymentsService } from './payments.service'
 
 describe('PaymentsService', () => {
-  const service = new PaymentsService(
+  const PaymentsServiceCtor = PaymentsService as unknown as new (...args: any[]) => PaymentsService
+
+  const service = new PaymentsServiceCtor(
     {} as never,
     { get: jest.fn() } as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,
@@ -74,9 +77,10 @@ describe('PaymentsService', () => {
   })
 
   it('does not guess a tenant for the public portal without tenant or router context', async () => {
-    const scopedService = new PaymentsService(
+    const scopedService = new PaymentsServiceCtor(
       { tenant: { findUnique: jest.fn() } } as never,
       { get: jest.fn() } as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

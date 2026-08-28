@@ -3,8 +3,8 @@ import RegisterAgentPanel from '@/components/RegisterAgentPanel'
 import AgentActionsPanel from '@/components/AgentActionsPanel'
 import AgentLoginPanel from '@/components/AgentLoginPanel'
 import AgentSalesControlsPanel from '@/components/AgentSalesControlsPanel'
-import type { AdminSessionResponse, AgentItem, PackageCatalogResponse } from '@/lib/admin-types'
-import { fetchApi } from '@/lib/api'
+import type { AgentItem, PackageCatalogResponse } from '@/lib/admin-types'
+import { fetchApi, getAdminSession } from '@/lib/api'
 import { encodeAgentSalesPolicy } from '@/lib/agent-sales-policy'
 import { formatCurrency, getStatusBadgeClass } from '@/lib/format'
 import { isVendorWorkspace } from '@/lib/workspace'
@@ -45,44 +45,22 @@ type HybridOverview = {
   agents: HybridAgent[]
 }
 
-type UsersResponse = {
-  users: Array<{
-    email: string
-    isActive: boolean
-    tenant: { id: string; name: string } | null
-    role: { name: string }
-  }>
-}
-
 function isTrialPackage(pkg: PackageCatalogResponse['items'][number]) {
   const haystack = `${pkg.name} ${pkg.code} ${pkg.description ?? ''}`.toLowerCase()
   return Boolean(pkg.isTrialEnabled) || (pkg.activePriceUgx ?? 0) <= 0 || haystack.includes('trial')
 }
 
-function hasAgentLogin(agent: HybridAgent, users?: UsersResponse | null) {
-  const email = agent.email?.trim().toLowerCase()
-  if (!email) return false
-  return Boolean(
-    users?.users.some(
-      (user) =>
-        user.isActive &&
-        user.role.name === 'VoucherAgent' &&
-        user.tenant?.id === agent.tenant.id &&
-        user.email.trim().toLowerCase() === email,
-    ),
-  )
-}
-
 export default async function AgentsPage() {
-  const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  const session = await getAdminSession()
   if (session?.user.role === 'VoucherAgent') redirect('/dashboard')
 
-  const [overview, packages, users] = await Promise.all([
-    fetchApi<HybridOverview>('/agent-sales/overview'),
-    fetchApi<PackageCatalogResponse>('/packages').catch(() => null),
-    fetchApi<UsersResponse>('/users').catch(() => null),
-  ])
   const canManageBusinessAgents = isVendorWorkspace(session?.user)
+  const [overview, packages] = await Promise.all([
+    fetchApi<HybridOverview>('/agent-sales/overview'),
+    canManageBusinessAgents
+      ? fetchApi<PackageCatalogResponse>('/packages').catch(() => null)
+      : Promise.resolve<PackageCatalogResponse | null>(null),
+  ])
   const activePackages = (packages?.items ?? []).filter((pkg) => pkg.status === 'ACTIVE' && !isTrialPackage(pkg))
 
   return (
@@ -150,7 +128,7 @@ export default async function AgentsPage() {
               )}
               {(overview?.agents ?? []).map((agent) => {
                 const actionAgent = toAgentItem(agent)
-                const loginReady = hasAgentLogin(agent, users)
+                const loginReady = agent.loginReady
                 return (
                   <tr key={agent.id}>
                     <td>
@@ -165,7 +143,7 @@ export default async function AgentsPage() {
                         <><span className="badge badge-warning">Login Not Set</span><div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>{agent.email || 'Add agent email'}</div></>
                       )}
                       {canManageBusinessAgents && (
-                        <div style={{ marginTop: 7 }}><AgentLoginPanel agent={{ name: agent.name, email: agent.email }} loginReady={loginReady} /></div>
+                        <div style={{ marginTop: 7 }}><AgentLoginPanel agent={{ id: agent.id, name: agent.name, email: agent.email }} loginReady={loginReady} /></div>
                       )}
                     </td>
                     <td style={{ fontWeight: 700 }}>{(agent.commissionRateBps / 100).toFixed(1)}%<div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{formatCurrency(agent.commissionUgx)} earned</div></td>

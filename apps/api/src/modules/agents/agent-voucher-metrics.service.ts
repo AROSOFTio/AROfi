@@ -86,6 +86,10 @@ export class AgentVoucherMetricsService {
         : {}),
     }
 
+    const voucherWhere: Prisma.VoucherWhereInput = {
+      batch: batchWhere,
+    }
+
     const saleWhere: Prisma.BillingTransactionWhereInput = {
       ...(tenantId ? { tenantId } : {}),
       type: {
@@ -109,7 +113,7 @@ export class AgentVoucherMetricsService {
         : {}),
     }
 
-    const [agents, batches, sales] = await Promise.all([
+    const [agents, batches, voucherGroups, dateExpiredVoucherGroups, sales] = await Promise.all([
       includeAgents
         ? this.prisma.agent.findMany({
             where: agentWhere,
@@ -125,29 +129,36 @@ export class AgentVoucherMetricsService {
       this.prisma.voucherBatch.findMany({
         where: batchWhere,
         select: {
+          id: true,
           agentId: true,
-          agent: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              phoneNumber: true,
-              territory: true,
-            },
-          },
-          vouchers: {
-            select: {
-              status: true,
-              expiresAt: true,
-              faceValueUgx: true,
-            },
+        },
+      }),
+      this.prisma.voucher.groupBy({
+        by: ['batchId', 'status'],
+        where: voucherWhere,
+        _count: { _all: true },
+        _sum: { faceValueUgx: true },
+      }),
+      this.prisma.voucher.groupBy({
+        by: ['batchId', 'status'],
+        where: {
+          ...voucherWhere,
+          expiresAt: { lte: now },
+          status: {
+            notIn: [
+              VoucherStatus.EXPIRED,
+              VoucherStatus.REDEEMED,
+              VoucherStatus.VOID,
+              VoucherStatus.VOIDED,
+            ],
           },
         },
+        _count: { _all: true },
+        _sum: { faceValueUgx: true },
       }),
       this.prisma.billingTransaction.findMany({
         where: saleWhere,
         select: {
-          id: true,
           agentId: true,
           grossAmountUgx: true,
           feeAmountUgx: true,
@@ -190,17 +201,39 @@ export class AgentVoucherMetricsService {
       ensureMetric(agent)
     }
 
+    const metricByBatch = new Map<string, VoucherMetric>()
     for (const batch of batches) {
-      const target = batch.agent && batch.agentId
-        ? ensureMetric(batch.agent)
+      const target = batch.agentId
+        ? metrics.get(batch.agentId) ?? null
         : includeMain
           ? main
           : null
+      if (target) {
+        metricByBatch.set(batch.id, target)
+      }
+    }
+
+    const dateExpiredByBatchStatus = new Map<string, { count: number; valueUgx: number }>()
+    for (const group of dateExpiredVoucherGroups) {
+      dateExpiredByBatchStatus.set(this.batchStatusKey(group.batchId, group.status), {
+        count: group._count._all,
+        valueUgx: group._sum.faceValueUgx ?? 0,
+      })
+    }
+
+    for (const group of voucherGroups) {
+      const target = metricByBatch.get(group.batchId)
       if (!target) continue
 
-      for (const voucher of batch.vouchers) {
-        this.accumulateVoucher(target, voucher, now)
-      }
+      const dateExpired = dateExpiredByBatchStatus.get(this.batchStatusKey(group.batchId, group.status))
+      this.accumulateVoucherGroup(
+        target,
+        group.status,
+        group._count._all,
+        group._sum.faceValueUgx ?? 0,
+        dateExpired?.count ?? 0,
+        dateExpired?.valueUgx ?? 0,
+      )
     }
 
     for (const sale of sales) {
@@ -231,6 +264,27 @@ export class AgentVoucherMetricsService {
       ...(includeMain ? [main] : []),
     ]
 
+    const summaryTotals = this.emptyMetric()
+    let agentsWithStock = 0
+    let agentSalesUgx = 0
+    for (const item of items) {
+      if (item.totalAssigned > 0) agentsWithStock += 1
+      agentSalesUgx += item.recordedSalesUgx
+    }
+    for (const item of allMetrics) {
+      summaryTotals.totalAssigned += item.totalAssigned
+      summaryTotals.unsold += item.unsold
+      summaryTotals.soldAwaitingUse += item.soldAwaitingUse
+      summaryTotals.redeemed += item.redeemed
+      summaryTotals.expired += item.expired
+      summaryTotals.voided += item.voided
+      summaryTotals.unsoldValueUgx += item.unsoldValueUgx
+      summaryTotals.recordedSales += item.recordedSales
+      summaryTotals.recordedSalesUgx += item.recordedSalesUgx
+      summaryTotals.recordedFeesUgx += item.recordedFeesUgx
+      summaryTotals.recordedNetUgx += item.recordedNetUgx
+    }
+
     return {
       filters: {
         ...filters,
@@ -238,22 +292,22 @@ export class AgentVoucherMetricsService {
       },
       summary: {
         totalAgentsTracked: items.length,
-        agentsWithStock: items.filter((item) => item.totalAssigned > 0).length,
-        totalAssigned: allMetrics.reduce((total, item) => total + item.totalAssigned, 0),
-        unsold: allMetrics.reduce((total, item) => total + item.unsold, 0),
-        soldAwaitingUse: allMetrics.reduce((total, item) => total + item.soldAwaitingUse, 0),
-        redeemed: allMetrics.reduce((total, item) => total + item.redeemed, 0),
-        expired: allMetrics.reduce((total, item) => total + item.expired, 0),
-        voided: allMetrics.reduce((total, item) => total + item.voided, 0),
-        unsoldValueUgx: allMetrics.reduce((total, item) => total + item.unsoldValueUgx, 0),
-        recordedSales: allMetrics.reduce((total, item) => total + item.recordedSales, 0),
-        recordedSalesUgx: allMetrics.reduce((total, item) => total + item.recordedSalesUgx, 0),
-        recordedFeesUgx: allMetrics.reduce((total, item) => total + item.recordedFeesUgx, 0),
-        recordedNetUgx: allMetrics.reduce((total, item) => total + item.recordedNetUgx, 0),
+        agentsWithStock,
+        totalAssigned: summaryTotals.totalAssigned,
+        unsold: summaryTotals.unsold,
+        soldAwaitingUse: summaryTotals.soldAwaitingUse,
+        redeemed: summaryTotals.redeemed,
+        expired: summaryTotals.expired,
+        voided: summaryTotals.voided,
+        unsoldValueUgx: summaryTotals.unsoldValueUgx,
+        recordedSales: summaryTotals.recordedSales,
+        recordedSalesUgx: summaryTotals.recordedSalesUgx,
+        recordedFeesUgx: summaryTotals.recordedFeesUgx,
+        recordedNetUgx: summaryTotals.recordedNetUgx,
         mainAssigned: main.totalAssigned,
         mainSales: main.recordedSales,
         mainSalesUgx: main.recordedSalesUgx,
-        agentSalesUgx: items.reduce((total, item) => total + item.recordedSalesUgx, 0),
+        agentSalesUgx,
       },
       main: includeMain
         ? {
@@ -360,45 +414,46 @@ export class AgentVoucherMetricsService {
     }
   }
 
-  private accumulateVoucher(
+  private batchStatusKey(batchId: string, status: VoucherStatus) {
+    return `${batchId}:${status}`
+  }
+
+  private accumulateVoucherGroup(
     metric: VoucherMetric,
-    voucher: { status: VoucherStatus; expiresAt: Date | null; faceValueUgx: number },
-    now: Date,
+    status: VoucherStatus,
+    count: number,
+    valueUgx: number,
+    expiredByDateCount: number,
+    expiredByDateValueUgx: number,
   ) {
-    metric.totalAssigned += 1
-    metric.assignedValueUgx += voucher.faceValueUgx
+    metric.totalAssigned += count
+    metric.assignedValueUgx += valueUgx
 
-    const expiredByDate =
-      voucher.expiresAt !== null &&
-      voucher.expiresAt <= now &&
-      voucher.status !== VoucherStatus.REDEEMED &&
-      voucher.status !== VoucherStatus.VOID &&
-      voucher.status !== VoucherStatus.VOIDED
-
-    if (voucher.status === VoucherStatus.EXPIRED || expiredByDate) {
-      metric.expired += 1
+    if (status === VoucherStatus.EXPIRED) {
+      metric.expired += count
       return
     }
 
-    if (voucher.status === VoucherStatus.GENERATED) {
-      metric.generated += 1
-      metric.unsold += 1
-      metric.unsoldValueUgx += voucher.faceValueUgx
-    } else if (voucher.status === VoucherStatus.PRINTED) {
-      metric.printed += 1
-      metric.unsold += 1
-      metric.unsoldValueUgx += voucher.faceValueUgx
-    } else if (voucher.status === VoucherStatus.SOLD) {
+    const activeCount = Math.max(0, count - expiredByDateCount)
+    const activeValueUgx = Math.max(0, valueUgx - expiredByDateValueUgx)
+    metric.expired += expiredByDateCount
+
+    if (status === VoucherStatus.GENERATED) {
+      metric.generated += activeCount
+      metric.unsold += activeCount
+      metric.unsoldValueUgx += activeValueUgx
+    } else if (status === VoucherStatus.PRINTED) {
+      metric.printed += activeCount
+      metric.unsold += activeCount
+      metric.unsoldValueUgx += activeValueUgx
+    } else if (status === VoucherStatus.SOLD) {
       // Kept only for historical batches. New vouchers move directly from
       // generated/printed to redeemed because redemption is the sale event.
-      metric.soldAwaitingUse += 1
-    } else if (voucher.status === VoucherStatus.REDEEMED) {
-      metric.redeemed += 1
-    } else if (
-      voucher.status === VoucherStatus.VOID ||
-      voucher.status === VoucherStatus.VOIDED
-    ) {
-      metric.voided += 1
+      metric.soldAwaitingUse += activeCount
+    } else if (status === VoucherStatus.REDEEMED) {
+      metric.redeemed += count
+    } else if (status === VoucherStatus.VOID || status === VoucherStatus.VOIDED) {
+      metric.voided += count
     }
   }
 

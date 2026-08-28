@@ -6,6 +6,7 @@ export const REDIS_CACHE_INVALIDATE_METADATA = 'arofi:redis-cache-invalidate'
 export interface RedisCacheOptions {
   namespace: string
   ttlSeconds: number
+  scope?: 'tenant' | 'user'
 }
 
 export const RedisCache = (options: RedisCacheOptions) => SetMetadata(REDIS_CACHE_METADATA, options)

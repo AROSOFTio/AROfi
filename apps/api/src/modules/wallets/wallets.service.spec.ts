@@ -74,6 +74,7 @@ describe('WalletsService withdrawals', () => {
   const dto = {
     amountUgx: 10_000,
     secretKey: 'correct-secret',
+    payoutNumberId: 'payout-1',
     confirmPhoneInPossession: true,
     acceptFinalTerms: true,
   }

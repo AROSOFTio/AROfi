@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "node scripts/apply-captive-fast-path.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",

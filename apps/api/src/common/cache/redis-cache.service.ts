@@ -40,7 +40,15 @@ export class RedisCacheService implements OnModuleDestroy {
     return `${this.keyPrefix}:${this.cacheVersion}:${namespace}:${digest}`
   }
 
-  buildHttpKey(namespace: string, request: any) {
+  buildHttpKey(namespace: string, request: any, scope: 'tenant' | 'user' = 'tenant') {
+    const userScope =
+      scope === 'user'
+        ? {
+            userId: request.user?.id ?? null,
+            email: request.user?.email ?? null,
+          }
+        : undefined
+
     return this.buildKey(namespace, {
       method: request.method,
       route: request.route?.path ?? request.path ?? request.url,
@@ -49,6 +57,7 @@ export class RedisCacheService implements OnModuleDestroy {
       scope: {
         tenantId: request.user?.tenantId ?? null,
         role: request.user?.role ?? null,
+        user: userScope,
       },
     })
   }

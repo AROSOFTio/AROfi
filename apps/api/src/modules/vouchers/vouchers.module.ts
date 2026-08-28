@@ -5,6 +5,7 @@ import { MailModule } from '../mail/mail.module'
 import { PaymentsModule } from '../payments/payments.module'
 import { WhatsAppModule } from '../whatsapp/whatsapp.module'
 import { VoucherCodeService } from './voucher-code.service'
+import { VoucherOverviewService } from './voucher-overview.service'
 import { VoucherQrRoutingInitializer } from './voucher-qr-routing.initializer'
 import { VoucherRedemptionSaleService } from './voucher-redemption-sale.service'
 import { VouchersController } from './vouchers.controller'
@@ -15,6 +16,7 @@ import { VouchersService } from './vouchers.service'
   controllers: [VouchersController],
   providers: [
     VoucherCodeService,
+    VoucherOverviewService,
     VouchersService,
     VoucherQrRoutingInitializer,
     VoucherRedemptionSaleService,

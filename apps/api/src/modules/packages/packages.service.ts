@@ -39,9 +39,11 @@ export class PackagesService {
         },
         prices: {
           orderBy: { startsAt: 'desc' },
+          take: 1,
         },
         _count: {
           select: {
+            prices: true,
             voucherBatches: true,
             vouchers: true,
           },
@@ -50,8 +52,15 @@ export class PackagesService {
       orderBy: { createdAt: 'desc' },
     })
 
+    let activePackages = 0
+    let featuredPackages = 0
+    let totalPriceUgx = 0
     const mappedItems = items.map((item) => {
-      const activePrice = item.prices.find((price) => price.endsAt === null) ?? item.prices[0]
+      const activePrice = item.prices[0]
+      const activePriceUgx = activePrice?.amountUgx ?? 0
+      if (item.status === PackageStatus.ACTIVE) activePackages += 1
+      if (item.isFeatured) featuredPackages += 1
+      totalPriceUgx += activePriceUgx
 
       return {
         id: item.id,
@@ -67,27 +76,25 @@ export class PackagesService {
         uploadSpeedKbps: item.uploadSpeedKbps,
         isFeatured: item.isFeatured,
         status: item.status,
-        activePriceUgx: activePrice?.amountUgx ?? 0,
-        priceHistoryCount: item.prices.length,
+        activePriceUgx,
+        priceHistoryCount: item._count.prices,
         voucherBatchCount: item._count.voucherBatches,
         voucherCount: item._count.vouchers,
         updatedAt: item.updatedAt,
       }
     })
 
-    const sortedItems = [...mappedItems].sort((a, b) => a.activePriceUgx - b.activePriceUgx)
+    mappedItems.sort((a, b) => a.activePriceUgx - b.activePriceUgx)
 
     return {
       summary: {
         totalPackages: mappedItems.length,
-        activePackages: mappedItems.filter((item) => item.status === PackageStatus.ACTIVE).length,
-        featuredPackages: mappedItems.filter((item) => item.isFeatured).length,
+        activePackages,
+        featuredPackages,
         averagePriceUgx:
-          mappedItems.length > 0
-            ? Math.round(mappedItems.reduce((total, item) => total + item.activePriceUgx, 0) / mappedItems.length)
-            : 0,
+          mappedItems.length > 0 ? Math.round(totalPriceUgx / mappedItems.length) : 0,
       },
-      items: sortedItems,
+      items: mappedItems,
     }
   }
 
@@ -135,23 +142,28 @@ export class PackagesService {
       ? [tenantId]
       : (await this.prisma.tenant.findMany({ select: { id: true } })).map((tenant) => tenant.id)
 
+    if (tenantIds.length === 0) return
+
+    // The admin catalog can span every tenant. Checking one tenant at a time
+    // turned this into an N+1 read path, so discover all existing trials in one
+    // query and only create rows for the missing tenants.
+    const existingTrials = await this.prisma.package.findMany({
+      where: {
+        tenantId: { in: tenantIds },
+        status: { not: PackageStatus.ARCHIVED },
+        OR: [
+          { isTrialEnabled: true },
+          { code: this.defaultTrialCode },
+          { name: { contains: 'trial', mode: 'insensitive' } },
+        ],
+      },
+      select: { tenantId: true },
+    })
+    const tenantIdsWithTrial = new Set(existingTrials.map((pkg) => pkg.tenantId))
+    const missingTenantIds = tenantIds.filter((id) => !tenantIdsWithTrial.has(id))
+
     await Promise.all(
-      tenantIds.map(async (id) => {
-        const existingTrial = await this.prisma.package.findFirst({
-          where: {
-            tenantId: id,
-            status: { not: PackageStatus.ARCHIVED },
-            OR: [
-              { isTrialEnabled: true },
-              { code: this.defaultTrialCode },
-              { name: { contains: 'trial', mode: 'insensitive' } },
-            ],
-          },
-          select: { id: true },
-        })
-
-        if (existingTrial) return
-
+      missingTenantIds.map(async (id) => {
         try {
           await this.prisma.package.create({
             data: {

@@ -41,8 +41,6 @@ function buildReconnectHarness(activation: ReturnType<typeof buildActivation> | 
     },
     router: {
       findUnique: jest.fn().mockResolvedValue({
-        // Deliberately looks dead from the backend's point of view — the
-        // reconnect decision must NOT consult this.
         status: 'OFFLINE',
         lastSeenAt: new Date(Date.now() - 60 * 60 * 1000),
       }),
@@ -52,6 +50,7 @@ function buildReconnectHarness(activation: ReturnType<typeof buildActivation> | 
   const service = new PortalService(
     prisma as never,
     { get: jest.fn(() => 'portal-secret') } as never,
+    {} as never,
     {} as never,
     {} as never,
     { publish: jest.fn() } as never,
@@ -65,17 +64,12 @@ describe('PortalService', () => {
     {} as never,
     {
       get: jest.fn((key: string) => {
-        if (key === 'PORTAL_TOKEN_SECRET') {
-          return 'portal-secret'
-        }
-
-        if (key === 'JWT_SECRET') {
-          return 'jwt-fallback'
-        }
-
+        if (key === 'PORTAL_TOKEN_SECRET') return 'portal-secret'
+        if (key === 'JWT_SECRET') return 'jwt-fallback'
         return undefined
       }),
     } as never,
+    {} as never,
     {} as never,
     {} as never,
     { publish: jest.fn() } as never,
@@ -110,7 +104,6 @@ describe('PortalService', () => {
     })
 
     const [payload] = token.split('.')
-
     expect(() => (service as any).verifyAccessToken(`${payload}.broken-signature`)).toThrow(
       UnauthorizedException,
     )
@@ -135,10 +128,7 @@ describe('PortalService returning-device auto-reconnect', () => {
       username: 'arofi-user',
       password: 'secret-pass',
     })
-    // The router's backend liveness must never gate reconnect — the customer
-    // is physically on the router if they can load the portal through it.
     expect(prisma.router.findUnique).not.toHaveBeenCalled()
-    // Session-Timeout is refreshed to the real remaining seconds.
     expect(prisma.radReply.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { username: 'arofi-user', attribute: 'Session-Timeout' },

@@ -1,4 +1,4 @@
-import { SessionStatus } from '@prisma/client'
+import { PackageActivationStatus, SessionStatus } from '@prisma/client'
 import { RadiusSignalSyncService } from './radius-signal-sync.service'
 
 function buildAcctRow(overrides: Record<string, unknown> = {}) {
@@ -18,6 +18,15 @@ function buildAcctRow(overrides: Record<string, unknown> = {}) {
     acctinputoctets: BigInt(1024),
     acctoutputoctets: BigInt(4096),
     ...overrides,
+  }
+}
+
+function activeActivationSelection() {
+  return {
+    id: 'activation-1',
+    voucherRedemptionId: null,
+    status: PackageActivationStatus.ACTIVE,
+    endsAt: new Date(Date.now() + 60 * 60 * 1000),
   }
 }
 
@@ -45,7 +54,7 @@ function buildHarness(options: {
     packageActivation: {
       findFirst: jest.fn().mockImplementation(({ select }) => {
         if (select?.voucherRedemptionId) {
-          return Promise.resolve({ id: 'activation-1', voucherRedemptionId: null })
+          return Promise.resolve(activeActivationSelection())
         }
         return Promise.resolve({ id: 'activation-1', tenantId: 'tenant-1', routerId: 'router-1' })
       }),
@@ -95,9 +104,7 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
     )
     const publishedTypes = realtimeEvents.publish.mock.calls.map((call) => call[0])
     expect(publishedTypes).toContain('session.started')
-    // Observability event row is written too.
     expect(prisma.radiusEvent.create).toHaveBeenCalled()
-    // usedBytes aggregate refreshed for quota enforcement.
     expect(prisma.packageActivation.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { usedBytes: BigInt(5120) } }),
     )
@@ -149,10 +156,7 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
 
   it('never bumps router liveness with "now" for old rows — uses the row timestamps', async () => {
     const oldSignal = new Date(Date.now() - 30 * 60 * 1000)
-    const { service, prisma } = buildHarness({
-      existingSession: null,
-    })
-    // Router already has a NEWER accounting signal than this stale row.
+    const { service, prisma } = buildHarness({ existingSession: null })
     prisma.router.findFirst.mockResolvedValue({
       id: 'router-1',
       tenantId: 'tenant-1',
@@ -187,10 +191,7 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
   })
 
   it('falls back to packageActivation.radiusUsername when the credential row is missing', async () => {
-    const { service, prisma, realtimeEvents } = buildHarness({
-      credential: null,
-      existingSession: null,
-    })
+    const { service, prisma, realtimeEvents } = buildHarness({ credential: null, existingSession: null })
 
     await service.processAcctRow(buildAcctRow() as never)
 
@@ -215,16 +216,13 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
   })
 
   it('maps router-identified accounting rows to the router when no credential exists', async () => {
-    const { service, prisma, realtimeEvents } = buildHarness({
-      credential: null,
-      existingSession: null,
-    })
+    const { service, prisma, realtimeEvents } = buildHarness({ credential: null, existingSession: null })
 
     prisma.router.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'router-1' })
     prisma.packageActivation.findFirst
-      .mockResolvedValueOnce({ id: 'activation-1', voucherRedemptionId: null })
+      .mockResolvedValueOnce(activeActivationSelection())
       .mockResolvedValueOnce(null)
 
     await service.processAcctRow(buildAcctRow({ username: 'router-router-1', nasipaddress: '192.0.2.250' }) as never)
@@ -234,8 +232,17 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
         where: expect.objectContaining({ id: 'router-1' }),
       }),
     )
+    expect(prisma.networkSession.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          routerId: 'router-1',
+          status: SessionStatus.STALE,
+          activationId: null,
+        }),
+      }),
+    )
     expect(realtimeEvents.publish).toHaveBeenCalledWith(
-      'session.started',
+      'session.updated',
       expect.objectContaining({ routerId: 'router-1' }),
     )
   })
@@ -295,9 +302,7 @@ describe('RadiusSignalSyncService (FreeRADIUS → API bridge)', () => {
       }),
     )
     expect(prisma.router.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: 'router-1' }),
-      }),
+      expect.objectContaining({ where: expect.objectContaining({ id: 'router-1' }) }),
     )
   })
 })

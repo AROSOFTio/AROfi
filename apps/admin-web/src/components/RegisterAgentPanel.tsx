@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { clientDeleteApi, clientPostApi } from '@/lib/client-api'
+import { clientPostApi } from '@/lib/client-api'
 import { PhoneNumberField } from '@/components/PhoneNumberField'
 
 type AgentFormState = {
@@ -17,11 +17,7 @@ type AgentFormState = {
 
 type CreatedAgent = {
   id: string
-}
-
-type CreatedUser = {
-  id: string
-  email: string
+  loginReady?: boolean
 }
 
 const initialForm: AgentFormState = {
@@ -33,14 +29,6 @@ const initialForm: AgentFormState = {
   commissionPercent: '5',
   notes: '',
   temporaryPassword: '',
-}
-
-function splitAgentName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  return {
-    firstName: parts[0] || 'Agent',
-    lastName: parts.slice(1).join(' ') || 'Agent',
-  }
 }
 
 export default function RegisterAgentPanel() {
@@ -62,43 +50,28 @@ export default function RegisterAgentPanel() {
     setError(null)
     setIsSubmitting(true)
 
-    let createdAgentId: string | null = null
-
     try {
       const email = form.email.trim().toLowerCase()
       const password = form.temporaryPassword
-      const names = splitAgentName(form.name)
 
-      const agent = await clientPostApi<CreatedAgent>('/agents', {
+      const agent = await clientPostApi<CreatedAgent>('/agents/register', {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
         phoneNumber: form.phoneNumber.trim(),
         email,
+        temporaryPassword: password,
         territory: form.territory.trim() || undefined,
         commissionRateBps: Math.round(Number(form.commissionPercent || 0) * 100),
         floatLimitUgx: 0,
         notes: form.notes.trim() || undefined,
       })
-      createdAgentId = agent.id
 
-      await clientPostApi<CreatedUser>('/users', {
-        email,
-        firstName: names.firstName,
-        lastName: names.lastName,
-        password,
-        roleName: 'VoucherAgent',
-      })
+      if (!agent.loginReady) {
+        throw new Error('Agent profile was created without a login. Please refresh and review the Agent account.')
+      }
 
       setCreatedLogin({ email, password })
     } catch (requestError) {
-      if (createdAgentId) {
-        try {
-          await clientDeleteApi(`/agents/${createdAgentId}`)
-        } catch {
-          // Keep the original registration error. The owner can safely review
-          // the agent list before retrying if cleanup could not complete.
-        }
-      }
       setError(requestError instanceof Error ? requestError.message : 'Could not register agent login')
     } finally {
       setIsSubmitting(false)
@@ -148,7 +121,7 @@ export default function RegisterAgentPanel() {
                 <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 14, background: 'var(--bg-soft)' }}>
                   <strong style={{ fontSize: 13 }}>Every online-selling Agent gets their own login.</strong>
                   <p style={{ color: 'var(--text-muted)', fontSize: 12.5, lineHeight: 1.5, margin: '4px 0 0' }}>
-                    Use a real email the Agent can access. AROFi uses it for sign-in verification. The same Agent account sells Cash and Mobile Money without sharing the business owner account.
+                    Use a real email the Agent can access. AROFi creates the seller profile and login together, so registration cannot leave a half-created Agent if one step fails.
                   </p>
                 </div>
 

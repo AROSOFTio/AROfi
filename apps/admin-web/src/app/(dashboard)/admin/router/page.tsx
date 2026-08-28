@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { clientFetchApi } from '@/lib/client-api'
 import { useRealtimeRefresh } from '@/lib/realtime'
 import type { RouterOverviewResponse } from '@/lib/admin-types'
@@ -22,38 +22,40 @@ export default function RouterObservabilityPage() {
   const [data, setData] = useState<RouterOverviewResponse | null>(null)
   const [selectedRouterId, setSelectedRouterId] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const requestInFlight = useRef(false)
 
   async function loadRouters() {
+    if (requestInFlight.current) return
+    requestInFlight.current = true
     try {
       const result = await clientFetchApi<RouterOverviewResponse>('/routers/overview')
       setData(result)
-      if (result.routers.length > 0 && !selectedRouterId) {
-        setSelectedRouterId(result.routers[0].id)
-      }
+      setError(null)
+      setSelectedRouterId((current) => current || result.routers[0]?.id || '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch routers')
     } finally {
+      requestInFlight.current = false
       setLoading(false)
     }
   }
 
-  // Primary update path: the realtime event stream (router heartbeats,
-  // session accounting, disconnects) — refreshes within ~0.5s of a change.
-  // The interval below is only the fallback when the stream is unavailable.
   useRealtimeRefresh(() => void loadRouters(), [
     'router.online',
     'router.stale',
     'router.offline',
     'session.started',
-    'session.updated',
     'session.stopped',
-    'radius.auth',
     'disconnect.failed',
-  ])
+  ], 5_000)
 
   useEffect(() => {
     void loadRouters()
-    const interval = setInterval(() => { void loadRouters() }, 60_000)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadRouters()
+      }
+    }, 120_000)
     return () => clearInterval(interval)
   }, [])
 
@@ -101,7 +103,6 @@ export default function RouterObservabilityPage() {
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'grid', gap: 4 }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -140,7 +141,6 @@ export default function RouterObservabilityPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div className="stat-card green">
           <div className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -185,11 +185,10 @@ export default function RouterObservabilityPage() {
         </div>
       </div>
 
-      {/* All Routers table */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">All Routers</span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Live updates, quiet fallback every 60s</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Realtime updates, fallback every 2 minutes</span>
         </div>
         <div className="table-wrap">
           <table>
@@ -245,7 +244,6 @@ export default function RouterObservabilityPage() {
         </div>
       </div>
 
-      {/* Recent Health Checks */}
       {recentHealthChecks.length > 0 && (
         <div className="card">
           <div className="card-header">

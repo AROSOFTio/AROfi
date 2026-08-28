@@ -23,6 +23,7 @@ AGENTS = ROOT / "AGENTS.md"
 COPILOT = ROOT / ".github/copilot-instructions.md"
 
 GUARD_COMMAND = "python3 scripts/forbid_mikrotik_auto_mac_auth.py"
+WINDOWS_GUARD_COMMAND = "python scripts/forbid_mikrotik_auto_mac_auth.py"
 POLICY_MARKER = "AROFI_NO_AUTOMATIC_MAC_AUTH"
 FINAL_LOGIN_BY = "login-by=cookie,mac-cookie,http-pap"
 FINAL_PERSISTENCE = (
@@ -115,12 +116,17 @@ def main() -> None:
         if marker not in finalizer:
             fail(f"the final source-normalization stage no longer runs {message}")
 
-    # Docker and both GitHub workflows independently run this guard. This makes
-    # accidental removal visible in Coolify/local builds and in branch/main CI.
-    for path in (DOCKERFILE, CI, DEPLOY):
+    # Docker/main CI use python3. The self-hosted Windows PR runner uses the
+    # portable Python executable exposed as `python`, so accept that equivalent
+    # command only for ci.yml instead of requiring an unavailable python3 alias.
+    for path in (DOCKERFILE, DEPLOY):
         text = path.read_text(encoding="utf-8")
         if GUARD_COMMAND not in text:
             fail(f"guard command missing from {path.relative_to(ROOT)}")
+
+    ci_text = CI.read_text(encoding="utf-8")
+    if GUARD_COMMAND not in ci_text and WINDOWS_GUARD_COMMAND not in ci_text:
+        fail(f"guard command missing from {CI.relative_to(ROOT)}")
 
     for path in (AGENTS, COPILOT):
         text = path.read_text(encoding="utf-8")

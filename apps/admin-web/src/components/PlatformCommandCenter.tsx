@@ -15,7 +15,6 @@ import type {
   PlatformWithdrawalsResponse,
   RouterOverviewResponse,
   SessionOverviewResponse,
-  SystemOverviewResponse,
   TenantOverviewResponse,
 } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
@@ -40,6 +39,19 @@ type PlatformSettingsSnapshot = {
   }
 }
 
+type DashboardSummaryResponse = {
+  support: {
+    open: number
+    critical: number
+  }
+  audit: {
+    critical: number
+  }
+  reviews: {
+    pendingCompliance: number
+  }
+}
+
 type ReviewItem = {
   id: string
 }
@@ -53,16 +65,15 @@ async function safeFetch<T>(path: string): Promise<T | null> {
 }
 
 export default async function PlatformCommandCenter() {
-  const [tenants, routers, billing, withdrawals, compliance, emailChanges, sessions, payments, system, settings] = await Promise.all([
+  const [tenants, routers, billing, withdrawals, emailChanges, sessions, payments, system, settings] = await Promise.all([
     safeFetch<TenantOverviewResponse>('/tenants'),
     safeFetch<RouterOverviewResponse>('/routers/overview'),
     safeFetch<BillingOverviewResponse>('/billing/overview'),
     safeFetch<PlatformWithdrawalsResponse>('/wallets/withdrawals/all'),
-    safeFetch<ReviewItem[]>('/compliance/requests?status=PENDING_REVIEW'),
     safeFetch<ReviewItem[]>('/auth/email-change-requests?status=PENDING'),
     safeFetch<SessionOverviewResponse>('/sessions/overview'),
     safeFetch<PaymentOverviewResponse>('/payments/overview'),
-    safeFetch<SystemOverviewResponse>('/system/overview'),
+    safeFetch<DashboardSummaryResponse>('/system/dashboard-summary'),
     safeFetch<PlatformSettingsSnapshot>('/system/settings'),
   ])
 
@@ -83,9 +94,11 @@ export default async function PlatformCommandCenter() {
     (withdrawals?.summary.pendingReview ?? 0) +
     (withdrawals?.summary.pendingPayoutNumbers ?? 0) +
     (withdrawals?.summary.pendingNumberChanges ?? 0)
-  const pendingReviews = (compliance?.length ?? 0) + (emailChanges?.length ?? 0)
-  const openTickets = system?.support.summary.open ?? 0
-  const criticalTickets = system?.support.summary.critical ?? 0
+  const pendingCompliance = system?.reviews.pendingCompliance ?? 0
+  const pendingReviews = pendingCompliance + (emailChanges?.length ?? 0)
+  const openTickets = system?.support.open ?? 0
+  const criticalTickets = system?.support.critical ?? 0
+  const criticalAudits = system?.audit.critical ?? 0
   const criticalAlerts = offlineRouters.length + paymentFailed + pendingPayouts + pendingReviews + criticalTickets
   const selectedGateway = settings?.gatewayReadiness?.gatewayLabel ?? settings?.paymentGateway ?? 'Not selected'
   const gatewayReady = Boolean(settings?.gatewayReadiness?.productionReady)
@@ -305,8 +318,8 @@ export default async function PlatformCommandCenter() {
             <Health label="Callbacks" value={settings?.gatewayReadiness?.webhookReady ? 'Ready' : 'Check setup'} healthy={Boolean(settings?.gatewayReadiness?.webhookReady)} />
             <Health label="RADIUS" value={`${routers?.radiusFoundation.authEventsToday ?? 0} auth events`} healthy={Boolean(routers)} />
             <Health label="Support" value={`${openTickets} open tickets`} healthy={criticalTickets === 0} />
-            <Health label="Audit" value={`${system?.audit.summary.critical ?? 0} critical`} healthy={(system?.audit.summary.critical ?? 0) === 0} />
-            <Health label="Feature limits" value={`${system?.featureLimits.summary.exceeded ?? 0} exceeded`} healthy={(system?.featureLimits.summary.exceeded ?? 0) === 0} />
+            <Health label="Audit" value={`${criticalAudits} critical`} healthy={criticalAudits === 0} />
+            <Health label="Compliance" value={`${pendingCompliance} pending`} healthy={pendingCompliance === 0} />
           </div>
         </div>
       </section>

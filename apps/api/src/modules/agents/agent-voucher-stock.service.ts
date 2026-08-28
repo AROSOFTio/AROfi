@@ -14,31 +14,80 @@ export class AgentVoucherStockService {
     if (!agent) throw new ForbiddenException('This login is not linked to an Agent profile.')
     if (agent.status !== AgentStatus.ACTIVE) throw new ForbiddenException('This Agent account is not active.')
 
-    const batches = await this.prisma.voucherBatch.findMany({
-      where: { tenantId, agentId: agent.id },
-      include: {
-        package: { select: { id: true, name: true, code: true } },
-        vouchers: { select: { status: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    })
+    const [batches, batchTotals, stockCounts] = await Promise.all([
+      this.prisma.voucherBatch.findMany({
+        where: { tenantId, agentId: agent.id },
+        select: {
+          id: true,
+          batchNumber: true,
+          package: { select: { id: true, name: true, code: true } },
+          quantity: true,
+          faceValueUgx: true,
+          status: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.voucherBatch.aggregate({
+        where: { tenantId, agentId: agent.id },
+        _sum: { quantity: true },
+      }),
+      this.prisma.voucher.groupBy({
+        by: ['batchId', 'status'],
+        where: {
+          tenantId,
+          batch: { agentId: agent.id },
+          status: {
+            in: [
+              VoucherStatus.GENERATED,
+              VoucherStatus.PRINTED,
+              VoucherStatus.SOLD,
+              VoucherStatus.REDEEMED,
+            ],
+          },
+        },
+        _count: { _all: true },
+      }),
+    ])
+
+    const countsByBatch = new Map<string, { available: number; sold: number; redeemed: number }>()
+    const summary = {
+      assigned: batchTotals._sum.quantity ?? 0,
+      available: 0,
+      sold: 0,
+      redeemed: 0,
+    }
+
+    for (const row of stockCounts) {
+      if (!row.batchId) continue
+      const counts = countsByBatch.get(row.batchId) ?? { available: 0, sold: 0, redeemed: 0 }
+      if (row.status === VoucherStatus.GENERATED || row.status === VoucherStatus.PRINTED) {
+        counts.available += row._count._all
+        summary.available += row._count._all
+      } else if (row.status === VoucherStatus.SOLD) {
+        counts.sold += row._count._all
+        summary.sold += row._count._all
+      } else if (row.status === VoucherStatus.REDEEMED) {
+        counts.redeemed += row._count._all
+        summary.redeemed += row._count._all
+      }
+      countsByBatch.set(row.batchId, counts)
+    }
 
     const items = batches.map((batch) => {
-      const available = batch.vouchers.filter((voucher) =>
-        voucher.status === VoucherStatus.GENERATED || voucher.status === VoucherStatus.PRINTED,
-      ).length
-      const redeemed = batch.vouchers.filter((voucher) => voucher.status === VoucherStatus.REDEEMED).length
-      const sold = batch.vouchers.filter((voucher) => voucher.status === VoucherStatus.SOLD).length
+      const counts = countsByBatch.get(batch.id) ?? { available: 0, sold: 0, redeemed: 0 }
+
       return {
         id: batch.id,
         batchNumber: batch.batchNumber,
         package: batch.package,
         quantity: batch.quantity,
         faceValueUgx: batch.faceValueUgx,
-        available,
-        sold,
-        redeemed,
+        available: counts.available,
+        sold: counts.sold,
+        redeemed: counts.redeemed,
         status: batch.status,
         createdAt: batch.createdAt,
         expiresAt: batch.expiresAt,
@@ -47,12 +96,7 @@ export class AgentVoucherStockService {
 
     return {
       agent: { id: agent.id, code: agent.code, name: agent.name },
-      summary: {
-        assigned: items.reduce((sum, item) => sum + item.quantity, 0),
-        available: items.reduce((sum, item) => sum + item.available, 0),
-        sold: items.reduce((sum, item) => sum + item.sold, 0),
-        redeemed: items.reduce((sum, item) => sum + item.redeemed, 0),
-      },
+      summary,
       batches: items,
     }
   }
