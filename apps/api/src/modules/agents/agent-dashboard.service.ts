@@ -4,9 +4,7 @@ import {
   BillingChannel,
   BillingTransactionStatus,
   BillingTransactionType,
-  CommissionStatus,
   Prisma,
-  SettlementStatus,
   VoucherStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
@@ -21,6 +19,14 @@ type AgentSalesPolicy = {
 }
 
 type JsonRecord = Record<string, unknown>
+
+type AgentDashboardFinancialRollup = {
+  todayCommissionUgx: bigint
+  totalCommissionUgx: bigint
+  cashSalesUgx: bigint
+  cashCommissionUgx: bigint
+  cashSettledUgx: bigint
+}
 
 /**
  * Read-only Agent dashboard queries.
@@ -84,22 +90,11 @@ export class AgentDashboardService {
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
     }
 
-    const commissionWhere: Prisma.AgentCommissionWhereInput = {
-      tenantId,
-      agentId: agent.id,
-      status: { not: CommissionStatus.REVERSED },
-    }
-
-    const [
-      recentTransactions,
-      todaySales,
-      todayCommissions,
-      totalCommissions,
-      availableOfflineVouchers,
-      cashSales,
-      cashSaleCommissions,
-      completedCashSettlements,
-    ] = await Promise.all([
+    // These five values used to require five independent aggregate queries.
+    // Keep the calculations in PostgreSQL, but fetch them in one round-trip so
+    // an Agent dashboard refresh does not fan out repeatedly across the same
+    // commission/sales/settlement tables.
+    const [recentTransactions, todaySales, financialRollups, availableOfflineVouchers] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: completedSalesWhere,
         select: {
@@ -120,14 +115,52 @@ export class AgentDashboardService {
         where: { ...completedSalesWhere, createdAt: { gte: startOfToday } },
         _sum: { grossAmountUgx: true },
       }),
-      this.prisma.agentCommission.aggregate({
-        where: { ...commissionWhere, createdAt: { gte: startOfToday } },
-        _sum: { amountUgx: true },
-      }),
-      this.prisma.agentCommission.aggregate({
-        where: commissionWhere,
-        _sum: { amountUgx: true },
-      }),
+      this.prisma.$queryRaw<AgentDashboardFinancialRollup[]>(Prisma.sql`
+        SELECT
+          COALESCE((
+            SELECT SUM(ac."amountUgx")
+            FROM "AgentCommission" ac
+            WHERE ac."tenantId" = ${tenantId}
+              AND ac."agentId" = ${agent.id}
+              AND ac.status <> 'REVERSED'
+              AND ac."createdAt" >= ${startOfToday}
+          ), 0)::bigint AS "todayCommissionUgx",
+          COALESCE((
+            SELECT SUM(ac."amountUgx")
+            FROM "AgentCommission" ac
+            WHERE ac."tenantId" = ${tenantId}
+              AND ac."agentId" = ${agent.id}
+              AND ac.status <> 'REVERSED'
+          ), 0)::bigint AS "totalCommissionUgx",
+          COALESCE((
+            SELECT SUM(bt."grossAmountUgx")
+            FROM "BillingTransaction" bt
+            WHERE bt."tenantId" = ${tenantId}
+              AND bt."agentId" = ${agent.id}
+              AND bt.type = 'VOUCHER_SALE'
+              AND bt.status = 'COMPLETED'
+          ), 0)::bigint AS "cashSalesUgx",
+          COALESCE((
+            SELECT SUM(ac."amountUgx")
+            FROM "AgentCommission" ac
+            INNER JOIN "BillingTransaction" bt ON bt.id = ac."sourceTransactionId"
+            WHERE ac."tenantId" = ${tenantId}
+              AND ac."agentId" = ${agent.id}
+              AND ac.status <> 'REVERSED'
+              AND bt."tenantId" = ${tenantId}
+              AND bt."agentId" = ${agent.id}
+              AND bt.type = 'VOUCHER_SALE'
+              AND bt.status = 'COMPLETED'
+          ), 0)::bigint AS "cashCommissionUgx",
+          COALESCE((
+            SELECT SUM(s."payableAmountUgx")
+            FROM "Settlement" s
+            WHERE s."tenantId" = ${tenantId}
+              AND s."agentId" = ${agent.id}
+              AND s.status = 'COMPLETED'
+              AND s.notes LIKE ${`${CASH_SETTLEMENT_MARKER}%`}
+          ), 0)::bigint AS "cashSettledUgx"
+      `),
       this.prisma.voucher.count({
         where: {
           tenantId,
@@ -135,48 +168,22 @@ export class AgentDashboardService {
           batch: { agentId: agent.id },
         },
       }),
-      this.prisma.billingTransaction.aggregate({
-        where: {
-          tenantId,
-          agentId: agent.id,
-          type: BillingTransactionType.VOUCHER_SALE,
-          status: BillingTransactionStatus.COMPLETED,
-        },
-        _sum: { grossAmountUgx: true },
-      }),
-      this.prisma.agentCommission.aggregate({
-        where: {
-          tenantId,
-          agentId: agent.id,
-          status: { not: CommissionStatus.REVERSED },
-          sourceTransaction: {
-            tenantId,
-            agentId: agent.id,
-            type: BillingTransactionType.VOUCHER_SALE,
-            status: BillingTransactionStatus.COMPLETED,
-          },
-        },
-        _sum: { amountUgx: true },
-      }),
-      this.prisma.settlement.aggregate({
-        where: {
-          tenantId,
-          agentId: agent.id,
-          status: SettlementStatus.COMPLETED,
-          notes: { startsWith: CASH_SETTLEMENT_MARKER },
-        },
-        _sum: { payableAmountUgx: true },
-      }),
     ])
 
-    const cashObligationUgx = Math.max(
-      0,
-      (cashSales._sum.grossAmountUgx ?? 0) - (cashSaleCommissions._sum.amountUgx ?? 0),
-    )
-    const cashOutstandingUgx = Math.max(
-      0,
-      cashObligationUgx - (completedCashSettlements._sum.payableAmountUgx ?? 0),
-    )
+    const financial = financialRollups[0] ?? {
+      todayCommissionUgx: BigInt(0),
+      totalCommissionUgx: BigInt(0),
+      cashSalesUgx: BigInt(0),
+      cashCommissionUgx: BigInt(0),
+      cashSettledUgx: BigInt(0),
+    }
+    const todayCommissionUgx = Number(financial.todayCommissionUgx)
+    const totalCommissionUgx = Number(financial.totalCommissionUgx)
+    const cashSalesUgx = Number(financial.cashSalesUgx)
+    const cashCommissionUgx = Number(financial.cashCommissionUgx)
+    const cashSettledUgx = Number(financial.cashSettledUgx)
+    const cashObligationUgx = Math.max(0, cashSalesUgx - cashCommissionUgx)
+    const cashOutstandingUgx = Math.max(0, cashObligationUgx - cashSettledUgx)
 
     return {
       agent: {
@@ -192,8 +199,8 @@ export class AgentDashboardService {
       },
       summary: {
         todaySalesUgx: todaySales._sum.grossAmountUgx ?? 0,
-        todayCommissionUgx: todayCommissions._sum.amountUgx ?? 0,
-        totalCommissionUgx: totalCommissions._sum.amountUgx ?? 0,
+        todayCommissionUgx,
+        totalCommissionUgx,
         cashToRemitUgx: cashOutstandingUgx,
         cashRemainingBeforeLimitUgx:
           agent.floatLimitUgx > 0 ? Math.max(0, agent.floatLimitUgx - cashOutstandingUgx) : null,
