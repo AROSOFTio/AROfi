@@ -35,7 +35,7 @@ export class AgentVoucherStockService {
         _sum: { quantity: true },
       }),
       this.prisma.voucher.groupBy({
-        by: ['status'],
+        by: ['batchId', 'status'],
         where: {
           tenantId,
           batch: { agentId: agent.id },
@@ -52,40 +52,7 @@ export class AgentVoucherStockService {
       }),
     ])
 
-    const batchIds = batches.map((batch) => batch.id)
-    const voucherCounts = batchIds.length
-      ? await this.prisma.voucher.groupBy({
-          by: ['batchId', 'status'],
-          where: {
-            tenantId,
-            batchId: { in: batchIds },
-            status: {
-              in: [
-                VoucherStatus.GENERATED,
-                VoucherStatus.PRINTED,
-                VoucherStatus.SOLD,
-                VoucherStatus.REDEEMED,
-              ],
-            },
-          },
-          _count: { _all: true },
-        })
-      : []
-
     const countsByBatch = new Map<string, { available: number; sold: number; redeemed: number }>()
-    for (const row of voucherCounts) {
-      if (!row.batchId) continue
-      const counts = countsByBatch.get(row.batchId) ?? { available: 0, sold: 0, redeemed: 0 }
-      if (row.status === VoucherStatus.GENERATED || row.status === VoucherStatus.PRINTED) {
-        counts.available += row._count._all
-      } else if (row.status === VoucherStatus.SOLD) {
-        counts.sold += row._count._all
-      } else if (row.status === VoucherStatus.REDEEMED) {
-        counts.redeemed += row._count._all
-      }
-      countsByBatch.set(row.batchId, counts)
-    }
-
     const summary = {
       assigned: batchTotals._sum.quantity ?? 0,
       available: 0,
@@ -94,13 +61,19 @@ export class AgentVoucherStockService {
     }
 
     for (const row of stockCounts) {
+      if (!row.batchId) continue
+      const counts = countsByBatch.get(row.batchId) ?? { available: 0, sold: 0, redeemed: 0 }
       if (row.status === VoucherStatus.GENERATED || row.status === VoucherStatus.PRINTED) {
+        counts.available += row._count._all
         summary.available += row._count._all
       } else if (row.status === VoucherStatus.SOLD) {
+        counts.sold += row._count._all
         summary.sold += row._count._all
       } else if (row.status === VoucherStatus.REDEEMED) {
+        counts.redeemed += row._count._all
         summary.redeemed += row._count._all
       }
+      countsByBatch.set(row.batchId, counts)
     }
 
     const items = batches.map((batch) => {
