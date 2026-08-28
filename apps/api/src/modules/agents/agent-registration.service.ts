@@ -172,7 +172,7 @@ export class AgentRegistrationService {
     const passwordHash = await bcrypt.hash(normalizedTemporaryPassword, 10)
 
     if (existing) {
-      await this.restoreLogin(existing.id, names, passwordHash)
+      await this.restoreLogin(existing.id, tenantId, role.id, names, passwordHash)
       return { agentId: agent.id, email, loginReady: true, restored: true }
     }
 
@@ -199,26 +199,34 @@ export class AgentRegistrationService {
         throw new BadRequestException('This email already belongs to another AROFi user account')
       }
 
-      await this.restoreLogin(concurrentUser.id, names, passwordHash)
+      await this.restoreLogin(concurrentUser.id, tenantId, role.id, names, passwordHash)
       return { agentId: agent.id, email, loginReady: true, restored: true }
     }
   }
 
-  private restoreLogin(
+  private async restoreLogin(
     userId: string,
+    tenantId: string,
+    roleId: string,
     names: { firstName: string; lastName: string },
     passwordHash: string,
   ) {
-    return this.prisma.user.update({
-      where: { id: userId },
+    // Keep the tenant + VoucherAgent role predicate on the write itself, not
+    // only on the preceding read. If another request reassigns the account
+    // between those operations, do not overwrite that newly reassigned user.
+    const result = await this.prisma.user.updateMany({
+      where: { id: userId, tenantId, roleId },
       data: {
         firstName: names.firstName,
         lastName: names.lastName,
         password: passwordHash,
         isActive: true,
       },
-      select: { id: true },
     })
+
+    if (result.count !== 1) {
+      throw new BadRequestException('Agent login changed while it was being restored; try again')
+    }
   }
 
   private normalizeTemporaryPassword(password?: string) {
