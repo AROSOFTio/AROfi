@@ -77,6 +77,18 @@ describe('AgentRegistrationService', () => {
     expect(result.loginReady).toBe(true)
   })
 
+  it('rejects a temporary password that becomes too short after trimming before DB work', async () => {
+    const { service, prisma, roleCatalog } = createHarness()
+
+    await expect(
+      service.register({ ...registration, temporaryPassword: '       x       ' }),
+    ).rejects.toBeInstanceOf(BadRequestException)
+
+    expect(roleCatalog.ensureStandardRoles).not.toHaveBeenCalled()
+    expect(prisma.tenant.findUnique).not.toHaveBeenCalled()
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
   it('does not create an Agent when the login email already belongs to a user', async () => {
     const { service, prisma, tx } = createHarness()
     prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' })
@@ -122,8 +134,21 @@ describe('AgentRegistrationService', () => {
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'user-1' },
       data: expect.objectContaining({ isActive: true }),
+      select: { id: true },
     })
     expect(prisma.user.create).not.toHaveBeenCalled()
     expect(result).toEqual(expect.objectContaining({ loginReady: true, restored: true }))
+  })
+
+  it('rejects a weak provision password before role or Agent lookups', async () => {
+    const { service, prisma, roleCatalog } = createHarness()
+
+    await expect(service.provisionLogin('agent-1', tenant.id, '    x    ')).rejects.toBeInstanceOf(
+      BadRequestException,
+    )
+
+    expect(roleCatalog.ensureStandardRoles).not.toHaveBeenCalled()
+    expect(prisma.agent.findFirst).not.toHaveBeenCalled()
+    expect(prisma.role.findUnique).not.toHaveBeenCalled()
   })
 })
