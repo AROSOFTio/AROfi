@@ -86,7 +86,9 @@ export class AgentOverviewService {
       emails: Array.from(emails),
     }))
 
+    const tenantScope = tenantId ? { tenantId } : {}
     const completedSalesWhere = {
+      ...tenantScope,
       agentId: { in: ids },
       status: BillingTransactionStatus.COMPLETED,
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
@@ -108,6 +110,7 @@ export class AgentOverviewService {
       this.prisma.agentCommission.groupBy({
         by: ['agentId'],
         where: {
+          ...tenantScope,
           agentId: { in: ids },
           status: { not: CommissionStatus.REVERSED },
         },
@@ -116,9 +119,11 @@ export class AgentOverviewService {
       this.prisma.agentCommission.groupBy({
         by: ['agentId'],
         where: {
+          ...tenantScope,
           agentId: { in: ids },
           status: { not: CommissionStatus.REVERSED },
           sourceTransaction: {
+            ...tenantScope,
             status: BillingTransactionStatus.COMPLETED,
             type: BillingTransactionType.VOUCHER_SALE,
           },
@@ -128,6 +133,7 @@ export class AgentOverviewService {
       this.prisma.settlement.groupBy({
         by: ['agentId'],
         where: {
+          ...tenantScope,
           agentId: { in: ids },
           status: SettlementStatus.COMPLETED,
           notes: { startsWith: CASH_SETTLEMENT_MARKER },
