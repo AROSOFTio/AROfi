@@ -147,6 +147,9 @@ export class AgentOverviewService {
         FROM "VoucherBatch" AS batches
         INNER JOIN "Voucher" AS vouchers ON vouchers."batchId" = batches.id
         WHERE batches."agentId" IN (${Prisma.join(ids)})
+          ${tenantId
+            ? Prisma.sql`AND batches."tenantId" = ${tenantId} AND vouchers."tenantId" = ${tenantId}`
+            : Prisma.empty}
           AND vouchers.status IN ('GENERATED', 'PRINTED')
         GROUP BY batches."agentId"
       `),
