@@ -36,23 +36,36 @@ export class AgentDashboardService {
 
   async getMyDashboard(email: string, tenantId: string) {
     const normalizedEmail = email.trim()
-    const agent = await this.prisma.agent.findFirst({
-      where: {
-        tenantId,
-        email: { equals: normalizedEmail, mode: 'insensitive' },
-      },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        email: true,
-        phoneNumber: true,
-        status: true,
-        commissionRateBps: true,
-        floatLimitUgx: true,
-        notes: true,
-      },
-    })
+    const agentSelect = {
+      id: true,
+      code: true,
+      name: true,
+      email: true,
+      phoneNumber: true,
+      status: true,
+      commissionRateBps: true,
+      floatLimitUgx: true,
+      notes: true,
+    } satisfies Prisma.AgentSelect
+
+    // Agent logins are normally stored with the exact authenticated email. Use
+    // that index-friendly predicate first and only pay for a case-insensitive
+    // scan when supporting a legacy profile whose email casing differs.
+    const agent =
+      (await this.prisma.agent.findFirst({
+        where: {
+          tenantId,
+          email: normalizedEmail,
+        },
+        select: agentSelect,
+      })) ??
+      (await this.prisma.agent.findFirst({
+        where: {
+          tenantId,
+          email: { equals: normalizedEmail, mode: 'insensitive' },
+        },
+        select: agentSelect,
+      }))
 
     if (!agent) {
       throw new ForbiddenException('Your login is not linked to an agent profile.')
