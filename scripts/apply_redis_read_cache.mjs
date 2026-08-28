@@ -35,7 +35,11 @@ function ensureSingleRxjsCopy() {
 }
 
 function read(relativePath) {
-  return fs.readFileSync(path.join(root, relativePath), 'utf8')
+  // Earlier Python source-normalization steps run on both Linux and Windows.
+  // Python text writes on Windows may leave CRLF even though the repository is
+  // LF-normalized, so make this guarded source patch insensitive to checkout /
+  // runtime newline style before matching exact snippets.
+  return fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 function write(relativePath, content) {
