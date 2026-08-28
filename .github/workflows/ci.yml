@@ -1,23 +1,33 @@
-name: CI (branch build verify)
+name: CI (self-hosted PR verify + merge)
 
-# Build + test verification for non-main branches. Pushes to main are already
-# verified by the build-verify job in deploy.yml before deployment; this
-# workflow gives feature/emergency branches the same gate without deploying.
 on:
-  push:
-    branches-ignore:
+  pull_request:
+    branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   build-verify:
     name: Verify Builds Pass
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, Windows, X64]
     steps:
-      - name: Checkout code
+      - name: Checkout PR code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -32,58 +42,120 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-${{ github.event.pull_request.head.sha || github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
       - name: Install root dependencies
+        shell: powershell
         run: npm ci
 
-      # IMPORTANT: Keep this in the same order as Dockerfile and
-      # Dockerfile.components. This is the exact source state Coolify compiles,
-      # so branch CI catches patch interactions before deployment.
       - name: Apply guarded production source patches
+        shell: powershell
         run: |
           python scripts/apply_iotec_source_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_unified_gateway_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_gateway_webhook_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/hide_pesapal_gateway.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_live_gateway_activation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/preserve_yo_uganda_gateway.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_voucher_preview_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_voucher_dashboard_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/finalize_voucher_dashboard.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/fix_lucide_icon_compat.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_public_content_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_portal_tv_package_patches_v2.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_router_compensation_review.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_router_compensation_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/fix_support_ticket_workspace.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_router_wan_port_support.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/sanitize_mikrotik_command_output.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/fix_routeros6_7_provisioning.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_mikrotik_background_install.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/enforce_no_idle_bundle_logout.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/fix_router_presence_and_access_lifecycle.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/stabilize_router_status_hysteresis.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/fix_iotec_live_gateway_diagnostics.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/fix_iotec_oauth_compatibility.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/finalize_gateway_compile.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/verify_router_captive_invariants.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/apply_arofi_brand_and_three_plan_patches.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/forbid_mikrotik_auto_mac_auth.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Generate Prisma Client
+        shell: powershell
         run: npx prisma generate --schema=apps/api/prisma/schema.prisma
 
       - name: Build all apps
+        shell: powershell
         run: npx turbo run build --cache-dir=.turbo
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
 
       - name: Run tests
+        shell: powershell
         run: npx turbo run test --cache-dir=.turbo
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
+
+  merge-after-green:
+    name: Merge PR to main after green verification
+    needs: build-verify
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Merge exact verified PR head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            const current = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+            })
+            if (current.data.head.sha !== pr.head.sha) {
+              core.setFailed(`PR head moved from ${pr.head.sha} to ${current.data.head.sha}; refusing to merge an unverified commit.`)
+              return
+            }
+            const result = await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              merge_method: 'merge',
+              sha: pr.head.sha,
+              commit_title: `Merge PR #${pr.number}: ${pr.title}`,
+            })
+            if (!result.data.merged) {
+              core.setFailed(result.data.message || 'GitHub refused the merge.')
+            }
