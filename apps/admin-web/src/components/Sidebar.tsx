@@ -248,22 +248,6 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
     if (activeGroup) setOpenGroup(activeGroup.label)
   }, [currentHref, visibleGroups])
 
-  useEffect(() => {
-    const hrefs = Array.from(new Set(['/dashboard', ...visibleGroups.flatMap((group) => group.items.map((item) => item.href))]))
-    const prefetch = () => hrefs.slice(0, 18).forEach((href) => router.prefetch(href))
-    const idle = 'requestIdleCallback' in window
-      ? window.requestIdleCallback(prefetch, { timeout: 1800 })
-      : window.setTimeout(prefetch, 600)
-
-    return () => {
-      if (typeof idle === 'number') {
-        window.clearTimeout(idle)
-      } else if ('cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idle)
-      }
-    }
-  }, [router, visibleGroups])
-
   const workspaceLabel = isReseller ? 'Referral Partner' : isVendor ? 'Business Console' : 'Platform Control'
   const homeLabel = isVendor ? 'Dashboard' : isReseller ? 'Overview' : 'Command Center'
 
@@ -299,7 +283,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
       {isVendor && user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
 
       <div className="sidebar-section">
-        <Link href="/dashboard" prefetch onPointerEnter={() => router.prefetch('/dashboard')} className={`sidebar-group-toggle ${isActiveHref(currentHref, '/dashboard') ? 'active' : ''}`}>
+        <Link href="/dashboard" prefetch={false} onPointerEnter={() => router.prefetch('/dashboard')} className={`sidebar-group-toggle ${isActiveHref(currentHref, '/dashboard') ? 'active' : ''}`}>
           <span className="sidebar-group-label">
             <LayoutDashboard size={17} />
             {homeLabel}
@@ -325,7 +309,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
                 <span className={`platform-nav-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">›</span>
               </button>
             ) : (
-              <Link href={group.items[0].href} prefetch onPointerEnter={() => router.prefetch(group.items[0].href)} className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`}>
+              <Link href={group.items[0].href} prefetch={false} onPointerEnter={() => router.prefetch(group.items[0].href)} className={`sidebar-group-toggle ${isInSection ? 'active' : ''}`}>
                 <span className="sidebar-group-label">{group.icon}{group.label}</span>
               </Link>
             )}
@@ -336,7 +320,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
                   <Link
                     key={`${group.label}-${item.href}-${item.label}`}
                     href={item.href}
-                    prefetch
+                    prefetch={false}
                     onPointerEnter={() => router.prefetch(item.href)}
                     className={`nav-item ${isActiveHref(currentHref, item.href) ? 'active' : ''}`}
                   >
