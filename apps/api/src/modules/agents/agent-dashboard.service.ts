@@ -21,6 +21,7 @@ type AgentSalesPolicy = {
 type JsonRecord = Record<string, unknown>
 
 type AgentDashboardFinancialRollup = {
+  todaySalesUgx: bigint
   todayCommissionUgx: bigint
   totalCommissionUgx: bigint
   cashSalesUgx: bigint
@@ -90,11 +91,11 @@ export class AgentDashboardService {
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
     }
 
-    // These five values used to require five independent aggregate queries.
+    // These six values used to require six independent aggregate queries.
     // Keep the calculations in PostgreSQL, but fetch them in one round-trip so
     // an Agent dashboard refresh does not fan out repeatedly across the same
     // commission/sales/settlement tables.
-    const [recentTransactions, todaySales, financialRollups, availableOfflineVouchers] = await Promise.all([
+    const [recentTransactions, financialRollups, availableOfflineVouchers] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: completedSalesWhere,
         select: {
@@ -111,12 +112,17 @@ export class AgentDashboardService {
         orderBy: { createdAt: 'desc' },
         take: 20,
       }),
-      this.prisma.billingTransaction.aggregate({
-        where: { ...completedSalesWhere, createdAt: { gte: startOfToday } },
-        _sum: { grossAmountUgx: true },
-      }),
       this.prisma.$queryRaw<AgentDashboardFinancialRollup[]>(Prisma.sql`
         SELECT
+          COALESCE((
+            SELECT SUM(bt."grossAmountUgx")
+            FROM "BillingTransaction" bt
+            WHERE bt."tenantId" = ${tenantId}
+              AND bt."agentId" = ${agent.id}
+              AND bt.status = 'COMPLETED'
+              AND bt.type IN ('VOUCHER_SALE', 'MOBILE_MONEY_SALE')
+              AND bt."createdAt" >= ${startOfToday}
+          ), 0)::bigint AS "todaySalesUgx",
           COALESCE((
             SELECT SUM(ac."amountUgx")
             FROM "AgentCommission" ac
@@ -171,12 +177,14 @@ export class AgentDashboardService {
     ])
 
     const financial = financialRollups[0] ?? {
+      todaySalesUgx: BigInt(0),
       todayCommissionUgx: BigInt(0),
       totalCommissionUgx: BigInt(0),
       cashSalesUgx: BigInt(0),
       cashCommissionUgx: BigInt(0),
       cashSettledUgx: BigInt(0),
     }
+    const todaySalesUgx = Number(financial.todaySalesUgx)
     const todayCommissionUgx = Number(financial.todayCommissionUgx)
     const totalCommissionUgx = Number(financial.totalCommissionUgx)
     const cashSalesUgx = Number(financial.cashSalesUgx)
@@ -198,7 +206,7 @@ export class AgentDashboardService {
         policy: this.readPolicy(agent.notes),
       },
       summary: {
-        todaySalesUgx: todaySales._sum.grossAmountUgx ?? 0,
+        todaySalesUgx,
         todayCommissionUgx,
         totalCommissionUgx,
         cashToRemitUgx: cashOutstandingUgx,
