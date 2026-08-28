@@ -36,9 +36,10 @@ export class AgentRegistrationService {
     const names = this.splitName(dto.name)
 
     // Resolve all cheap prerequisites and conflicts before spending bcrypt CPU
-    // or opening the write transaction. Database unique constraints below still
-    // protect the race between this preflight and the actual create.
-    const [tenant, loginRole, duplicateAgent, existingUser] = await Promise.all([
+    // or opening the write transaction. Keep the normal duplicate lookup exact
+    // and index-friendly; only legacy Agent rows with differently-cased emails
+    // need the slower case-insensitive fallback below.
+    const [tenant, loginRole, exactDuplicateAgent, existingUser] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: tenantId },
         select: { id: true, name: true },
@@ -55,7 +56,7 @@ export class AgentRegistrationService {
           OR: [
             { code },
             { phoneNumber: normalizedPhone },
-            ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+            ...(email ? [{ email }] : []),
           ],
         },
         select: { code: true, phoneNumber: true, email: true },
@@ -67,6 +68,16 @@ export class AgentRegistrationService {
           })
         : Promise.resolve(null),
     ])
+
+    const duplicateAgent = exactDuplicateAgent ?? (email
+      ? await this.prisma.agent.findFirst({
+          where: {
+            tenantId,
+            email: { equals: email, mode: 'insensitive' },
+          },
+          select: { code: true, phoneNumber: true, email: true },
+        })
+      : null)
 
     if (!tenant) throw new NotFoundException('Business not found')
     if (email && temporaryPassword && !loginRole) {
