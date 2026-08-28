@@ -22,7 +22,7 @@ describe('AgentRegistrationService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'user-1' }),
-        update: jest.fn().mockResolvedValue({ id: 'user-1' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as any
@@ -131,13 +131,37 @@ describe('AgentRegistrationService', () => {
       where: { name: 'VoucherAgent' },
       select: { id: true },
     })
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user-1', tenantId: tenant.id, roleId: 'role-agent' },
       data: expect.objectContaining({ isActive: true }),
-      select: { id: true },
     })
     expect(prisma.user.create).not.toHaveBeenCalled()
     expect(result).toEqual(expect.objectContaining({ loginReady: true, restored: true }))
+  })
+
+  it('does not overwrite a login that changes tenant or role during restoration', async () => {
+    const { service, prisma } = createHarness()
+    prisma.agent.findFirst.mockResolvedValue({
+      id: 'agent-1',
+      tenantId: tenant.id,
+      name: 'Kampala Agent',
+      email: 'agent@example.com',
+    })
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      tenantId: tenant.id,
+      roleId: 'role-agent',
+    })
+    prisma.user.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(
+      service.provisionLogin('agent-1', tenant.id, 'replacement-123'),
+    ).rejects.toBeInstanceOf(BadRequestException)
+
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user-1', tenantId: tenant.id, roleId: 'role-agent' },
+      data: expect.objectContaining({ isActive: true }),
+    })
   })
 
   it('rejects a weak provision password before role or Agent lookups', async () => {
