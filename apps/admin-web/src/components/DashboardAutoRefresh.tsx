@@ -32,8 +32,8 @@ const MIN_REFRESH_GAP_MS = 5_000
 // Server-rendered dashboard pages are deliberately quiet. Realtime bursts are
 // coalesced for 10 seconds, and the timer is only a low-frequency safety net.
 // Hidden tabs do not keep a polling timer alive or execute realtime-triggered
-// refreshes. When a tab becomes visible again we refresh once and restart the
-// fallback timer from that point.
+// refreshes. When a tab becomes visible again we refresh once if the shared
+// dedupe window allows it, then restart the fallback timer from that point.
 export function DashboardAutoRefresh({
   intervalMs = 180_000,
   eventTypes = DASHBOARD_EVENT_TYPES,
@@ -44,19 +44,16 @@ export function DashboardAutoRefresh({
   const router = useRouter()
   const lastRefreshAtRef = useRef(0)
 
-  const refreshIfVisible = useCallback(
-    (force = false) => {
-      if (document.visibilityState !== 'visible') return false
+  const refreshIfVisible = useCallback(() => {
+    if (document.visibilityState !== 'visible') return false
 
-      const now = Date.now()
-      if (!force && now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) return false
+    const now = Date.now()
+    if (now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) return false
 
-      lastRefreshAtRef.current = now
-      router.refresh()
-      return true
-    },
-    [router],
-  )
+    lastRefreshAtRef.current = now
+    router.refresh()
+    return true
+  }, [router])
 
   useRealtimeRefresh(() => refreshIfVisible(), eventTypes, 10_000)
 
@@ -82,9 +79,10 @@ export function DashboardAutoRefresh({
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Force one catch-up render after a hidden period. The timestamp also
-        // suppresses a realtime callback that may already be waiting to fire.
-        refreshIfVisible(true)
+        // Use the same minimum gap as timer/realtime refreshes so a quick tab
+        // switch cannot force a duplicate full server render immediately after
+        // another dashboard refresh.
+        refreshIfVisible()
         scheduleRefresh()
       } else {
         clearRefreshTimer()
