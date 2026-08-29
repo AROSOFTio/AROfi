@@ -111,26 +111,36 @@ export class VoucherDashboardService {
         : {}),
     }
 
-    const [sales, previousSales, batches, commissions, completedSettlements, openSettlements] = await Promise.all([
+    const [
+      sales,
+      previousSales,
+      batches,
+      commissionsByAgent,
+      completedSettlementsByAgent,
+      overdueSettlements,
+    ] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: {
           ...baseSalesWhere,
           createdAt: { gte: range.from, lte: range.to },
         },
         orderBy: { createdAt: 'desc' },
-        include: {
-          tenant: { select: { id: true, name: true } },
-          package: { select: { id: true, name: true, code: true } },
+        select: {
+          id: true,
+          createdAt: true,
+          grossAmountUgx: true,
+          feeAmountUgx: true,
+          netAmountUgx: true,
+          tenant: { select: { name: true } },
+          package: { select: { id: true, name: true } },
           agent: { select: { id: true, code: true, name: true, territory: true } },
           voucher: {
             select: {
-              id: true,
               code: true,
               batch: {
                 select: {
                   id: true,
                   batchNumber: true,
-                  agentId: true,
                   agent: { select: { id: true, code: true, name: true, territory: true } },
                 },
               },
@@ -160,32 +170,33 @@ export class VoucherDashboardService {
           },
         },
       }),
-      this.prisma.agentCommission.findMany({
+      this.prisma.agentCommission.groupBy({
+        by: ['agentId'],
         where: {
           ...(tenantId ? { tenantId } : {}),
           ...(filters.agentId ? { agentId: filters.agentId } : {}),
           status: { not: CommissionStatus.REVERSED },
           createdAt: { gte: range.from, lte: range.to },
         },
-        select: { agentId: true, amountUgx: true },
+        _sum: { amountUgx: true },
       }),
-      this.prisma.settlement.findMany({
+      this.prisma.settlement.groupBy({
+        by: ['agentId'],
         where: {
           ...(tenantId ? { tenantId } : {}),
           ...(filters.agentId ? { agentId: filters.agentId } : {}),
           status: SettlementStatus.COMPLETED,
           periodEnd: { gte: range.from, lte: range.to },
         },
-        select: { agentId: true, grossSalesUgx: true },
+        _sum: { grossSalesUgx: true },
       }),
-      this.prisma.settlement.findMany({
+      this.prisma.settlement.count({
         where: {
           ...(tenantId ? { tenantId } : {}),
           ...(filters.agentId ? { agentId: filters.agentId } : {}),
           status: { in: [SettlementStatus.READY, SettlementStatus.PROCESSING] },
           periodEnd: { lt: now },
         },
-        select: { id: true, agentId: true },
       }),
     ])
 
@@ -264,13 +275,13 @@ export class VoucherDashboardService {
       }
     }
 
-    for (const commission of commissions) {
+    for (const commission of commissionsByAgent) {
       const agent = agentMap.get(commission.agentId)
-      if (agent) agent.commissionUgx += commission.amountUgx
+      if (agent) agent.commissionUgx = commission._sum.amountUgx ?? 0
     }
-    for (const settlement of completedSettlements) {
+    for (const settlement of completedSettlementsByAgent) {
       const agent = agentMap.get(settlement.agentId)
-      if (agent) agent.settledGrossUgx += settlement.grossSalesUgx
+      if (agent) agent.settledGrossUgx = settlement._sum.grossSalesUgx ?? 0
     }
 
     const recentSales = sales.slice(0, 15).map((sale) => {
@@ -417,7 +428,7 @@ export class VoucherDashboardService {
         voided,
         lowStockAgents,
         dormantAgents,
-        overdueSettlements: openSettlements.length,
+        overdueSettlements,
       },
       recentSales,
       agents,

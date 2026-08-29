@@ -68,11 +68,15 @@ export class AgentVoucherStockService {
         take: 100,
       }),
       this.prisma.$queryRaw<VoucherStockSummaryRow[]>(Prisma.sql`
-        WITH batch_totals AS (
-          SELECT COALESCE(SUM(batches.quantity), 0)::bigint AS assigned
+        WITH agent_batches AS (
+          SELECT batches.id, batches.quantity
           FROM "VoucherBatch" AS batches
           WHERE batches."tenantId" = ${tenantId}
             AND batches."agentId" = ${agent.id}
+        ),
+        batch_totals AS (
+          SELECT COALESCE(SUM(agent_batches.quantity), 0)::bigint AS assigned
+          FROM agent_batches
         ),
         voucher_totals AS (
           SELECT
@@ -86,10 +90,8 @@ export class AgentVoucherStockService {
               WHERE vouchers.status = 'REDEEMED'
             )::bigint AS redeemed
           FROM "Voucher" AS vouchers
-          INNER JOIN "VoucherBatch" AS batches ON batches.id = vouchers."batchId"
+          INNER JOIN agent_batches ON agent_batches.id = vouchers."batchId"
           WHERE vouchers."tenantId" = ${tenantId}
-            AND batches."tenantId" = ${tenantId}
-            AND batches."agentId" = ${agent.id}
         )
         SELECT
           batch_totals.assigned,
