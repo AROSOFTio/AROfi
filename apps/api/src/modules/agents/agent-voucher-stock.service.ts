@@ -82,14 +82,14 @@ export class AgentVoucherStockService {
         ),
         voucher_totals AS (
           SELECT
-            COUNT(vouchers.id) FILTER (
+            COUNT(*) FILTER (
               WHERE vouchers.status IN ('GENERATED', 'PRINTED')
                 AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
             )::bigint AS available,
-            COUNT(vouchers.id) FILTER (
+            COUNT(*) FILTER (
               WHERE vouchers.status = 'SOLD'
             )::bigint AS sold,
-            COUNT(vouchers.id) FILTER (
+            COUNT(*) FILTER (
               WHERE vouchers.status = 'REDEEMED'
             )::bigint AS redeemed
           FROM "Voucher" AS vouchers
@@ -121,14 +121,14 @@ export class AgentVoucherStockService {
         )
         SELECT
           vouchers."batchId" AS "batchId",
-          COUNT(vouchers.id) FILTER (
+          COUNT(*) FILTER (
             WHERE vouchers.status IN ('GENERATED', 'PRINTED')
               AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
           )::bigint AS available,
-          COUNT(vouchers.id) FILTER (
+          COUNT(*) FILTER (
             WHERE vouchers.status = 'SOLD'
           )::bigint AS sold,
-          COUNT(vouchers.id) FILTER (
+          COUNT(*) FILTER (
             WHERE vouchers.status = 'REDEEMED'
           )::bigint AS redeemed
         FROM "Voucher" AS vouchers
