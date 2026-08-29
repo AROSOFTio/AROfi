@@ -46,6 +46,8 @@ export class AgentVoucherStockService {
     if (!agent) throw new ForbiddenException('This login is not linked to an Agent profile.')
     if (agent.status !== AgentStatus.ACTIVE) throw new ForbiddenException('This Agent account is not active.')
 
+    const now = new Date()
+
     // The UI only renders the latest 100 assigned batches. Keep per-batch
     // status aggregation bounded to those same 100 rows instead of grouping
     // every voucher batch the Agent has ever received. Overall summary totals
@@ -82,6 +84,7 @@ export class AgentVoucherStockService {
           SELECT
             COUNT(vouchers.id) FILTER (
               WHERE vouchers.status IN ('GENERATED', 'PRINTED')
+                AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
             )::bigint AS available,
             COUNT(vouchers.id) FILTER (
               WHERE vouchers.status = 'SOLD'
@@ -92,7 +95,13 @@ export class AgentVoucherStockService {
           FROM "Voucher" AS vouchers
           INNER JOIN agent_batches ON agent_batches.id = vouchers."batchId"
           WHERE vouchers."tenantId" = ${tenantId}
-            AND vouchers.status IN ('GENERATED', 'PRINTED', 'SOLD', 'REDEEMED')
+            AND (
+              vouchers.status IN ('SOLD', 'REDEEMED')
+              OR (
+                vouchers.status IN ('GENERATED', 'PRINTED')
+                AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
+              )
+            )
         )
         SELECT
           batch_totals.assigned,
@@ -114,6 +123,7 @@ export class AgentVoucherStockService {
           vouchers."batchId" AS "batchId",
           COUNT(vouchers.id) FILTER (
             WHERE vouchers.status IN ('GENERATED', 'PRINTED')
+              AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
           )::bigint AS available,
           COUNT(vouchers.id) FILTER (
             WHERE vouchers.status = 'SOLD'
@@ -124,7 +134,13 @@ export class AgentVoucherStockService {
         FROM "Voucher" AS vouchers
         INNER JOIN recent_batches ON recent_batches.id = vouchers."batchId"
         WHERE vouchers."tenantId" = ${tenantId}
-          AND vouchers.status IN ('GENERATED', 'PRINTED', 'SOLD', 'REDEEMED')
+          AND (
+            vouchers.status IN ('SOLD', 'REDEEMED')
+            OR (
+              vouchers.status IN ('GENERATED', 'PRINTED')
+              AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
+            )
+          )
         GROUP BY vouchers."batchId"
       `),
     ])
