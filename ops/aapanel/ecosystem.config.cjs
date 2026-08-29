@@ -1,13 +1,15 @@
 'use strict'
 
+const path = require('path')
+
 const node = '/www/server/nodejs/v20.20.2/bin/node'
-const root = '/www/wwwroot/arofi'
+const root = path.resolve(__dirname, '..', '..')
 
 module.exports = {
   apps: [
     {
       name: 'arofi_api',
-      cwd: `${root}/apps/api`,
+      cwd: path.join(root, 'apps', 'api'),
       script: 'aapanel-server.cjs',
       interpreter: node,
       autorestart: true,
@@ -19,7 +21,7 @@ module.exports = {
     },
     {
       name: 'arofi_admin',
-      cwd: `${root}/apps/admin-web`,
+      cwd: path.join(root, 'apps', 'admin-web'),
       script: 'aapanel-server.cjs',
       interpreter: node,
       autorestart: true,
@@ -32,7 +34,7 @@ module.exports = {
     },
     {
       name: 'arofi_portal',
-      cwd: `${root}/apps/portal-web`,
+      cwd: path.join(root, 'apps', 'portal-web'),
       script: 'aapanel-server.cjs',
       interpreter: node,
       autorestart: true,
