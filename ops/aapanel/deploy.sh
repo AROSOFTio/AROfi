@@ -33,8 +33,20 @@ echo "[AROFI] Applying production database migrations"
   npx prisma migrate deploy --schema=prisma/schema.prisma
 )
 
-echo "[AROFI] Building API, Admin and Portal"
-npm run build
+echo "[AROFI] Verifying Next.js build installation"
+node -e "require.resolve('next/dist/build/swc/index.js'); console.log('[AROFI] Next.js SWC build module OK')"
+
+echo "[AROFI] Building API"
+npm run build --workspace=arofi-api
+
+echo "[AROFI] Building Portal"
+npm run build --workspace=arofi-portal
+
+echo "[AROFI] Re-checking Next.js build installation"
+node -e "require.resolve('next/dist/build/swc/index.js'); console.log('[AROFI] Next.js SWC build module still OK')"
+
+echo "[AROFI] Building Admin"
+npm run build --workspace=arofi-admin
 
 echo "[AROFI] Starting/reloading all services with PM2"
 pm2 startOrReload ops/aapanel/ecosystem.config.cjs --update-env
