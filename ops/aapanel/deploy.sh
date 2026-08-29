@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/www/wwwroot/arofi"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NODE_BIN="/www/server/nodejs/v20.20.2/bin"
 export PATH="$NODE_BIN:$PATH"
 export NODE_ENV=production
 
 cd "$ROOT"
 
+echo "[AROFI] Repo root: $ROOT"
 echo "[AROFI] Installing locked workspace dependencies"
 npm ci --no-audit --no-fund
 
