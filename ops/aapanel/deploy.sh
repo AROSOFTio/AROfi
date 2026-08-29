@@ -8,6 +8,13 @@ export TURBO_TELEMETRY_DISABLED=1
 export NEXT_TELEMETRY_DISABLED=1
 export GENERATE_SOURCEMAP=false
 export UV_THREADPOOL_SIZE=1
+export NPM_CONFIG_AUDIT=false
+export NPM_CONFIG_FUND=false
+export NPM_CONFIG_PROGRESS=false
+export NPM_CONFIG_FETCH_RETRIES=4
+export NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000
+export NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=30000
+export NPM_CONFIG_FETCH_TIMEOUT=60000
 
 cd "$ROOT"
 
@@ -31,8 +38,56 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+install_dependencies() {
+  NODE_ENV=development npm ci --include=dev --no-audit --no-fund --progress=false --prefer-online
+}
+
+verify_next_install() {
+  node <<'NODE'
+const fs = require('fs')
+const path = require('path')
+
+try {
+  const packagePath = require.resolve('next/package.json')
+  const nextRoot = path.dirname(packagePath)
+  const version = require(packagePath).version
+  const requiredFiles = [
+    'dist/server/route-modules/app-page/module.compiled.js',
+    'dist/server/route-modules/pages/module.compiled.js',
+  ]
+
+  if (version !== '16.2.6') {
+    throw new Error(`expected Next 16.2.6 but found ${version}`)
+  }
+
+  for (const relativePath of requiredFiles) {
+    const absolutePath = path.join(nextRoot, relativePath)
+    if (!fs.existsSync(absolutePath) || fs.statSync(absolutePath).size === 0) {
+      throw new Error(`missing required Next runtime file: ${absolutePath}`)
+    }
+  }
+
+  console.log(`[AROFI] Next ${version} installation verified`)
+} catch (error) {
+  console.error(`[AROFI] Next installation verification failed: ${error.message}`)
+  process.exit(1)
+}
+NODE
+}
+
 echo "[AROFI] Installing locked workspace dependencies (including build tools)"
-NODE_ENV=development npm ci --include=dev --no-audit --no-fund
+install_dependencies
+
+if ! verify_next_install; then
+  echo "[AROFI] Detected an incomplete/corrupt Next installation; repairing dependencies once before build"
+  rm -rf node_modules
+  npm cache clean --force
+  install_dependencies
+  if ! verify_next_install; then
+    echo "[AROFI] ERROR: Next installation is still incomplete after a clean reinstall; refusing to waste time on a doomed build"
+    exit 1
+  fi
+fi
 
 echo "[AROFI] Applying the repository's guarded production source patches"
 python3 scripts/apply_iotec_source_patches.py
@@ -72,6 +127,9 @@ echo "[AROFI] Applying production database migrations"
   cd apps/api
   npx prisma migrate deploy --schema=prisma/schema.prisma
 )
+
+echo "[AROFI] Clearing stale build output"
+rm -rf apps/admin-web/.next apps/portal-web/.next apps/api/dist
 
 echo "[AROFI] Building Admin with production memory limits"
 NODE_OPTIONS='--max-old-space-size=640 --max-semi-space-size=8' NEXT_CPU_LIMIT=1 CI=1 \
