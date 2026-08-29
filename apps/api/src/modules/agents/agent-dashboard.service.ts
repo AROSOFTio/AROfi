@@ -132,23 +132,18 @@ export class AgentDashboardService {
             COALESCE(SUM(ac."amountUgx") FILTER (
               WHERE ac."createdAt" >= ${startOfToday}
             ), 0)::bigint AS "todayCommissionUgx",
-            COALESCE(SUM(ac."amountUgx"), 0)::bigint AS "totalCommissionUgx"
+            COALESCE(SUM(ac."amountUgx"), 0)::bigint AS "totalCommissionUgx",
+            COALESCE(SUM(ac."amountUgx") FILTER (
+              WHERE bt."tenantId" = ${tenantId}
+                AND bt."agentId" = ${agent.id}
+                AND bt.type = 'VOUCHER_SALE'
+                AND bt.status = 'COMPLETED'
+            ), 0)::bigint AS "cashCommissionUgx"
           FROM "AgentCommission" ac
+          LEFT JOIN "BillingTransaction" bt ON bt.id = ac."sourceTransactionId"
           WHERE ac."tenantId" = ${tenantId}
             AND ac."agentId" = ${agent.id}
             AND ac.status <> 'REVERSED'
-        ),
-        cash_commission AS (
-          SELECT COALESCE(SUM(ac."amountUgx"), 0)::bigint AS "cashCommissionUgx"
-          FROM "AgentCommission" ac
-          INNER JOIN "BillingTransaction" bt ON bt.id = ac."sourceTransactionId"
-          WHERE ac."tenantId" = ${tenantId}
-            AND ac."agentId" = ${agent.id}
-            AND ac.status <> 'REVERSED'
-            AND bt."tenantId" = ${tenantId}
-            AND bt."agentId" = ${agent.id}
-            AND bt.type = 'VOUCHER_SALE'
-            AND bt.status = 'COMPLETED'
         ),
         settlements AS (
           SELECT COALESCE(SUM(s."payableAmountUgx"), 0)::bigint AS "cashSettledUgx"
@@ -172,10 +167,10 @@ export class AgentDashboardService {
           commissions."todayCommissionUgx",
           commissions."totalCommissionUgx",
           sales."cashSalesUgx",
-          cash_commission."cashCommissionUgx",
+          commissions."cashCommissionUgx",
           settlements."cashSettledUgx",
           voucher_stock."availableOfflineVouchers"
-        FROM sales, commissions, cash_commission, settlements, voucher_stock
+        FROM sales, commissions, settlements, voucher_stock
       `),
     ])
 
