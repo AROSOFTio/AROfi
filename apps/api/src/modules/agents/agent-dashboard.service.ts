@@ -5,7 +5,6 @@ import {
   BillingTransactionStatus,
   BillingTransactionType,
   Prisma,
-  VoucherStatus,
 } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
@@ -27,6 +26,7 @@ type AgentDashboardFinancialRollup = {
   cashSalesUgx: bigint
   cashCommissionUgx: bigint
   cashSettledUgx: bigint
+  availableOfflineVouchers: bigint
 }
 
 /**
@@ -91,11 +91,11 @@ export class AgentDashboardService {
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
     }
 
-    // These six values used to require six independent aggregate queries.
-    // Keep the calculations in PostgreSQL, but fetch them in one round-trip so
-    // an Agent dashboard refresh does not fan out repeatedly across the same
-    // commission/sales/settlement tables.
-    const [recentTransactions, financialRollups, availableOfflineVouchers] = await Promise.all([
+    // Return the 20 rows needed by the UI separately, but collapse all summary
+    // metrics into one PostgreSQL round-trip. FILTER aggregates avoid scanning
+    // the same sales/commission tables repeatedly, and voucher stock is counted
+    // in the same query instead of requiring another Prisma count call.
+    const [recentTransactions, financialRollups] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: completedSalesWhere,
         select: {
@@ -113,67 +113,70 @@ export class AgentDashboardService {
         take: 20,
       }),
       this.prisma.$queryRaw<AgentDashboardFinancialRollup[]>(Prisma.sql`
+        WITH sales AS (
+          SELECT
+            COALESCE(SUM(bt."grossAmountUgx") FILTER (
+              WHERE bt."createdAt" >= ${startOfToday}
+            ), 0)::bigint AS "todaySalesUgx",
+            COALESCE(SUM(bt."grossAmountUgx") FILTER (
+              WHERE bt.type = 'VOUCHER_SALE'
+            ), 0)::bigint AS "cashSalesUgx"
+          FROM "BillingTransaction" bt
+          WHERE bt."tenantId" = ${tenantId}
+            AND bt."agentId" = ${agent.id}
+            AND bt.status = 'COMPLETED'
+            AND bt.type IN ('VOUCHER_SALE', 'MOBILE_MONEY_SALE')
+        ),
+        commissions AS (
+          SELECT
+            COALESCE(SUM(ac."amountUgx") FILTER (
+              WHERE ac."createdAt" >= ${startOfToday}
+            ), 0)::bigint AS "todayCommissionUgx",
+            COALESCE(SUM(ac."amountUgx"), 0)::bigint AS "totalCommissionUgx"
+          FROM "AgentCommission" ac
+          WHERE ac."tenantId" = ${tenantId}
+            AND ac."agentId" = ${agent.id}
+            AND ac.status <> 'REVERSED'
+        ),
+        cash_commission AS (
+          SELECT COALESCE(SUM(ac."amountUgx"), 0)::bigint AS "cashCommissionUgx"
+          FROM "AgentCommission" ac
+          INNER JOIN "BillingTransaction" bt ON bt.id = ac."sourceTransactionId"
+          WHERE ac."tenantId" = ${tenantId}
+            AND ac."agentId" = ${agent.id}
+            AND ac.status <> 'REVERSED'
+            AND bt."tenantId" = ${tenantId}
+            AND bt."agentId" = ${agent.id}
+            AND bt.type = 'VOUCHER_SALE'
+            AND bt.status = 'COMPLETED'
+        ),
+        settlements AS (
+          SELECT COALESCE(SUM(s."payableAmountUgx"), 0)::bigint AS "cashSettledUgx"
+          FROM "Settlement" s
+          WHERE s."tenantId" = ${tenantId}
+            AND s."agentId" = ${agent.id}
+            AND s.status = 'COMPLETED'
+            AND s.notes LIKE ${`${CASH_SETTLEMENT_MARKER}%`}
+        ),
+        voucher_stock AS (
+          SELECT COUNT(v.id)::bigint AS "availableOfflineVouchers"
+          FROM "Voucher" v
+          INNER JOIN "VoucherBatch" vb ON vb.id = v."batchId"
+          WHERE v."tenantId" = ${tenantId}
+            AND vb."tenantId" = ${tenantId}
+            AND vb."agentId" = ${agent.id}
+            AND v.status IN ('GENERATED', 'PRINTED')
+        )
         SELECT
-          COALESCE((
-            SELECT SUM(bt."grossAmountUgx")
-            FROM "BillingTransaction" bt
-            WHERE bt."tenantId" = ${tenantId}
-              AND bt."agentId" = ${agent.id}
-              AND bt.status = 'COMPLETED'
-              AND bt.type IN ('VOUCHER_SALE', 'MOBILE_MONEY_SALE')
-              AND bt."createdAt" >= ${startOfToday}
-          ), 0)::bigint AS "todaySalesUgx",
-          COALESCE((
-            SELECT SUM(ac."amountUgx")
-            FROM "AgentCommission" ac
-            WHERE ac."tenantId" = ${tenantId}
-              AND ac."agentId" = ${agent.id}
-              AND ac.status <> 'REVERSED'
-              AND ac."createdAt" >= ${startOfToday}
-          ), 0)::bigint AS "todayCommissionUgx",
-          COALESCE((
-            SELECT SUM(ac."amountUgx")
-            FROM "AgentCommission" ac
-            WHERE ac."tenantId" = ${tenantId}
-              AND ac."agentId" = ${agent.id}
-              AND ac.status <> 'REVERSED'
-          ), 0)::bigint AS "totalCommissionUgx",
-          COALESCE((
-            SELECT SUM(bt."grossAmountUgx")
-            FROM "BillingTransaction" bt
-            WHERE bt."tenantId" = ${tenantId}
-              AND bt."agentId" = ${agent.id}
-              AND bt.type = 'VOUCHER_SALE'
-              AND bt.status = 'COMPLETED'
-          ), 0)::bigint AS "cashSalesUgx",
-          COALESCE((
-            SELECT SUM(ac."amountUgx")
-            FROM "AgentCommission" ac
-            INNER JOIN "BillingTransaction" bt ON bt.id = ac."sourceTransactionId"
-            WHERE ac."tenantId" = ${tenantId}
-              AND ac."agentId" = ${agent.id}
-              AND ac.status <> 'REVERSED'
-              AND bt."tenantId" = ${tenantId}
-              AND bt."agentId" = ${agent.id}
-              AND bt.type = 'VOUCHER_SALE'
-              AND bt.status = 'COMPLETED'
-          ), 0)::bigint AS "cashCommissionUgx",
-          COALESCE((
-            SELECT SUM(s."payableAmountUgx")
-            FROM "Settlement" s
-            WHERE s."tenantId" = ${tenantId}
-              AND s."agentId" = ${agent.id}
-              AND s.status = 'COMPLETED'
-              AND s.notes LIKE ${`${CASH_SETTLEMENT_MARKER}%`}
-          ), 0)::bigint AS "cashSettledUgx"
+          sales."todaySalesUgx",
+          commissions."todayCommissionUgx",
+          commissions."totalCommissionUgx",
+          sales."cashSalesUgx",
+          cash_commission."cashCommissionUgx",
+          settlements."cashSettledUgx",
+          voucher_stock."availableOfflineVouchers"
+        FROM sales, commissions, cash_commission, settlements, voucher_stock
       `),
-      this.prisma.voucher.count({
-        where: {
-          tenantId,
-          status: { in: [VoucherStatus.GENERATED, VoucherStatus.PRINTED] },
-          batch: { agentId: agent.id },
-        },
-      }),
     ])
 
     const financial = financialRollups[0] ?? {
@@ -183,6 +186,7 @@ export class AgentDashboardService {
       cashSalesUgx: BigInt(0),
       cashCommissionUgx: BigInt(0),
       cashSettledUgx: BigInt(0),
+      availableOfflineVouchers: BigInt(0),
     }
     const todaySalesUgx = Number(financial.todaySalesUgx)
     const todayCommissionUgx = Number(financial.todayCommissionUgx)
@@ -190,6 +194,7 @@ export class AgentDashboardService {
     const cashSalesUgx = Number(financial.cashSalesUgx)
     const cashCommissionUgx = Number(financial.cashCommissionUgx)
     const cashSettledUgx = Number(financial.cashSettledUgx)
+    const availableOfflineVouchers = Number(financial.availableOfflineVouchers)
     const cashObligationUgx = Math.max(0, cashSalesUgx - cashCommissionUgx)
     const cashOutstandingUgx = Math.max(0, cashObligationUgx - cashSettledUgx)
 
