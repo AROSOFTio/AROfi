@@ -1,11 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import {
-  AgentStatus,
-  BillingChannel,
-  BillingTransactionStatus,
-  BillingTransactionType,
-  Prisma,
-} from '@prisma/client'
+import { AgentStatus, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
 const POLICY_MARKER = '[[AROFI_AGENT_SALES_POLICY]]'
@@ -24,6 +18,9 @@ type AgentVoucherStockRow = {
 
 type AgentFinancialAggregateRow = {
   agentId: string
+  totalSalesUgx: bigint
+  cashSalesUgx: bigint
+  mobileMoneySalesUgx: bigint
   totalCommissionUgx: bigint
   cashCommissionUgx: bigint
   cashSettledUgx: bigint
@@ -96,33 +93,47 @@ export class AgentOverviewService {
       emails: Array.from(emails),
     }))
 
-    const tenantScope = tenantId ? { tenantId } : {}
-    const completedSalesWhere = {
-      ...tenantScope,
-      agentId: { in: ids },
-      status: BillingTransactionStatus.COMPLETED,
-      type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
-    }
-
-    const [salesByChannel, financialsByAgent, voucherStockByAgent, loginUsers] = await Promise.all([
-      this.prisma.billingTransaction.groupBy({
-        by: ['agentId', 'channel'],
-        where: completedSalesWhere,
-        _sum: { grossAmountUgx: true },
-      }),
-      // Commission totals, cash-only commission and completed cash remittances
-      // all cover the same Agent set. Fetch the three rollups in one database
-      // round-trip instead of issuing three independent groupBy queries on
-      // every management overview refresh.
+    const [financialsByAgent, voucherStockByAgent, loginUsers] = await Promise.all([
+      // Sales, commission totals, cash-only commission and completed cash
+      // remittances all cover the same Agent set. Fold them into one compact
+      // PostgreSQL result so an overview refresh does not issue a separate
+      // sales groupBy round-trip and then merge another aggregate result in Node.
       this.prisma.$queryRaw<AgentFinancialAggregateRow[]>(Prisma.sql`
         SELECT
           financial."agentId" AS "agentId",
+          SUM(financial."totalSalesUgx")::bigint AS "totalSalesUgx",
+          SUM(financial."cashSalesUgx")::bigint AS "cashSalesUgx",
+          SUM(financial."mobileMoneySalesUgx")::bigint AS "mobileMoneySalesUgx",
           SUM(financial."totalCommissionUgx")::bigint AS "totalCommissionUgx",
           SUM(financial."cashCommissionUgx")::bigint AS "cashCommissionUgx",
           SUM(financial."cashSettledUgx")::bigint AS "cashSettledUgx"
         FROM (
           SELECT
+            transactions."agentId" AS "agentId",
+            COALESCE(SUM(transactions."grossAmountUgx"), 0)::bigint AS "totalSalesUgx",
+            COALESCE(SUM(transactions."grossAmountUgx") FILTER (
+              WHERE transactions.channel = 'VOUCHER'
+            ), 0)::bigint AS "cashSalesUgx",
+            COALESCE(SUM(transactions."grossAmountUgx") FILTER (
+              WHERE transactions.channel = 'MOBILE_MONEY'
+            ), 0)::bigint AS "mobileMoneySalesUgx",
+            0::bigint AS "totalCommissionUgx",
+            0::bigint AS "cashCommissionUgx",
+            0::bigint AS "cashSettledUgx"
+          FROM "BillingTransaction" AS transactions
+          WHERE transactions."agentId" IN (${Prisma.join(ids)})
+            AND transactions.status = 'COMPLETED'
+            AND transactions.type IN ('VOUCHER_SALE', 'MOBILE_MONEY_SALE')
+            ${tenantId ? Prisma.sql`AND transactions."tenantId" = ${tenantId}` : Prisma.empty}
+          GROUP BY transactions."agentId"
+
+          UNION ALL
+
+          SELECT
             commissions."agentId" AS "agentId",
+            0::bigint AS "totalSalesUgx",
+            0::bigint AS "cashSalesUgx",
+            0::bigint AS "mobileMoneySalesUgx",
             COALESCE(SUM(commissions."amountUgx"), 0)::bigint AS "totalCommissionUgx",
             COALESCE(SUM(
               CASE
@@ -146,6 +157,9 @@ export class AgentOverviewService {
 
           SELECT
             settlements."agentId" AS "agentId",
+            0::bigint AS "totalSalesUgx",
+            0::bigint AS "cashSalesUgx",
+            0::bigint AS "mobileMoneySalesUgx",
             0::bigint AS "totalCommissionUgx",
             0::bigint AS "cashCommissionUgx",
             COALESCE(SUM(settlements."payableAmountUgx"), 0)::bigint AS "cashSettledUgx"
@@ -175,20 +189,15 @@ export class AgentOverviewService {
     ])
 
     const saleTotals = new Map<string, { total: number; cash: number; mobileMoney: number }>()
-    for (const row of salesByChannel) {
-      if (!row.agentId) continue
-      const current = saleTotals.get(row.agentId) ?? { total: 0, cash: 0, mobileMoney: 0 }
-      const amount = row._sum.grossAmountUgx ?? 0
-      current.total += amount
-      if (row.channel === BillingChannel.VOUCHER) current.cash += amount
-      if (row.channel === BillingChannel.MOBILE_MONEY) current.mobileMoney += amount
-      saleTotals.set(row.agentId, current)
-    }
-
     const commissionTotals = new Map<string, number>()
     const cashCommissionTotals = new Map<string, number>()
     const settlementTotals = new Map<string, number>()
     for (const row of financialsByAgent) {
+      saleTotals.set(row.agentId, {
+        total: Number(row.totalSalesUgx),
+        cash: Number(row.cashSalesUgx),
+        mobileMoney: Number(row.mobileMoneySalesUgx),
+      })
       commissionTotals.set(row.agentId, Number(row.totalCommissionUgx))
       cashCommissionTotals.set(row.agentId, Number(row.cashCommissionUgx))
       settlementTotals.set(row.agentId, Number(row.cashSettledUgx))
