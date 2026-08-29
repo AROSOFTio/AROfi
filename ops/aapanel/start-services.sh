@@ -7,6 +7,19 @@ PM2="$NODE_BIN/pm2"
 
 cd "$ROOT"
 
+admin_server="$ROOT/apps/admin-web/.next/standalone/apps/admin-web/server.js"
+portal_server="$ROOT/apps/portal-web/.next/standalone/apps/portal-web/server.js"
+api_main="$ROOT/apps/api/dist/main.js"
+api_src_main="$ROOT/apps/api/dist/src/main.js"
+
+# aaPanel Git deployments replace the checkout and can remove untracked build
+# artifacts (.next and dist). If that happened, recover them once using the
+# already-installed dependencies instead of entering a PM2 crash loop.
+if [ ! -f "$admin_server" ] || [ ! -f "$portal_server" ] || { [ ! -f "$api_main" ] && [ ! -f "$api_src_main" ]; }; then
+  echo "[AROFI] Generated runtime files are missing after Git deployment; running fast recovery build"
+  exec bash "$ROOT/ops/aapanel/recover-runtime.sh"
+fi
+
 echo "[AROFI] Preparing standalone Admin and Portal runtimes"
 
 prepare_web_runtime() {
