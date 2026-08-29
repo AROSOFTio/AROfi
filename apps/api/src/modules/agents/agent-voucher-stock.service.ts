@@ -21,7 +21,7 @@ export class AgentVoucherStockService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMyStock(email: string, tenantId: string) {
-    const normalizedEmail = email.trim()
+    const normalizedEmail = email.trim().toLowerCase()
     const agentSelect = {
       id: true,
       code: true,
@@ -29,9 +29,10 @@ export class AgentVoucherStockService {
       status: true,
     } satisfies Prisma.AgentSelect
 
-    // Authenticated emails are normally stored exactly as normalized by the
-    // account flow. Keep the common lookup index-friendly and only fall back to
-    // an insensitive comparison for legacy Agent rows with mismatched casing.
+    // Account emails are normalized to lowercase by the auth flow. Normalize
+    // the authenticated value here too so ordinary mixed-case login input can
+    // use the exact, index-friendly lookup. Keep the insensitive fallback only
+    // for legacy Agent rows whose stored email casing differs.
     const agent =
       (await this.prisma.agent.findFirst({
         where: { tenantId, email: normalizedEmail },

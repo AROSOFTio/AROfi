@@ -42,7 +42,7 @@ export class AgentDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMyDashboard(email: string, tenantId: string) {
-    const normalizedEmail = email.trim()
+    const normalizedEmail = email.trim().toLowerCase()
     const agentSelect = {
       id: true,
       code: true,
@@ -55,9 +55,10 @@ export class AgentDashboardService {
       notes: true,
     } satisfies Prisma.AgentSelect
 
-    // Agent logins are normally stored with the exact authenticated email. Use
-    // that index-friendly predicate first and only pay for a case-insensitive
-    // scan when supporting a legacy profile whose email casing differs.
+    // Account emails are normalized to lowercase by the auth flow. Normalize
+    // the authenticated value here too so ordinary mixed-case login input can
+    // still use the exact, index-friendly predicate. Retain the insensitive
+    // fallback only for legacy Agent rows that were stored with mixed casing.
     const agent =
       (await this.prisma.agent.findFirst({
         where: {
