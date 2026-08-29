@@ -82,7 +82,7 @@ export class AgentOverviewService {
 
     const loginEmailsByTenant = new Map<string, Set<string>>()
     for (const agent of agents) {
-      const email = agent.email?.trim()
+      const email = agent.email?.trim().toLowerCase()
       if (!email) continue
       const emails = loginEmailsByTenant.get(agent.tenantId) ?? new Set<string>()
       emails.add(email)

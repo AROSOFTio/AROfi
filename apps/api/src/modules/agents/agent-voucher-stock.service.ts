@@ -92,6 +92,7 @@ export class AgentVoucherStockService {
           FROM "Voucher" AS vouchers
           INNER JOIN agent_batches ON agent_batches.id = vouchers."batchId"
           WHERE vouchers."tenantId" = ${tenantId}
+            AND vouchers.status IN ('GENERATED', 'PRINTED', 'SOLD', 'REDEEMED')
         )
         SELECT
           batch_totals.assigned,
