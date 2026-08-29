@@ -1,6 +1,20 @@
 import { ForbiddenException, Injectable } from '@nestjs/common'
-import { AgentStatus, Prisma, VoucherStatus } from '@prisma/client'
+import { AgentStatus, Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
+
+type VoucherStockSummaryRow = {
+  assigned: bigint
+  available: bigint
+  sold: bigint
+  redeemed: bigint
+}
+
+type VoucherStockBatchCountRow = {
+  batchId: string
+  available: bigint
+  sold: bigint
+  redeemed: bigint
+}
 
 @Injectable()
 export class AgentVoucherStockService {
@@ -31,7 +45,12 @@ export class AgentVoucherStockService {
     if (!agent) throw new ForbiddenException('This login is not linked to an Agent profile.')
     if (agent.status !== AgentStatus.ACTIVE) throw new ForbiddenException('This Agent account is not active.')
 
-    const [batches, batchTotals, stockCounts] = await Promise.all([
+    // The UI only renders the latest 100 assigned batches. Keep per-batch
+    // status aggregation bounded to those same 100 rows instead of grouping
+    // every voucher batch the Agent has ever received. Overall summary totals
+    // still cover the Agent's complete stock history in a separate compact
+    // aggregate row, preserving the existing response semantics.
+    const [batches, summaryRows, batchCountRows] = await Promise.all([
       this.prisma.voucherBatch.findMany({
         where: { tenantId, agentId: agent.id },
         select: {
@@ -47,50 +66,85 @@ export class AgentVoucherStockService {
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
-      this.prisma.voucherBatch.aggregate({
-        where: { tenantId, agentId: agent.id },
-        _sum: { quantity: true },
-      }),
-      this.prisma.voucher.groupBy({
-        by: ['batchId', 'status'],
-        where: {
-          tenantId,
-          batch: { agentId: agent.id },
-          status: {
-            in: [
-              VoucherStatus.GENERATED,
-              VoucherStatus.PRINTED,
-              VoucherStatus.SOLD,
-              VoucherStatus.REDEEMED,
-            ],
-          },
-        },
-        _count: { _all: true },
-      }),
+      this.prisma.$queryRaw<VoucherStockSummaryRow[]>(Prisma.sql`
+        WITH batch_totals AS (
+          SELECT COALESCE(SUM(batches.quantity), 0)::bigint AS assigned
+          FROM "VoucherBatch" AS batches
+          WHERE batches."tenantId" = ${tenantId}
+            AND batches."agentId" = ${agent.id}
+        ),
+        voucher_totals AS (
+          SELECT
+            COUNT(vouchers.id) FILTER (
+              WHERE vouchers.status IN ('GENERATED', 'PRINTED')
+            )::bigint AS available,
+            COUNT(vouchers.id) FILTER (
+              WHERE vouchers.status = 'SOLD'
+            )::bigint AS sold,
+            COUNT(vouchers.id) FILTER (
+              WHERE vouchers.status = 'REDEEMED'
+            )::bigint AS redeemed
+          FROM "Voucher" AS vouchers
+          INNER JOIN "VoucherBatch" AS batches ON batches.id = vouchers."batchId"
+          WHERE vouchers."tenantId" = ${tenantId}
+            AND batches."tenantId" = ${tenantId}
+            AND batches."agentId" = ${agent.id}
+        )
+        SELECT
+          batch_totals.assigned,
+          voucher_totals.available,
+          voucher_totals.sold,
+          voucher_totals.redeemed
+        FROM batch_totals, voucher_totals
+      `),
+      this.prisma.$queryRaw<VoucherStockBatchCountRow[]>(Prisma.sql`
+        WITH recent_batches AS (
+          SELECT batches.id
+          FROM "VoucherBatch" AS batches
+          WHERE batches."tenantId" = ${tenantId}
+            AND batches."agentId" = ${agent.id}
+          ORDER BY batches."createdAt" DESC
+          LIMIT 100
+        )
+        SELECT
+          vouchers."batchId" AS "batchId",
+          COUNT(vouchers.id) FILTER (
+            WHERE vouchers.status IN ('GENERATED', 'PRINTED')
+          )::bigint AS available,
+          COUNT(vouchers.id) FILTER (
+            WHERE vouchers.status = 'SOLD'
+          )::bigint AS sold,
+          COUNT(vouchers.id) FILTER (
+            WHERE vouchers.status = 'REDEEMED'
+          )::bigint AS redeemed
+        FROM "Voucher" AS vouchers
+        INNER JOIN recent_batches ON recent_batches.id = vouchers."batchId"
+        WHERE vouchers."tenantId" = ${tenantId}
+          AND vouchers.status IN ('GENERATED', 'PRINTED', 'SOLD', 'REDEEMED')
+        GROUP BY vouchers."batchId"
+      `),
     ])
 
     const countsByBatch = new Map<string, { available: number; sold: number; redeemed: number }>()
-    const summary = {
-      assigned: batchTotals._sum.quantity ?? 0,
-      available: 0,
-      sold: 0,
-      redeemed: 0,
+    for (const row of batchCountRows) {
+      countsByBatch.set(row.batchId, {
+        available: Number(row.available),
+        sold: Number(row.sold),
+        redeemed: Number(row.redeemed),
+      })
     }
 
-    for (const row of stockCounts) {
-      if (!row.batchId) continue
-      const counts = countsByBatch.get(row.batchId) ?? { available: 0, sold: 0, redeemed: 0 }
-      if (row.status === VoucherStatus.GENERATED || row.status === VoucherStatus.PRINTED) {
-        counts.available += row._count._all
-        summary.available += row._count._all
-      } else if (row.status === VoucherStatus.SOLD) {
-        counts.sold += row._count._all
-        summary.sold += row._count._all
-      } else if (row.status === VoucherStatus.REDEEMED) {
-        counts.redeemed += row._count._all
-        summary.redeemed += row._count._all
-      }
-      countsByBatch.set(row.batchId, counts)
+    const summaryRow = summaryRows[0] ?? {
+      assigned: BigInt(0),
+      available: BigInt(0),
+      sold: BigInt(0),
+      redeemed: BigInt(0),
+    }
+    const summary = {
+      assigned: Number(summaryRow.assigned),
+      available: Number(summaryRow.available),
+      sold: Number(summaryRow.sold),
+      redeemed: Number(summaryRow.redeemed),
     }
 
     const items = batches.map((batch) => {
