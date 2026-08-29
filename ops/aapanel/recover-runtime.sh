@@ -47,6 +47,18 @@ else
   echo "[AROFI] Existing node_modules verified; skipping dependency installation"
 fi
 
+# Previous interrupted recovery/build attempts can leave guarded production
+# patches half-applied in tracked source. Always return tracked source to the
+# currently deployed Git commit before applying the full patch pipeline again.
+# This does not touch ignored/untracked runtime configuration such as apps/api/.env
+# and it does not remove node_modules.
+echo "[AROFI] Resetting tracked source to the deployed Git commit before patches"
+git reset --hard HEAD
+
+if [ ! -f package-lock.json ]; then
+  git show HEAD:package-lock.json > package-lock.json
+fi
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "[AROFI] ERROR: python3 is required"
   exit 1
