@@ -45,6 +45,7 @@ export class AgentOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(tenantId?: string) {
+    const now = new Date()
     const agents = await this.prisma.agent.findMany({
       where: tenantId ? { tenantId } : undefined,
       select: {
@@ -183,6 +184,7 @@ export class AgentOverviewService {
             ? Prisma.sql`AND batches."tenantId" = ${tenantId} AND vouchers."tenantId" = ${tenantId}`
             : Prisma.empty}
           AND vouchers.status IN ('GENERATED', 'PRINTED')
+          AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
         GROUP BY batches."agentId"
       `),
       this.findLoginUsers(loginGroups),
