@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import {
-  BillingTransactionStatus,
-  BillingTransactionType,
-  Prisma,
-  VoucherStatus,
-} from '@prisma/client'
+import { Prisma, VoucherStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
 type AgentIdentity = {
@@ -35,6 +30,14 @@ type VoucherMetric = {
 type AgentVoucherMetric = VoucherMetric & {
   agentId: string
   agent: AgentIdentity
+}
+
+type AgentSaleAggregateRow = {
+  assignedAgentId: string | null
+  recordedSales: bigint
+  recordedSalesUgx: bigint
+  recordedFeesUgx: bigint
+  recordedNetUgx: bigint
 }
 
 export type AgentVoucherMetricFilters = {
@@ -90,29 +93,6 @@ export class AgentVoucherMetricsService {
       batch: batchWhere,
     }
 
-    const saleWhere: Prisma.BillingTransactionWhereInput = {
-      ...(tenantId ? { tenantId } : {}),
-      type: {
-        in: [
-          BillingTransactionType.VOUCHER_SALE,
-          BillingTransactionType.VOUCHER_REDEMPTION,
-        ],
-      },
-      status: BillingTransactionStatus.COMPLETED,
-      grossAmountUgx: { gt: 0 },
-      ...(salesDate ? { createdAt: salesDate } : {}),
-      ...(filters.packageId ? { packageId: filters.packageId } : {}),
-      ...(filters.batchId ? { voucher: { is: { batchId: filters.batchId } } } : {}),
-      ...(filters.agentId
-        ? {
-            OR: [
-              { agentId: filters.agentId },
-              { voucher: { is: { batch: { is: { agentId: filters.agentId } } } } },
-            ],
-          }
-        : {}),
-    }
-
     const [agents, batches, voucherGroups, dateExpiredVoucherGroups, sales] = await Promise.all([
       includeAgents
         ? this.prisma.agent.findMany({
@@ -156,29 +136,40 @@ export class AgentVoucherMetricsService {
         _count: { _all: true },
         _sum: { faceValueUgx: true },
       }),
-      this.prisma.billingTransaction.findMany({
-        where: saleWhere,
-        select: {
-          agentId: true,
-          grossAmountUgx: true,
-          feeAmountUgx: true,
-          netAmountUgx: true,
-          voucher: {
-            select: {
-              batch: {
-                select: {
-                  agentId: true,
-                  agent: {
-                    select: {
-                      territory: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      }),
+      // Voucher accountability used to materialize every matching completed
+      // transaction (plus nested voucher/batch/Agent rows) and reduce it in
+      // Node. Preserve the attribution rule -- batch Agent first, transaction
+      // Agent second -- but let PostgreSQL return one compact row per owner.
+      this.prisma.$queryRaw<AgentSaleAggregateRow[]>(Prisma.sql`
+        SELECT
+          COALESCE(batches."agentId", transactions."agentId") AS "assignedAgentId",
+          COUNT(*)::bigint AS "recordedSales",
+          COALESCE(SUM(transactions."grossAmountUgx"), 0)::bigint AS "recordedSalesUgx",
+          COALESCE(SUM(transactions."feeAmountUgx"), 0)::bigint AS "recordedFeesUgx",
+          COALESCE(SUM(transactions."netAmountUgx"), 0)::bigint AS "recordedNetUgx"
+        FROM "BillingTransaction" AS transactions
+        LEFT JOIN "Voucher" AS vouchers
+          ON vouchers.id = transactions."voucherId"
+        LEFT JOIN "VoucherBatch" AS batches
+          ON batches.id = vouchers."batchId"
+        LEFT JOIN "Agent" AS batch_agents
+          ON batch_agents.id = batches."agentId"
+        WHERE transactions.type IN ('VOUCHER_SALE', 'VOUCHER_REDEMPTION')
+          AND transactions.status = 'COMPLETED'
+          AND transactions."grossAmountUgx" > 0
+          ${tenantId ? Prisma.sql`AND transactions."tenantId" = ${tenantId}` : Prisma.empty}
+          ${salesDate?.gte ? Prisma.sql`AND transactions."createdAt" >= ${salesDate.gte}` : Prisma.empty}
+          ${salesDate?.lte ? Prisma.sql`AND transactions."createdAt" <= ${salesDate.lte}` : Prisma.empty}
+          ${filters.packageId ? Prisma.sql`AND transactions."packageId" = ${filters.packageId}` : Prisma.empty}
+          ${filters.batchId ? Prisma.sql`AND vouchers."batchId" = ${filters.batchId}` : Prisma.empty}
+          ${filters.agentId
+            ? Prisma.sql`AND (transactions."agentId" = ${filters.agentId} OR batches."agentId" = ${filters.agentId})`
+            : Prisma.empty}
+          ${filters.territory
+            ? Prisma.sql`AND batch_agents.territory ILIKE ${`%${filters.territory}%`}`
+            : Prisma.empty}
+        GROUP BY COALESCE(batches."agentId", transactions."agentId")
+      `),
     ])
 
     const metrics = new Map<string, AgentVoucherMetric>()
@@ -237,19 +228,12 @@ export class AgentVoucherMetricsService {
     }
 
     for (const sale of sales) {
-      const assignedAgentId = sale.voucher?.batch.agentId ?? sale.agentId
-      const territory = sale.voucher?.batch.agent?.territory ?? null
-
-      if (filters.territory && !territory?.toLowerCase().includes(filters.territory.toLowerCase())) {
-        continue
-      }
-
-      if (assignedAgentId) {
-        const metric = metrics.get(assignedAgentId)
+      if (sale.assignedAgentId) {
+        const metric = metrics.get(sale.assignedAgentId)
         if (!metric || !includeAgents) continue
-        this.accumulateSale(metric, sale)
+        this.accumulateSaleAggregate(metric, sale)
       } else if (includeMain) {
-        this.accumulateSale(main, sale)
+        this.accumulateSaleAggregate(main, sale)
       }
     }
 
@@ -457,18 +441,11 @@ export class AgentVoucherMetricsService {
     }
   }
 
-  private accumulateSale(
-    metric: VoucherMetric,
-    sale: {
-      grossAmountUgx: number
-      feeAmountUgx: number
-      netAmountUgx: number
-    },
-  ) {
-    metric.recordedSales += 1
-    metric.recordedSalesUgx += sale.grossAmountUgx
-    metric.recordedFeesUgx += sale.feeAmountUgx
-    metric.recordedNetUgx += sale.netAmountUgx
+  private accumulateSaleAggregate(metric: VoucherMetric, sale: AgentSaleAggregateRow) {
+    metric.recordedSales += Number(sale.recordedSales)
+    metric.recordedSalesUgx += Number(sale.recordedSalesUgx)
+    metric.recordedFeesUgx += Number(sale.recordedFeesUgx)
+    metric.recordedNetUgx += Number(sale.recordedNetUgx)
   }
 
   private buildDateFilter(from?: string, to?: string): Prisma.DateTimeFilter | undefined {
