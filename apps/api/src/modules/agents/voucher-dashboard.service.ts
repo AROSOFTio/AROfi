@@ -125,19 +125,22 @@ export class VoucherDashboardService {
           createdAt: { gte: range.from, lte: range.to },
         },
         orderBy: { createdAt: 'desc' },
-        include: {
-          tenant: { select: { id: true, name: true } },
-          package: { select: { id: true, name: true, code: true } },
+        select: {
+          id: true,
+          createdAt: true,
+          grossAmountUgx: true,
+          feeAmountUgx: true,
+          netAmountUgx: true,
+          tenant: { select: { name: true } },
+          package: { select: { id: true, name: true } },
           agent: { select: { id: true, code: true, name: true, territory: true } },
           voucher: {
             select: {
-              id: true,
               code: true,
               batch: {
                 select: {
                   id: true,
                   batchNumber: true,
-                  agentId: true,
                   agent: { select: { id: true, code: true, name: true, territory: true } },
                 },
               },
