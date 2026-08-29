@@ -5,6 +5,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { RedisCache } from '../../common/cache/redis-cache.decorators'
 import { SessionsService } from './sessions.service'
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -16,10 +17,10 @@ export class SessionsController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.sessionsRead)
+  @RedisCache({ namespace: 'sessions:overview', ttlSeconds: 8 })
   @Get('overview')
   getOverview(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
     return this.sessionsService.getOverview(scopedTenantId)
   }
 }
-

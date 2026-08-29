@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { WalletsService } from './wallets.service'
 import { RegisterPayoutNumberDto } from './dto/register-payout-number.dto'
 import { RequestPayoutNumberChangeDto } from './dto/request-payout-number-change.dto'
@@ -29,6 +30,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingRead)
+  @RedisCache({ namespace: 'wallets:payouts-profile', ttlSeconds: 8 })
   @Get('payouts/profile/me')
   getPayoutProfile(@CurrentUser() user: AuthenticatedAdminUser) {
     const isSuper = this.accessScope.isSuperAdmin(user)
@@ -37,6 +39,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/secret')
   setPayoutSecret(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: SetPayoutSecretDto) {
     const isSuper = this.accessScope.isSuperAdmin(user)
@@ -53,6 +56,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/secret/reset/confirm')
   confirmPayoutSecretReset(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -64,6 +68,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/numbers')
   registerPayoutNumber(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RegisterPayoutNumberDto) {
     const isSuper = this.accessScope.isSuperAdmin(user)
@@ -72,6 +77,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/number-change-requests')
   requestPayoutNumberChange(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -83,6 +89,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.billingWrite)
+  @InvalidateRedisCache('wallets:withdrawals-all', 'wallets:payouts-profile')
   @Post('withdrawals')
   requestWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RequestWithdrawalDto) {
     const isSuper = this.accessScope.isSuperAdmin(user)
@@ -91,6 +98,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsRead)
+  @RedisCache({ namespace: 'wallets:withdrawals-all', ttlSeconds: 8 })
   @Get('withdrawals/all')
   listVendorWithdrawals(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -104,6 +112,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:withdrawals-all', 'wallets:payouts-profile')
   @Post('withdrawals/:disbursementId/approve')
   approveWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('disbursementId') disbursementId: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
@@ -114,6 +123,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:withdrawals-all', 'wallets:payouts-profile')
   @Post('withdrawals/:disbursementId/reject')
   rejectWithdrawal(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -128,6 +138,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:withdrawals-all', 'wallets:payouts-profile')
   @Post('withdrawals/:disbursementId/retry')
   retryWithdrawal(@CurrentUser() user: AuthenticatedAdminUser, @Param('disbursementId') disbursementId: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
@@ -138,6 +149,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/numbers/:numberId/approve')
   approvePayoutNumber(@CurrentUser() user: AuthenticatedAdminUser, @Param('numberId') numberId: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
@@ -148,6 +160,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/numbers/:numberId/reject')
   rejectPayoutNumber(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -162,6 +175,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/number-change-requests/:requestId/approve')
   approvePayoutNumberChange(@CurrentUser() user: AuthenticatedAdminUser, @Param('requestId') requestId: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
@@ -172,6 +186,7 @@ export class WalletsController {
   }
 
   @RequirePermissions(PERMISSIONS.disbursementsManage)
+  @InvalidateRedisCache('wallets:payouts-profile')
   @Post('payouts/number-change-requests/:requestId/reject')
   rejectPayoutNumberChange(
     @CurrentUser() user: AuthenticatedAdminUser,
@@ -206,4 +221,3 @@ export class WalletsController {
     return this.walletsService.getWallet(tenantId, scopedTenantId)
   }
 }
-

@@ -5,6 +5,7 @@ import { PermissionsGuard } from '../auth/permissions.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RequirePermissions } from '../auth/permissions.decorator'
 import { PERMISSIONS } from '../auth/permissions.constants'
+import { InvalidateRedisCache, RedisCache } from '../../common/cache/redis-cache.decorators'
 import { CreateTenantDto } from './dto/create-tenant.dto'
 import { TenantsService } from './tenants.service'
 
@@ -17,6 +18,7 @@ export class TenantsController {
   ) {}
 
   @RequirePermissions(PERMISSIONS.tenantsRead)
+  @RedisCache({ namespace: 'tenants:list', ttlSeconds: 8 })
   @Get()
   findAll(@CurrentUser() user: AuthenticatedAdminUser, @Query('tenantId') tenantId?: string) {
     const scopedTenantId = this.accessScope.resolveTenantScope(user, tenantId)
@@ -24,12 +26,14 @@ export class TenantsController {
   }
 
   @RequirePermissions(PERMISSIONS.tenantsManage)
+  @InvalidateRedisCache('tenants:list')
   @Post()
   create(@Body() dto: CreateTenantDto) {
     return this.tenantsService.create(dto)
   }
 
   @RequirePermissions(PERMISSIONS.tenantsManage)
+  @InvalidateRedisCache('tenants:list')
   @Delete(':id')
   deleteTenant(@CurrentUser() user: AuthenticatedAdminUser, @Param('id') id: string) {
     if (!this.accessScope.isSuperAdmin(user)) {
@@ -38,4 +42,3 @@ export class TenantsController {
     return this.tenantsService.deleteTenant(id)
   }
 }
-

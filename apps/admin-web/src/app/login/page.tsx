@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 function resolveNextPath() {
   if (typeof window === 'undefined') {
@@ -27,6 +28,7 @@ async function readErrorMessage(response: Response, fallback: string) {
 }
 
 export default function LoginPage() {
+  const router = useRouter()
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -73,7 +75,7 @@ export default function LoginPage() {
 
       const data = await res.json()
       if (data?.otpRequired === false) {
-        window.location.href = nextPath
+        router.replace(nextPath)
         return
       }
       setStep('otp')
@@ -106,7 +108,7 @@ export default function LoginPage() {
         return
       }
 
-      window.location.href = nextPath
+      router.replace(nextPath)
     } catch {
       setError('Could not reach the server. Check your connection and try again.')
     } finally {
