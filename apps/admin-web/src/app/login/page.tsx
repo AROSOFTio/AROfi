@@ -35,6 +35,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState('')
   const [rememberDevice, setRememberDevice] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [challengeReady, setChallengeReady] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
@@ -58,7 +59,14 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    setInfo('')
+    setOtp('')
+    setChallengeReady(false)
+
+    // Move to the verification screen immediately. Password validation,
+    // trusted-device rotation and OTP delivery continue in the background,
+    // so the user never sits on a blocking "Checking..." credentials screen.
+    setStep('otp')
+    setInfo('Sending your 6-digit verification code…')
 
     try {
       const res = await fetch(`${apiBaseUrl}/auth/login/start`, {
@@ -69,6 +77,8 @@ export default function LoginPage() {
       })
 
       if (!res.ok) {
+        setStep('credentials')
+        setInfo('')
         setError(await readErrorMessage(res, 'Invalid email or password. Please try again.'))
         return
       }
@@ -78,13 +88,15 @@ export default function LoginPage() {
         router.replace(nextPath)
         return
       }
-      setStep('otp')
-      setOtp('')
+
+      setChallengeReady(true)
       setInfo(`We emailed a 6-digit verification code to ${email}. It expires in a few minutes.`)
       if (typeof data?.resendAvailableAt === 'string') {
         setResendAvailableAt(new Date(data.resendAvailableAt).getTime())
       }
     } catch {
+      setStep('credentials')
+      setInfo('')
       setError('Could not reach the server. Check your connection and try again.')
     } finally {
       setLoading(false)
@@ -92,6 +104,10 @@ export default function LoginPage() {
   }
 
   async function verifyOtp(code: string) {
+    if (!challengeReady) {
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -122,14 +138,14 @@ export default function LoginPage() {
   }
 
   useEffect(() => {
-    if (step === 'otp' && otp.length === 6 && !loading && !error) {
+    if (step === 'otp' && challengeReady && otp.length === 6 && !loading && !error) {
       void verifyOtp(otp)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp, step])
+  }, [otp, step, challengeReady])
 
   async function handleResend() {
-    if (resendCountdown > 0 || loading) {
+    if (!challengeReady || resendCountdown > 0 || loading) {
       return
     }
     setLoading(true)
@@ -246,7 +262,7 @@ export default function LoginPage() {
                 style={{ marginTop: 8 }}
                 disabled={loading}
               >
-                {loading ? 'Signing in...' : 'Continue'}
+                Continue
               </button>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
                 <a href="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>Forgot password?</a>
@@ -279,9 +295,9 @@ export default function LoginPage() {
                 type="submit"
                 className="btn btn-primary btn-block"
                 style={{ marginTop: 8 }}
-                disabled={loading || otp.length !== 6}
+                disabled={!challengeReady || loading || otp.length !== 6}
               >
-                {loading ? 'Verifying...' : 'Verify and sign in'}
+                {!challengeReady && loading ? 'Sending code…' : loading ? 'Verifying...' : 'Verify and sign in'}
               </button>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 12 }}>
                 <button
@@ -289,6 +305,7 @@ export default function LoginPage() {
                   onClick={() => {
                     setStep('credentials')
                     setOtp('')
+                    setChallengeReady(false)
                     setError('')
                     setInfo('')
                   }}
@@ -299,17 +316,21 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={handleResend}
-                  disabled={resendCountdown > 0 || loading}
+                  disabled={!challengeReady || resendCountdown > 0 || loading}
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: resendCountdown > 0 ? 'var(--text-muted)' : 'var(--green)',
-                    cursor: resendCountdown > 0 ? 'default' : 'pointer',
+                    color: !challengeReady || resendCountdown > 0 ? 'var(--text-muted)' : 'var(--green)',
+                    cursor: !challengeReady || resendCountdown > 0 ? 'default' : 'pointer',
                     padding: 0,
                     fontWeight: 700,
                   }}
                 >
-                  {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+                  {!challengeReady
+                    ? 'Sending code…'
+                    : resendCountdown > 0
+                      ? `Resend code in ${resendCountdown}s`
+                      : 'Resend code'}
                 </button>
               </div>
             </form>
