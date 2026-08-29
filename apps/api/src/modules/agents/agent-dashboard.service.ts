@@ -84,6 +84,7 @@ export class AgentDashboardService {
 
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
+    const now = new Date()
 
     const completedSalesWhere: Prisma.BillingTransactionWhereInput = {
       tenantId,
@@ -155,13 +156,14 @@ export class AgentDashboardService {
             AND s.notes LIKE ${`${CASH_SETTLEMENT_MARKER}%`}
         ),
         voucher_stock AS (
-          SELECT COUNT(v.id)::bigint AS "availableOfflineVouchers"
+          SELECT COUNT(*)::bigint AS "availableOfflineVouchers"
           FROM "Voucher" v
           INNER JOIN "VoucherBatch" vb ON vb.id = v."batchId"
           WHERE v."tenantId" = ${tenantId}
             AND vb."tenantId" = ${tenantId}
             AND vb."agentId" = ${agent.id}
             AND v.status IN ('GENERATED', 'PRINTED')
+            AND (v."expiresAt" IS NULL OR v."expiresAt" > ${now})
         )
         SELECT
           sales."todaySalesUgx",
