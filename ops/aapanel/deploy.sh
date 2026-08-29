@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NODE_BIN="/www/server/nodejs/v20.20.2/bin"
 export PATH="$NODE_BIN:$PATH"
-export NODE_ENV=production
 
 cd "$ROOT"
 
@@ -20,8 +19,10 @@ if [ ! -s package-lock.json ]; then
   exit 1
 fi
 
-echo "[AROFI] Installing locked workspace dependencies"
-npm ci --no-audit --no-fund
+echo "[AROFI] Installing locked workspace dependencies (including build tools)"
+NODE_ENV=development npm ci --include=dev --no-audit --no-fund
+
+export NODE_ENV=production
 
 echo "[AROFI] Generating Prisma client"
 npm run prisma:generate --workspace=arofi-api
