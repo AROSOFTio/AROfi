@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common'
-import { AgentStatus, VoucherStatus } from '@prisma/client'
+import { AgentStatus, Prisma, VoucherStatus } from '@prisma/client'
 import { PrismaService } from '../../prisma.service'
 
 @Injectable()
@@ -7,10 +7,27 @@ export class AgentVoucherStockService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMyStock(email: string, tenantId: string) {
-    const agent = await this.prisma.agent.findFirst({
-      where: { tenantId, email: { equals: email, mode: 'insensitive' } },
-      select: { id: true, code: true, name: true, status: true },
-    })
+    const normalizedEmail = email.trim()
+    const agentSelect = {
+      id: true,
+      code: true,
+      name: true,
+      status: true,
+    } satisfies Prisma.AgentSelect
+
+    // Authenticated emails are normally stored exactly as normalized by the
+    // account flow. Keep the common lookup index-friendly and only fall back to
+    // an insensitive comparison for legacy Agent rows with mismatched casing.
+    const agent =
+      (await this.prisma.agent.findFirst({
+        where: { tenantId, email: normalizedEmail },
+        select: agentSelect,
+      })) ??
+      (await this.prisma.agent.findFirst({
+        where: { tenantId, email: { equals: normalizedEmail, mode: 'insensitive' } },
+        select: agentSelect,
+      }))
+
     if (!agent) throw new ForbiddenException('This login is not linked to an Agent profile.')
     if (agent.status !== AgentStatus.ACTIVE) throw new ForbiddenException('This Agent account is not active.')
 
