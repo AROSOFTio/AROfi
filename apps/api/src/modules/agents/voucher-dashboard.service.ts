@@ -48,6 +48,18 @@ type DashboardLocation = {
   cashDueUgx: number
 }
 
+type DashboardSaleAggregateRow = {
+  assignedAgentId: string | null
+  agentCode: string | null
+  agentName: string | null
+  territory: string | null
+  sales: bigint
+  grossSalesUgx: bigint
+  platformFeesUgx: bigint
+  netSalesUgx: bigint
+  lastSaleAt: Date | null
+}
+
 @Injectable()
 export class VoucherDashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -112,7 +124,8 @@ export class VoucherDashboardService {
     }
 
     const [
-      sales,
+      recentSaleRows,
+      salesByAgent,
       previousSales,
       batches,
       commissionsByAgent,
@@ -125,11 +138,11 @@ export class VoucherDashboardService {
           createdAt: { gte: range.from, lte: range.to },
         },
         orderBy: { createdAt: 'desc' },
+        take: 15,
         select: {
           id: true,
           createdAt: true,
           grossAmountUgx: true,
-          feeAmountUgx: true,
           netAmountUgx: true,
           tenant: { select: { name: true } },
           package: { select: { id: true, name: true } },
@@ -148,6 +161,50 @@ export class VoucherDashboardService {
           },
         },
       }),
+      // Period totals and rankings previously required hydrating every matching
+      // transaction plus nested relations. Keep the established attribution
+      // rule (voucher-batch Agent first, transaction Agent second), but return
+      // one compact aggregate row per assigned owner from PostgreSQL.
+      this.prisma.$queryRaw<DashboardSaleAggregateRow[]>(Prisma.sql`
+        SELECT
+          COALESCE(batches."agentId", transactions."agentId") AS "assignedAgentId",
+          assigned_agents.code AS "agentCode",
+          assigned_agents.name AS "agentName",
+          assigned_agents.territory AS territory,
+          COUNT(*)::bigint AS sales,
+          COALESCE(SUM(transactions."grossAmountUgx"), 0)::bigint AS "grossSalesUgx",
+          COALESCE(SUM(transactions."feeAmountUgx"), 0)::bigint AS "platformFeesUgx",
+          COALESCE(SUM(transactions."netAmountUgx"), 0)::bigint AS "netSalesUgx",
+          MAX(transactions."createdAt") AS "lastSaleAt"
+        FROM "BillingTransaction" AS transactions
+        LEFT JOIN "Voucher" AS vouchers
+          ON vouchers.id = transactions."voucherId"
+        LEFT JOIN "VoucherBatch" AS batches
+          ON batches.id = vouchers."batchId"
+        LEFT JOIN "Agent" AS batch_agents
+          ON batch_agents.id = batches."agentId"
+        LEFT JOIN "Agent" AS assigned_agents
+          ON assigned_agents.id = COALESCE(batches."agentId", transactions."agentId")
+        WHERE transactions.type IN ('VOUCHER_SALE', 'VOUCHER_REDEMPTION')
+          AND transactions.status = 'COMPLETED'
+          AND transactions."grossAmountUgx" > 0
+          AND transactions."createdAt" >= ${range.from}
+          AND transactions."createdAt" <= ${range.to}
+          ${tenantId ? Prisma.sql`AND transactions."tenantId" = ${tenantId}` : Prisma.empty}
+          ${filters.packageId ? Prisma.sql`AND transactions."packageId" = ${filters.packageId}` : Prisma.empty}
+          ${filters.batchId ? Prisma.sql`AND vouchers."batchId" = ${filters.batchId}` : Prisma.empty}
+          ${filters.agentId
+            ? Prisma.sql`AND (transactions."agentId" = ${filters.agentId} OR batches."agentId" = ${filters.agentId})`
+            : Prisma.empty}
+          ${filters.territory
+            ? Prisma.sql`AND batch_agents.territory ILIKE ${`%${filters.territory}%`}`
+            : Prisma.empty}
+        GROUP BY
+          COALESCE(batches."agentId", transactions."agentId"),
+          assigned_agents.code,
+          assigned_agents.name,
+          assigned_agents.territory
+      `),
       this.prisma.billingTransaction.aggregate({
         where: {
           ...baseSalesWhere,
@@ -232,6 +289,10 @@ export class VoucherDashboardService {
     let mainStockValueUgx = 0
     let mainSales = 0
     let mainSalesUgx = 0
+    let totalSales = 0
+    let grossSalesUgx = 0
+    let platformFeesUgx = 0
+    let netSalesUgx = 0
     let expired = 0
     let voided = 0
     let expiringSoon = 0
@@ -275,6 +336,51 @@ export class VoucherDashboardService {
       }
     }
 
+    // Populate period sales first so Agents that only appear through direct
+    // transaction attribution exist before commission/settlement enrichment.
+    for (const sale of salesByAgent) {
+      const sales = Number(sale.sales)
+      const gross = Number(sale.grossSalesUgx)
+      const fees = Number(sale.platformFeesUgx)
+      const net = Number(sale.netSalesUgx)
+
+      totalSales += sales
+      grossSalesUgx += gross
+      platformFeesUgx += fees
+      netSalesUgx += net
+
+      if (sale.assignedAgentId && sale.agentCode && sale.agentName) {
+        const agent = ensureAgent({
+          id: sale.assignedAgentId,
+          code: sale.agentCode,
+          name: sale.agentName,
+          territory: sale.territory,
+        })
+        agent.sales = sales
+        agent.grossSalesUgx = gross
+        agent.platformFeesUgx = fees
+        agent.lastSaleAt = sale.lastSaleAt?.toISOString() ?? null
+      } else {
+        mainSales += sales
+        mainSalesUgx += gross
+      }
+
+      const locationKey = sale.assignedAgentId
+        ? sale.territory?.trim() || 'Unassigned'
+        : 'Owner direct'
+      const locationMetric = locationMap.get(locationKey) ?? {
+        location: locationKey,
+        agents: 0,
+        stock: 0,
+        sales: 0,
+        grossSalesUgx: 0,
+        cashDueUgx: 0,
+      }
+      locationMetric.sales += sales
+      locationMetric.grossSalesUgx += gross
+      locationMap.set(locationKey, locationMetric)
+    }
+
     for (const commission of commissionsByAgent) {
       const agent = agentMap.get(commission.agentId)
       if (agent) agent.commissionUgx = commission._sum.amountUgx ?? 0
@@ -284,33 +390,9 @@ export class VoucherDashboardService {
       if (agent) agent.settledGrossUgx = settlement._sum.grossSalesUgx ?? 0
     }
 
-    const recentSales = sales.slice(0, 15).map((sale) => {
+    const recentSales = recentSaleRows.map((sale) => {
       const assignedAgent = sale.voucher?.batch.agent ?? sale.agent
       const location = assignedAgent?.territory || 'Owner direct'
-      if (assignedAgent) {
-        const agent = ensureAgent(assignedAgent)
-        agent.sales += 1
-        agent.grossSalesUgx += sale.grossAmountUgx
-        agent.platformFeesUgx += sale.feeAmountUgx
-        if (!agent.lastSaleAt) agent.lastSaleAt = sale.createdAt.toISOString()
-      } else {
-        mainSales += 1
-        mainSalesUgx += sale.grossAmountUgx
-      }
-
-      const locationKey = assignedAgent?.territory?.trim() || 'Owner direct'
-      const locationMetric = locationMap.get(locationKey) ?? {
-        location: locationKey,
-        agents: 0,
-        stock: 0,
-        sales: 0,
-        grossSalesUgx: 0,
-        cashDueUgx: 0,
-      }
-      locationMetric.sales += 1
-      locationMetric.grossSalesUgx += sale.grossAmountUgx
-      locationMap.set(locationKey, locationMetric)
-
       return {
         id: sale.id,
         createdAt: sale.createdAt.toISOString(),
@@ -328,34 +410,6 @@ export class VoucherDashboardService {
         tenantName: sale.tenant.name,
       }
     })
-
-    // The map above was updated only for the recent subset; apply all remaining
-    // sales so period totals and rankings are complete.
-    for (const sale of sales.slice(15)) {
-      const assignedAgent = sale.voucher?.batch.agent ?? sale.agent
-      if (assignedAgent) {
-        const agent = ensureAgent(assignedAgent)
-        agent.sales += 1
-        agent.grossSalesUgx += sale.grossAmountUgx
-        agent.platformFeesUgx += sale.feeAmountUgx
-        if (!agent.lastSaleAt) agent.lastSaleAt = sale.createdAt.toISOString()
-      } else {
-        mainSales += 1
-        mainSalesUgx += sale.grossAmountUgx
-      }
-      const locationKey = assignedAgent?.territory?.trim() || 'Owner direct'
-      const locationMetric = locationMap.get(locationKey) ?? {
-        location: locationKey,
-        agents: 0,
-        stock: 0,
-        sales: 0,
-        grossSalesUgx: 0,
-        cashDueUgx: 0,
-      }
-      locationMetric.sales += 1
-      locationMetric.grossSalesUgx += sale.grossAmountUgx
-      locationMap.set(locationKey, locationMetric)
-    }
 
     for (const agent of agentMap.values()) {
       agent.cashDueUgx = Math.max(
@@ -383,9 +437,6 @@ export class VoucherDashboardService {
       (left, right) => right.grossSalesUgx - left.grossSalesUgx || right.stock - left.stock,
     )
 
-    const grossSalesUgx = sales.reduce((total, sale) => total + sale.grossAmountUgx, 0)
-    const platformFeesUgx = sales.reduce((total, sale) => total + sale.feeAmountUgx, 0)
-    const netSalesUgx = sales.reduce((total, sale) => total + sale.netAmountUgx, 0)
     const agentSalesUgx = agents.reduce((total, agent) => total + agent.grossSalesUgx, 0)
     const cashDueUgx = agents.reduce((total, agent) => total + agent.cashDueUgx, 0)
     const stock = mainStock + agents.reduce((total, agent) => total + agent.stock, 0)
@@ -407,7 +458,7 @@ export class VoucherDashboardService {
         previousTo: previousRange.to.toISOString(),
       },
       summary: {
-        sales: sales.length,
+        sales: totalSales,
         grossSalesUgx,
         netSalesUgx,
         platformFeesUgx,
