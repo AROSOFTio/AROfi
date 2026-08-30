@@ -5,9 +5,9 @@ This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
 gateway patches, validates the final ioTec OAuth/diagnostics output, restores
 the business-specific voucher QR route, installs the active-bundle disconnect
-guard, locks seamless same-business AP roaming, locks the operator-facing
-MikroTik onboarding command, then verifies the MikroTik captive/session and
-no-automatic-MAC-auth policies.
+guard, locks seamless same-business AP roaming, enforces the premium captive
+portal UI, locks the operator-facing MikroTik onboarding command, then verifies
+the MikroTik captive/session and no-automatic-MAC-auth policies.
 
 The diagnostics patch is deliberately NOT executed again here. The Docker build
 already runs it before the OAuth compatibility patch; executing it a second time
@@ -27,6 +27,7 @@ SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
 BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
 ACTIVE_BUNDLE_GUARD = ROOT / "scripts/guard_active_bundle_disconnects.py"
 CROSS_AP_ROAMING_GUARD = ROOT / "scripts/enforce_cross_ap_roaming.py"
+PREMIUM_PORTAL_UI_GUARD = ROOT / "scripts/enforce_premium_portal_ui.py"
 SIMPLE_ONBOARDING_GUARD = ROOT / "scripts/enforce_simple_mikrotik_onboarding.py"
 CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
 MAC_AUTH_GUARD = ROOT / "scripts/forbid_mikrotik_auto_mac_auth.py"
@@ -110,6 +111,12 @@ def enforce_cross_ap_roaming() -> None:
     runpy.run_path(str(CROSS_AP_ROAMING_GUARD), run_name="__main__")
 
 
+def enforce_premium_portal_ui() -> None:
+    if not PREMIUM_PORTAL_UI_GUARD.exists():
+        raise RuntimeError("Premium portal UI guard is missing")
+    runpy.run_path(str(PREMIUM_PORTAL_UI_GUARD), run_name="__main__")
+
+
 def lock_simple_mikrotik_onboarding() -> None:
     if not SIMPLE_ONBOARDING_GUARD.exists():
         raise RuntimeError("IP-first MikroTik onboarding guard is missing")
@@ -138,13 +145,14 @@ def main() -> None:
     enforce_business_qr()
     install_active_bundle_guard()
     enforce_cross_ap_roaming()
+    enforce_premium_portal_ui()
     lock_simple_mikrotik_onboarding()
     verify_captive_flow_last()
     enforce_no_automatic_mac_auth_last()
     print(
         "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
-        "disconnect guard, seamless cross-AP roaming, RouterOS 6/7 IP-first onboarding, "
-        "captive-flow state, and no-automatic-MAC-auth policy verified."
+        "disconnect guard, seamless cross-AP roaming, premium captive portal UI, "
+        "RouterOS 6/7 IP-first onboarding, captive-flow state, and no-automatic-MAC-auth policy verified."
     )
 
 
