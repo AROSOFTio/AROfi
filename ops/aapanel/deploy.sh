@@ -143,9 +143,52 @@ echo "[AROFI] Building API"
 NODE_OPTIONS='--max-old-space-size=1024 --max-semi-space-size=8' CI=1 \
   npm run build --workspace=arofi-api
 
-echo "[AROFI] Starting/reloading API, Admin and Portal with PM2"
-pm2 startOrReload ops/aapanel/ecosystem.config.cjs --update-env
-pm2 save
+echo "[AROFI] Verifying Next build assets before process reload"
+for app in admin-web portal-web; do
+  if [ ! -s "apps/$app/.next/BUILD_ID" ]; then
+    echo "[AROFI] ERROR: apps/$app/.next/BUILD_ID is missing; refusing to reload a partial build"
+    exit 1
+  fi
+  if ! find "apps/$app/.next/static" -type f -name '*.css' -print -quit 2>/dev/null | grep -q .; then
+    echo "[AROFI] ERROR: apps/$app has no generated CSS assets; refusing to reload"
+    exit 1
+  fi
+done
 
-echo "[AROFI] Deployment complete"
-pm2 status
+PM2_BIN="$(command -v pm2 || true)"
+if [ -z "$PM2_BIN" ]; then
+  echo "[AROFI] ERROR: pm2 is not available in PATH"
+  exit 1
+fi
+
+if [ "$(id -u)" -eq 0 ]; then
+  PM2_USER="www"
+  PM2_GROUP="www"
+  PM2_HOME_DIR="/home/www/.pm2"
+else
+  PM2_USER="$(id -un)"
+  PM2_GROUP="$(id -gn)"
+  PM2_HOME_DIR="${PM2_HOME:-$HOME/.pm2}"
+fi
+
+echo "[AROFI] Preparing build output for production user $PM2_USER"
+if [ "$(id -u)" -eq 0 ]; then
+  install -d -o "$PM2_USER" -g "$PM2_GROUP" "$PM2_HOME_DIR"
+  chown -R "$PM2_USER:$PM2_GROUP" apps/admin-web/.next apps/portal-web/.next apps/api/dist
+fi
+
+echo "[AROFI] Starting/reloading API, Admin and Portal under production PM2 user $PM2_USER"
+if [ "$(id -u)" -eq 0 ]; then
+  runuser -u "$PM2_USER" -- env PATH="$PATH" PM2_HOME="$PM2_HOME_DIR" \
+    "$PM2_BIN" startOrReload ops/aapanel/ecosystem.config.cjs --update-env
+  runuser -u "$PM2_USER" -- env PATH="$PATH" PM2_HOME="$PM2_HOME_DIR" \
+    "$PM2_BIN" save
+  echo "[AROFI] Deployment complete"
+  runuser -u "$PM2_USER" -- env PATH="$PATH" PM2_HOME="$PM2_HOME_DIR" \
+    "$PM2_BIN" status
+else
+  PM2_HOME="$PM2_HOME_DIR" "$PM2_BIN" startOrReload ops/aapanel/ecosystem.config.cjs --update-env
+  PM2_HOME="$PM2_HOME_DIR" "$PM2_BIN" save
+  echo "[AROFI] Deployment complete"
+  PM2_HOME="$PM2_HOME_DIR" "$PM2_BIN" status
+fi
