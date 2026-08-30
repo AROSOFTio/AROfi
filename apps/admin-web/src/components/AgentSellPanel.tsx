@@ -430,7 +430,7 @@ export default function AgentSellPanel({
 }
 
 function SectionTitle({ step, title }: { step: string; title: string }) {
-  return <div style={{ fontSize: 13px, fontWeight: 850, margin: '18px 0 8px' }}><span style={{ color: 'var(--brand)', marginRight: 6 }}>{step}.</span>{title}</div>
+  return <div style={{ fontSize: 13, fontWeight: 850, margin: '18px 0 8px' }}><span style={{ color: 'var(--brand)', marginRight: 6 }}>{step}.</span>{title}</div>
 }
 
 function ChoiceButton({ active, icon, title, text, onClick, disabled = false }: { active: boolean; icon: React.ReactNode; title: string; text: string; onClick: () => void; disabled?: boolean }) {
