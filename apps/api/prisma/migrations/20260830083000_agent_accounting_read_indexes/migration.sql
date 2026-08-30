@@ -15,3 +15,8 @@ CREATE INDEX IF NOT EXISTS idx_settlement_agent_cash_completed
   ON "Settlement"("tenantId", "agentId", "createdAt" DESC)
   WHERE status = 'COMPLETED'
     AND notes LIKE 'AGENT_CASH_REMITTANCE%';
+
+CREATE INDEX IF NOT EXISTS idx_billing_agent_pending_float_return
+  ON "BillingTransaction"("tenantId", "agentId", "createdAt" DESC)
+  WHERE status = 'PENDING'
+    AND type = 'AGENT_FLOAT_RETURN';
