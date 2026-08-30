@@ -11,11 +11,6 @@ type AgentSalesPolicy = {
   allowedPackageIds: string[]
 }
 
-type AgentVoucherStockRow = {
-  agentId: string
-  availableCount: bigint
-}
-
 type AgentFinancialAggregateRow = {
   agentId: string
   totalSalesUgx: bigint
@@ -24,6 +19,7 @@ type AgentFinancialAggregateRow = {
   totalCommissionUgx: bigint
   cashCommissionUgx: bigint
   cashSettledUgx: bigint
+  availableVoucherStock: bigint
 }
 
 type AgentLoginGroup = {
@@ -94,11 +90,11 @@ export class AgentOverviewService {
       emails: Array.from(emails),
     }))
 
-    const [financialsByAgent, voucherStockByAgent, loginUsers] = await Promise.all([
-      // Sales, commission totals, cash-only commission and completed cash
-      // remittances all cover the same Agent set. Fold them into one compact
-      // PostgreSQL result so an overview refresh does not issue a separate
-      // sales groupBy round-trip and then merge another aggregate result in Node.
+    const [financialsByAgent, loginUsers] = await Promise.all([
+      // Sales, commissions, settlements and available voucher stock all cover
+      // the same Agent set. Fold them into one compact PostgreSQL result so an
+      // overview refresh does not issue separate aggregate round-trips and then
+      // merge those result sets in Node.
       this.prisma.$queryRaw<AgentFinancialAggregateRow[]>(Prisma.sql`
         SELECT
           financial."agentId" AS "agentId",
@@ -107,7 +103,8 @@ export class AgentOverviewService {
           SUM(financial."mobileMoneySalesUgx")::bigint AS "mobileMoneySalesUgx",
           SUM(financial."totalCommissionUgx")::bigint AS "totalCommissionUgx",
           SUM(financial."cashCommissionUgx")::bigint AS "cashCommissionUgx",
-          SUM(financial."cashSettledUgx")::bigint AS "cashSettledUgx"
+          SUM(financial."cashSettledUgx")::bigint AS "cashSettledUgx",
+          SUM(financial."availableVoucherStock")::bigint AS "availableVoucherStock"
         FROM (
           SELECT
             transactions."agentId" AS "agentId",
@@ -120,7 +117,8 @@ export class AgentOverviewService {
             ), 0)::bigint AS "mobileMoneySalesUgx",
             0::bigint AS "totalCommissionUgx",
             0::bigint AS "cashCommissionUgx",
-            0::bigint AS "cashSettledUgx"
+            0::bigint AS "cashSettledUgx",
+            0::bigint AS "availableVoucherStock"
           FROM "BillingTransaction" AS transactions
           WHERE transactions."agentId" IN (${Prisma.join(ids)})
             AND transactions.status = 'COMPLETED'
@@ -143,7 +141,8 @@ export class AgentOverviewService {
                 ELSE 0
               END
             ), 0)::bigint AS "cashCommissionUgx",
-            0::bigint AS "cashSettledUgx"
+            0::bigint AS "cashSettledUgx",
+            0::bigint AS "availableVoucherStock"
           FROM "AgentCommission" AS commissions
           INNER JOIN "BillingTransaction" AS transactions
             ON transactions.id = commissions."sourceTransactionId"
@@ -163,29 +162,37 @@ export class AgentOverviewService {
             0::bigint AS "mobileMoneySalesUgx",
             0::bigint AS "totalCommissionUgx",
             0::bigint AS "cashCommissionUgx",
-            COALESCE(SUM(settlements."payableAmountUgx"), 0)::bigint AS "cashSettledUgx"
+            COALESCE(SUM(settlements."payableAmountUgx"), 0)::bigint AS "cashSettledUgx",
+            0::bigint AS "availableVoucherStock"
           FROM "Settlement" AS settlements
           WHERE settlements."agentId" IN (${Prisma.join(ids)})
             AND settlements.status = 'COMPLETED'
             AND settlements.notes LIKE ${`${CASH_SETTLEMENT_MARKER}%`}
             ${tenantId ? Prisma.sql`AND settlements."tenantId" = ${tenantId}` : Prisma.empty}
           GROUP BY settlements."agentId"
+
+          UNION ALL
+
+          SELECT
+            batches."agentId" AS "agentId",
+            0::bigint AS "totalSalesUgx",
+            0::bigint AS "cashSalesUgx",
+            0::bigint AS "mobileMoneySalesUgx",
+            0::bigint AS "totalCommissionUgx",
+            0::bigint AS "cashCommissionUgx",
+            0::bigint AS "cashSettledUgx",
+            COUNT(*)::bigint AS "availableVoucherStock"
+          FROM "VoucherBatch" AS batches
+          INNER JOIN "Voucher" AS vouchers ON vouchers."batchId" = batches.id
+          WHERE batches."agentId" IN (${Prisma.join(ids)})
+            ${tenantId
+              ? Prisma.sql`AND batches."tenantId" = ${tenantId} AND vouchers."tenantId" = ${tenantId}`
+              : Prisma.empty}
+            AND vouchers.status IN ('GENERATED', 'PRINTED')
+            AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
+          GROUP BY batches."agentId"
         ) AS financial
         GROUP BY financial."agentId"
-      `),
-      this.prisma.$queryRaw<AgentVoucherStockRow[]>(Prisma.sql`
-        SELECT
-          batches."agentId" AS "agentId",
-          COUNT(vouchers.id)::bigint AS "availableCount"
-        FROM "VoucherBatch" AS batches
-        INNER JOIN "Voucher" AS vouchers ON vouchers."batchId" = batches.id
-        WHERE batches."agentId" IN (${Prisma.join(ids)})
-          ${tenantId
-            ? Prisma.sql`AND batches."tenantId" = ${tenantId} AND vouchers."tenantId" = ${tenantId}`
-            : Prisma.empty}
-          AND vouchers.status IN ('GENERATED', 'PRINTED')
-          AND (vouchers."expiresAt" IS NULL OR vouchers."expiresAt" > ${now})
-        GROUP BY batches."agentId"
       `),
       this.findLoginUsers(loginGroups),
     ])
@@ -194,6 +201,7 @@ export class AgentOverviewService {
     const commissionTotals = new Map<string, number>()
     const cashCommissionTotals = new Map<string, number>()
     const settlementTotals = new Map<string, number>()
+    const voucherStock = new Map<string, number>()
     for (const row of financialsByAgent) {
       saleTotals.set(row.agentId, {
         total: Number(row.totalSalesUgx),
@@ -203,11 +211,7 @@ export class AgentOverviewService {
       commissionTotals.set(row.agentId, Number(row.totalCommissionUgx))
       cashCommissionTotals.set(row.agentId, Number(row.cashCommissionUgx))
       settlementTotals.set(row.agentId, Number(row.cashSettledUgx))
-    }
-
-    const voucherStock = new Map<string, number>()
-    for (const row of voucherStockByAgent) {
-      voucherStock.set(row.agentId, Number(row.availableCount))
+      voucherStock.set(row.agentId, Number(row.availableVoucherStock))
     }
 
     const loginKeys = new Set(
