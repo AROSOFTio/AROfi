@@ -10,6 +10,16 @@ CREATE INDEX IF NOT EXISTS idx_billing_agent_completed_sales
   WHERE status = 'COMPLETED'
     AND type IN ('VOUCHER_SALE', 'MOBILE_MONEY_SALE');
 
+-- cashOutstanding() runs inside Agent deposit finalization and only considers completed
+-- voucher-channel voucher sales. Give that narrower transactional path its own small
+-- covering index so it does not scan the broader completed Agent sales index.
+CREATE INDEX IF NOT EXISTS idx_billing_agent_completed_cash_sales
+  ON "BillingTransaction"("tenantId", "agentId")
+  INCLUDE ("id", "grossAmountUgx")
+  WHERE status = 'COMPLETED'
+    AND type = 'VOUCHER_SALE'
+    AND channel = 'VOUCHER';
+
 CREATE INDEX IF NOT EXISTS idx_agent_commission_active_by_agent
   ON "AgentCommission"("tenantId", "agentId", "createdAt" DESC)
   INCLUDE ("amountUgx", "status", "sourceTransactionId")
