@@ -24,6 +24,7 @@ ROUTER = ROOT / "apps/api/src/modules/payments/payment-router.service.ts"
 PAYMENTS = ROOT / "apps/api/src/modules/payments/payments.service.ts"
 IOTEC = ROOT / "apps/api/src/modules/payments/iotec-pay.service.ts"
 SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
+PORTAL = ROOT / "apps/portal-web/src/components/PortalCheckout.tsx"
 BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
 ACTIVE_BUNDLE_GUARD = ROOT / "scripts/guard_active_bundle_disconnects.py"
 CROSS_AP_ROAMING_GUARD = ROOT / "scripts/enforce_cross_ap_roaming.py"
@@ -114,6 +115,21 @@ def enforce_cross_ap_roaming() -> None:
 def enforce_premium_portal_ui() -> None:
     if not PREMIUM_PORTAL_UI_GUARD.exists():
         raise RuntimeError("Premium portal UI guard is missing")
+    if not PORTAL.exists():
+        raise RuntimeError("Premium portal UI source is missing")
+
+    # The base portal currently defines the same classic package-card token in
+    # several template objects. The premium guard originally expected exactly
+    # one occurrence and rejected a valid source tree before builds could run.
+    # Normalize every identical classic token first; the guard remains the final
+    # authority for all other portal UI invariants and stays idempotent.
+    text = PORTAL.read_text(encoding="utf-8")
+    old_theme = "packageCard: 'border-slate-200 bg-white',"
+    premium_theme = "packageCard: 'border-slate-200 bg-white hover:border-blue-200 hover:shadow-md',"
+    if old_theme in text:
+        text = text.replace(old_theme, premium_theme)
+        PORTAL.write_text(text, encoding="utf-8")
+
     runpy.run_path(str(PREMIUM_PORTAL_UI_GUARD), run_name="__main__")
 
 
