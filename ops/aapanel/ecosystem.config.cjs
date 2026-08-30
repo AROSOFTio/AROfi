@@ -37,6 +37,11 @@ module.exports = {
         PORT: '3002',
         HOSTNAME: '0.0.0.0',
         NEXT_TELEMETRY_DISABLED: '1',
+        // Dashboard server components authenticate against the local API.
+        // Without this, apps/admin-web/src/lib/api.ts falls back to port 3000,
+        // getAdminSession() returns null, and a valid OTP login redirects back
+        // to /login even though the browser received the session cookie.
+        API_SERVER_URL: 'http://127.0.0.1:3001/api',
       },
     },
     {
