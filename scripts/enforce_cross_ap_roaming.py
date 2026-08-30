@@ -10,6 +10,8 @@ by the original router. This guard locks the browser/router side to that policy:
 - auto-connect waits for fresh context resolved from the AP the device is on now;
 - the current AP's MikroTik link-login URL always wins over a stale cached URL;
 - router-served captive pages likewise prefer their local $(link-login-only);
+- every generated AP/router under one business uses the same tenant-wide SSID,
+  preventing per-SSID private-MAC changes from breaking same-device roaming;
 - cross-business reuse stays forbidden because the backend tenant scope remains
   authoritative.
 
@@ -28,6 +30,7 @@ CAPTIVE_SPEC = ROOT / "apps/api/src/modules/routers/router-captive-flow.initiali
 CAPTIVE_VERIFY = ROOT / "scripts/verify_router_captive_invariants.py"
 PORTAL_SERVICE = ROOT / "apps/api/src/modules/portal/portal.service.ts"
 PORTAL_SPEC = ROOT / "apps/api/src/modules/portal/portal.service.spec.ts"
+ROUTERS_SERVICE = ROOT / "apps/api/src/modules/routers/routers.service.ts"
 
 
 def replace_required(text: str, old: str, new: str, label: str) -> str:
@@ -154,6 +157,35 @@ def patch_router_captive_flow() -> None:
     CAPTIVE_VERIFY.write_text(verify, encoding="utf-8")
 
 
+def patch_tenant_roaming_ssid() -> None:
+    """Make generated WiFi names tenant-wide instead of router-specific.
+
+    Modern phones commonly use a different private/randomized MAC for each SSID.
+    If Router A is named `AroFi` and Router B is named `AROFI WIFI`, a device can
+    therefore appear to AROFi as two unrelated MAC addresses and the active
+    bundle cannot follow automatically. True WiFi roaming also requires one
+    network identity. Use the business/tenant name first for every generated AP
+    and retain the router/site name only as a defensive fallback.
+    """
+
+    text = ROUTERS_SERVICE.read_text(encoding="utf-8")
+    target = "hotspotNetworkName: router.tenant.name || router.siteLabel || router.name,"
+    old_variants = (
+        "hotspotNetworkName: router.siteLabel ?? router.hotspot?.name ?? router.name,",
+        "hotspotNetworkName: router.siteLabel ?? router.name,",
+    )
+
+    for old in old_variants:
+        text = text.replace(old, target)
+
+    if text.count(target) < 2:
+        raise RuntimeError(
+            "Cross-AP roaming patch rejected: tenant-wide hotspot SSID was not applied to every provisioning path"
+        )
+
+    ROUTERS_SERVICE.write_text(text, encoding="utf-8")
+
+
 def verify_backend_scope() -> None:
     service = PORTAL_SERVICE.read_text(encoding="utf-8")
     spec = PORTAL_SPEC.read_text(encoding="utf-8")
@@ -173,7 +205,15 @@ def verify_backend_scope() -> None:
 
 
 def main() -> None:
-    required_files = (PORTAL_WEB, CAPTIVE_FLOW, CAPTIVE_SPEC, CAPTIVE_VERIFY, PORTAL_SERVICE, PORTAL_SPEC)
+    required_files = (
+        PORTAL_WEB,
+        CAPTIVE_FLOW,
+        CAPTIVE_SPEC,
+        CAPTIVE_VERIFY,
+        PORTAL_SERVICE,
+        PORTAL_SPEC,
+        ROUTERS_SERVICE,
+    )
     missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
     if missing:
         raise RuntimeError("Cross-AP roaming required files missing: " + ", ".join(missing))
@@ -181,10 +221,11 @@ def main() -> None:
     verify_backend_scope()
     patch_portal_web()
     patch_router_captive_flow()
+    patch_tenant_roaming_ssid()
     verify_backend_scope()
     print(
-        "Cross-AP roaming enforced: fresh same-business MAC access follows the customer to the current AP, "
-        "uses that AP's RouterOS login endpoint, and remains isolated across businesses."
+        "Cross-AP roaming enforced: same-business APs use one tenant-wide SSID, fresh MAC access follows the customer "
+        "to the current AP, that AP's RouterOS login endpoint wins, and cross-business reuse remains isolated."
     )
 
 
