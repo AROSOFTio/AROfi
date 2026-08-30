@@ -20,3 +20,10 @@ CREATE INDEX IF NOT EXISTS idx_billing_agent_pending_float_return
   ON "BillingTransaction"("tenantId", "agentId", "createdAt" DESC)
   WHERE status = 'PENDING'
     AND type = 'AGENT_FLOAT_RETURN';
+
+-- getMyAccounting() returns only the newest Agent disbursements, scoped by tenant
+-- and Agent. The existing tenant/date and Agent/status indexes cannot satisfy this
+-- filter + ordering together, so keep a dedicated read-path index for that query.
+CREATE INDEX IF NOT EXISTS idx_disbursement_tenant_agent_recent
+  ON "Disbursement"("tenantId", "agentId", "createdAt" DESC)
+  WHERE "agentId" IS NOT NULL;
