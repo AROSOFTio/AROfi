@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { ChatMessageSender, SupportTicketChannel } from '@prisma/client'
+import { ChatMessageSender, SupportTicketChannel, SupportTicketStatus } from '@prisma/client'
 import { randomBytes, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../../prisma.service'
 
@@ -9,6 +9,10 @@ import { PrismaService } from '../../prisma.service'
 const PLATFORM_TENANT_ID = 'platform'
 const MAX_VISITOR_NAME_LENGTH = 80
 const MAX_CHAT_MESSAGE_LENGTH = 2000
+const FINAL_TICKET_STATUSES = new Set<SupportTicketStatus>([
+  SupportTicketStatus.RESOLVED,
+  SupportTicketStatus.CLOSED,
+])
 
 export interface ChatMessage {
   sender: 'visitor' | 'admin'
@@ -41,7 +45,7 @@ export class ChatService {
 
   async createSession(name: string): Promise<{ sessionId: string; code: string }> {
     const sessionId = randomBytes(12).toString('hex').toUpperCase()
-    const visitorName = this.normalizeText(name || 'Visitor', MAX_VISITOR_NAME_LENGTH) || 'Visitor'
+    const visitorName = this.normalizeText(name || 'Website Visitor', MAX_VISITOR_NAME_LENGTH) || 'Website Visitor'
 
     let code = ''
     for (let attempts = 0; attempts < 20; attempts += 1) {
@@ -84,22 +88,46 @@ export class ChatService {
   async getSession(sessionId: string): Promise<ChatSession | undefined> {
     const session = await this.prisma.chatSession.findUnique({
       where: { sessionId },
-      include: { messages: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+        supportTicket: {
+          include: {
+            messages: {
+              where: { isInternal: false },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+      },
     })
     if (!session) {
       return undefined
     }
+
+    // The support ticket is the canonical human-support thread. Visitor chat
+    // messages are already mirrored into it, and replies made by AROFi staff
+    // in Support Floor are written there too. Reading that thread here makes
+    // dashboard replies appear back in the public website chat without a
+    // separate paid chat provider.
+    const ticketMessages = session.supportTicket?.messages ?? []
+    const messages: ChatMessage[] = ticketMessages.length > 0
+      ? ticketMessages.map((message) => ({
+          sender: message.authorRole === 'CUSTOMER' ? 'visitor' : 'admin',
+          text: message.body,
+          timestamp: message.createdAt.toISOString(),
+        }))
+      : session.messages.map((message) => ({
+          sender: message.sender === ChatMessageSender.VISITOR ? 'visitor' : 'admin',
+          text: message.text,
+          timestamp: message.createdAt.toISOString(),
+        }))
 
     return {
       sessionId: session.sessionId,
       code: session.code,
       name: session.name,
       lastActive: session.lastActiveAt,
-      messages: session.messages.map((message) => ({
-        sender: message.sender === ChatMessageSender.VISITOR ? 'visitor' : 'admin',
-        text: message.text,
-        timestamp: message.createdAt.toISOString(),
-      })),
+      messages,
     }
   }
 
@@ -109,10 +137,16 @@ export class ChatService {
       return false
     }
 
-    const session = await this.prisma.chatSession.findUnique({ where: { sessionId } })
+    const session = await this.prisma.chatSession.findUnique({
+      where: { sessionId },
+      include: { supportTicket: { select: { status: true } } },
+    })
     if (!session) {
       return false
     }
+
+    const now = new Date()
+    const reopenTicket = session.supportTicket && FINAL_TICKET_STATUSES.has(session.supportTicket.status)
 
     await this.prisma.$transaction([
       this.prisma.chatMessage.create({
@@ -120,7 +154,7 @@ export class ChatService {
       }),
       this.prisma.chatSession.update({
         where: { id: session.id },
-        data: { lastActiveAt: new Date() },
+        data: { lastActiveAt: now },
       }),
       ...(session.supportTicketId
         ? [
@@ -134,13 +168,18 @@ export class ChatService {
             }),
             this.prisma.supportTicket.update({
               where: { id: session.supportTicketId },
-              data: { latestResponseAt: new Date() },
+              data: {
+                latestResponseAt: now,
+                ...(reopenTicket ? { status: SupportTicketStatus.OPEN, resolvedAt: null } : {}),
+              },
             }),
           ]
         : []),
     ])
 
-    // Send via WAHA to the admin's phone
+    // Optional immediate notification/fallback: if self-hosted WAHA is
+    // configured, mirror the visitor message to the support phone. The public
+    // website chat itself does not depend on WhatsApp.
     const wahaUrl = process.env.WHATSAPP_GATEWAY_URL
     const wahaApiKey = process.env.WHATSAPP_GATEWAY_API_KEY
     const adminPhone = process.env.ROUTER_ALERTS_WHATSAPP_PHONE
@@ -234,13 +273,14 @@ export class ChatService {
       return
     }
 
+    const now = new Date()
     await this.prisma.$transaction([
       this.prisma.chatMessage.create({
         data: { chatSessionId: session.id, sender: ChatMessageSender.ADMIN, text: cleanText },
       }),
       this.prisma.chatSession.update({
         where: { id: session.id },
-        data: { lastActiveAt: new Date() },
+        data: { lastActiveAt: now },
       }),
       ...(session.supportTicketId
         ? [
@@ -252,12 +292,17 @@ export class ChatService {
                 body: cleanText,
               },
             }),
+            this.prisma.supportTicket.update({
+              where: { id: session.supportTicketId },
+              data: { latestResponseAt: now },
+            }),
           ]
         : []),
     ])
 
     this.logger.log(`Routed admin WhatsApp reply to session ${session.sessionId} (Code: #${code})`)
   }
+
   private normalizeText(value: unknown, maxLength: number) {
     if (typeof value !== 'string') {
       return ''
