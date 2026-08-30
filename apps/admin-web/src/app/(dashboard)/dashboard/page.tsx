@@ -22,18 +22,18 @@ export default async function DashboardAliasPage({
 }) {
   const session = await getAdminSession()
   const user = session?.user
+  const resolvedSearchParams = await searchParams
 
   if (user?.role === 'VoucherAgent') {
     return (
       <Suspense fallback={<DashboardContentFallback />}>
-        <AgentDashboard />
+        <AgentDashboard openSeller={resolvedSearchParams?.sell === '1'} />
       </Suspense>
     )
   }
 
   const isVendor = isVendorWorkspace(user)
   const isReseller = isResellerWorkspace(user)
-  const resolvedSearchParams = await searchParams
 
   if (!isVendor && !isReseller) {
     if (user?.role === 'Support' || user?.role === 'ReadOnlySupport') redirect('/support')

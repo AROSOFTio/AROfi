@@ -39,9 +39,11 @@ export class AgentCashSaleDto {
   @IsUUID()
   packageId: string
 
+  // A walk-in customer can buy a voucher code for a laptop/TV/phone without
+  // giving the Agent a phone number. Phone is only metadata for delivery/lookup.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  customerPhoneNumber: string
+  customerPhoneNumber?: string
 
   @IsIn(agentFulfillmentModes)
   fulfillment: AgentFulfillmentMode
