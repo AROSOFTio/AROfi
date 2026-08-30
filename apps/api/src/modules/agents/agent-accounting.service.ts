@@ -55,7 +55,28 @@ export class AgentAccountingService {
 
   async getMyAccounting(email: string, tenantId: string) {
     const agent = await this.requireAgent(email, tenantId)
-    const [sales, commissions, settlements, pendingDeposits, withdrawals, tenantWallet] = await Promise.all([
+    const settlementWhere = {
+      tenantId,
+      agentId: agent.id,
+      status: SettlementStatus.COMPLETED,
+      notes: { startsWith: CASH_SETTLEMENT_MARKER },
+    } satisfies Prisma.SettlementWhereInput
+    const pendingDepositWhere = {
+      tenantId,
+      agentId: agent.id,
+      type: BillingTransactionType.AGENT_FLOAT_RETURN,
+      status: BillingTransactionStatus.PENDING,
+    } satisfies Prisma.BillingTransactionWhereInput
+
+    const [
+      sales,
+      commissions,
+      recentSettlements,
+      settlementTotals,
+      pendingDepositTotals,
+      withdrawals,
+      tenantWallet,
+    ] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: {
           tenantId,
@@ -73,23 +94,18 @@ export class AgentAccountingService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.settlement.findMany({
-        where: {
-          tenantId,
-          agentId: agent.id,
-          status: SettlementStatus.COMPLETED,
-          notes: { startsWith: CASH_SETTLEMENT_MARKER },
-        },
+        where: settlementWhere,
         select: { payableAmountUgx: true, createdAt: true, reference: true },
         orderBy: { createdAt: 'desc' },
+        take: 10,
       }),
-      this.prisma.billingTransaction.findMany({
-        where: {
-          tenantId,
-          agentId: agent.id,
-          type: BillingTransactionType.AGENT_FLOAT_RETURN,
-          status: BillingTransactionStatus.PENDING,
-        },
-        select: { id: true, grossAmountUgx: true, createdAt: true },
+      this.prisma.settlement.aggregate({
+        where: settlementWhere,
+        _sum: { payableAmountUgx: true },
+      }),
+      this.prisma.billingTransaction.aggregate({
+        where: pendingDepositWhere,
+        _sum: { grossAmountUgx: true },
       }),
       this.prisma.disbursement.findMany({
         where: { tenantId, agentId: agent.id },
@@ -118,9 +134,9 @@ export class AgentAccountingService {
       (sum, item) => sum + Math.max(0, item.grossAmountUgx - (item.sourceCommission?.amountUgx ?? 0)),
       0,
     )
-    const cashSettledUgx = settlements.reduce((sum, item) => sum + item.payableAmountUgx, 0)
+    const cashSettledUgx = settlementTotals._sum.payableAmountUgx ?? 0
     const cashOutstandingUgx = Math.max(0, cashLiabilityUgx - cashSettledUgx)
-    const pendingCashDepositUgx = pendingDeposits.reduce((sum, item) => sum + item.grossAmountUgx, 0)
+    const pendingCashDepositUgx = pendingDepositTotals._sum.grossAmountUgx ?? 0
     const fundedCommissionUgx = Math.max(
       0,
       Math.min(tenantWallet?.balanceUgx ?? 0, tenantWallet?.earnedBalanceUgx ?? 0),
@@ -161,7 +177,7 @@ export class AgentAccountingService {
         pendingCashDepositUgx,
         cashAvailableToDepositUgx: Math.max(0, cashOutstandingUgx - pendingCashDepositUgx),
       },
-      recentSettlements: settlements.slice(0, 10),
+      recentSettlements,
       recentWithdrawals: withdrawals
         .filter((item) => this.metadataString(item.metadata, 'kind') === COMMISSION_WITHDRAWAL_KIND)
         .slice(0, 10)
@@ -403,11 +419,11 @@ export class AgentAccountingService {
           id: transaction.id,
           status: 'COMPLETED',
           amountUgx: transaction.grossAmountUgx,
-          cashRemainingUgx: await this.cashOutstanding(tx, tenantId, agentId),
+          cashRemainingUgx: await this.cashOutstanding(tx, tenantId, agent.id),
         }
       }
 
-      const outstanding = await this.cashOutstanding(tx, tenantId, agentId)
+      const outstanding = await this.cashOutstanding(tx, tenantId, agent.id)
       const amountUgx = Math.min(transaction.grossAmountUgx, outstanding)
       if (amountUgx <= 0) throw new BadRequestException('This cash balance has already been settled.')
       const wallet = await this.findOrCreateTenantWalletWithClient(tx, tenantId)
