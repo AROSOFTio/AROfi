@@ -150,7 +150,8 @@ export class RouterOverviewService {
           },
           _count: { _all: true },
         }),
-        this.prisma.radAcct.findMany({
+        this.prisma.radAcct.groupBy({
+          by: ['nasipaddress', 'username'],
           where: {
             acctstoptime: null,
             OR: [
@@ -158,10 +159,7 @@ export class RouterOverviewService {
               { acctupdatetime: null, acctstarttime: { gte: liveAccountingCutoff } },
             ],
           },
-          select: {
-            nasipaddress: true,
-            username: true,
-          },
+          _count: { _all: true },
         }),
         this.prisma.radAcct.count({
           where: {
@@ -182,7 +180,7 @@ export class RouterOverviewService {
         liveNasIps.add(row.nasipaddress)
         activeAccountingByNas.set(
           row.nasipaddress,
-          (activeAccountingByNas.get(row.nasipaddress) ?? 0) + 1,
+          (activeAccountingByNas.get(row.nasipaddress) ?? 0) + row._count._all,
         )
       }
       if (row.username) {
@@ -219,7 +217,7 @@ export class RouterOverviewService {
       if (routerId) {
         activeAccountingByRouterId.set(
           routerId,
-          (activeAccountingByRouterId.get(routerId) ?? 0) + 1,
+          (activeAccountingByRouterId.get(routerId) ?? 0) + row._count._all,
         )
       }
     }
