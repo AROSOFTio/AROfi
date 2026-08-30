@@ -112,12 +112,27 @@ def patch_portal_web() -> None:
 
 def patch_router_captive_flow() -> None:
     text = CAPTIVE_FLOW.read_text(encoding="utf-8")
-    text = replace_required(
-        text,
+
+    # Keep `oldConnect` unchanged: it is deliberately the matcher for the
+    # legacy/current generated captive HTML (`rc.loginUrl || lo`). Only the
+    # replacement payload (`instantConnect`) must prefer the AP the customer is
+    # physically on now (`lo || rc.loginUrl`). Changing the matcher itself made
+    # prepareLoginHtml() stop recognizing the generated login function and
+    # regressed the direct RouterOS POST path.
+    instant_anchor = "const instantConnect = "
+    instant_index = text.find(instant_anchor)
+    if instant_index < 0:
+        raise RuntimeError("Cross-AP roaming patch rejected: missing instant-connect payload")
+
+    prefix = text[:instant_index]
+    instant_tail = text[instant_index:]
+    instant_tail = replace_required(
+        instant_tail,
         "var target=(rc.loginUrl||lo||'http://10.55.0.1/login')",
         "var target=(lo||rc.loginUrl||'http://10.55.0.1/login')",
-        "router-local link-login precedence",
+        "router-local instant-connect link-login precedence",
     )
+    text = prefix + instant_tail
     CAPTIVE_FLOW.write_text(text, encoding="utf-8")
 
     spec = CAPTIVE_SPEC.read_text(encoding="utf-8")
