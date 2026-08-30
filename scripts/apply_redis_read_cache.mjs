@@ -54,6 +54,39 @@ function replaceOnce(source, before, after, label) {
   return source.replace(before, after)
 }
 
+function patchAgentAccountingCompileRegression() {
+  const relativePath = 'apps/api/src/modules/agents/agent-accounting.service.ts'
+  const source = read(relativePath)
+  const startMarker = '  private async finalizeCashDeposit(transactionId: string, tenantId: string, agentId: string) {'
+  const endMarker = '\n  private async finalizeCommissionWithdrawal('
+  const start = source.indexOf(startMarker)
+  const end = source.indexOf(endMarker, start)
+
+  if (start < 0 || end < 0) {
+    throw new Error('Agent cash-deposit finalizer anchors not found')
+  }
+
+  const beforeMethod = source.slice(0, start)
+  let method = source.slice(start, end)
+  const afterMethod = source.slice(end)
+  const broken = 'this.cashOutstanding(tx, tenantId, agent.id)'
+  const fixed = 'this.cashOutstanding(tx, tenantId, agentId)'
+  const brokenCount = method.split(broken).length - 1
+
+  if (brokenCount > 0) {
+    method = method.split(broken).join(fixed)
+    write(relativePath, beforeMethod + method + afterMethod)
+    console.log(`Repaired Agent accounting compile regression: ${brokenCount} stale agent.id reference(s) replaced with agentId`)
+    return
+  }
+
+  if (!method.includes(fixed)) {
+    throw new Error('Agent cash-deposit finalizer contains neither the expected fixed nor legacy cashOutstanding call')
+  }
+
+  console.log('Agent accounting cash-deposit finalizer already uses agentId')
+}
+
 function patchPaymentsService() {
   const relativePath = 'apps/api/src/modules/payments/payments.service.ts'
   let source = read(relativePath)
@@ -208,5 +241,6 @@ function patchPaymentsService() {
 }
 
 ensureSingleRxjsCopy()
+patchAgentAccountingCompileRegression()
 patchPaymentsService()
 console.log('Redis portal catalog optimization applied')
