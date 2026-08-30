@@ -33,7 +33,7 @@ type AgentVoucherMetric = VoucherMetric & {
 }
 
 type VoucherAggregateRow = {
-  batchId: string
+  assignedAgentId: string | null
   status: VoucherStatus
   count: bigint
   valueUgx: bigint
@@ -78,27 +78,7 @@ export class AgentVoucherMetricsService {
         : {}),
     }
 
-    const batchWhere: Prisma.VoucherBatchWhereInput = {
-      ...(tenantId ? { tenantId } : {}),
-      ...(filters.packageId ? { packageId: filters.packageId } : {}),
-      ...(filters.batchId ? { id: filters.batchId } : {}),
-      ...(ownerType === 'AGENT'
-        ? { agentId: filters.agentId ? filters.agentId : { not: null } }
-        : ownerType === 'MAIN'
-          ? { agentId: null }
-          : filters.agentId
-            ? { agentId: filters.agentId }
-            : {}),
-      ...(filters.territory
-        ? {
-            agent: {
-              is: { territory: { contains: filters.territory, mode: 'insensitive' } },
-            },
-          }
-        : {}),
-    }
-
-    const [agents, batches, voucherGroups, sales] = await Promise.all([
+    const [agents, voucherGroups, sales] = await Promise.all([
       includeAgents
         ? this.prisma.agent.findMany({
             where: agentWhere,
@@ -111,20 +91,13 @@ export class AgentVoucherMetricsService {
             },
           })
         : Promise.resolve([]),
-      this.prisma.voucherBatch.findMany({
-        where: batchWhere,
-        select: {
-          id: true,
-          agentId: true,
-        },
-      }),
-      // The accountability view used to scan/group the same voucher population
-      // twice: once for status totals and again for date-expired stock. Fold
-      // both into one grouped query so PostgreSQL only walks the matching
-      // voucher/batch set once while preserving the same expiry semantics.
+      // Group directly by the owning Agent instead of returning one row per
+      // batch/status and separately loading every matching VoucherBatch just to
+      // map batch IDs back to owners in Node. This removes one database round
+      // trip and keeps the aggregate result proportional to owners/statuses.
       this.prisma.$queryRaw<VoucherAggregateRow[]>(Prisma.sql`
         SELECT
-          vouchers."batchId" AS "batchId",
+          batches."agentId" AS "assignedAgentId",
           vouchers.status AS status,
           COUNT(*)::bigint AS count,
           COALESCE(SUM(vouchers."faceValueUgx"), 0)::bigint AS "valueUgx",
@@ -160,7 +133,7 @@ export class AgentVoucherMetricsService {
                   AND batch_agents.territory ILIKE ${`%${filters.territory}%`}
               )`
             : Prisma.empty}
-        GROUP BY vouchers."batchId", vouchers.status
+        GROUP BY batches."agentId", vouchers.status
       `),
       // Voucher accountability used to materialize every matching completed
       // transaction (plus nested voucher/batch/Agent rows) and reduce it in
@@ -218,20 +191,12 @@ export class AgentVoucherMetricsService {
       ensureMetric(agent)
     }
 
-    const metricByBatch = new Map<string, VoucherMetric>()
-    for (const batch of batches) {
-      const target = batch.agentId
-        ? metrics.get(batch.agentId) ?? null
+    for (const group of voucherGroups) {
+      const target = group.assignedAgentId
+        ? metrics.get(group.assignedAgentId) ?? null
         : includeMain
           ? main
           : null
-      if (target) {
-        metricByBatch.set(batch.id, target)
-      }
-    }
-
-    for (const group of voucherGroups) {
-      const target = metricByBatch.get(group.batchId)
       if (!target) continue
 
       this.accumulateVoucherGroup(
