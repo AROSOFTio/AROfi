@@ -11,25 +11,32 @@ permissions:
 
 jobs:
   recover:
-    name: Inspect edge vhost layout
+    name: Identify AROFi public proxy owner
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
-      - name: Inspect edge configuration layout
+      - name: Inspect public proxy process and configuration
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $key = Join-Path $env:USERPROFILE '.ssh\arofi-production-actions'
           $remote = @'
           set -e
-          echo '=== CONF FILES ==='
-          ls -la /opt/infrastructure/proxy/nginx/conf.d
-          echo '=== SERVER NAMES ==='
-          grep -R -n -E 'server_name|proxy_pass|ssl_certificate' /opt/infrastructure/proxy/nginx/conf.d 2>/dev/null || true
-          echo '=== CERT FILES ==='
-          find /opt/infrastructure/proxy/certs -maxdepth 3 -type f -printf '%p\n' 2>/dev/null | sort
-          echo '=== NGINX LISTENERS ==='
-          docker exec edge-nginx nginx -T 2>&1 | grep -n -E 'listen .*443|listen .*80|server_name' || true
+          echo '=== HOST PORTS 80/443 ==='
+          ss -ltnp | grep -E ':(80|443) ' || true
+          echo '=== DOCKER PUBLISHED 80/443 ==='
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}' | grep -E '80->|443->|0\.0\.0\.0:80|0\.0\.0\.0:443|edge-nginx' || true
+          echo '=== EDGE VERSION ==='
+          docker exec edge-nginx nginx -v 2>&1 || true
+          echo '=== EDGE MAIN NGINX.CONF ==='
+          docker exec edge-nginx cat /etc/nginx/nginx.conf 2>&1 || true
+          echo '=== EDGE NGINX -T FIRST 160 LINES ==='
+          docker exec edge-nginx nginx -T 2>&1 | sed -n '1,160p' || true
+          echo '=== HOST NGINX ==='
+          command -v nginx && nginx -v 2>&1 || true
+          echo '=== PUBLIC LOCAL HOST HEADER TEST HTTP ==='
+          curl -sS -D - -o /tmp/arofi-http-body -H 'Host: arofi.net' --max-time 10 http://127.0.0.1/api/health || true
+          cat /tmp/arofi-http-body 2>/dev/null || true
           '@
           $remote = $remote.Replace("`r`n", "`n").Replace("`r", "`n")
           $encoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($remote))
