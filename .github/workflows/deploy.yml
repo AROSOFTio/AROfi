@@ -47,10 +47,12 @@ jobs:
           $target = "$userName@$hostName"
           $sha = '${{ github.sha }}'
           $archive = Join-Path $env:RUNNER_TEMP "arofi-$sha.tar"
-          $keyFile = $null
+          $temporaryKeyFile = $null
+          $identityKey = $null
 
           $sshArgs = @(
             '-o', 'BatchMode=yes',
+            '-o', 'IdentitiesOnly=yes',
             '-o', 'StrictHostKeyChecking=accept-new',
             '-o', 'ConnectTimeout=15',
             '-o', 'ServerAliveInterval=20',
@@ -59,18 +61,47 @@ jobs:
 
           try {
             if (-not [string]::IsNullOrWhiteSpace($env:PROD_SSH_PRIVATE_KEY)) {
-              $keyFile = Join-Path $env:RUNNER_TEMP 'arofi-production-ssh-key'
+              $temporaryKeyFile = Join-Path $env:RUNNER_TEMP 'arofi-production-ssh-key'
               $normalizedKey = $env:PROD_SSH_PRIVATE_KEY.Replace("`r`n", "`n").Trim() + "`n"
               $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-              [System.IO.File]::WriteAllText($keyFile, $normalizedKey, $utf8NoBom)
-              & icacls.exe $keyFile /inheritance:r | Out-Null
-              & icacls.exe $keyFile /grant:r "$($env:USERNAME):(R)" | Out-Null
-              $sshArgs += @('-i', $keyFile)
+              [System.IO.File]::WriteAllText($temporaryKeyFile, $normalizedKey, $utf8NoBom)
+              & icacls.exe $temporaryKeyFile /inheritance:r | Out-Null
+              & icacls.exe $temporaryKeyFile /grant:r "$($env:USERNAME):(R)" | Out-Null
+              $identityKey = $temporaryKeyFile
             }
+            else {
+              # Self-hosted runner fallback: keep one dedicated deployment key
+              # on the runner machine. Only the PUBLIC half is printed. The
+              # private key never enters GitHub, the repository or job output.
+              $runnerSshDir = Join-Path $env:USERPROFILE '.ssh'
+              $identityKey = Join-Path $runnerSshDir 'arofi-production-actions'
+              $publicKeyFile = "$identityKey.pub"
+
+              New-Item -ItemType Directory -Path $runnerSshDir -Force | Out-Null
+
+              if (-not (Test-Path $identityKey) -or -not (Test-Path $publicKeyFile)) {
+                Write-Host 'No persistent AROFi deployment key found on this runner; generating an Ed25519 keypair.'
+                & ssh-keygen.exe -q -t ed25519 -f $identityKey -N '""' -C 'arofi-production-actions'
+                if ($LASTEXITCODE -ne 0) {
+                  throw 'Could not generate the runner production deployment key.'
+                }
+              }
+
+              $publicKey = (Get-Content $publicKeyFile -Raw).Trim()
+              Write-Host 'AROFi runner deployment PUBLIC key (safe to add to /root/.ssh/authorized_keys):'
+              Write-Host $publicKey
+            }
+
+            $sshArgs += @('-i', $identityKey)
 
             Write-Host "Checking production SSH access to $target"
             & ssh.exe @sshArgs $target 'id -u | grep -qx 0 && docker info >/dev/null && ip -4 addr show | grep -Fq 95.111.234.34'
             if ($LASTEXITCODE -ne 0) {
+              if ([string]::IsNullOrWhiteSpace($env:PROD_SSH_PRIVATE_KEY)) {
+                $publicKey = (Get-Content "$identityKey.pub" -Raw).Trim()
+                Write-Host 'AUTHORIZE THIS PUBLIC KEY ON PRODUCTION, THEN RE-RUN THIS JOB:'
+                Write-Host $publicKey
+              }
               throw 'Production SSH preflight failed. No production changes were made.'
             }
 
@@ -83,10 +114,11 @@ jobs:
             Write-Host 'Uploading immutable release archive'
             $scpArgs = @(
               '-o', 'BatchMode=yes',
+              '-o', 'IdentitiesOnly=yes',
               '-o', 'StrictHostKeyChecking=accept-new',
-              '-o', 'ConnectTimeout=15'
+              '-o', 'ConnectTimeout=15',
+              '-i', $identityKey
             )
-            if ($keyFile) { $scpArgs += @('-i', $keyFile) }
             & scp.exe @scpArgs $archive "${target}:/tmp/arofi-$sha.tar"
             if ($LASTEXITCODE -ne 0) { throw 'Release upload failed.' }
 
@@ -101,7 +133,7 @@ jobs:
           }
           finally {
             if (Test-Path $archive) { Remove-Item $archive -Force -ErrorAction SilentlyContinue }
-            if ($keyFile -and (Test-Path $keyFile)) { Remove-Item $keyFile -Force -ErrorAction SilentlyContinue }
+            if ($temporaryKeyFile -and (Test-Path $temporaryKeyFile)) { Remove-Item $temporaryKeyFile -Force -ErrorAction SilentlyContinue }
           }
 
       - name: Verify public production after deployment
