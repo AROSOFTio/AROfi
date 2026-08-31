@@ -1,6 +1,6 @@
-import { AdminSessionResponse } from '@/lib/admin-types'
 import { fetchApi } from '@/lib/api'
 import VendorWithdrawalsPanel from '@/components/VendorWithdrawalsPanel'
+import WithdrawalOperationsPanel from '@/components/WithdrawalOperationsPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +16,7 @@ export default async function EarningsPage() {
         </div>
       </div>
       <VendorWithdrawalsPanel initialProfile={payoutProfile} />
+      <WithdrawalOperationsPanel initialWithdrawals={payoutProfile?.recentWithdrawals ?? []} />
     </>
   )
 }
