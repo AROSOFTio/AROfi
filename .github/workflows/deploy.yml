@@ -123,7 +123,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Release upload failed.' }
 
             $remoteDir = "/root/arofi-runner-releases/$sha"
-            $remoteCommand = "set -e; mkdir -p '$remoteDir'; find '$remoteDir' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -xf '/tmp/arofi-$sha.tar' -C '$remoteDir'; chmod +x '$remoteDir/scripts/deploy-production-runner.sh'; AROFI_RELEASE_SHA='$sha' bash '$remoteDir/scripts/deploy-production-runner.sh' '$remoteDir'; rm -f '/tmp/arofi-$sha.tar'"
+            $remoteCommand = "set -e; mkdir -p '$remoteDir'; find '$remoteDir' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -xf '/tmp/arofi-$sha.tar' -C '$remoteDir'; chmod +x '$remoteDir/scripts/deploy-production-runner.sh'; cd '$remoteDir'; python3 scripts/forbid_mikrotik_auto_mac_auth.py; AROFI_RELEASE_SHA='$sha' bash scripts/deploy-production-runner.sh '$remoteDir'; rm -f '/tmp/arofi-$sha.tar'"
 
             Write-Host 'Starting rollback-safe production deployment'
             & ssh.exe @sshArgs $target $remoteCommand
