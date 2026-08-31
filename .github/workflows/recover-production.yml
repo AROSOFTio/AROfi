@@ -91,7 +91,7 @@ jobs:
 
           echo '=== INTERNAL HEALTH ==='
           docker exec "$API" sh -lc "wget -qO- http://127.0.0.1:3000/api/health" | tee "$SAFE/api-health.txt"
-          docker exec "$ADMIN" sh -lc "wget -qO- http://127.0.0.1:3000/login >/dev/null" 
+          docker exec "$ADMIN" sh -lc "wget -qO- http://127.0.0.1:3000/login >/dev/null"
           docker exec "$PORTAL" sh -lc "wget -qO- http://127.0.0.1:3000/portal >/dev/null"
           docker exec "$NGINX" sh -lc "wget -qO- http://127.0.0.1:3000/api/health" | tee "$SAFE/nginx-health.txt"
 
@@ -107,6 +107,9 @@ jobs:
           echo "AROFI_RECOVERY_OK=$SAFE"
           '@
 
+          # PowerShell here-strings use CRLF on Windows. Normalize to Unix LF
+          # before shipping the script to Bash on the production server.
+          $remote = $remote.Replace("`r`n", "`n").Replace("`r", "`n")
           $bytes = [System.Text.Encoding]::UTF8.GetBytes($remote)
           $encoded = [Convert]::ToBase64String($bytes)
           $sshArgs = @(
