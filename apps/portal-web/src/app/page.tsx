@@ -1,8 +1,7 @@
-import PortalCheckout from '../components/PortalCheckout'
+import PremiumPortalCheckout from '../components/PremiumPortalCheckout'
 
 export default function PortalPage() {
-  // `/portal` is the real customer portal. Keeping the checkout on the root
-  // route also preserves voucher, tenant, and MikroTik query parameters from
-  // printed QR codes and captive-portal redirects.
-  return <PortalCheckout initialView="home" />
+  // `/portal` is the real customer captive portal. The premium experience keeps
+  // all MikroTik query parameters in-place and resolves the business dynamically.
+  return <PremiumPortalCheckout />
 }
