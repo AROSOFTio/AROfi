@@ -136,7 +136,7 @@ jobs:
             }
 
             Write-Host "Checking SSH access to $target"
-            & ssh.exe @sshArgs $target "test \"\$(id -u)\" = 0 && docker info >/dev/null && ip -4 addr show | grep -Fq 95.111.234.34"
+            & ssh.exe @sshArgs $target 'id -u | grep -qx 0 && docker info >/dev/null && ip -4 addr show | grep -Fq 95.111.234.34'
             if ($LASTEXITCODE -ne 0) {
               throw 'Production SSH preflight failed. No production changes were made.'
             }
