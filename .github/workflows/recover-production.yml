@@ -11,38 +11,28 @@ permissions:
 
 jobs:
   recover:
-    name: Inspect AROFi edge route
+    name: Inspect edge vhost layout
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
-      - name: Inspect edge routing
+      - name: Inspect edge configuration layout
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $key = Join-Path $env:USERPROFILE '.ssh\arofi-production-actions'
-          if (-not (Test-Path $key)) { throw 'AROFi SSH key missing.' }
-
           $remote = @'
           set -e
-          echo '=== INTERNAL AROFI ==='
-          docker exec arofi-api-v2-20260809-api-1-pre-load-tune-20260826-221759 sh -lc 'wget -qO- http://127.0.0.1:3000/api/health'
-          echo
-          echo '=== EDGE TO AROFI ==='
-          docker exec edge-nginx sh -lc 'wget -S -O- http://arofi-nginx-v2-20260809:3000/api/health 2>&1' || true
-          echo '=== EDGE MOUNTS ==='
-          docker inspect edge-nginx --format '{{range .Mounts}}{{println .Source .Destination}}{{end}}'
-          echo '=== EDGE NETWORK MEMBERS ==='
-          docker network inspect edge --format '{{range .Containers}}{{println .Name .IPv4Address}}{{end}}' | grep -E 'edge-nginx|arofi-nginx' || true
-          echo '=== AROFI ROUTE REFERENCES ==='
-          docker exec edge-nginx nginx -T 2>&1 | grep -n -B 8 -A 25 -E 'arofi\.net|arofi-nginx' || true
-          echo '=== PUBLIC HEALTH ==='
-          curl -sS -D - -o /tmp/arofi-public-body --max-time 20 https://arofi.net/api/health || true
-          echo '=== PUBLIC BODY ==='
-          cat /tmp/arofi-public-body 2>/dev/null || true
+          echo '=== CONF FILES ==='
+          ls -la /opt/infrastructure/proxy/nginx/conf.d
+          echo '=== SERVER NAMES ==='
+          grep -R -n -E 'server_name|proxy_pass|ssl_certificate' /opt/infrastructure/proxy/nginx/conf.d 2>/dev/null || true
+          echo '=== CERT FILES ==='
+          find /opt/infrastructure/proxy/certs -maxdepth 3 -type f -printf '%p\n' 2>/dev/null | sort
+          echo '=== NGINX LISTENERS ==='
+          docker exec edge-nginx nginx -T 2>&1 | grep -n -E 'listen .*443|listen .*80|server_name' || true
           '@
-
           $remote = $remote.Replace("`r`n", "`n").Replace("`r", "`n")
           $encoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($remote))
           $sshArgs = @('-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=accept-new','-o','ConnectTimeout=15','-i',$key)
           & ssh.exe @sshArgs 'root@95.111.234.34' "echo '$encoded' | base64 -d | bash"
-          if ($LASTEXITCODE -ne 0) { throw "Edge inspection failed: $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "Inspection failed: $LASTEXITCODE" }
