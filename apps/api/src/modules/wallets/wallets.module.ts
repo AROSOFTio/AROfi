@@ -5,11 +5,13 @@ import { PaymentsModule } from '../payments/payments.module'
 import { IotecWalletWebhookController } from './iotec-wallet-webhook.controller'
 import { WalletsController } from './wallets.controller'
 import { WalletsService } from './wallets.service'
+import { WithdrawalOperationsController } from './withdrawal-operations.controller'
+import { WithdrawalOperationsService } from './withdrawal-operations.service'
 
 @Module({
   imports: [AuthModule, MailModule, PaymentsModule],
-  controllers: [WalletsController, IotecWalletWebhookController],
-  providers: [WalletsService],
-  exports: [WalletsService],
+  controllers: [WalletsController, WithdrawalOperationsController, IotecWalletWebhookController],
+  providers: [WalletsService, WithdrawalOperationsService],
+  exports: [WalletsService, WithdrawalOperationsService],
 })
 export class WalletsModule {}
