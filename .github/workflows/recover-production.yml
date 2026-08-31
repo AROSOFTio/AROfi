@@ -11,47 +11,50 @@ permissions:
 
 jobs:
   recover:
-    name: Restore shared edge route table
+    name: Inspect pre-change shared edge state
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
-      - name: Restore missing edge dependency and verify AROFi
+      - name: Inspect snapshot and exact edge block
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $key = Join-Path $env:USERPROFILE '.ssh\arofi-production-actions'
           $remote = @'
-          set -e
-          MISSING='web-e11rcq00bwhs567qffc8iuhz-142013732610'
-          echo '=== MISSING UPSTREAM STATUS ==='
-          docker inspect "$MISSING" --format 'name={{.Name}} status={{.State.Status}} image={{.Config.Image}}' || true
-          if docker inspect "$MISSING" >/dev/null 2>&1 && [ "$(docker inspect -f '{{.State.Running}}' "$MISSING")" = 'true' ]; then
-            echo 'Ensuring missing upstream is attached to edge network'
-            docker network connect edge "$MISSING" 2>/dev/null || true
+          echo '=== RECOVERY SNAPSHOTS ==='
+          find /root/arofi-emergency-recovery -maxdepth 2 -type f -name 'edge-before.json' -printf '%h\n' 2>/dev/null | sort || true
+
+          SNAP="$(find /root/arofi-emergency-recovery -maxdepth 2 -type f -name 'edge-before.json' 2>/dev/null | sort | head -n 1)"
+          echo "snapshot=$SNAP"
+
+          echo '=== WEB-E11 IN PRE-CHANGE EDGE SNAPSHOT ==='
+          if [ -n "$SNAP" ]; then
+            grep -n -C 3 'web-e11rcq00bwhs567qffc8iuhz-142013732610' "$SNAP" || echo 'NOT_PRESENT_IN_SNAPSHOT'
           fi
-          echo '=== NGINX CONFIG TEST ==='
-          if ! docker exec edge-nginx nginx -t; then
-            echo 'Edge config still invalid; refusing reload.' >&2
-            exit 2
-          fi
-          echo '=== RELOAD EDGE NGINX ==='
-          docker exec edge-nginx nginx -s reload
-          sleep 3
-          echo '=== VERIFY AROFI PUBLIC API ==='
-          curl -fsS --max-time 20 https://arofi.net/api/health
-          echo
-          echo '=== VERIFY AROFI LOGIN ==='
-          curl -fsS --max-time 20 https://arofi.net/login -o /tmp/arofi-login.html
-          grep -qi 'arofi' /tmp/arofi-login.html || { echo 'Login page is not AROFi' >&2; exit 3; }
-          echo 'AROFi login page OK'
-          echo '=== VERIFY DASHBOARD ROUTE ==='
-          code="$(curl -sS -o /tmp/arofi-dashboard -w '%{http_code}' --max-time 20 https://arofi.net/dashboard)"
-          echo "dashboard_http=$code"
-          case "$code" in 200|301|302|307|308) ;; *) exit 4 ;; esac
-          echo 'AROFI_PUBLIC_RECOVERY_OK'
+
+          echo '=== CURRENT EDGE MEMBERSHIP ==='
+          docker network inspect edge --format '{{range .Containers}}{{println .Name .IPv4Address}}{{end}}' 2>&1 | grep -E 'edge-nginx|arofi-nginx|pesapal-app|web-e11' || true
+
+          echo '=== CURRENT WEB-E11 STATUS ==='
+          docker inspect web-e11rcq00bwhs567qffc8iuhz-142013732610 --format 'status={{.State.Status}} restart={{.RestartCount}} networks={{json .NetworkSettings.Networks}}' 2>&1 || true
+
+          echo '=== WEB-E11 LAST 50 LOG LINES ==='
+          docker logs --tail 50 web-e11rcq00bwhs567qffc8iuhz-142013732610 2>&1 || true
+
+          echo '=== AROSOFTLABS HTTPS BLOCK ==='
+          awk 'BEGIN{p=0} /server_name arosoftlabs\.com www\.arosoftlabs\.com;/{p=1} p{print} p && /^}/{exit}' /opt/infrastructure/proxy/nginx/conf.d/https.conf 2>/dev/null || true
+
+          echo '=== AROFI HTTPS BLOCK ==='
+          awk 'BEGIN{p=0} /server_name arofi\.net;/{p=1} p{print} p && /^}/{exit}' /opt/infrastructure/proxy/nginx/conf.d/https.conf 2>/dev/null || true
+
+          echo '=== PESAPAL HTTPS BLOCK ==='
+          awk 'BEGIN{p=0} /server_name pesapal\.owltechsolutionsltd\.com;/{p=1} p{print} p && /^}/{exit}' /opt/infrastructure/proxy/nginx/conf.d/https.conf 2>/dev/null || true
+
+          echo '=== NGINX TEST ==='
+          docker exec edge-nginx nginx -t 2>&1 || true
           '@
           $remote = $remote.Replace("`r`n", "`n").Replace("`r", "`n")
           $encoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($remote))
           $sshArgs = @('-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=accept-new','-o','ConnectTimeout=15','-i',$key)
           & ssh.exe @sshArgs 'root@95.111.234.34' "echo '$encoded' | base64 -d | bash"
-          if ($LASTEXITCODE -ne 0) { throw "Recovery failed: $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "Inspection failed: $LASTEXITCODE" }
