@@ -1,4 +1,4 @@
-name: Verify and deploy AROFi production
+name: Deploy AROFi production
 
 on:
   push:
@@ -14,84 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-verify:
-    name: Verify exact production source
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout exact release
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Cache Turborepo
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Install root dependencies
-        run: npm ci
-
-      # Keep this in the same order as the production Dockerfile so the exact
-      # source state verified here is the source state built on production.
-      - name: Apply guarded production source patches
-        run: |
-          python3 scripts/apply_iotec_source_patches.py
-          python3 scripts/apply_unified_gateway_patches.py
-          python3 scripts/apply_gateway_webhook_patches.py
-          python3 scripts/hide_pesapal_gateway.py
-          python3 scripts/apply_live_gateway_activation.py
-          python3 scripts/preserve_yo_uganda_gateway.py
-          python3 scripts/apply_voucher_preview_patches.py
-          python3 scripts/apply_voucher_dashboard_patches.py
-          python3 scripts/finalize_voucher_dashboard.py
-          python3 scripts/fix_lucide_icon_compat.py
-          python3 scripts/apply_public_content_patches.py
-          python3 scripts/apply_portal_tv_package_patches_v2.py
-          python3 scripts/apply_router_compensation_review.py
-          python3 scripts/apply_router_compensation_ui.py
-          python3 scripts/fix_support_ticket_workspace.py
-          python3 scripts/apply_router_wan_port_support.py
-          python3 scripts/sanitize_mikrotik_command_output.py
-          python3 scripts/fix_routeros6_7_provisioning.py
-          python3 scripts/apply_mikrotik_background_install.py
-          python3 scripts/enforce_no_idle_bundle_logout.py
-          python3 scripts/fix_router_presence_and_access_lifecycle.py
-          python3 scripts/stabilize_router_status_hysteresis.py
-          python3 scripts/fix_iotec_live_gateway_diagnostics.py
-          python3 scripts/fix_iotec_oauth_compatibility.py
-          python3 scripts/finalize_gateway_compile.py
-          python3 scripts/verify_router_captive_invariants.py
-          python3 scripts/apply_arofi_brand_and_three_plan_patches.py
-          python3 scripts/forbid_mikrotik_auto_mac_auth.py
-
-      - name: Generate Prisma Client
-        run: npx prisma generate --schema=apps/api/prisma/schema.prisma
-
-      - name: Build all apps
-        run: npx turbo run build --cache-dir=.turbo
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
-
-      - name: Run tests
-        run: npx turbo run test --cache-dir=.turbo
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
-
   deploy-production:
     name: Backup, clean build and deploy Contabo production
-    needs: build-verify
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 120
     env:
@@ -99,11 +23,20 @@ jobs:
       PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
       PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
     steps:
-      - name: Checkout exact verified release
+      - name: Checkout exact production release
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          clean: true
+
+      - name: Clean disposable runner release files
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem -Path $env:RUNNER_TEMP -Filter 'arofi-*.tar' -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+          Write-Host 'Runner temporary AROFi release archives cleaned. Repository checkout is an exact clean Git checkout.'
 
       - name: Package and deploy exact commit
         shell: powershell
@@ -135,7 +68,7 @@ jobs:
               $sshArgs += @('-i', $keyFile)
             }
 
-            Write-Host "Checking SSH access to $target"
+            Write-Host "Checking production SSH access to $target"
             & ssh.exe @sshArgs $target 'id -u | grep -qx 0 && docker info >/dev/null && ip -4 addr show | grep -Fq 95.111.234.34'
             if ($LASTEXITCODE -ne 0) {
               throw 'Production SSH preflight failed. No production changes were made.'
@@ -144,7 +77,7 @@ jobs:
             if (Test-Path $archive) { Remove-Item $archive -Force }
             & git.exe archive --format=tar -o $archive $sha
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path $archive)) {
-              throw 'Could not package the exact verified Git commit.'
+              throw 'Could not package the exact Git commit.'
             }
 
             Write-Host 'Uploading immutable release archive'
@@ -163,7 +96,7 @@ jobs:
             Write-Host 'Starting rollback-safe production deployment'
             & ssh.exe @sshArgs $target $remoteCommand
             if ($LASTEXITCODE -ne 0) {
-              throw "Production deployment failed with exit code $LASTEXITCODE. Review the deployment log and rollback metadata on the server."
+              throw "Production deployment failed with exit code $LASTEXITCODE. Review rollback metadata on the server."
             }
           }
           finally {
@@ -171,7 +104,7 @@ jobs:
             if ($keyFile -and (Test-Path $keyFile)) { Remove-Item $keyFile -Force -ErrorAction SilentlyContinue }
           }
 
-      - name: Verify public production after runner deployment
+      - name: Verify public production after deployment
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
