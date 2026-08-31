@@ -11,35 +11,47 @@ permissions:
 
 jobs:
   recover:
-    name: Identify AROFi public proxy owner
+    name: Restore shared edge route table
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
-      - name: Inspect public proxy process and configuration
+      - name: Restore missing edge dependency and verify AROFi
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $key = Join-Path $env:USERPROFILE '.ssh\arofi-production-actions'
           $remote = @'
           set -e
-          echo '=== HOST PORTS 80/443 ==='
-          ss -ltnp | grep -E ':(80|443) ' || true
-          echo '=== DOCKER PUBLISHED 80/443 ==='
-          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}' | grep -E '80->|443->|0\.0\.0\.0:80|0\.0\.0\.0:443|edge-nginx' || true
-          echo '=== EDGE VERSION ==='
-          docker exec edge-nginx nginx -v 2>&1 || true
-          echo '=== EDGE MAIN NGINX.CONF ==='
-          docker exec edge-nginx cat /etc/nginx/nginx.conf 2>&1 || true
-          echo '=== EDGE NGINX -T FIRST 160 LINES ==='
-          docker exec edge-nginx nginx -T 2>&1 | sed -n '1,160p' || true
-          echo '=== HOST NGINX ==='
-          command -v nginx && nginx -v 2>&1 || true
-          echo '=== PUBLIC LOCAL HOST HEADER TEST HTTP ==='
-          curl -sS -D - -o /tmp/arofi-http-body -H 'Host: arofi.net' --max-time 10 http://127.0.0.1/api/health || true
-          cat /tmp/arofi-http-body 2>/dev/null || true
+          MISSING='web-e11rcq00bwhs567qffc8iuhz-142013732610'
+          echo '=== MISSING UPSTREAM STATUS ==='
+          docker inspect "$MISSING" --format 'name={{.Name}} status={{.State.Status}} image={{.Config.Image}}' || true
+          if docker inspect "$MISSING" >/dev/null 2>&1 && [ "$(docker inspect -f '{{.State.Running}}' "$MISSING")" = 'true' ]; then
+            echo 'Ensuring missing upstream is attached to edge network'
+            docker network connect edge "$MISSING" 2>/dev/null || true
+          fi
+          echo '=== NGINX CONFIG TEST ==='
+          if ! docker exec edge-nginx nginx -t; then
+            echo 'Edge config still invalid; refusing reload.' >&2
+            exit 2
+          fi
+          echo '=== RELOAD EDGE NGINX ==='
+          docker exec edge-nginx nginx -s reload
+          sleep 3
+          echo '=== VERIFY AROFI PUBLIC API ==='
+          curl -fsS --max-time 20 https://arofi.net/api/health
+          echo
+          echo '=== VERIFY AROFI LOGIN ==='
+          curl -fsS --max-time 20 https://arofi.net/login -o /tmp/arofi-login.html
+          grep -qi 'arofi' /tmp/arofi-login.html || { echo 'Login page is not AROFi' >&2; exit 3; }
+          echo 'AROFi login page OK'
+          echo '=== VERIFY DASHBOARD ROUTE ==='
+          code="$(curl -sS -o /tmp/arofi-dashboard -w '%{http_code}' --max-time 20 https://arofi.net/dashboard)"
+          echo "dashboard_http=$code"
+          case "$code" in 200|301|302|307|308) ;; *) exit 4 ;; esac
+          echo 'AROFI_PUBLIC_RECOVERY_OK'
           '@
           $remote = $remote.Replace("`r`n", "`n").Replace("`r", "`n")
           $encoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($remote))
           $sshArgs = @('-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=accept-new','-o','ConnectTimeout=15','-i',$key)
           & ssh.exe @sshArgs 'root@95.111.234.34' "echo '$encoded' | base64 -d | bash"
-          if ($LASTEXITCODE -ne 0) { throw "Inspection failed: $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "Recovery failed: $LASTEXITCODE" }
