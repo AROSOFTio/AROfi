@@ -126,6 +126,6 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $health = Invoke-RestMethod -Uri 'https://arofi.net/api/health' -TimeoutSec 20
           if ($health.status -ne 'ok') { throw 'Production API health response was not OK.' }
-          $home = Invoke-WebRequest -Uri 'https://arofi.net/' -TimeoutSec 20 -UseBasicParsing
-          if ($home.StatusCode -ne 200) { throw "Production homepage returned HTTP $($home.StatusCode)" }
+          $homepage = Invoke-WebRequest -Uri 'https://arofi.net/' -TimeoutSec 20 -UseBasicParsing
+          if ($homepage.StatusCode -ne 200) { throw "Production homepage returned HTTP $($homepage.StatusCode)" }
           Write-Host "AROFi production is healthy at commit ${{ github.sha }}"
