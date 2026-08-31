@@ -1,9 +1,6 @@
 name: Deploy AROFi production
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -70,30 +67,21 @@ jobs:
               $identityKey = $temporaryKeyFile
             }
             else {
-              # Self-hosted runner fallback: keep one dedicated deployment key
-              # on the runner machine. Only the PUBLIC half is printed. The
-              # private key never enters GitHub, the repository or job output.
               $runnerSshDir = Join-Path $env:USERPROFILE '.ssh'
               $identityKey = Join-Path $runnerSshDir 'arofi-production-actions'
               $publicKeyFile = "$identityKey.pub"
-
               New-Item -ItemType Directory -Path $runnerSshDir -Force | Out-Null
-
               if (-not (Test-Path $identityKey) -or -not (Test-Path $publicKeyFile)) {
                 Write-Host 'No persistent AROFi deployment key found on this runner; generating an Ed25519 keypair.'
                 & ssh-keygen.exe -q -t ed25519 -f $identityKey -N '""' -C 'arofi-production-actions'
-                if ($LASTEXITCODE -ne 0) {
-                  throw 'Could not generate the runner production deployment key.'
-                }
+                if ($LASTEXITCODE -ne 0) { throw 'Could not generate the runner production deployment key.' }
               }
-
               $publicKey = (Get-Content $publicKeyFile -Raw).Trim()
               Write-Host 'AROFi runner deployment PUBLIC key (safe to add to /root/.ssh/authorized_keys):'
               Write-Host $publicKey
             }
 
             $sshArgs += @('-i', $identityKey)
-
             Write-Host "Checking production SSH access to $target"
             & ssh.exe @sshArgs $target 'id -u | grep -qx 0 && docker info >/dev/null && ip -4 addr show | grep -Fq 95.111.234.34'
             if ($LASTEXITCODE -ne 0) {
@@ -107,9 +95,7 @@ jobs:
 
             if (Test-Path $archive) { Remove-Item $archive -Force }
             & git.exe archive --format=tar -o $archive $sha
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $archive)) {
-              throw 'Could not package the exact Git commit.'
-            }
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $archive)) { throw 'Could not package the exact Git commit.' }
 
             Write-Host 'Uploading immutable release archive'
             $scpArgs = @(
@@ -127,9 +113,7 @@ jobs:
 
             Write-Host 'Starting rollback-safe production deployment'
             & ssh.exe @sshArgs $target $remoteCommand
-            if ($LASTEXITCODE -ne 0) {
-              throw "Production deployment failed with exit code $LASTEXITCODE. Review rollback metadata on the server."
-            }
+            if ($LASTEXITCODE -ne 0) { throw "Production deployment failed with exit code $LASTEXITCODE. Review rollback metadata on the server." }
           }
           finally {
             if (Test-Path $archive) { Remove-Item $archive -Force -ErrorAction SilentlyContinue }
@@ -141,11 +125,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $health = Invoke-RestMethod -Uri 'https://arofi.net/api/health' -TimeoutSec 20
-          if ($health.status -ne 'ok') {
-            throw 'Production API health response was not OK.'
-          }
+          if ($health.status -ne 'ok') { throw 'Production API health response was not OK.' }
           $home = Invoke-WebRequest -Uri 'https://arofi.net/' -TimeoutSec 20 -UseBasicParsing
-          if ($home.StatusCode -ne 200) {
-            throw "Production homepage returned HTTP $($home.StatusCode)"
-          }
+          if ($home.StatusCode -ne 200) { throw "Production homepage returned HTTP $($home.StatusCode)" }
           Write-Host "AROFi production is healthy at commit ${{ github.sha }}"
