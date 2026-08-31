@@ -8,6 +8,7 @@ import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
 import { MikrotikService } from './mikrotik.service'
+import { PremiumCaptivePortalInitializer } from './premium-captive-portal.initializer'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RouterLifecycleService } from './router-lifecycle.service'
@@ -29,6 +30,9 @@ import { RemoteProxyService } from './remote-proxy.service'
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
     MikrotikCompatibilityInitializer,
+    // Registered after the compatibility/session initializers so its wrapper is
+    // the last visual transform applied to generated hotspot/login.html.
+    PremiumCaptivePortalInitializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,
