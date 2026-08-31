@@ -60,6 +60,14 @@ wait_http_in_container() {
   return 1
 }
 
+assert_container_role() {
+  local name="$1"
+  local expected="$2"
+  docker inspect "$name" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+    | grep -qx "SERVICE_NAME=${expected}" \
+    || fail_after_cutover "Replacement ${name} did not start with SERVICE_NAME=${expected}"
+}
+
 attach_live_networks() {
   local name="$1"
   local role="$2"
@@ -153,12 +161,15 @@ cutover_api() {
       --network-alias arofi-api-v2 \
       --network-alias arofi-api-canary \
       --env-file "$BACKUP_ROOT/api.env" \
+      -e SERVICE_NAME=api \
       --memory 768m \
       -p 31000-31100:31000-31100/tcp \
       "$RUNTIME_IMAGE" >/dev/null; then
     restore_rollback_container "$API_NAME" "$rollback" api
     fail "Could not start replacement API container; old API restored"
   fi
+
+  assert_container_role "$API_NAME" api
 
   if ! wait_http_in_container "$API_NAME" 'http://127.0.0.1:3000/api/health' 80 3; then
     docker logs --tail 150 "$API_NAME" || true
@@ -186,11 +197,14 @@ cutover_admin() {
       --network-alias admin \
       --network-alias arofi-admin-v2 \
       --env-file "$BACKUP_ROOT/admin.env" \
+      -e SERVICE_NAME=admin \
       --memory 384m \
       "$RUNTIME_IMAGE" >/dev/null; then
     restore_rollback_container "$ADMIN_NAME" "$rollback" admin
     fail_after_cutover "Could not start replacement Admin container"
   fi
+
+  assert_container_role "$ADMIN_NAME" admin
 
   if ! wait_http_in_container "$ADMIN_NAME" 'http://127.0.0.1:3000/' 60 3; then
     docker logs --tail 150 "$ADMIN_NAME" || true
@@ -213,11 +227,14 @@ cutover_portal() {
       --network-alias portal \
       --network-alias arofi-portal-v2 \
       --env-file "$BACKUP_ROOT/portal.env" \
+      -e SERVICE_NAME=portal \
       --memory 320m \
       "$RUNTIME_IMAGE" >/dev/null; then
     restore_rollback_container "$PORTAL_NAME" "$rollback" portal
     fail_after_cutover "Could not start replacement Portal container"
   fi
+
+  assert_container_role "$PORTAL_NAME" portal
 
   if ! wait_http_in_container "$PORTAL_NAME" 'http://127.0.0.1:3000/portal' 60 3; then
     docker logs --tail 150 "$PORTAL_NAME" || true
@@ -238,11 +255,14 @@ cutover_nginx() {
       --restart unless-stopped \
       --network "$NETWORK" \
       --env-file "$BACKUP_ROOT/nginx.env" \
+      -e SERVICE_NAME=nginx \
       --memory 64m \
       "$RUNTIME_IMAGE" >/dev/null; then
     restore_rollback_container "$NGINX_NAME" "$rollback" nginx
     fail_after_cutover "Could not start replacement AROFi Nginx container"
   fi
+
+  assert_container_role "$NGINX_NAME" nginx
 
   if ! docker network connect "$EDGE_NETWORK" "$NGINX_NAME"; then
     restore_rollback_container "$NGINX_NAME" "$rollback" nginx
