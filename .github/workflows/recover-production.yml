@@ -9,115 +9,19 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: arofi-production-recovery
-  cancel-in-progress: false
-
 jobs:
   recover:
-    name: Restore AROFi live routing
+    name: Inspect AROFi edge route
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Restore AROFi container networks and verify public health
+      - name: Inspect edge routing
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $key = Join-Path $env:USERPROFILE '.ssh\arofi-production-actions'
-          if (-not (Test-Path $key)) { throw 'Dedicated AROFi production SSH key is missing on the runner.' }
-
-          $remote = @'
-          set -Eeuo pipefail
-
-          API='arofi-api-v2-20260809-api-1-pre-load-tune-20260826-221759'
-          ADMIN='arofi-admin-v2-20260809-admin-1'
-          PORTAL='arofi-portal-v2-20260809-portal-1'
-          NGINX='arofi-nginx-v2-20260809'
-          POSTGRES='arofi-postgres'
-          REDIS='arofi-redis'
-          RADIUS='arofi-freeradius-1'
-          NETWORK='arofi-prod'
-          EDGE='edge'
-          STAMP="$(date -u +%Y%m%d_%H%M%S)"
-          SAFE="/root/arofi-emergency-recovery/$STAMP"
-          mkdir -p "$SAFE"
-          chmod 700 "$SAFE"
-
-          echo '=== EMERGENCY RECOVERY SNAPSHOT ==='
-          docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' > "$SAFE/docker-ps-before.txt"
-          docker network inspect "$NETWORK" > "$SAFE/arofi-prod-before.json"
-          docker network inspect "$EDGE" > "$SAFE/edge-before.json"
-          docker inspect "$API" "$ADMIN" "$PORTAL" "$NGINX" > "$SAFE/app-containers-before.json"
-
-          for c in "$POSTGRES" "$REDIS" "$RADIUS"; do
-            test "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null || true)" = 'true' || {
-              echo "CRITICAL: required infrastructure container is not running: $c" >&2
-              exit 1
-            }
-          done
-          systemctl is-active --quiet sstpd || {
-            echo 'CRITICAL: sstpd.service is not active' >&2
-            exit 1
-          }
-
-          for c in "$API" "$ADMIN" "$PORTAL" "$NGINX"; do
-            docker inspect "$c" >/dev/null 2>&1 || {
-              echo "CRITICAL: expected AROFi application container is missing: $c" >&2
-              exit 1
-            }
-            docker start "$c" >/dev/null 2>&1 || true
-          done
-
-          echo '=== RESTORE AROFI-PROD DNS ALIASES ==='
-          docker network disconnect -f "$NETWORK" "$API" >/dev/null 2>&1 || true
-          docker network connect --alias api --alias arofi-api-v2 --alias arofi-api-canary "$NETWORK" "$API"
-
-          docker network disconnect -f "$NETWORK" "$ADMIN" >/dev/null 2>&1 || true
-          docker network connect --alias admin --alias arofi-admin-v2 "$NETWORK" "$ADMIN"
-
-          docker network disconnect -f "$NETWORK" "$PORTAL" >/dev/null 2>&1 || true
-          docker network connect --alias portal --alias arofi-portal-v2 "$NETWORK" "$PORTAL"
-
-          docker network disconnect -f "$NETWORK" "$NGINX" >/dev/null 2>&1 || true
-          docker network disconnect -f "$EDGE" "$NGINX" >/dev/null 2>&1 || true
-          docker network connect "$NETWORK" "$NGINX"
-          docker network connect "$EDGE" "$NGINX"
-
-          echo '=== RESTART ONLY AROFI APPLICATION CONTAINERS ==='
-          docker restart "$API" "$ADMIN" "$PORTAL" "$NGINX" >/dev/null
-          sleep 10
-          docker exec edge-nginx nginx -s reload >/dev/null 2>&1 || true
-          sleep 5
-
-          echo '=== INTERNAL HEALTH ==='
-          docker exec "$API" sh -lc "wget -qO- http://127.0.0.1:3000/api/health" | tee "$SAFE/api-health.txt"
-          docker exec "$ADMIN" sh -lc "wget -qO- http://127.0.0.1:3000/login >/dev/null"
-          docker exec "$PORTAL" sh -lc "wget -qO- http://127.0.0.1:3000/portal >/dev/null"
-          docker exec "$NGINX" sh -lc "wget -qO- http://127.0.0.1:3000/api/health" | tee "$SAFE/nginx-health.txt"
-
-          echo '=== PUBLIC HEALTH ==='
-          curl -fsS --max-time 20 https://arofi.net/api/health | tee "$SAFE/public-api-health.txt"
-          curl -fsS --max-time 20 https://arofi.net/login -o "$SAFE/public-login.html"
-          curl -fsSI --max-time 20 https://arofi.net/dashboard | head -n 20 | tee "$SAFE/public-dashboard-head.txt"
-
-          echo '=== INFRASTRUCTURE PRESERVED ==='
-          docker ps --format '{{.Names}} {{.Status}}' | grep -E '^(arofi-postgres|arofi-redis|arofi-freeradius-1) '
-          systemctl is-active sstpd
-
-          echo "AROFI_RECOVERY_OK=$SAFE"
-          '@
-
-          # PowerShell here-strings use CRLF on Windows. Normalize to Unix LF
-          # before shipping the script to Bash on the production server.
-          $remote = $remote.Replace("`r`n", "`n").Replace("`r", "`n")
-          $bytes = [System.Text.Encoding]::UTF8.GetBytes($remote)
-          $encoded = [Convert]::ToBase64String($bytes)
-          $sshArgs = @(
-            '-o','BatchMode=yes',
-            '-o','IdentitiesOnly=yes',
-            '-o','StrictHostKeyChecking=accept-new',
-            '-o','ConnectTimeout=15',
-            '-i',$key
-          )
-          & ssh.exe @sshArgs 'root@95.111.234.34' "echo '$encoded' | base64 -d | bash"
-          if ($LASTEXITCODE -ne 0) { throw "AROFI emergency recovery failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path $key)) { throw 'AROFi SSH key missing.' }
+          $command = "echo '=== INTERNAL AROFI ==='; docker exec arofi-api-v2-20260809-api-1-pre-load-tune-20260826-221759 sh -lc 'wget -qO- http://127.0.0.1:3000/api/health'; echo; echo '=== EDGE TO AROFI ==='; docker exec edge-nginx sh -lc 'wget -S -O- http://arofi-nginx-v2-20260809:3000/api/health 2>&1' || true; echo '=== EDGE MOUNTS ==='; docker inspect edge-nginx --format '{{range .Mounts}}{{println .Source \"->\" .Destination}}{{end}}'; echo '=== AROFI ROUTE REFERENCES ==='; docker exec edge-nginx nginx -T 2>&1 | grep -n -B 8 -A 25 -E 'arofi\.net|arofi-nginx' || true; echo '=== PUBLIC ==='; curl -sS -D - -o /tmp/arofi-body --max-time 20 https://arofi.net/api/health || true; cat /tmp/arofi-body 2>/dev/null || true"
+          $sshArgs = @('-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=accept-new','-o','ConnectTimeout=15','-i',$key)
+          & ssh.exe @sshArgs 'root@95.111.234.34' $command
+          if ($LASTEXITCODE -ne 0) { throw "Edge inspection failed: $LASTEXITCODE" }
