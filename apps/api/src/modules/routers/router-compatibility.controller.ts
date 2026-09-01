@@ -27,7 +27,7 @@ export class RouterCompatibilityController {
   @InvalidateRedisCache('routers:overview', 'hotspots:overview')
   @Post('register')
   register(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RegisterCompatibleRouterDto) {
-    const tenantId = this.accessScope.requireTenantScope(user)
+    const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
     return this.compatibility.register(tenantId, dto)
   }
 
