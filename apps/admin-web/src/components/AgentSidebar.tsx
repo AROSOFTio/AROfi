@@ -9,7 +9,7 @@ const items = [
   { href: '/dashboard#sell', label: 'Sell Internet', icon: ShoppingBag },
   { href: '/dashboard#reconciliation', label: 'Reconciliation', icon: WalletCards },
   { href: '/dashboard#account', label: 'Account', icon: UserRound },
-  { href: '/settings?tab=Password', label: 'Settings', icon: Settings },
+  { href: '/agent-settings', label: 'Settings', icon: Settings },
 ]
 
 export default function AgentSidebar({ user }: { user: AdminSessionResponse['user'] }) {
