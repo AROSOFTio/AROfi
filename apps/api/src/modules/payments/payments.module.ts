@@ -4,10 +4,13 @@ import { BillingModule } from '../billing/billing.module'
 import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { PaymentsController } from './payments.controller'
+import { EnterprisePaymentConnectorController } from './enterprise-payment-connector.controller'
 import { PackageActivationService } from './package-activation.service'
 import { PaymentsService } from './payments.service'
 import { AirtelMoneyCollectionService } from './airtel-money-collection.service'
 import { AirtelMoneyDisbursementService } from './airtel-money-disbursement.service'
+import { EnterprisePaymentConnectorCrypto } from './enterprise-payment-connector.crypto'
+import { EnterprisePaymentConnectorService } from './enterprise-payment-connector.service'
 import { IotecPayService } from './iotec-pay.service'
 import { MtnMomoCollectionService } from './mtn-momo-collection.service'
 import { MtnMomoDisbursementService } from './mtn-momo-disbursement.service'
@@ -23,10 +26,12 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module'
 
 @Module({
   imports: [AuthModule, BillingModule, MailModule, RadiusModule, WhatsAppModule],
-  controllers: [PaymentsController],
+  controllers: [PaymentsController, EnterprisePaymentConnectorController],
   providers: [
     AirtelMoneyCollectionService,
     AirtelMoneyDisbursementService,
+    EnterprisePaymentConnectorCrypto,
+    EnterprisePaymentConnectorService,
     IotecPayService,
     MtnMomoCollectionService,
     MtnMomoDisbursementService,
@@ -42,6 +47,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module'
     VoucherCodeService,
   ],
   exports: [
+    EnterprisePaymentConnectorService,
     IotecPayService,
     PackageActivationService,
     PaymentRouterService,
