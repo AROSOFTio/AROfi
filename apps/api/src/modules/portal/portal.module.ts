@@ -3,13 +3,15 @@ import { PaymentsModule } from '../payments/payments.module'
 import { SessionsModule } from '../sessions/sessions.module'
 import { VouchersModule } from '../vouchers/vouchers.module'
 import { PortalController } from './portal.controller'
+import { PortalRoamingController } from './portal-roaming.controller'
+import { PortalRoamingService } from './portal-roaming.service'
 import { PortalService } from './portal.service'
 import { PortalTrialEligibilityInitializer } from './portal-trial-eligibility.initializer'
 
 @Module({
   imports: [PaymentsModule, SessionsModule, VouchersModule],
-  controllers: [PortalController],
-  providers: [PortalService, PortalTrialEligibilityInitializer],
+  controllers: [PortalController, PortalRoamingController],
+  providers: [PortalService, PortalRoamingService, PortalTrialEligibilityInitializer],
   exports: [PortalService],
 })
 export class PortalModule {}
