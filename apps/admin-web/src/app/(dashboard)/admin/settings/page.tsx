@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   Users,
   Wallet,
-  Wifi,
   Zap,
 } from 'lucide-react'
 import { fetchApi } from '@/lib/api'
@@ -62,6 +61,12 @@ const sections = [
     description: 'Gateway selection, plan pricing, service fees, and networks.',
     href: '/settings?tab=Payment%20%26%20Fees',
     icon: <CreditCard size={18} />,
+  },
+  {
+    title: 'Payment API Connectors',
+    description: 'Enterprise businesses can connect their own mobile-money or payment REST API.',
+    href: '/admin/settings/payment-connectors',
+    icon: <Globe size={18} />,
   },
   {
     title: 'Withdrawals & Risk',
@@ -187,7 +192,7 @@ export default async function PlatformSettingsCenterPage() {
 
       <div className="psc-security-note">
         <Lock size={16} />
-        <span>Gateway credentials and webhook secrets remain in Coolify environment variables. This dashboard only selects providers, controls platform rules, and reports readiness; it never displays secret values.</span>
+        <span>Built-in platform gateway secrets remain in server environment variables. Enterprise Bring Your Own API credentials are encrypted server-side and are never returned to the browser after they are saved.</span>
       </div>
     </div>
   )
