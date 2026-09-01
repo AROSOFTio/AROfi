@@ -8,6 +8,7 @@ import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
 import { MikrotikService } from './mikrotik.service'
+import { PortalPackageClarityInitializer } from './portal-package-clarity.initializer'
 import { PremiumCaptivePortalInitializer } from './premium-captive-portal.initializer'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
 import { RouterCredentialsService } from './router-credentials.service'
@@ -30,9 +31,11 @@ import { RemoteProxyService } from './remote-proxy.service'
     RemoteProxyService,
     RouterCaptiveFlowInitializer,
     MikrotikCompatibilityInitializer,
-    // Registered after the compatibility/session initializers so its wrapper is
-    // the last visual transform applied to generated hotspot/login.html.
+    // Visual transforms are deliberately ordered last. Package clarity wraps
+    // the premium captive shell so existing voucher/payment/roaming behaviour
+    // is preserved while the final RouterOS login.html gets readable plan cards.
     PremiumCaptivePortalInitializer,
+    PortalPackageClarityInitializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,
