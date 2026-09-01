@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
 import { MailModule } from '../mail/mail.module'
+import { BackupRecoveryController } from './backup-recovery.controller'
+import { BackupRecoveryService } from './backup-recovery.service'
 import { DashboardSummaryController } from './dashboard-summary.controller'
 import { DashboardSummaryService } from './dashboard-summary.service'
 import { PlatformStaffController } from './platform-staff.controller'
@@ -20,8 +22,15 @@ import { SystemService } from './system.service'
     SupportFloorController,
     PlatformStaffController,
     DashboardSummaryController,
+    BackupRecoveryController,
   ],
-  providers: [SystemService, SupportFloorService, PlatformStaffService, DashboardSummaryService],
-  exports: [SystemService, SupportFloorService, PlatformStaffService],
+  providers: [
+    SystemService,
+    SupportFloorService,
+    PlatformStaffService,
+    DashboardSummaryService,
+    BackupRecoveryService,
+  ],
+  exports: [SystemService, SupportFloorService, PlatformStaffService, BackupRecoveryService],
 })
 export class SystemModule {}

@@ -96,7 +96,7 @@ RUN set -eux; \
 
 FROM node:20-alpine AS runtime
 WORKDIR /usr/src/app
-RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx
+RUN apk add --no-cache openssl libc6-compat freeradius-utils nginx postgresql-client aws-cli
 RUN addgroup -g 1001 -S nodejs && adduser -S arofi -u 1001 -G nodejs
 
 COPY scripts/run_with_heartbeat.sh /usr/local/bin/run-with-heartbeat

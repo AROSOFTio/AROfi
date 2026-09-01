@@ -50,6 +50,7 @@ const platformNavItems: NavGroup[] = [
     icon: <Gauge size={17} />,
     items: [
       { href: '/admin/operations', label: 'Troubleshooting Center', required: ['ALL'], platformOnly: true },
+      { href: '/admin/backups', label: 'Backup & Recovery', required: ['ALL'], platformOnly: true },
       { href: '/admin/notifications', label: 'Alerts & Notifications', required: ['settings.manage'], platformOnly: true },
     ],
   },
