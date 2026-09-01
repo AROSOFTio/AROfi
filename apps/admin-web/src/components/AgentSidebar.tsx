@@ -1,41 +1,40 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Ticket } from 'lucide-react'
+import { Home, Settings, ShoppingBag, UserRound, WalletCards } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 
-export default function AgentSidebar({ user }: { user: AdminSessionResponse['user'] }) {
-  const pathname = usePathname()
+const items = [
+  { href: '/dashboard', label: 'Dashboard', icon: Home },
+  { href: '/dashboard#sell', label: 'Sell Internet', icon: ShoppingBag },
+  { href: '/dashboard#reconciliation', label: 'Reconciliation', icon: WalletCards },
+  { href: '/dashboard#account', label: 'Account', icon: UserRound },
+  { href: '/agent-settings', label: 'Settings', icon: Settings },
+]
 
+export default function AgentSidebar({ user }: { user: AdminSessionResponse['user'] }) {
   return (
-    <aside className="sidebar">
+    <aside className="sidebar agent-sidebar">
       <div className="sidebar-logo">
         <img src="/logo.svg" alt="AROFi" />
         <div>
           <h1>ARO<span>Fi</span></h1>
-          <p>Agent Console</p>
-          <div style={{ marginTop: 8 }}><span className="badge badge-info">Agent</span></div>
+          <p>Agent Portal</p>
         </div>
       </div>
 
       {user.tenantName && <div className="tenant-switcher">{user.tenantName}</div>}
 
-      <div className="sidebar-section">
-        <Link href="/dashboard" className={`sidebar-group-toggle ${pathname === '/dashboard' ? 'active' : ''}`}>
-          <span className="sidebar-group-label"><LayoutDashboard size={17} /> Home & Sell Internet</span>
-        </Link>
-      </div>
-
-      <div className="sidebar-section">
-        <Link href="/vouchers" className={`sidebar-group-toggle ${pathname.startsWith('/vouchers') ? 'active' : ''}`}>
-          <span className="sidebar-group-label"><Ticket size={17} /> Offline Vouchers</span>
-        </Link>
-      </div>
-
-      <div style={{ marginTop: 'auto', padding: '14px 15px 18px', color: 'var(--text-3)', fontSize: 11.5, lineHeight: 1.5 }}>
-        Your sales, commission and cash accountability are on Home. Business settings and network controls remain with the business owner.
-      </div>
+      {items.map((item) => {
+        const Icon = item.icon
+        return (
+          <div className="sidebar-section" key={item.href}>
+            <Link href={item.href} className="sidebar-group-toggle">
+              <span className="sidebar-group-label"><Icon size={17} /> {item.label}</span>
+            </Link>
+          </div>
+        )
+      })}
     </aside>
   )
 }

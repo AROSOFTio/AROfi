@@ -25,11 +25,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .join('')
     .slice(0, 2) || 'AD'
 
-  const workspaceTitle = isResellerWorkspace(session.user)
-    ? 'Referral Partner Console'
-    : isVendorWorkspace(session.user) && session.user.tenantName
-      ? `${session.user.tenantName} Console`
-      : 'AROFi Developer Admin'
+  const workspaceTitle = session.user.role === 'VoucherAgent'
+    ? 'AROFi Agent Portal'
+    : isResellerWorkspace(session.user)
+      ? 'Referral Partner Console'
+      : isVendorWorkspace(session.user) && session.user.tenantName
+        ? `${session.user.tenantName} Console`
+        : 'AROFi Developer Admin'
 
   return (
     <>

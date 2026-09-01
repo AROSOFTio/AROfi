@@ -21,6 +21,7 @@ type JsonRecord = Record<string, unknown>
 
 type AgentDashboardFinancialRollup = {
   todaySalesUgx: bigint
+  monthSalesUgx: bigint
   todayCommissionUgx: bigint
   totalCommissionUgx: bigint
   cashSalesUgx: bigint
@@ -55,10 +56,6 @@ export class AgentDashboardService {
       notes: true,
     } satisfies Prisma.AgentSelect
 
-    // Account emails are normalized to lowercase by the auth flow. Normalize
-    // the authenticated value here too so ordinary mixed-case login input can
-    // still use the exact, index-friendly predicate. Retain the insensitive
-    // fallback only for legacy Agent rows that were stored with mixed casing.
     const agent =
       (await this.prisma.agent.findFirst({
         where: {
@@ -82,9 +79,10 @@ export class AgentDashboardService {
       throw new ForbiddenException('Your Agent account is not active.')
     }
 
-    const startOfToday = new Date()
-    startOfToday.setHours(0, 0, 0, 0)
     const now = new Date()
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
     const completedSalesWhere: Prisma.BillingTransactionWhereInput = {
       tenantId,
@@ -93,10 +91,6 @@ export class AgentDashboardService {
       type: { in: [BillingTransactionType.VOUCHER_SALE, BillingTransactionType.MOBILE_MONEY_SALE] },
     }
 
-    // Return the 20 rows needed by the UI separately, but collapse all summary
-    // metrics into one PostgreSQL round-trip. FILTER aggregates avoid scanning
-    // the same sales/commission tables repeatedly, and voucher stock is counted
-    // in the same query instead of requiring another Prisma count call.
     const [recentTransactions, financialRollups] = await Promise.all([
       this.prisma.billingTransaction.findMany({
         where: completedSalesWhere,
@@ -120,6 +114,9 @@ export class AgentDashboardService {
             COALESCE(SUM(bt."grossAmountUgx") FILTER (
               WHERE bt."createdAt" >= ${startOfToday}
             ), 0)::bigint AS "todaySalesUgx",
+            COALESCE(SUM(bt."grossAmountUgx") FILTER (
+              WHERE bt."createdAt" >= ${startOfMonth}
+            ), 0)::bigint AS "monthSalesUgx",
             COALESCE(SUM(bt."grossAmountUgx") FILTER (
               WHERE bt.type = 'VOUCHER_SALE'
             ), 0)::bigint AS "cashSalesUgx"
@@ -167,6 +164,7 @@ export class AgentDashboardService {
         )
         SELECT
           sales."todaySalesUgx",
+          sales."monthSalesUgx",
           commissions."todayCommissionUgx",
           commissions."totalCommissionUgx",
           sales."cashSalesUgx",
@@ -179,6 +177,7 @@ export class AgentDashboardService {
 
     const financial = financialRollups[0] ?? {
       todaySalesUgx: BigInt(0),
+      monthSalesUgx: BigInt(0),
       todayCommissionUgx: BigInt(0),
       totalCommissionUgx: BigInt(0),
       cashSalesUgx: BigInt(0),
@@ -187,6 +186,7 @@ export class AgentDashboardService {
       availableOfflineVouchers: BigInt(0),
     }
     const todaySalesUgx = Number(financial.todaySalesUgx)
+    const monthSalesUgx = Number(financial.monthSalesUgx)
     const todayCommissionUgx = Number(financial.todayCommissionUgx)
     const totalCommissionUgx = Number(financial.totalCommissionUgx)
     const cashSalesUgx = Number(financial.cashSalesUgx)
@@ -210,6 +210,7 @@ export class AgentDashboardService {
       },
       summary: {
         todaySalesUgx,
+        monthSalesUgx,
         todayCommissionUgx,
         totalCommissionUgx,
         cashToRemitUgx: cashOutstandingUgx,
