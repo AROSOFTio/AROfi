@@ -26,16 +26,18 @@ export class RouterCompatibilityController {
   @RequirePermissions(PERMISSIONS.routersManage)
   @InvalidateRedisCache('routers:overview', 'hotspots:overview')
   @Post('register')
-  register(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RegisterCompatibleRouterDto) {
+  async register(@CurrentUser() user: AuthenticatedAdminUser, @Body() dto: RegisterCompatibleRouterDto) {
     const tenantId = this.accessScope.requireTenantScope(user, dto.tenantId)
-    return this.compatibility.register(tenantId, dto)
+    const setup = await this.compatibility.register(tenantId, dto)
+    return this.withRadiusPortalUrl(setup)
   }
 
   @RequirePermissions(PERMISSIONS.routersRead)
   @Get(':routerId/setup')
-  getSetup(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
+  async getSetup(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
-    return this.compatibility.getSetup(routerId, tenantId)
+    const setup = await this.compatibility.getSetup(routerId, tenantId)
+    return this.withRadiusPortalUrl(setup)
   }
 
   @RequirePermissions(PERMISSIONS.routersManage)
@@ -44,5 +46,29 @@ export class RouterCompatibilityController {
   verify(@CurrentUser() user: AuthenticatedAdminUser, @Param('routerId') routerId: string) {
     const tenantId = this.accessScope.resolveTenantScope(user)
     return this.compatibility.verify(routerId, tenantId)
+  }
+
+  private withRadiusPortalUrl<T extends {
+    router: { id: string; vendor: string }
+    portal: { url: string | null; required: boolean; note: string }
+    instructions: string[]
+  }>(setup: T): T {
+    const configured = (process.env.PORTAL_PUBLIC_URL ?? 'https://arofi.net/portal').trim().replace(/\/$/, '')
+    const radiusBase = /\/radius(?:[/?#]|$)/i.test(configured) ? configured : `${configured}/radius`
+    const separator = radiusBase.includes('?') ? '&' : '?'
+    const portalUrl = `${radiusBase}${separator}routerId=${encodeURIComponent(setup.router.id)}&vendor=${encodeURIComponent(setup.router.vendor)}`
+
+    return {
+      ...setup,
+      portal: {
+        ...setup.portal,
+        url: portalUrl,
+        note: 'Use this router-specific AROFi URL as the external checkout/portal handoff where the controller supports a third-party portal. Native RADIUS login deployments can also open it to buy access and receive credentials.',
+      },
+      instructions: [
+        ...setup.instructions.filter((item) => !/external (portal|hotspot)|external portal url/i.test(item)),
+        `AROFi RADIUS checkout / external portal handoff: ${portalUrl}`,
+      ],
+    }
   }
 }
