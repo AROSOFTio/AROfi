@@ -1,0 +1,127 @@
+.shell {
+  --compat-navy: #071a49;
+  --compat-blue: #0964fa;
+  --compat-cyan: #00c4eb;
+  display: grid;
+  gap: 18px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.hero {
+  border-radius: 18px;
+  padding: 28px;
+  background: linear-gradient(135deg, #071328, #081f48 62%, #083b74);
+  color: white;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(250px, .6fr);
+  gap: 24px;
+  align-items: end;
+  overflow: hidden;
+  position: relative;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  right: -110px;
+  top: -150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 196, 235, .22), rgba(9, 100, 250, 0));
+}
+
+.hero h1 { margin: 0; font-size: clamp(30px, 4vw, 52px); line-height: .98; letter-spacing: -.045em; max-width: 700px; }
+.hero p { margin: 12px 0 0; color: #c6d5ee; line-height: 1.55; max-width: 700px; }
+.heroAside { border-left: 1px solid rgba(255,255,255,.18); padding-left: 22px; color: #dce8fa; font-size: 13px; line-height: 1.55; position: relative; z-index: 1; }
+.heroAside strong { display: block; color: white; margin-bottom: 6px; }
+
+.radiusStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.radiusStrip strong { margin-right: 6px; }
+.radiusItem { padding: 6px 9px; border-radius: 8px; background: var(--bg-soft); font-size: 12px; color: var(--text-secondary); }
+
+.vendorGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.vendorCard {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  min-height: 140px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  text-align: left;
+}
+.vendorName { font-size: 16px; font-weight: 850; color: var(--text-primary); }
+.vendorFamily { margin-top: 5px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.vendorDescription { margin-top: 5px; color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; }
+.vendorMark { display: grid; place-items: center; min-height: 74px; border-radius: 12px; background: var(--bg-soft); font-weight: 900; letter-spacing: -.02em; color: var(--text-secondary); }
+.capabilities { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.capability { font-size: 10.5px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--bg-soft); }
+.level { align-self: start; white-space: nowrap; font-size: 10px; padding: 5px 8px; border-radius: 999px; font-weight: 800; color: #085e45; background: #e8f8f2; }
+
+.section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.sectionHeader { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 15px; }
+.sectionHeader h2 { margin: 0; font-size: 18px; }
+.sectionHeader p { margin: 5px 0 0; font-size: 12px; color: var(--text-muted); }
+
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.field { display: grid; gap: 6px; }
+.field label { font-size: 11.5px; font-weight: 750; color: var(--text-secondary); }
+.field input, .field select { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-card); color: var(--text-primary); padding: 0 11px; outline: none; }
+.field input:focus, .field select:focus { border-color: var(--compat-blue); box-shadow: 0 0 0 3px rgba(9,100,250,.08); }
+.portGrid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 14px; }
+.primary, .secondary, .ghost { min-height: 42px; border-radius: 9px; padding: 0 14px; font-weight: 800; cursor: pointer; border: 0; }
+.primary { background: linear-gradient(135deg, var(--compat-blue), #0b7ce8); color: white; }
+.secondary { background: var(--bg-soft); color: var(--compat-blue); border: 1px solid var(--border); }
+.ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.primary:disabled, .secondary:disabled { opacity: .55; cursor: not-allowed; }
+
+.setupGrid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 14px; }
+.setupCard { border: 1px solid var(--border); border-radius: 12px; padding: 15px; background: var(--bg-soft); }
+.setupCard h3 { margin: 0 0 11px; font-size: 14px; }
+.kv { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.kv:last-child { border-bottom: 0; }
+.kv span { color: var(--text-muted); }
+.kv strong { word-break: break-all; }
+.secret { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.instructions { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.notice { padding: 11px 12px; border-radius: 9px; background: #fff8e8; border: 1px solid #f1d9a2; color: #72540d; font-size: 12px; line-height: 1.45; }
+.success { padding: 11px 12px; border-radius: 9px; background: #ecfbf3; border: 1px solid #c9eedb; color: #146f46; font-size: 12px; }
+.error { padding: 11px 12px; border-radius: 9px; background: #fff0f0; border: 1px solid #f2caca; color: #a92a2a; font-size: 12px; }
+
+.genericRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.genericTag { padding: 8px 10px; border-radius: 9px; background: var(--bg-soft); border: 1px solid var(--border); font-weight: 750; font-size: 12px; color: var(--text-secondary); }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; padding: 22px; }
+  .heroAside { border-left: 0; border-top: 1px solid rgba(255,255,255,.18); padding: 16px 0 0; }
+  .vendorGrid { grid-template-columns: 1fr; }
+  .setupGrid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .shell { gap: 12px; }
+  .hero { border-radius: 12px; padding: 19px 16px; }
+  .hero h1 { font-size: 34px; }
+  .vendorCard { grid-template-columns: 88px minmax(0,1fr); gap: 12px; padding: 14px; }
+  .level { grid-column: 1 / -1; justify-self: start; }
+  .formGrid { grid-template-columns: 1fr; }
+  .portGrid { grid-template-columns: 1fr; }
+  .section { padding: 14px; border-radius: 11px; }
+  .actions { flex-direction: column; }
+  .primary, .secondary, .ghost { width: 100%; }
+  .kv { grid-template-columns: 1fr; gap: 3px; }
+}
