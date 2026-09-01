@@ -6,6 +6,7 @@ import { Headphones } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
+import AgentSidebar from './AgentSidebar'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import RouterOnboardingNudge from './RouterOnboardingNudge'
@@ -29,6 +30,7 @@ export default function DashboardShell({ children, initials, session, workspaceT
   const pathname = usePathname()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const isAgent = session.user.role === 'VoucherAgent'
 
   useEffect(() => {
     setMenuOpen(false)
@@ -51,10 +53,38 @@ export default function DashboardShell({ children, initials, session, workspaceT
     return () => window.clearInterval(interval)
   }, [])
 
+  const shellClassName = [
+    'dashboard-shell',
+    menuOpen ? 'mobile-nav-open' : '',
+    isAgent ? 'agent-dashboard-shell' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className={menuOpen ? 'dashboard-shell mobile-nav-open' : 'dashboard-shell'}>
+    <div className={shellClassName}>
+      {isAgent && (
+        <style>{`
+          @media (max-width: 820px) {
+            .agent-dashboard-shell > .sidebar,
+            .agent-dashboard-shell > .mobile-nav-backdrop,
+            .agent-dashboard-shell > .mobile-nav-close,
+            .agent-dashboard-shell .topbar {
+              display: none !important;
+            }
+            .agent-dashboard-shell .main-content {
+              margin-left: 0 !important;
+              width: 100% !important;
+              min-width: 0 !important;
+            }
+            .agent-dashboard-shell .content {
+              padding: 0 !important;
+              margin: 0 !important;
+              max-width: none !important;
+            }
+          }
+        `}</style>
+      )}
       <button type="button" className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)} />
-      <Sidebar user={session.user} />
+      {isAgent ? <AgentSidebar user={session.user} /> : <Sidebar user={session.user} />}
       <button type="button" className="mobile-nav-close" aria-label="Close navigation menu" onClick={() => setMenuOpen(false)}>x</button>
       <div className="main-content">
         <header className="topbar">
@@ -65,11 +95,13 @@ export default function DashboardShell({ children, initials, session, workspaceT
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <RouterSupportDock user={session.user} />
-            <SupportTicketQuickAccess user={session.user} />
-            <button type="button" className="topbar-ai-support" onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))} aria-label="Open support chat">
-              <Headphones size={15} /><span>Support</span>
-            </button>
+            {!isAgent && <RouterSupportDock user={session.user} />}
+            {!isAgent && <SupportTicketQuickAccess user={session.user} />}
+            {!isAgent && (
+              <button type="button" className="topbar-ai-support" onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))} aria-label="Open support chat">
+                <Headphones size={15} /><span>Support</span>
+              </button>
+            )}
             <NotificationBell />
             <div style={{ position: 'relative' }}>
               <button type="button" className="topbar-profile-trigger" onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}>
@@ -94,10 +126,10 @@ export default function DashboardShell({ children, initials, session, workspaceT
           </div>
         </header>
         <WorkspaceRouteGuard user={session.user}>
-          <RouterOnboardingNudge enabled={isVendorWorkspace(session.user)} />
+          <RouterOnboardingNudge enabled={!isAgent && isVendorWorkspace(session.user)} />
           <div className="content">{children}</div>
         </WorkspaceRouteGuard>
-        <FeedbackPrompt enabled={isVendorWorkspace(session.user)} />
+        <FeedbackPrompt enabled={!isAgent && isVendorWorkspace(session.user)} />
       </div>
     </div>
   )
