@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import KycDocumentsPanel from '@/components/KycDocumentsPanel'
 import SettingsManager from '@/components/SettingsManager'
 import type { AdminSessionResponse, KycDocumentItem } from '@/lib/admin-types'
@@ -6,6 +7,8 @@ import { isVendorWorkspace } from '@/lib/workspace'
 
 export default async function SettingsPage({ searchParams }: { searchParams?: Promise<{ tenantId?: string; tab?: string }> }) {
   const session = await fetchApi<AdminSessionResponse>('/auth/me')
+  if (session?.user.role === 'VoucherAgent') redirect('/agent-settings')
+
   const isDevAdmin = Boolean(session?.user.permissions.includes('ALL'))
   const isVendor = isVendorWorkspace(session?.user)
   const resolvedSearchParams = await searchParams
