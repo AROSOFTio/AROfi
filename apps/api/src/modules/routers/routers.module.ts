@@ -11,6 +11,8 @@ import { MikrotikService } from './mikrotik.service'
 import { PortalPackageClarityInitializer } from './portal-package-clarity.initializer'
 import { PremiumCaptivePortalInitializer } from './premium-captive-portal.initializer'
 import { RouterCaptiveFlowInitializer } from './router-captive-flow.initializer'
+import { RouterCompatibilityController } from './router-compatibility.controller'
+import { RouterCompatibilityService } from './router-compatibility.service'
 import { RouterCredentialsService } from './router-credentials.service'
 import { RouterLifecycleService } from './router-lifecycle.service'
 import { RouterOverviewService } from './router-overview.service'
@@ -21,11 +23,12 @@ import { RemoteProxyService } from './remote-proxy.service'
 
 @Module({
   imports: [AuthModule, MailModule, RadiusModule, SmsModule],
-  controllers: [RoutersController, MikrotikController, MikrotikAloginController],
+  controllers: [RoutersController, RouterCompatibilityController, MikrotikController, MikrotikAloginController],
   providers: [
     RouterCredentialsService,
     MikrotikService,
     RoutersService,
+    RouterCompatibilityService,
     RouterOverviewService,
     RouterLifecycleService,
     RemoteProxyService,
@@ -41,6 +44,13 @@ import { RemoteProxyService } from './remote-proxy.service'
       useClass: MikrotikInstantLoginInterceptor,
     },
   ],
-  exports: [RouterCredentialsService, MikrotikService, RoutersService, RouterLifecycleService, RemoteProxyService],
+  exports: [
+    RouterCredentialsService,
+    MikrotikService,
+    RoutersService,
+    RouterCompatibilityService,
+    RouterLifecycleService,
+    RemoteProxyService,
+  ],
 })
 export class RoutersModule {}
