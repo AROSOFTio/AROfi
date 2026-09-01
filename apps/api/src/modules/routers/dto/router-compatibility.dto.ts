@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator'
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 
 export const routerCompatibilityVendors = [
   'MIKROTIK',
@@ -16,11 +16,15 @@ export const routerCompatibilityVendors = [
 export type RouterCompatibilityVendor = (typeof routerCompatibilityVendors)[number]
 
 export class RegisterCompatibleRouterDto {
+  @IsOptional()
+  @IsUUID()
+  tenantId?: string
+
   @IsString()
   @IsNotEmpty()
   name: string
 
-  @IsIn(routerCompatibilityVendors)
+  @IsIn([...routerCompatibilityVendors])
   vendor: RouterCompatibilityVendor
 
   @IsString()
