@@ -18,6 +18,7 @@ NGINX_NAME="${AROFI_NGINX_CONTAINER:-arofi-nginx-v2-20260809}"
 POSTGRES_NAME="${AROFI_POSTGRES_CONTAINER:-arofi-postgres}"
 REDIS_NAME="${AROFI_REDIS_CONTAINER:-arofi-redis}"
 RADIUS_NAME="${AROFI_RADIUS_CONTAINER:-arofi-freeradius-1}"
+MANAGED_BACKUP_VOLUME="${AROFI_MANAGED_BACKUP_VOLUME:-arofi-managed-backups}"
 
 STAMP="$(date -u +%Y%m%d_%H%M%S)"
 BACKUP_ROOT="/root/arofi-runner-backups/${STAMP}-${RELEASE_SHA:0:12}"
@@ -162,6 +163,8 @@ cutover_api() {
       --network-alias arofi-api-canary \
       --env-file "$BACKUP_ROOT/api.env" \
       -e SERVICE_NAME=api \
+      -e AROFI_BACKUP_DIR=/var/lib/arofi/backups \
+      --mount "source=$MANAGED_BACKUP_VOLUME,target=/var/lib/arofi/backups" \
       --memory 768m \
       -p 31000-31100:31000-31100/tcp \
       "$RUNTIME_IMAGE" >/dev/null; then
@@ -293,6 +296,8 @@ for container in "$API_NAME" "$ADMIN_NAME" "$PORTAL_NAME" "$NGINX_NAME" "$POSTGR
   require_running "$container"
 done
 
+docker volume create "$MANAGED_BACKUP_VOLUME" >/dev/null
+
 systemctl is-active --quiet sstpd || fail "sstpd.service is not active"
 curl -fsS --max-time 15 https://arofi.net/api/health >/dev/null \
   || fail "Public API was unhealthy before deployment; refusing to change production"
@@ -301,6 +306,13 @@ log "Production preflight passed (release=$RELEASE_SHA, database container=$POST
 
 log "Snapshot current application environments and topology"
 snapshot_env "$API_NAME" "$BACKUP_ROOT/api.env"
+# Optional root-only file lets the operator add R2 credentials without ever
+# committing or printing them. Existing container env still wins by normal
+# env-file ordering if the same setting is already present above.
+if [ -f /root/arofi-backup.env ]; then
+  cat /root/arofi-backup.env >> "$BACKUP_ROOT/api.env"
+  chmod 600 "$BACKUP_ROOT/api.env"
+fi
 snapshot_env "$ADMIN_NAME" "$BACKUP_ROOT/admin.env"
 snapshot_env "$PORTAL_NAME" "$BACKUP_ROOT/portal.env"
 snapshot_env "$NGINX_NAME" "$BACKUP_ROOT/nginx.env"
@@ -382,10 +394,12 @@ deployed_at=$(date -u +%FT%TZ)
 runtime_image=$RUNTIME_IMAGE
 production_ip=$PRODUCTION_IP
 network=$NETWORK
+managed_backup_volume=$MANAGED_BACKUP_VOLUME
 EOF
 
 log "AROFi production deployment succeeded"
 echo "Release: $RELEASE_SHA"
 echo "Safety backup: $BACKUP_ROOT/arofi-production-predeploy.dump"
+echo "Managed backup volume: $MANAGED_BACKUP_VOLUME"
 echo "Rollback metadata: $BACKUP_ROOT"
 echo "PostgreSQL/Redis/FreeRADIUS/SSTP were preserved in place."
