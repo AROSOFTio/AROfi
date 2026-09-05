@@ -2,11 +2,6 @@ name: Deploy AROFi production
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/src/modules/routers/**'
-      - '.github/workflows/deploy.yml'
 
 permissions:
   contents: read
