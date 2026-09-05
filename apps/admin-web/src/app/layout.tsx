@@ -8,94 +8,43 @@ import DeferredChatWidget from '@/components/DeferredChatWidget'
 import CookieConsent from '@/components/CookieConsent'
 
 const SITE_URL = 'https://arofi.net'
-const SITE_NAME = 'AROFi by AROSOFT'
-const TITLE = 'AROFi – #1 WiFi Hotspot Billing & Mobile Money System in Uganda'
+const SITE_NAME = 'AroFi by AROSOFT'
+const TITLE = 'AroFi – WiFi, Hotspot, RADIUS & ISP Billing Platform for Africa'
 const DESCRIPTION =
-  'AROFi is Uganda\'s best hotspot billing software. Manage MikroTik routers, sell WiFi packages, collect MTN MoMo & Airtel Money payments, issue vouchers, and track sessions — all from one multi-business cloud console. Self-onboarding. No IT needed.'
-const FAVICON = '/brand/arofi-favicon-v2.svg'
-const BRAND_MARK = '/brand/arofi-mark-blue.svg'
-const BRAND_LOGO = '/brand/arofi-logo-blue.svg'
+  'AroFi helps WiFi businesses and ISPs manage hotspot billing, RADIUS access, routers, internet packages, vouchers, customers, wallets and live sessions from one cloud console. Built for African network operators in Uganda, Kenya, Nigeria, Ghana, Rwanda, Tanzania, Zambia, Malawi, Botswana, South Africa and additional markets as local payment and support options are enabled.'
+
+const FAVICON = '/brand-assets/arofi-app-icon.png'
+const BRAND_MARK = '/brand-assets/arofi-app-icon.png'
+const BRAND_LOGO = '/brand-assets/arofi-logo.png'
+const HERO_IMAGE = '/brand-assets/arofi-hero.png'
+
+const COUNTRIES = [
+  'Uganda', 'Kenya', 'Nigeria', 'Ghana', 'Rwanda', 'Tanzania', 'Zambia', 'Malawi',
+  'Botswana', 'South Africa', 'Zimbabwe', 'Namibia', 'Mozambique', 'Ethiopia',
+  'Cameroon', 'Senegal', "Côte d'Ivoire",
+]
 
 const KEYWORDS = [
-  'wifi billing system Uganda',
-  'hotspot billing software Uganda',
-  'mobile money wifi billing',
-  'MikroTik hotspot billing Uganda',
-  'wifi billing software',
-  'hotspot management system',
-  'captive portal billing Uganda',
-  'wifi management software Uganda',
-  'internet cafe billing software Uganda',
-  'MTN MoMo wifi payment',
-  'Airtel Money wifi payment',
-  'mobile money hotspot payment Uganda',
-  'pay wifi with MTN mobile money Uganda',
-  'pay wifi with Airtel Money Uganda',
-  'MTN MoMo hotspot',
-  'Airtel Money hotspot billing',
-  'mobile money internet billing Uganda',
-  'how to accept MTN MoMo for wifi',
-  'how to accept Airtel Money for internet',
-  'MikroTik hotspot setup Uganda',
-  'MikroTik billing system Uganda',
-  'MikroTik RADIUS billing',
-  'MikroTik captive portal Uganda',
-  'RouterOS hotspot billing',
-  'MikroTik user manager alternative',
-  'MikroTik online billing system',
-  'how to set up MikroTik hotspot billing',
-  'MikroTik settings for wifi business Uganda',
-  'best MikroTik billing software Uganda',
-  'wifi business Uganda',
-  'hotspot business Uganda',
-  'how to start wifi business Uganda',
-  'wifi billing Kampala',
-  'hotspot billing Kampala',
-  'internet service provider software Uganda',
-  'ISP billing software Uganda',
-  'Uganda wifi management',
-  'Kampala wifi hotspot',
-  'Uganda hotspot software',
-  'Uganda internet billing',
-  'affordable wifi billing Uganda',
-  'cheap wifi software Uganda',
-  'how to set up online wifi billing',
-  'how to set up wifi business Uganda',
-  'how to bill wifi customers automatically',
-  'automated wifi billing system',
-  'wifi voucher system Uganda',
-  'wifi voucher printing Uganda',
-  'sell wifi vouchers Uganda',
-  'prepaid wifi Uganda',
-  'wifi packages Uganda',
-  'free wifi billing software Uganda',
-  'free hotspot billing system',
-  'best free wifi billing software Africa',
-  'SaaS wifi billing Africa',
-  'cloud wifi billing Uganda',
-  'online wifi billing system Uganda',
-  'multi-business wifi billing',
-  'wifi reseller system Uganda',
-  'wifi agent management system',
-  'ISP reseller billing Uganda',
-  'wifi franchise billing Uganda',
-  'wholesale wifi billing Uganda',
-  'RADIUS server billing Uganda',
-  'FreeRADIUS hotspot Uganda',
-  'RADIUS hotspot management',
-  'hotspot authentication system Uganda',
-  'Mikrotik CHR billing Uganda',
-  'Splynx alternative Uganda',
-  'WHMCS alternative Uganda hotspot',
-  'Ubersmith alternative Africa',
-  'best billing software for wifi Uganda',
-  'AROFi',
-  'AROFi wifi billing',
-  'AROSOFT Uganda',
-  'AROSOFT wifi system',
-  'arosoftlabs Uganda',
-  'arofi hotspot',
-  'arofi mikrotik billing',
+  'WiFi billing Africa',
+  'hotspot billing software Africa',
+  'ISP billing software Africa',
+  'RADIUS billing Africa',
+  'captive portal billing Africa',
+  'MikroTik hotspot billing',
+  'router management platform Africa',
+  'WiFi voucher system Africa',
+  'internet package billing',
+  'mobile money WiFi billing',
+  'MTN MoMo WiFi Uganda',
+  'Airtel Money WiFi Uganda',
+  ...COUNTRIES.flatMap((country) => [
+    `WiFi billing ${country}`,
+    `hotspot billing ${country}`,
+    `ISP billing software ${country}`,
+  ]),
+  'AroFi',
+  'AroFi WiFi billing',
+  'AROSOFT Innovations Ltd',
 ].join(', ')
 
 export const metadata: Metadata = {
@@ -113,11 +62,11 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'AROFi',
+    title: 'AroFi',
     statusBarStyle: 'default',
   },
   icons: {
-    icon: [{ url: FAVICON, type: 'image/svg+xml' }],
+    icon: [{ url: FAVICON, type: 'image/png' }],
     apple: BRAND_MARK,
     shortcut: FAVICON,
   },
@@ -130,10 +79,10 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     images: [
       {
-        url: `${SITE_URL}/og-image.png`,
-        width: 1200,
-        height: 630,
-        alt: 'AROFi – WiFi Hotspot Billing System Uganda | MTN MoMo & Airtel Money',
+        url: `${SITE_URL}${HERO_IMAGE}`,
+        width: 1600,
+        height: 900,
+        alt: 'AroFi network and WiFi management platform for African operators',
         type: 'image/png',
       },
     ],
@@ -142,219 +91,122 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE_URL}/og-image.png`],
-    creator: '@arosoftlabs',
-    site: '@arosoftlabs',
+    images: [`${SITE_URL}${HERO_IMAGE}`],
   },
-  alternates: {
-    canonical: SITE_URL,
-  },
+  alternates: { canonical: SITE_URL },
   robots: {
     index: true,
     follow: true,
-    nocache: false,
     googleBot: {
       index: true,
       follow: true,
-      noimageindex: false,
       'max-video-preview': -1,
       'max-image-preview': 'large',
       'max-snippet': -1,
     },
   },
   other: {
+    'application-name': 'AroFi',
     'ai-content-type': 'product',
-    'ai-product-category': 'WiFi Hotspot Billing Software',
-    'ai-geography': 'Uganda, East Africa',
-    'ai-primary-use-case': 'MikroTik hotspot billing with MTN MoMo and Airtel Money',
-    'application-name': 'AROFi',
-    'msapplication-TileColor': '#2563EB',
+    'ai-product-category': 'WiFi Hotspot, RADIUS and ISP Billing Platform',
+    'ai-geography': COUNTRIES.join(', '),
+    'msapplication-TileColor': '#22A53A',
     'msapplication-TileImage': FAVICON,
-    'llms-txt': `${SITE_URL}/llms.txt`,
-    'geo.region': 'UG-C',
+    'geo.region': 'UG',
     'geo.placename': 'Kampala',
-    'geo.position': '0.3476;32.5825',
-    'ICBM': '0.3476, 32.5825',
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F5F7F9' },
+    { media: '(prefers-color-scheme: dark)', color: '#0B0805' },
+  ],
   width: 'device-width',
   initialScale: 1,
 }
 
-async function getPublicDefaultAccentTheme() {
-  try {
-    const apiBase = process.env.API_SERVER_URL || 'http://api:3000/api'
-    const response = await fetch(`${apiBase}/system/public-settings`, {
-      next: { revalidate: 60 },
-    })
-    if (!response.ok) return 'blue'
-    const settings = await response.json() as { publicDefaultAccentTheme?: string }
-    return ['blue', 'green', 'gold'].includes(settings.publicDefaultAccentTheme ?? '')
-      ? settings.publicDefaultAccentTheme
-      : 'blue'
-  } catch {
-    return 'blue'
-  }
-}
-
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const publicDefaultAccentTheme = await getPublicDefaultAccentTheme()
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   const themeScript = `
     (function () {
-      var publicDefaultAccentTheme = ${JSON.stringify(publicDefaultAccentTheme)};
       try {
         var cookies = document.cookie.split('; ').reduce(function (values, item) {
           var parts = item.split('=');
           values[parts[0]] = parts.slice(1).join('=');
           return values;
         }, {});
-        var mode = null;
-        var accent = null;
-        try {
-          mode = localStorage.getItem('arofi-theme');
-        } catch (storageError) {}
-        mode = mode || cookies['arofi-theme'];
-        if (mode !== 'dark' && mode !== 'light') {
-          mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        // The public colour is controlled by the SaaS Admin. Do not let an
-        // old per-browser dashboard preference keep arofi.net on a stale
-        // accent after the platform default changes.
-        accent = publicDefaultAccentTheme;
+        var preference = null;
+        try { preference = localStorage.getItem('arofi-theme'); } catch (storageError) {}
+        preference = preference || cookies['arofi-theme'] || 'system';
+        if (preference !== 'light' && preference !== 'dark' && preference !== 'system') preference = 'system';
+        var mode = preference === 'system'
+          ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : preference;
         document.documentElement.setAttribute('data-theme', mode);
-        document.documentElement.setAttribute('data-accent-theme', accent);
+        document.documentElement.setAttribute('data-accent-theme', 'green');
+        document.documentElement.style.colorScheme = mode;
       } catch (error) {
         document.documentElement.setAttribute('data-theme', 'light');
-        document.documentElement.setAttribute('data-accent-theme', publicDefaultAccentTheme);
+        document.documentElement.setAttribute('data-accent-theme', 'green');
       }
     })();
   `
-  const jsonLd = {
+
+  const softwareJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'AROFi',
+    name: 'AroFi',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     url: SITE_URL,
     description: DESCRIPTION,
+    image: `${SITE_URL}${HERO_IMAGE}`,
+    screenshot: `${SITE_URL}${HERO_IMAGE}`,
+    keywords: KEYWORDS,
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'UGX',
-      description: 'Free self-onboarding. Commission-based pricing.',
+      description: 'Free self-onboarding option with paid plans and transaction services available by market.',
     },
-    author: {
+    provider: {
       '@type': 'Organization',
       name: 'AROSOFT Innovations Ltd',
       url: 'https://arosoftlabs.com',
       logo: `${SITE_URL}${BRAND_MARK}`,
       address: {
         '@type': 'PostalAddress',
-        addressCountry: 'UG',
         addressLocality: 'Kampala',
-        addressRegion: 'Central Region',
-      },
-      contactPoint: [
-        {
-          '@type': 'ContactPoint',
-          telephone: '+256787726388',
-          email: 'support@arofi.net',
-          contactType: 'customer support',
-          areaServed: 'UG',
-          availableLanguage: ['en'],
-        },
-      ],
-    },
-    audience: {
-      '@type': 'Audience',
-      geographicArea: {
-        '@type': 'Country',
-        name: 'Uganda',
+        addressCountry: 'UG',
       },
     },
-    keywords: KEYWORDS,
+    areaServed: COUNTRIES.map((name) => ({ '@type': 'Country', name })),
     featureList: [
-      'MikroTik hotspot billing',
-      'MTN MoMo payment integration',
-      'Airtel Money payment integration',
-      'Multi-business SaaS',
-      'WiFi voucher management',
-      'RADIUS authentication',
-      'Self-onboarding for WiFi operators',
-      'Kampala Uganda hotspot billing',
-      'Automated session management',
-      'Mobile money collection',
+      'WiFi and hotspot billing',
+      'RADIUS authentication and accounting',
+      'Router and access point management',
+      'Internet package management',
+      'Voucher generation and redemption',
+      'Customer and live session management',
+      'Wallet, sales and withdrawal reporting',
+      'Mobile money integrations where enabled',
     ],
-    screenshot: `${SITE_URL}${BRAND_LOGO}`,
   }
 
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="icon" href={FAVICON} type="image/svg+xml" />
-        <link rel="shortcut icon" href={FAVICON} type="image/svg+xml" />
+        <link rel="icon" href={FAVICON} type="image/png" />
+        <link rel="shortcut icon" href={FAVICON} type="image/png" />
         <link rel="apple-touch-icon" href={BRAND_MARK} />
         <link rel="llms" href="/llms.txt" type="text/plain" />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'LocalBusiness',
-              '@id': `${SITE_URL}/#local-business`,
-              name: 'AROSOFT Innovations Ltd',
-              alternateName: 'AROFi',
-              description: 'Uganda\'s leading WiFi hotspot billing platform with MTN MoMo and Airtel Money integration for MikroTik operators.',
-              url: SITE_URL,
-              logo: {
-                '@type': 'ImageObject',
-                url: `${SITE_URL}${BRAND_MARK}`,
-                width: 260,
-                height: 220,
-              },
-              image: `${SITE_URL}${BRAND_LOGO}`,
-              telephone: '+256787726388',
-              email: 'support@arofi.net',
-              address: {
-                '@type': 'PostalAddress',
-                streetAddress: 'Kampala',
-                addressLocality: 'Kampala',
-                addressRegion: 'Central Region',
-                addressCountry: 'UG',
-              },
-              geo: {
-                '@type': 'GeoCoordinates',
-                latitude: 0.3476,
-                longitude: 32.5825,
-              },
-              areaServed: [
-                { '@type': 'Country', name: 'Uganda' },
-                { '@type': 'AdministrativeArea', name: 'East Africa' },
-              ],
-              openingHoursSpecification: {
-                '@type': 'OpeningHoursSpecification',
-                dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-                opens: '00:00',
-                closes: '23:59',
-              },
-              priceRange: 'Free - UGX 20,000/month',
-              sameAs: ['https://arosoftlabs.com'],
-            }),
-          }}
-        />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }} />
       </head>
       <body>
         {children}
         <CookieConsent />
-        <PwaInstallPrompt appName="AROFi Admin" />
+        <PwaInstallPrompt appName="AroFi Admin" />
         <DeferredChatWidget />
       </body>
     </html>
