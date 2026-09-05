@@ -45,12 +45,12 @@ type NavItem = {
 
 const vendorNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, tenantOnly: true },
-  { href: '/routers', label: 'Routers', icon: Router, required: ['routers.read'], tenantOnly: true },
+  { href: '/admin/settings/routers', label: 'Routers', icon: Router, required: ['routers.read'], tenantOnly: true },
   { href: '/hotspots', label: 'Access Points', icon: Wifi, required: ['hotspots.read'], tenantOnly: true },
   { href: '/packages', label: 'Internet Packages', icon: ShoppingCart, required: ['packages.read'], tenantOnly: true },
   { href: '/vouchers', label: 'Vouchers', icon: Ticket, required: ['vouchers.read'], tenantOnly: true },
   { href: '/agents', label: 'Agents', icon: Store, required: ['agents.read'], tenantOnly: true },
-  { href: '/customers', label: 'Customers', icon: Users, required: ['users.read'], tenantOnly: true },
+  { href: '/users?tab=customers', label: 'Customers', icon: Users, required: ['users.read'], tenantOnly: true },
   { href: '/sessions', label: 'Active Sessions', icon: Activity, required: ['sessions.read'], tenantOnly: true },
   { href: '/sales', label: 'Sales & Payments', icon: CircleDollarSign, required: ['billing.read'], tenantOnly: true, dividerBefore: true },
   { href: '/transactions', label: 'Transactions', icon: CreditCard, required: ['billing.read'], tenantOnly: true },
