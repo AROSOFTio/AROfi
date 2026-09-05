@@ -36,38 +36,22 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="login-page">
-      <div className="login-shell" style={{ gridTemplateColumns: '1fr', width: '100%', maxWidth: 440 }}>
+      <div className="login-shell">
         <div className="login-card">
+          <Link href="/login" className="auth-back-link">← Back to sign in</Link>
           <div className="login-brand">
-            <img src="/logo.png" alt="AROFi Logo" style={{ width: 72, height: 'auto', margin: '0 auto 10px', display: 'block' }} />
+            <img src="/brand-assets/arofi-logo.png" alt="AroFi" className="login-logo" />
             <h1>Reset your password</h1>
             <p>Enter your account email and we&apos;ll send you a reset link.</p>
           </div>
 
-          {message && (
-            <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>
-              {message}
-            </div>
-          )}
-          {error && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 18 }}>
-              {error}
-            </div>
-          )}
+          {message && <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>{message}</div>}
+          {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 18 }}>{error}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label className="form-label">Email Address</label>
-              <input
-                className="form-input"
-                type="email"
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                autoFocus
-              />
+              <input className="form-input" type="email" placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" autoFocus />
             </div>
             <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={loading}>
               {loading ? 'Sending...' : 'Send Reset Link'}
@@ -75,8 +59,6 @@ export default function ForgotPasswordPage() {
           </form>
 
           <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-            Remembered it? <Link href="/login" style={{ color: 'var(--green)', fontWeight: 700 }}>Back to sign in</Link>
-            {' · '}
             <Link href="/forgot-email" style={{ color: 'var(--green)', fontWeight: 700 }}>Forgot email?</Link>
           </p>
         </div>
