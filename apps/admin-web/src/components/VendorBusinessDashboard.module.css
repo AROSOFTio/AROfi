@@ -1,21 +1,14 @@
 .dashboard {
-  --dash-blue: var(--arofi-theme-accent, #2563eb);
+  --dash-blue: var(--arofi-theme-accent, #22A53A);
   display: grid;
   gap: 16px;
   padding-bottom: 24px;
 }
 
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .title { margin: 0; font-size: 26px; letter-spacing: -.025em; color: var(--text-1); }
 .subtitle { margin: 4px 0 0; color: var(--text-3); font-size: 13px; }
 .headerTools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-
 .dateFilter { display: flex; align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--border-soft); background: var(--bg-card); border-radius: 12px; }
 .dateInput { width: 132px; min-width: 0; border: 0; background: transparent; color: var(--text-1); font: inherit; font-size: 12px; outline: none; }
 .dateArrow { color: var(--text-3); font-size: 12px; }
@@ -33,6 +26,9 @@
 .iconGreen { color: #059669; background: #ecfdf5; }
 .iconPurple { color: #7c3aed; background: #f5f3ff; }
 .kpiValue { display: block; margin-top: 12px; color: var(--text-1); font-size: clamp(19px, 2vw, 24px); font-weight: 850; letter-spacing: -.025em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpiTrend { display: flex; align-items: center; gap: 4px; margin-top: 7px; color: #16a34a; font-size: 11px; font-weight: 850; line-height: 1.2; }
+.kpiTrend span { color: inherit; font-weight: 700; }
+.kpiTrendDown { color: #dc2626; }
 .kpiNote { margin-top: 5px; min-height: 16px; color: var(--text-3); font-size: 10.5px; }
 .kpiFoot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-top: 1px solid var(--border-soft); margin-top: 12px; padding-top: 9px; }
 .kpiFoot span { min-width: 0; color: var(--text-3); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; }
@@ -46,7 +42,7 @@
 .panelLink { color: var(--dash-blue); text-decoration: none; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
 
 .insightGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding-top: 10px; }
-.insight { display: flex; align-items: center; gap: 9px; border: 1px solid var(--border-soft); background: var(--bg-page); border-radius: 10px; padding: 11px; min-width: 0; }
+.insight { display: flex; align-items: center; gap: 9px; border: 1px solid var(--border-soft); background: var(--bg-app); border-radius: 10px; padding: 11px; min-width: 0; }
 .insight svg { color: var(--dash-blue); flex: 0 0 auto; }
 .insight strong { display: block; color: var(--text-1); font-size: 14px; }
 .insight span { display: block; color: var(--text-3); font-size: 9.5px; margin-top: 2px; }
@@ -66,7 +62,7 @@
 
 .wallet { border-radius: 15px; overflow: hidden; border: 1px solid var(--border-soft); background: var(--bg-card); box-shadow: 0 3px 14px rgba(15, 23, 42, .05); }
 .walletHead { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; color: var(--text-1); font-size: 13px; font-weight: 800; }
-.walletBlue { margin: 0 10px; border-radius: 12px; padding: 19px 15px; background: linear-gradient(135deg, var(--dash-blue), #1d4ed8); color: white; position: relative; overflow: hidden; }
+.walletBlue { margin: 0 10px; border-radius: 12px; padding: 19px 15px; background: linear-gradient(135deg, #169b52, #2563eb); color: white; position: relative; overflow: hidden; }
 .walletBlue::after { content: ''; position: absolute; right: -28px; bottom: -44px; width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,.08); }
 .walletBlue span { display: block; font-size: 10px; opacity: .88; }
 .walletBlue strong { display: block; margin-top: 8px; font-size: 25px; letter-spacing: -.03em; }
@@ -76,11 +72,17 @@
 .walletButton { margin: 0 14px 14px; display: flex; justify-content: center; align-items: center; gap: 6px; min-height: 38px; color: var(--dash-blue); border: 1px solid color-mix(in srgb, var(--dash-blue) 55%, var(--border-soft)); border-radius: 9px; text-decoration: none; font-weight: 800; font-size: 11px; }
 
 .withdrawals { background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 14px; padding: 14px; }
-.withdrawList { display: grid; gap: 0; }
-.withdrawItem { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
-.withdrawItem:last-child { border-bottom: 0; }
-.withdrawItem strong { color: var(--text-1); font-size: 11.5px; }
-.withdrawItem small { color: var(--text-3); display: block; margin-top: 3px; font-size: 9.5px; }
+.walletActivityList { display: grid; }
+.walletActivityItem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
+.walletActivityItem:last-child { border-bottom: 0; }
+.walletActivityMain { min-width: 0; }
+.walletActivityMain strong { display: block; color: var(--text-1); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.walletActivityMain span { display: block; margin-top: 2px; color: var(--text-2); font-size: 9.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.walletActivityMain small { display: block; margin-top: 3px; color: var(--text-3); font-size: 8.8px; }
+.walletActivityRight { min-width: 82px; text-align: right; display: grid; justify-items: end; gap: 5px; }
+.walletActivityRight > strong { font-size: 10.5px; }
+.amountIn { color: #169b52; }
+.amountOut { color: #dc2626; }
 .status { justify-self: end; border-radius: 999px; padding: 4px 7px; background: #ecfdf5; color: #047857; font-size: 9px; font-weight: 700; text-transform: capitalize; }
 .empty { padding: 26px 8px; text-align: center; color: var(--text-3); font-size: 11px; }
 
@@ -91,6 +93,11 @@
 .salesTable tr:last-child td { border-bottom: 0; }
 .salesTable td strong { color: var(--text-1); }
 .saleBadge { display: inline-flex; border-radius: 999px; padding: 3px 7px; background: color-mix(in srgb, var(--dash-blue) 10%, transparent); color: var(--dash-blue); font-size: 9px; font-weight: 700; text-transform: capitalize; }
+
+:global(html[data-theme='dark']) .iconGreen { color: #58c86c; background: rgba(34,165,58,.14); }
+:global(html[data-theme='dark']) .iconPurple { color: #b9a0ff; background: rgba(124,58,237,.15); }
+:global(html[data-theme='dark']) .live,
+:global(html[data-theme='dark']) .status { background: rgba(34,165,58,.14); color: #58c86c; }
 
 @media (max-width: 1180px) {
   .shell { grid-template-columns: 1fr; }
@@ -123,7 +130,7 @@
   .kpiHead { font-size: 9px; gap: 6px; }
   .icon { width: 27px; height: 27px; border-radius: 8px; }
   .kpiValue { font-size: 17px; margin-top: 9px; }
-  .kpiNote { display: none; }
+  .kpiTrend { font-size: 10px; }
   .kpiFoot { display: none; }
   .panel { padding: 12px; }
   .agentHeader { align-items: flex-start; }
