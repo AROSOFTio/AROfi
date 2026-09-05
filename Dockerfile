@@ -32,6 +32,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/fix_lucide_icon_compat.py \
     && python3 scripts/apply_public_content_patches.py \
     && python3 scripts/apply_portal_tv_package_patches_v2.py \
+    && python3 scripts/apply_arofi_mikrotik_local_portal_ui.py \
     && python3 scripts/apply_router_compensation_review.py \
     && python3 scripts/apply_router_compensation_ui.py \
     && python3 scripts/fix_support_ticket_workspace.py \
