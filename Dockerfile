@@ -18,6 +18,8 @@ RUN chmod +x scripts/run_with_heartbeat.sh
 
 # The persistence normalizer must run before the router lifecycle validator.
 # The validator requires session-timeout=0s, which the normalizer installs.
+# The old AroFi UI patch scripts are intentionally not rerun here: their
+# results are now committed source and rerunning them breaks exact-release builds.
 RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/apply_unified_gateway_patches.py \
     && python3 scripts/apply_gateway_webhook_patches.py \
@@ -44,9 +46,6 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
     && python3 scripts/finalize_gateway_compile.py \
-    && python3 scripts/apply_arofi_brand_polish.py \
-    && python3 scripts/apply_arofi_africa_login_polish.py \
-    && python3 scripts/apply_arofi_final_auth_background.py \
     && python3 scripts/verify_router_captive_invariants.py \
     && python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
