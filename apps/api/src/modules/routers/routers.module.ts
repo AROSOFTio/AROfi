@@ -8,6 +8,7 @@ import { CaptivePortalResilienceInitializer } from './captive-portal-resilience.
 import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
+import { MikrotikLoginBootstrapInterceptor } from './mikrotik-login-bootstrap.interceptor'
 import { MikrotikLoginCacheInterceptor } from './mikrotik-login-cache.interceptor'
 import { MikrotikService } from './mikrotik.service'
 import { PortalPackageClarityInitializer } from './portal-package-clarity.initializer'
@@ -47,6 +48,10 @@ import { RemoteProxyService } from './remote-proxy.service'
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikLoginCacheInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MikrotikLoginBootstrapInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
