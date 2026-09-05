@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useMemo, type ComponentType } from 'react'
+import { useMemo } from 'react'
 import {
   Activity,
   Bell,
@@ -27,17 +27,16 @@ import {
   Wallet,
   Wifi,
   Zap,
+  type LucideIcon,
 } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { formatRoleName } from '@/lib/format'
 import { isPlatformAdmin, isResellerWorkspace, isVendorWorkspace } from '@/lib/workspace'
 
-type IconComponent = ComponentType<{ size?: number; className?: string }>
-
 type NavItem = {
   href: string
   label: string
-  icon: IconComponent
+  icon: LucideIcon
   required?: string[]
   platformOnly?: boolean
   tenantOnly?: boolean
