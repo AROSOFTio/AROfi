@@ -2,6 +2,16 @@ name: Deploy AROFi production
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'apps/admin-web/src/components/RouterFullEditModal.tsx'
+      - 'apps/admin-web/src/app/(dashboard)/admin/settings/routers/page.tsx'
+      - 'apps/admin-web/src/lib/client-api.ts'
+      - 'apps/api/src/modules/routers/**'
+      - 'scripts/enable_router_full_management_v2.py'
+      - '.github/workflows/deploy.yml'
 
 permissions:
   contents: read
