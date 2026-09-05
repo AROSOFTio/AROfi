@@ -123,9 +123,9 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   return (
     <aside className={`sidebar ${isPlatform ? 'platform-sidebar' : ''}`}>
       <div className="sidebar-logo">
-        <img src="/logo.svg" alt="AROFi" />
+        <img src="/brand-assets/arofi-app-icon.png" alt="AroFi" />
         <div style={{ minWidth: 0 }}>
-          <h1>ARO<span>Fi</span></h1>
+          <h1>Aro<span>Fi</span></h1>
           <p className="sidebar-workspace-label">{workspaceLabel}</p>
         </div>
       </div>

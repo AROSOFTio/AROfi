@@ -41,39 +41,23 @@ export default function ForgotEmailPage() {
 
   return (
     <div className="login-page">
-      <div className="login-shell" style={{ gridTemplateColumns: '1fr', width: '100%', maxWidth: 440 }}>
+      <div className="login-shell">
         <div className="login-card">
+          <Link href="/login" className="auth-back-link">← Back to sign in</Link>
           <div className="login-brand">
-            <img src="/logo.png" alt="AROFi Logo" style={{ width: 72, height: 'auto', margin: '0 auto 10px', display: 'block' }} />
+            <img src="/brand-assets/arofi-logo.png" alt="AroFi" className="login-logo" />
             <h1>Forgot your email?</h1>
             <p>Enter the phone number you registered with and we&apos;ll show you which email is on the account.</p>
           </div>
 
-          {maskedEmail && (
-            <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '12px 14px', fontSize: 14, color: 'var(--arofi-theme-accent-text)', marginBottom: 18, textAlign: 'center', fontWeight: 700 }}>
-              {maskedEmail}
-            </div>
-          )}
-          {message && !maskedEmail && (
-            <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>
-              {message}
-            </div>
-          )}
-          {error && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 18 }}>
-              {error}
-            </div>
-          )}
+          {maskedEmail && <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '12px 14px', fontSize: 14, color: 'var(--arofi-theme-accent-text)', marginBottom: 18, textAlign: 'center', fontWeight: 700 }}>{maskedEmail}</div>}
+          {message && !maskedEmail && <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>{message}</div>}
+          {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 18 }}>{error}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label className="form-label">Registered Phone Number</label>
-              <PhoneNumberField
-                value={phoneNumber}
-                onChange={setPhoneNumber}
-                required
-                autoFocus
-              />
+              <PhoneNumberField value={phoneNumber} onChange={setPhoneNumber} required autoFocus />
             </div>
             <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={loading}>
               {loading ? 'Looking up...' : 'Reveal My Email'}
@@ -81,8 +65,6 @@ export default function ForgotEmailPage() {
           </form>
 
           <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-            <Link href="/login" style={{ color: 'var(--green)', fontWeight: 700 }}>Back to sign in</Link>
-            {' · '}
             <Link href="/forgot-password" style={{ color: 'var(--green)', fontWeight: 700 }}>Forgot password?</Link>
           </p>
         </div>

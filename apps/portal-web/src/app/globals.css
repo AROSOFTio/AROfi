@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+:root[data-theme='light'] {
   --portal-primary: #22A53A;
   --portal-primary-hover: #1E9134;
   --portal-bg: #F5F7F9;
@@ -12,7 +13,6 @@
   --portal-text: #122033;
   --portal-text-secondary: #596675;
   --portal-text-muted: #7F8A96;
-
   --background: 210 20% 97%;
   --foreground: 214 47% 14%;
   --card: 0 0% 100%;
@@ -34,11 +34,13 @@
   --ring: 130 66% 39%;
   --radius: 0.625rem;
   --brand: #22A53A;
-  --arofi-portal-logo: url('/portal/brand/arofi-logo-blue.svg');
-  --arofi-portal-mark: url('/portal/brand/arofi-mark-blue.svg');
+  --arofi-portal-logo: url('/brand-assets/arofi-logo.png');
+  --arofi-portal-mark: url('/brand-assets/arofi-app-icon.png');
 }
 
 :root[data-theme='dark'] {
+  --portal-primary: #22A53A;
+  --portal-primary-hover: #2AB747;
   --portal-bg: #0B0805;
   --portal-surface: #202020;
   --portal-surface-soft: #292929;
@@ -46,7 +48,6 @@
   --portal-text: #E6E6E6;
   --portal-text-secondary: #B0B0B0;
   --portal-text-muted: #8F8F8F;
-
   --background: 30 38% 3%;
   --foreground: 0 0% 90%;
   --card: 0 0% 13%;
@@ -66,31 +67,22 @@
   --border: 0 0% 19%;
   --input: 0 0% 19%;
   --ring: 130 66% 39%;
+  --arofi-portal-logo: url('/brand-assets/arofi-logo.png');
+  --arofi-portal-mark: url('/brand-assets/arofi-app-icon.png');
 }
 
-:root[data-accent-theme='green'] {
-  --arofi-portal-logo: url('/portal/brand/arofi-logo-green.svg');
-  --arofi-portal-mark: url('/portal/brand/arofi-mark-green.svg');
-}
-
+:root[data-accent-theme='blue'],
+:root[data-accent-theme='green'],
 :root[data-accent-theme='gold'] {
-  --arofi-portal-logo: url('/portal/brand/arofi-logo-gold.svg');
-  --arofi-portal-mark: url('/portal/brand/arofi-mark-gold.svg');
+  --brand: #22A53A;
+  --portal-primary: #22A53A;
+  --arofi-portal-logo: url('/brand-assets/arofi-logo.png');
+  --arofi-portal-mark: url('/brand-assets/arofi-app-icon.png');
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  color-scheme: light;
-  background: var(--portal-bg);
-}
-
-html[data-theme='dark'] {
-  color-scheme: dark;
-}
-
+* { box-sizing: border-box; }
+html { color-scheme: light; background: var(--portal-bg); }
+html[data-theme='dark'] { color-scheme: dark; }
 body,
 body > main,
 main.min-h-screen {
@@ -99,63 +91,77 @@ main.min-h-screen {
   color: var(--portal-text) !important;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: normal;
+  transition: background-color .18s ease, color .18s ease;
 }
 
-::selection {
-  background: rgba(34, 165, 58, .20);
-  color: var(--portal-text);
-}
+::selection { background: rgba(34, 165, 58, .20); color: var(--portal-text); }
+a { color: var(--portal-primary); }
 
-a {
-  color: var(--portal-primary);
+.portal-theme-toggle {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(58px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--portal-border);
+  border-radius: 10px;
+  background: var(--portal-surface);
+  box-shadow: 0 4px 14px rgba(16, 24, 40, .08);
 }
+.portal-theme-toggle button {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--portal-text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.portal-theme-toggle button:hover { background: var(--portal-surface-soft); color: var(--portal-text); }
+.portal-theme-toggle button[aria-pressed='true'] { background: rgba(34,165,58,.13); color: var(--portal-primary); }
 
-/* Normalize Tailwind slate surfaces used by the current portal without touching
-   payment, voucher, reconnect, or package-loading behavior. */
+.portal-powered-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .72rem;
+  font-weight: 650;
+  color: var(--portal-text-muted);
+  text-decoration: none;
+  letter-spacing: .02em;
+}
+.portal-powered-by img { width: 24px; height: 24px; object-fit: contain; border-radius: 6px; }
+
 html[data-theme='dark'] .bg-white,
-html[data-theme='dark'] [class*='bg-white'] {
-  background-color: var(--portal-surface) !important;
-}
-
+html[data-theme='dark'] [class*='bg-white'] { background-color: var(--portal-surface) !important; }
 html[data-theme='dark'] .bg-slate-50,
 html[data-theme='dark'] .bg-slate-100,
 html[data-theme='dark'] [class*='bg-slate-50'],
-html[data-theme='dark'] [class*='bg-slate-100'] {
-  background-color: var(--portal-surface-soft) !important;
-}
-
+html[data-theme='dark'] [class*='bg-slate-100'] { background-color: var(--portal-surface-soft) !important; }
 html[data-theme='dark'] .text-slate-950,
 html[data-theme='dark'] .text-slate-900,
 html[data-theme='dark'] .text-slate-800,
 html[data-theme='dark'] [class*='text-slate-950'],
 html[data-theme='dark'] [class*='text-slate-900'],
-html[data-theme='dark'] [class*='text-slate-800'] {
-  color: var(--portal-text) !important;
-}
-
+html[data-theme='dark'] [class*='text-slate-800'] { color: var(--portal-text) !important; }
 html[data-theme='dark'] .text-slate-700,
 html[data-theme='dark'] .text-slate-600,
 html[data-theme='dark'] [class*='text-slate-700'],
-html[data-theme='dark'] [class*='text-slate-600'] {
-  color: var(--portal-text-secondary) !important;
-}
-
+html[data-theme='dark'] [class*='text-slate-600'] { color: var(--portal-text-secondary) !important; }
 html[data-theme='dark'] .text-slate-500,
 html[data-theme='dark'] .text-slate-400,
 html[data-theme='dark'] [class*='text-slate-500'],
-html[data-theme='dark'] [class*='text-slate-400'] {
-  color: var(--portal-text-muted) !important;
-}
-
+html[data-theme='dark'] [class*='text-slate-400'] { color: var(--portal-text-muted) !important; }
 html[data-theme='dark'] .border-slate-200,
 html[data-theme='dark'] .border-slate-300,
 html[data-theme='dark'] [class*='border-slate-200'],
-html[data-theme='dark'] [class*='border-slate-300'] {
-  border-color: var(--portal-border) !important;
-}
+html[data-theme='dark'] [class*='border-slate-300'] { border-color: var(--portal-border) !important; }
 
-/* Core primary controls stay AROFi green even when a tenant uses a different
-   logo/brand asset. */
 button[class*='bg-blue-'],
 button[class*='bg-indigo-'],
 a[class*='bg-blue-'],
@@ -167,51 +173,34 @@ button[data-primary='true'] {
   color: #FFFFFF !important;
   box-shadow: none !important;
 }
-
 button[class*='bg-blue-']:hover,
 button[class*='bg-indigo-']:hover,
 a[class*='bg-blue-']:hover,
-a[class*='bg-indigo-']:hover {
-  background-color: var(--portal-primary-hover) !important;
-}
+a[class*='bg-indigo-']:hover { background-color: var(--portal-primary-hover) !important; }
 
-input,
-select,
-textarea {
+input, select, textarea {
   border-color: var(--portal-border) !important;
   border-radius: 9px !important;
   background: var(--portal-surface) !important;
   color: var(--portal-text) !important;
 }
-
-input:focus,
-select:focus,
-textarea:focus {
+input:focus, select:focus, textarea:focus {
   border-color: var(--portal-primary) !important;
   outline: none !important;
   box-shadow: 0 0 0 3px rgba(34, 165, 58, .13) !important;
 }
 
-.rounded-2xl,
-.rounded-3xl {
-  border-radius: 12px !important;
-}
-
-.shadow-xl,
-.shadow-2xl {
-  box-shadow: 0 4px 18px rgba(16, 24, 40, .07) !important;
-}
-
+.rounded-2xl, .rounded-3xl { border-radius: 12px !important; }
+.shadow-xl, .shadow-2xl { box-shadow: 0 4px 18px rgba(16, 24, 40, .07) !important; }
 html[data-theme='dark'] .shadow-xl,
-html[data-theme='dark'] .shadow-2xl {
-  box-shadow: none !important;
-}
+html[data-theme='dark'] .shadow-2xl,
+html[data-theme='dark'] .portal-theme-toggle { box-shadow: none !important; }
 
-/* The platform fallback logo is borderless. Tenant-uploaded custom logos remain untouched. */
+/* Replace only the platform fallback logo. Tenant-uploaded branding is untouched. */
 div:has(> img[src="/logo.png"].h-10) {
-  width: 124px !important;
-  height: 44px !important;
-  flex: 0 0 124px !important;
+  width: 150px !important;
+  height: 50px !important;
+  flex: 0 0 150px !important;
   padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -222,10 +211,9 @@ div:has(> img[src="/logo.png"].h-10) {
   background-size: contain !important;
   box-shadow: none !important;
 }
-
 img[src="/logo.png"].h-10 {
-  width: 124px !important;
-  height: 44px !important;
+  width: 150px !important;
+  height: 50px !important;
   max-width: none !important;
   opacity: 0 !important;
   border: 0 !important;
@@ -235,6 +223,12 @@ img[src="/logo.png"].h-10 {
 }
 
 @media (max-width: 640px) {
+  .portal-theme-toggle {
+    position: sticky;
+    top: 8px;
+    margin: 8px 10px 0 auto;
+    width: min(250px, calc(100vw - 20px));
+  }
   body > main > div,
   main.min-h-screen > div {
     padding-left: 12px !important;
