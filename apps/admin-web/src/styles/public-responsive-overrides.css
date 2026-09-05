@@ -2,6 +2,10 @@
    These rules align the public and authentication surfaces with the same
    aaPanel-inspired light/dark language used by the internal console. */
 
+.dashboard-shell .sidebar-direct-item {
+  font-size: 15px !important;
+}
+
 .home-shell,
 .home-page {
   background: var(--aa-page-bg, var(--bg-app));
