@@ -16,13 +16,13 @@ async function getPublicDefaultAccentTheme() {
     const response = await fetch(`${apiBase}/system/public-settings`, {
       next: { revalidate: 60 },
     })
-    if (!response.ok) return 'blue'
+    if (!response.ok) return 'green'
     const settings = await response.json() as { publicDefaultAccentTheme?: string }
     return ['blue', 'green', 'gold'].includes(settings.publicDefaultAccentTheme ?? '')
       ? settings.publicDefaultAccentTheme
-      : 'blue'
+      : 'green'
   } catch {
-    return 'blue'
+    return 'green'
   }
 }
 
@@ -90,7 +90,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F5F7F9' },
+    { media: '(prefers-color-scheme: dark)', color: '#0B0805' },
+  ],
 }
 
 export default async function RootLayout({
@@ -99,9 +102,33 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   const publicDefaultAccentTheme = await getPublicDefaultAccentTheme()
+  const themeScript = `
+    (function () {
+      try {
+        var cookies = document.cookie.split('; ').reduce(function (values, item) {
+          var parts = item.split('=');
+          values[parts[0]] = parts.slice(1).join('=');
+          return values;
+        }, {});
+        var preference = null;
+        try { preference = localStorage.getItem('arofi-theme'); } catch (storageError) {}
+        preference = preference || cookies['arofi-theme'] || 'system';
+        if (preference !== 'light' && preference !== 'dark' && preference !== 'system') preference = 'system';
+        var mode = preference === 'system'
+          ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : preference;
+        document.documentElement.setAttribute('data-theme', mode);
+        document.documentElement.style.colorScheme = mode;
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  `
+
   return (
-    <html lang="en" data-accent-theme={publicDefaultAccentTheme}>
+    <html lang="en" data-accent-theme={publicDefaultAccentTheme} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href={FAVICON} type="image/svg+xml" />
         <link rel="shortcut icon" href={FAVICON} type="image/svg+xml" />
         <link rel="apple-touch-icon" href={MARK} />
@@ -132,8 +159,8 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className="bg-slate-50 text-slate-950 antialiased">
-        <main className="min-h-screen bg-slate-50">
+      <body className="antialiased">
+        <main className="min-h-screen">
           <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 sm:py-6">
             {children}
             <p className="pb-6 pt-10 text-center">
@@ -141,7 +168,7 @@ export default async function RootLayout({
                 href="https://arosoftlabs.com"
                 target="_blank"
                 rel="noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textDecoration: 'none', letterSpacing: '0.04em' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--portal-text-muted)', textDecoration: 'none', letterSpacing: '0.04em' }}
               >
                 <img src={MARK} alt="" aria-hidden="true" style={{ width: 20, height: 17, objectFit: 'contain' }} />
                 AROSOFT
