@@ -1,1 +1,0 @@
-AroFi release asset hotfix marker. Final user-visible branding uses the supplied AroFi WebP wordmark, square app icon, and dark mark. Internal AROFI_* identifiers remain unchanged.
