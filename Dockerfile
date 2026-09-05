@@ -45,6 +45,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
     && python3 scripts/finalize_gateway_compile.py \
     && python3 scripts/apply_arofi_brand_polish.py \
+    && python3 scripts/apply_arofi_africa_login_polish.py \
     && python3 scripts/verify_router_captive_invariants.py \
     && python3 scripts/forbid_mikrotik_auto_mac_auth.py
 
