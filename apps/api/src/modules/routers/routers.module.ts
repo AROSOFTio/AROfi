@@ -8,6 +8,7 @@ import { CaptivePortalResilienceInitializer } from './captive-portal-resilience.
 import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
+import { MikrotikLoginCacheInterceptor } from './mikrotik-login-cache.interceptor'
 import { MikrotikService } from './mikrotik.service'
 import { PortalPackageClarityInitializer } from './portal-package-clarity.initializer'
 import { PremiumCaptivePortalInitializer } from './premium-captive-portal.initializer'
@@ -43,6 +44,10 @@ import { RemoteProxyService } from './remote-proxy.service'
     // This MUST remain after the visual transforms. It is the final safety layer
     // on the real RouterOS hotspot/login.html used by first-time customers.
     CaptivePortalResilienceInitializer,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MikrotikLoginCacheInterceptor,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,
