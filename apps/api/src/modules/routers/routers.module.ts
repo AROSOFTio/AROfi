@@ -5,6 +5,7 @@ import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { SmsModule } from '../sms/sms.module'
 import { CaptivePortalResilienceInitializer } from './captive-portal-resilience.initializer'
+import { CrossApInstantHandoffInitializer } from './cross-ap-instant-handoff.initializer'
 import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
@@ -45,6 +46,10 @@ import { RemoteProxyService } from './remote-proxy.service'
     // This MUST remain after the visual transforms. It is the final safety layer
     // on the real RouterOS hotspot/login.html used by first-time customers.
     CaptivePortalResilienceInitializer,
+    // Final roaming layer: remember a paid device's reconnect credential on the
+    // tenant-local .wifi origin and immediately POST it to whichever AP/router
+    // the customer is on now. It does not change package/expiry enforcement.
+    CrossApInstantHandoffInitializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikLoginCacheInterceptor,
