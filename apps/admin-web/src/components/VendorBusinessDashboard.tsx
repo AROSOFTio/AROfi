@@ -19,7 +19,6 @@ import {
   ArrowUpRight,
   Banknote,
   Boxes,
-  Clock3,
   Cpu,
   Database,
   Router,
@@ -47,6 +46,16 @@ type AgentVoucherMetricsResponse = {
     recordedSales: number
     recordedSalesUgx: number
   }
+}
+
+type WalletActivity = {
+  id: string
+  kind: 'sale' | 'withdrawal'
+  title: string
+  detail: string
+  amountUgx: number
+  status: string
+  createdAt: string
 }
 
 export default async function VendorBusinessDashboard({
@@ -85,12 +94,63 @@ export default async function VendorBusinessDashboard({
   const liveRouters = routers?.summary.liveRouters ?? routerItems.filter((router) => router.liveState === 'LIVE').length
   const staleRouters = routers?.summary.staleRouters ?? routerItems.filter((router) => router.liveState === 'STALE').length
   const onlineRouters = liveRouters + staleRouters
+  const offlineRouters = Math.max(totalRouters - onlineRouters, 0)
   const dataUsedTodayMb = sessions?.summary.dataUsedTodayMb ?? activeSessions.reduce((total, item) => total + (item.dataUsedMb ?? 0), 0)
   const averageLatency = routers?.summary.averageLatencyMs ?? 0
+  const totalSessionsToday = sessions?.summary.totalSessionsToday ?? 0
+
+  const chart = billing?.chart ?? []
+  const latestChart = chart.at(-1)
+  const previousChart = chart.at(-2)
+  const grossTrend = percentChange(latestChart?.grossSalesUgx ?? billing?.summary.todayGrossSalesUgx ?? 0, previousChart?.grossSalesUgx ?? 0)
+  const netTrend = percentChange(latestChart?.netEarningsUgx ?? billing?.summary.todayNetEarningsUgx ?? 0, previousChart?.netEarningsUgx ?? 0)
+  const activeShare = totalSessionsToday > 0 ? Math.round((activeCustomers / totalSessionsToday) * 100) : activeCustomers > 0 ? 100 : 0
+  const routerAvailability = totalRouters > 0 ? Math.round((onlineRouters / totalRouters) * 100) : 0
 
   const verifiedNumbers = payoutProfile?.numbers?.filter((item: any) => item.status === 'VERIFIED') ?? []
   const availableUgx = payoutProfile?.wallet?.balanceUgx ?? billing?.summary.withdrawableBalanceUgx ?? billing?.summary.walletBalanceUgx ?? 0
   const recentWithdrawals = payoutProfile?.recentWithdrawals ?? []
+
+  const packageDurationById = new Map(packageItems.map((item) => [item.id, item.durationMinutes]))
+  const walletActivities: WalletActivity[] = [
+    ...recentTransactions.map((transaction): WalletActivity => {
+      const isVoucher = Boolean(transaction.voucher)
+      const isMobileMoney = transaction.channel === 'MOBILE_MONEY'
+      const packageName = transaction.package?.name ?? 'Internet package'
+      const durationMinutes = transaction.package?.id ? packageDurationById.get(transaction.package.id) : undefined
+      const duration = durationMinutes ? formatDuration(durationMinutes) : ''
+      const phone = transaction.payment?.phoneNumber ?? ''
+      const transactorName = transaction.customerReference || transaction.agent?.name || (isMobileMoney ? 'Mobile Money customer' : 'Customer')
+      const title = isVoucher ? `Voucher ${transaction.voucher?.code ?? ''}`.trim() : transactorName
+      const detail = isVoucher
+        ? [packageName, duration].filter(Boolean).join(' · ')
+        : isMobileMoney
+          ? [phone, packageName, duration].filter(Boolean).join(' · ')
+          : [transaction.channel?.replaceAll('_', ' '), packageName, duration].filter(Boolean).join(' · ')
+      return {
+        id: `sale-${transaction.id}`,
+        kind: 'sale',
+        title,
+        detail,
+        amountUgx: Math.max(transaction.grossAmountUgx ?? 0, 0),
+        status: transaction.status ?? 'completed',
+        createdAt: transaction.createdAt,
+      }
+    }),
+    ...recentWithdrawals.map((withdrawal: any): WalletActivity => ({
+      id: `withdrawal-${withdrawal.id}`,
+      kind: 'withdrawal',
+      title: withdrawal.ownerName || withdrawal.label || 'Wallet withdrawal',
+      detail: [withdrawal.phoneNumber || withdrawal.phone || withdrawal.destinationReference, withdrawal.network || withdrawal.provider]
+        .filter(Boolean)
+        .join(' · ') || 'Payout from AroFi wallet',
+      amountUgx: -Math.abs(Number(withdrawal.amountUgx ?? 0)),
+      status: withdrawal.status ?? 'pending',
+      createdAt: withdrawal.createdAt,
+    })),
+  ]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 7)
 
   const agentItems = agents?.agents ?? []
   const activeAgents = agents?.summary.activeAgents ?? agentItems.filter((agent) => agent.status === 'ACTIVE').length
@@ -107,7 +167,6 @@ export default async function VendorBusinessDashboard({
   const recentOtherSales = recentTransactions.filter((item) => item.channel !== 'MOBILE_MONEY' && !item.voucher && !item.agent).reduce((sum, item) => sum + Math.max(item.grossAmountUgx ?? 0, 0), 0)
 
   const dateRange = `${formatShortDate(range.from)} – ${formatShortDate(range.to)}`
-  const routerHealthLabel = totalRouters > 0 ? `${onlineRouters}/${totalRouters} available` : 'No routers yet'
 
   return (
     <div className={styles.dashboard}>
@@ -140,7 +199,9 @@ export default async function VendorBusinessDashboard({
             <Kpi
               title="Gross Sales"
               value={formatCurrency(grossSales)}
-              note={dateRange}
+              trend={grossTrend}
+              trendLabel="vs previous day"
+              note={`${formatCurrency(billing?.summary.todayGrossSalesUgx ?? 0)} today`}
               icon={<Banknote size={17} />}
               footLeft={['Today', formatCurrency(billing?.summary.todayGrossSalesUgx ?? 0)]}
               footRight={['This month', formatCurrency(billing?.summary.monthGrossSalesUgx ?? 0)]}
@@ -148,7 +209,9 @@ export default async function VendorBusinessDashboard({
             <Kpi
               title="Net Earnings"
               value={formatCurrency(netEarnings)}
-              note={dateRange}
+              trend={netTrend}
+              trendLabel="vs previous day"
+              note={`${formatCurrency(billing?.summary.todayNetEarningsUgx ?? 0)} today`}
               icon={<Wallet size={17} />}
               iconTone="green"
               footLeft={['Today', formatCurrency(billing?.summary.todayNetEarningsUgx ?? 0)]}
@@ -157,16 +220,20 @@ export default async function VendorBusinessDashboard({
             <Kpi
               title="Active Customers"
               value={`${activeCustomers}`}
-              note="Customers online now"
+              trend={activeShare}
+              trendLabel="active share"
+              note={`${totalSessionsToday} sessions today`}
               icon={<Users size={17} />}
               iconTone="purple"
-              footLeft={['Sessions today', `${sessions?.summary.totalSessionsToday ?? 0}`]}
+              footLeft={['Sessions today', `${totalSessionsToday}`]}
               footRight={['Data today', formatMegabytes(dataUsedTodayMb)]}
             />
             <Kpi
               title="Routers Online"
-              value={`${onlineRouters}`}
-              note={routerHealthLabel}
+              value={`${onlineRouters} / ${totalRouters}`}
+              trend={routerAvailability}
+              trendLabel="available"
+              note={`${onlineRouters} online, ${offlineRouters} offline`}
               icon={<Router size={17} />}
               footLeft={['Total routers', `${totalRouters}`]}
               footRight={['Live now', `${liveRouters}`]}
@@ -176,21 +243,15 @@ export default async function VendorBusinessDashboard({
           <section className={styles.twoCol}>
             <div className={styles.panel}>
               <div className={styles.panelHead}>
-                <div>
-                  <div className={styles.panelTitle}>Revenue Trend</div>
-                  <div className={styles.panelSubtitle}>{dateRange}</div>
-                </div>
+                <div><div className={styles.panelTitle}>Revenue Trend</div><div className={styles.panelSubtitle}>{dateRange}</div></div>
                 <a href={`/reports?${query}`} className={styles.panelLink}>Open report →</a>
               </div>
-              <RevenueChart data={billing?.chart ?? []} />
+              <RevenueChart data={chart} />
             </div>
 
             <div className={styles.panel}>
               <div className={styles.panelHead}>
-                <div>
-                  <div className={styles.panelTitle}>Sales by Channel</div>
-                  <div className={styles.panelSubtitle}>Recent transaction mix</div>
-                </div>
+                <div><div className={styles.panelTitle}>Sales by Channel</div><div className={styles.panelSubtitle}>Recent transaction mix</div></div>
               </div>
               <BusinessSalesChannelChart channels={[
                 { name: 'Mobile Money', value: recentMobileMoneySales, color: '#2563eb' },
@@ -204,20 +265,14 @@ export default async function VendorBusinessDashboard({
           <section className={styles.twoCol}>
             <div className={styles.panel}>
               <div className={styles.panelHead}>
-                <div>
-                  <div className={styles.panelTitle}>Daily Earnings &amp; Voucher Sales</div>
-                  <div className={styles.panelSubtitle}>Per-day business breakdown</div>
-                </div>
+                <div><div className={styles.panelTitle}>Daily Earnings &amp; Voucher Sales</div><div className={styles.panelSubtitle}>Per-day business breakdown</div></div>
               </div>
-              <BusinessDailyEarningsChart data={billing?.chart ?? []} />
+              <BusinessDailyEarningsChart data={chart} />
             </div>
 
             <div className={styles.panel}>
               <div className={styles.panelHead}>
-                <div>
-                  <div className={styles.panelTitle}>System Insights</div>
-                  <div className={styles.panelSubtitle}>Live network overview</div>
-                </div>
+                <div><div className={styles.panelTitle}>System Insights</div><div className={styles.panelSubtitle}>Live network overview</div></div>
                 <a href="/admin/router" className={styles.panelLink}>Network health →</a>
               </div>
               <div className={styles.insightGrid}>
@@ -245,10 +300,7 @@ export default async function VendorBusinessDashboard({
 
           <section className={styles.panel}>
             <div className={styles.panelHead}>
-              <div>
-                <div className={styles.panelTitle}>Recent Sales</div>
-                <div className={styles.panelSubtitle}>Latest business transactions</div>
-              </div>
+              <div><div className={styles.panelTitle}>Recent Sales</div><div className={styles.panelSubtitle}>Latest business transactions</div></div>
               <a href={`/sales?${query}`} className={styles.panelLink}>View all sales →</a>
             </div>
             <div className={styles.salesWrap}>
@@ -256,16 +308,7 @@ export default async function VendorBusinessDashboard({
                 <div className={styles.empty}>No recent sales yet.</div>
               ) : (
                 <table className={styles.salesTable}>
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Type</th>
-                      <th>Customer / Agent</th>
-                      <th>Description</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>Time</th><th>Type</th><th>Customer / Agent</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead>
                   <tbody>
                     {recentTransactions.slice(0, 6).map((transaction) => (
                       <tr key={transaction.id}>
@@ -286,10 +329,8 @@ export default async function VendorBusinessDashboard({
 
         <aside className={styles.side}>
           <section className={styles.wallet}>
-            <div className={styles.walletHead}><Wallet size={16} /> AROFi Wallet</div>
-            <div className={styles.walletBlue}>
-              <div><span>Available Balance</span><strong>{formatCurrency(availableUgx)}</strong></div>
-            </div>
+            <div className={styles.walletHead}><Wallet size={16} /> AroFi Wallet</div>
+            <div className={styles.walletBlue}><div><span>Available Balance</span><strong>{formatCurrency(availableUgx)}</strong></div></div>
             <div className={styles.walletMeta}>
               <div><span>Owner</span><strong>{session?.user.tenantName ?? 'Business'}</strong></div>
               <div><span>Payout</span><strong>{verifiedNumbers.length ? `${verifiedNumbers.length} registered` : 'Not set'}</strong></div>
@@ -299,19 +340,25 @@ export default async function VendorBusinessDashboard({
 
           <section className={styles.withdrawals}>
             <div className={styles.panelHead}>
-              <div>
-                <div className={styles.panelTitle}>Recent Withdrawals</div>
-                <div className={styles.panelSubtitle}>Latest payout activity</div>
-              </div>
-              <a href="/earnings" className={styles.panelLink}>View all</a>
+              <div><div className={styles.panelTitle}>Recent Transactions</div><div className={styles.panelSubtitle}>Sales and withdrawals</div></div>
+              <a href="/transactions" className={styles.panelLink}>View all</a>
             </div>
-            <div className={styles.withdrawList}>
-              {recentWithdrawals.length === 0 ? (
-                <div className={styles.empty}>No payout history yet.</div>
-              ) : recentWithdrawals.slice(0, 5).map((withdrawal: any) => (
-                <div className={styles.withdrawItem} key={withdrawal.id}>
-                  <div><strong>{formatCurrency(withdrawal.amountUgx)}</strong><small>{formatDate(withdrawal.createdAt)}</small></div>
-                  <span className={styles.status}>{String(withdrawal.status ?? 'pending').toLowerCase().replaceAll('_', ' ')}</span>
+            <div className={styles.walletActivityList}>
+              {walletActivities.length === 0 ? (
+                <div className={styles.empty}>No transaction history yet.</div>
+              ) : walletActivities.map((item) => (
+                <div className={styles.walletActivityItem} key={item.id}>
+                  <div className={styles.walletActivityMain}>
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                    <small>{formatDate(item.createdAt)}</small>
+                  </div>
+                  <div className={styles.walletActivityRight}>
+                    <strong className={item.kind === 'withdrawal' ? styles.amountOut : styles.amountIn}>
+                      {item.kind === 'withdrawal' ? '−' : '+'}{formatCurrency(Math.abs(item.amountUgx))}
+                    </strong>
+                    <span className={styles.status}>{item.status.toLowerCase().replaceAll('_', ' ')}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -325,6 +372,8 @@ export default async function VendorBusinessDashboard({
 function Kpi({
   title,
   value,
+  trend,
+  trendLabel,
   note,
   icon,
   iconTone,
@@ -333,6 +382,8 @@ function Kpi({
 }: {
   title: string
   value: string
+  trend: number
+  trendLabel: string
   note: string
   icon: React.ReactNode
   iconTone?: 'green' | 'purple'
@@ -340,10 +391,14 @@ function Kpi({
   footRight: [string, string]
 }) {
   const tone = iconTone === 'green' ? styles.iconGreen : iconTone === 'purple' ? styles.iconPurple : ''
+  const trendDown = trend < 0
   return (
     <div className={styles.kpi}>
       <div className={styles.kpiHead}><span className={`${styles.icon} ${tone}`}>{icon}</span>{title}</div>
       <strong className={styles.kpiValue}>{value}</strong>
+      <div className={`${styles.kpiTrend} ${trendDown ? styles.kpiTrendDown : ''}`}>
+        {trendDown ? '↓' : '↑'} {Math.abs(trend)}% <span>{trendLabel}</span>
+      </div>
       <div className={styles.kpiNote}>{note}</div>
       <div className={styles.kpiFoot}>
         <span>{footLeft[0]}<strong>{footLeft[1]}</strong></span>
@@ -358,13 +413,7 @@ function Insight({ icon, value, label }: { icon: React.ReactNode; value: string;
 }
 
 function AgentStat({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note: string }) {
-  return (
-    <div className={styles.agentStat}>
-      <div className={styles.agentLabel}>{icon}{label}</div>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </div>
-  )
+  return <div className={styles.agentStat}><div className={styles.agentLabel}>{icon}{label}</div><strong>{value}</strong><small>{note}</small></div>
 }
 
 function DateRangeFilter({ from, to }: { from: Date; to: Date }) {
@@ -377,6 +426,17 @@ function DateRangeFilter({ from, to }: { from: Date; to: Date }) {
       <button className={styles.filterButton} type="submit">Filter</button>
     </form>
   )
+}
+
+function percentChange(current: number, previous: number) {
+  if (previous <= 0) return current > 0 ? 100 : 0
+  return Math.round(((current - previous) / previous) * 100)
+}
+
+function formatDuration(minutes: number) {
+  if (minutes % 1440 === 0) return `${minutes / 1440} day${minutes === 1440 ? '' : 's'}`
+  if (minutes % 60 === 0) return `${minutes / 60} hour${minutes === 60 ? '' : 's'}`
+  return `${minutes} min`
 }
 
 function resolveDashboardRange(searchParams?: DashboardSearchParams) {
@@ -398,7 +458,6 @@ function resolveDashboardRange(searchParams?: DashboardSearchParams) {
       return { key, from, to }
     }
   }
-
   return { key: 'this-month', from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }
 }
 
