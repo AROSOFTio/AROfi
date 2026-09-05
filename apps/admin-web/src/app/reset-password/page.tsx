@@ -44,68 +44,38 @@ function ResetPasswordForm() {
 
   return (
     <div className="login-card">
+      <Link href="/login" className="auth-back-link">← Back to sign in</Link>
       <div className="login-brand">
-        <img src="/logo.png" alt="AROFi Logo" style={{ width: 72, height: 'auto', margin: '0 auto 10px', display: 'block' }} />
+        <img src="/brand-assets/arofi-logo.png" alt="AroFi" className="login-logo" />
         <h1>Choose a new password</h1>
         <p>At least 8 characters. You&apos;ll sign in again everywhere afterwards.</p>
       </div>
 
-      {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 18 }}>
-          {error}
-        </div>
-      )}
+      {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 18 }}>{error}</div>}
 
       {done ? (
         <div style={{ textAlign: 'center' }}>
-          <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>
-            Password updated successfully.
-          </div>
+          <div style={{ background: 'var(--arofi-theme-accent-soft)', border: '1px solid var(--arofi-theme-accent-border)', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: 'var(--arofi-theme-accent-text)', marginBottom: 18 }}>Password updated successfully.</div>
           <Link href="/login" className="btn btn-primary btn-block">Sign In</Link>
         </div>
       ) : !token ? (
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            This page needs a reset link from your email. Request a new one below.
-          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>This page needs a reset link from your email. Request a new one below.</p>
           <Link href="/forgot-password" className="btn btn-primary btn-block">Request Reset Link</Link>
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">New Password</label>
-            <input
-              className="form-input"
-              type="password"
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              autoFocus
-            />
+            <input className="form-input" type="password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" autoFocus />
           </div>
           <div className="form-group">
             <label className="form-label">Confirm New Password</label>
-            <input
-              className="form-input"
-              type="password"
-              minLength={8}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
+            <input className="form-input" type="password" minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" />
           </div>
-          <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={loading}>
-            {loading ? 'Updating...' : 'Update Password'}
-          </button>
+          <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={loading}>{loading ? 'Updating...' : 'Update Password'}</button>
         </form>
       )}
-
-      <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-        <Link href="/login" style={{ color: 'var(--green)', fontWeight: 700 }}>Back to sign in</Link>
-      </p>
     </div>
   )
 }
@@ -113,7 +83,7 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <div className="login-page">
-      <div className="login-shell" style={{ gridTemplateColumns: '1fr', width: '100%', maxWidth: 440 }}>
+      <div className="login-shell">
         <Suspense fallback={null}>
           <ResetPasswordForm />
         </Suspense>
