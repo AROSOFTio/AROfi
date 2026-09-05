@@ -1,6 +1,6 @@
-/* Public AROFi visual and responsive overrides.
-   Marketing content and SEO copy remain unchanged; these rules only align the
-   public surface with the shared aaPanel-inspired product language. */
+/* Public AroFi visual and responsive overrides.
+   These rules align the public and authentication surfaces with the same
+   aaPanel-inspired light/dark language used by the internal console. */
 
 .home-shell,
 .home-page {
@@ -26,16 +26,19 @@
 .home-nav .btn-primary,
 .home-hero .btn-primary,
 .home-pricing-card .btn-primary,
-.home-contact-card .btn-primary {
+.home-contact-card .btn-primary,
+.ph-btn-primary {
   background: #22A53A !important;
   border-color: #22A53A !important;
   color: #fff !important;
+  box-shadow: none !important;
 }
 
 .home-nav .btn-primary:hover,
 .home-hero .btn-primary:hover,
 .home-pricing-card .btn-primary:hover,
-.home-contact-card .btn-primary:hover {
+.home-contact-card .btn-primary:hover,
+.ph-btn-primary:hover {
   background: #1E9134 !important;
   border-color: #1E9134 !important;
 }
@@ -138,14 +141,8 @@
   font-size: 12.5px;
 }
 
-.home-pricing-list {
-  gap: 8px;
-}
-
-.home-pricing-card .btn {
-  min-height: 40px;
-  margin-top: auto;
-}
+.home-pricing-list { gap: 8px; }
+.home-pricing-card .btn { min-height: 40px; margin-top: auto; }
 
 .home-pricing-note {
   width: fit-content;
@@ -160,10 +157,7 @@
   text-transform: uppercase;
 }
 
-.home-pricing-card .btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.72;
-}
+.home-pricing-card .btn:disabled { cursor: not-allowed; opacity: 0.72; }
 
 .home-nav,
 .home-hero,
@@ -176,84 +170,180 @@
   max-width: 1180px;
 }
 
+/* Exact user-supplied brand asset. The file is served from a persistent
+   aaPanel-uploadable directory at /brand-assets/. */
+.home-brand img,
+.site-footer-brand img {
+  content: url('/brand-assets/arofi-logo.png') !important;
+  object-fit: contain !important;
+}
+
+/* Hero is the exact user-supplied router image. */
+.ph-hero {
+  grid-template-columns: minmax(0, .94fr) minmax(420px, 1.06fr) !important;
+  align-items: center !important;
+  gap: clamp(28px, 4vw, 52px) !important;
+  background: var(--aa-card-bg, #fff) !important;
+  border-color: var(--aa-border, #E1E6EA) !important;
+}
+
+.ph-stage {
+  min-height: clamp(430px, 42vw, 570px) !important;
+  width: 100% !important;
+  border: 1px solid color-mix(in srgb, #22A53A 20%, var(--aa-border, #E1E6EA));
+  border-radius: 18px !important;
+  overflow: hidden;
+  background: var(--aa-secondary-surface, #F5F7F9) url('/brand-assets/arofi-hero.png') center / cover no-repeat !important;
+  box-shadow: none !important;
+}
+.ph-stage > * { display: none !important; }
+
+[data-theme="dark"] .ph-hero {
+  background: #171717 !important;
+  border-color: #303030 !important;
+}
+[data-theme="dark"] .ph-stage { border-color: #303030 !important; }
+
+/* Keep public light/dark colours identical to the internal console. */
+.home-shell {
+  --bg-app: var(--aa-page-bg) !important;
+  --bg-card: var(--aa-card-bg) !important;
+  --bg-sidebar: var(--aa-sidebar-bg) !important;
+  --bg-hover: var(--aa-navigation-hover-bg) !important;
+  --border: var(--aa-border) !important;
+  --border-soft: var(--aa-border-soft) !important;
+  --text-1: var(--aa-text-strong) !important;
+  --text-2: var(--aa-text-subtle) !important;
+  --text-3: var(--aa-text-muted) !important;
+  --green: #22A53A !important;
+  --brand: #22A53A !important;
+  --brand-2: #22A53A !important;
+}
+
+/* Authentication pages: same visual width as the public site, uniform
+   left-image/right-form split on login, forgot-email, forgot-password and reset. */
+.login-page {
+  min-height: 100vh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  background: var(--aa-page-bg, #F5F7F9) !important;
+  background-image: none !important;
+}
+
+.login-shell,
+.login-shell[style] {
+  position: relative !important;
+  width: min(1180px, calc(100vw - 48px)) !important;
+  max-width: 1180px !important;
+  min-height: min(720px, calc(100vh - 48px)) !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.08fr) minmax(390px, .92fr) !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid var(--aa-border, #E1E6EA) !important;
+  border-radius: 20px !important;
+  background: var(--aa-card-bg, #fff) !important;
+  box-shadow: 0 18px 50px rgba(18, 32, 51, .10) !important;
+}
+
+.login-shell::before {
+  content: '';
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  background: #eef7f0 url('/brand-assets/arofi-auth-bg.png') left center / cover no-repeat;
+}
+
+.login-card {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: clamp(34px, 4.2vw, 58px) clamp(30px, 4vw, 54px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--aa-card-bg, #fff) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.login-brand { text-align: left !important; }
+.login-logo {
+  content: url('/brand-assets/arofi-logo.png') !important;
+  width: min(260px, 78%) !important;
+  max-height: 94px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  margin: 0 0 18px !important;
+}
+
+.login-card .btn-primary {
+  background: #22A53A !important;
+  border-color: #22A53A !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.login-card .btn-primary:hover { background: #1E9134 !important; }
+.auth-back-link { color: #197C2C !important; font-weight: 800 !important; }
+
+[data-theme="dark"] .login-page { background: #0B0805 !important; }
+[data-theme="dark"] .login-shell { background: #202020 !important; border-color: #303030 !important; box-shadow: none !important; }
+[data-theme="dark"] .login-card { background: #202020 !important; color: #E6E6E6 !important; }
+[data-theme="dark"] .login-brand h1,
+[data-theme="dark"] .login-card .form-label { color: #E6E6E6 !important; }
+[data-theme="dark"] .login-brand p,
+[data-theme="dark"] .login-signup,
+[data-theme="dark"] .login-footer { color: #9B9B9B !important; }
+[data-theme="dark"] .login-card .form-input { background: #1B1B1B !important; border-color: #383838 !important; color: #E6E6E6 !important; }
+
 @media (max-width: 900px) and (min-width: 641px) {
-  .home-pricing {
-    padding-inline: 18px;
-  }
+  .home-pricing { padding-inline: 18px; }
+  .home-pricing-grid { grid-auto-flow: column; grid-template-columns: none; gap: 12px; }
+  .home-pricing-card { padding: 18px 16px; gap: 9px; }
+  .home-pricing-card h3 { font-size: 16px; }
+  .home-pricing-price strong { font-size: 21px; }
+  .home-pricing-list { gap: 6px; }
+}
 
-  .home-pricing-grid {
-    grid-auto-flow: column;
-    grid-template-columns: none;
-    gap: 12px;
+@media (max-width: 860px) {
+  .ph-hero { grid-template-columns: 1fr !important; }
+  .ph-stage { min-height: 330px !important; }
+  .login-page { padding: 14px !important; }
+  .login-shell,
+  .login-shell[style] {
+    width: 100% !important;
+    min-height: calc(100vh - 28px) !important;
+    grid-template-columns: 1fr !important;
   }
-
-  .home-pricing-card {
-    padding: 18px 16px;
-    gap: 9px;
+  .login-shell::before {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 280px;
+    background-position: 30% center;
   }
-
-  .home-pricing-card h3 {
-    font-size: 16px;
-  }
-
-  .home-pricing-price strong {
-    font-size: 21px;
-  }
-
-  .home-pricing-list {
-    gap: 6px;
-  }
+  .login-card { grid-column: 1 !important; grid-row: 2 !important; }
 }
 
 @media (max-width: 640px) {
-  .home-pricing {
-    width: 100%;
-    max-width: none;
-    margin-top: 48px;
-    padding-inline: 14px;
-  }
-
-  .home-pricing-head {
-    width: 100%;
-    max-width: none;
-    margin-bottom: 24px;
-    padding-inline: 2px;
-  }
-
-  .home-pricing-grid {
-    width: 100%;
-    max-width: none;
-    grid-auto-flow: row;
-    grid-template-columns: minmax(0, 1fr);
-    grid-auto-columns: auto;
-    gap: 12px;
-  }
-
-  .home-pricing-card {
-    width: 100%;
-    max-width: none;
-    padding: 20px 18px;
-    border-radius: 12px;
-  }
-
-  .home-pricing-card .btn {
-    width: 100%;
-  }
-
-  .home-section,
-  .home-why,
-  .home-hero {
-    width: 100%;
-    max-width: none;
-  }
+  .home-pricing { width: 100%; max-width: none; margin-top: 48px; padding-inline: 14px; }
+  .home-pricing-head { width: 100%; max-width: none; margin-bottom: 24px; padding-inline: 2px; }
+  .home-pricing-grid { width: 100%; max-width: none; grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); grid-auto-columns: auto; gap: 12px; }
+  .home-pricing-card { width: 100%; max-width: none; padding: 20px 18px; border-radius: 12px; }
+  .home-pricing-card .btn { width: 100%; }
+  .home-section, .home-why, .home-hero { width: 100%; max-width: none; }
+  .login-shell::before { min-height: 220px; }
+  .login-card { padding: 28px 20px !important; }
 }
 
 @media (max-width: 380px) {
-  .home-pricing {
-    padding-inline: 10px;
-  }
-
-  .home-pricing-card {
-    padding: 18px 15px;
-  }
+  .home-pricing { padding-inline: 10px; }
+  .home-pricing-card { padding: 18px 15px; }
 }
