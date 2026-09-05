@@ -51,6 +51,37 @@ export class RadiusAuthorizationPolicyService {
       return { accepted: false, reason: 'MAC address is required for one-device enforcement', activation }
     }
 
+    // AP/router names and SSIDs are never authorization boundaries. When a
+    // customer moves from AP A to AP Z, the RADIUS request arrives with the
+    // current AROFi router id. Verify that router belongs to the SAME tenant
+    // before allowing any handoff. This also closes the old edge case where a
+    // matching MAC could present a valid credential through another business.
+    const currentRouter = input.routerId
+      ? await tx.router.findUnique({
+          where: { id: input.routerId },
+          select: { id: true, tenantId: true },
+        })
+      : null
+
+    if (input.routerId && (!currentRouter || currentRouter.tenantId !== activation.tenantId)) {
+      await this.recordSuspicious(
+        tx,
+        activation,
+        input,
+        SuspiciousAccessAttemptType.SECOND_DEVICE,
+        'Credential attempted through a router outside the activation business',
+      )
+      return { accepted: false, reason: 'Credential is not valid on this business network', activation }
+    }
+
+    const previousRouterId = activation.routerId ?? credential.routerId ?? null
+    const sameTenantCrossApHandoff = Boolean(
+      input.routerId &&
+        currentRouter?.tenantId === activation.tenantId &&
+        previousRouterId &&
+        input.routerId !== previousRouterId,
+    )
+
     const hasStartedSession = await tx.radAcct.findFirst({
       where: { username: input.username },
       select: { radacctid: true },
@@ -63,19 +94,52 @@ export class RadiusAuthorizationPolicyService {
           boundMacAddress: observedMac,
           firstSeenIp: activation.firstSeenIp ?? input.ipAddress,
           firstSeenAt: activation.firstSeenAt ?? now,
-          routerId: activation.routerId ?? input.routerId,
+          routerId: input.routerId ?? activation.routerId,
         },
       })
       await tx.radiusCredential.update({
         where: { id: credential.id },
         data: {
           boundMacAddress: observedMac,
-          routerId: credential.routerId ?? input.routerId,
+          routerId: input.routerId ?? credential.routerId,
         },
       })
     } else if (boundMac !== observedMac) {
-      await this.recordSuspicious(tx, activation, input, SuspiciousAccessAttemptType.SECOND_DEVICE, 'Credential attempted from a second MAC address')
-      return { accepted: false, reason: 'Credential is already bound to another device', activation }
+      if (!sameTenantCrossApHandoff) {
+        await this.recordSuspicious(tx, activation, input, SuspiciousAccessAttemptType.SECOND_DEVICE, 'Credential attempted from a second MAC address on the same AP/business edge')
+        return { accepted: false, reason: 'Credential is already bound to another device', activation }
+      }
+
+      // Modern phones may use a different private MAC per SSID. A verified
+      // same-business AP handoff therefore transfers the one active credential
+      // to the MAC currently presented on AP Z instead of blocking the buyer.
+      // The credential still cannot cross tenants, and a different MAC on the
+      // same AP is still rejected as a second device.
+      await tx.packageActivation.update({
+        where: { id: activation.id },
+        data: {
+          boundMacAddress: observedMac,
+          routerId: input.routerId,
+        },
+      })
+      await tx.radiusCredential.update({
+        where: { id: credential.id },
+        data: {
+          boundMacAddress: observedMac,
+          routerId: input.routerId,
+        },
+      })
+    } else if (sameTenantCrossApHandoff) {
+      // Same MAC, different AP: follow the customer to the current router so
+      // future reconnect/handoff decisions use AP Z as the latest location.
+      await tx.packageActivation.update({
+        where: { id: activation.id },
+        data: { routerId: input.routerId },
+      })
+      await tx.radiusCredential.update({
+        where: { id: credential.id },
+        data: { routerId: input.routerId },
+      })
     }
 
     const staleBefore = new Date(now.getTime() - 90 * 1000)
@@ -89,9 +153,15 @@ export class RadiusAuthorizationPolicyService {
       select: {
         id: true,
         macAddress: true,
+        routerId: true,
       },
     })
-    if (concurrentSession) {
+
+    // During a real roam, AP A may continue reporting its old accounting row
+    // for a short time after the phone has already associated to AP Z. That
+    // stale row must never block the AP-Z login. Outside a verified same-tenant
+    // router handoff, the normal one-device concurrent-session protection stays.
+    if (concurrentSession && !sameTenantCrossApHandoff) {
       await this.recordSuspicious(
         tx,
         activation,
@@ -102,15 +172,11 @@ export class RadiusAuthorizationPolicyService {
       return { accepted: false, reason: 'Concurrent session exists for another device', activation }
     }
 
-    // Every credential is locked to exactly one MAC, full stop. Packages with
-    // Package.deviceLimit > 1 don't relax this — they get extra devices by
-    // minting separate single-device companion vouchers at activation time
-    // (see PackageActivationService.generateCompanionVouchersForPackage), so
-    // each device has its own credential instead of sharing one login.
-
     return {
       accepted: true,
-      reason: 'Activation is active and device binding matches',
+      reason: sameTenantCrossApHandoff
+        ? 'Activation is active and same-business AP handoff is allowed'
+        : 'Activation is active and device binding matches',
       activation,
       sessionTimeoutSeconds: Math.max(1, Math.floor((activation.endsAt.getTime() - now.getTime()) / 1000)),
     }
