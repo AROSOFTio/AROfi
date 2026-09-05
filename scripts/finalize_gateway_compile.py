@@ -5,8 +5,9 @@ This runs after every feature patch. It removes TypeScript enum-alias
 comparisons and unresolved platform settings constants recreated by later
 gateway patches, validates the final ioTec OAuth/diagnostics output, restores
 the business-specific voucher QR route, installs the active-bundle disconnect
-guard, locks seamless same-business AP roaming, normalizes repeated portal
-action classes, enforces the premium captive portal UI, locks the operator-facing
+guard, locks seamless same-business AP roaming, explicitly allows differently
+named APs/SSIDs inside the same business, normalizes repeated portal action
+classes, enforces the premium captive portal UI, locks the operator-facing
 MikroTik onboarding command, then verifies the MikroTik captive/session and
 no-automatic-MAC-auth policies.
 
@@ -28,6 +29,7 @@ SETTINGS = ROOT / "apps/admin-web/src/components/SettingsManager.tsx"
 BUSINESS_QR_GUARD = ROOT / "scripts/enforce_business_voucher_qr.py"
 ACTIVE_BUNDLE_GUARD = ROOT / "scripts/guard_active_bundle_disconnects.py"
 CROSS_AP_ROAMING_GUARD = ROOT / "scripts/enforce_cross_ap_roaming.py"
+NAMED_AP_ROAMING_GUARD = ROOT / "scripts/allow_named_ap_roaming.py"
 PREMIUM_PORTAL_ACTION_NORMALIZER = ROOT / "scripts/normalize_premium_portal_action_classes.py"
 PREMIUM_PORTAL_UI_GUARD = ROOT / "scripts/enforce_premium_portal_ui.py"
 SIMPLE_ONBOARDING_GUARD = ROOT / "scripts/enforce_simple_mikrotik_onboarding.py"
@@ -113,6 +115,12 @@ def enforce_cross_ap_roaming() -> None:
     runpy.run_path(str(CROSS_AP_ROAMING_GUARD), run_name="__main__")
 
 
+def allow_named_ap_roaming() -> None:
+    if not NAMED_AP_ROAMING_GUARD.exists():
+        raise RuntimeError("Named-AP roaming guard is missing")
+    runpy.run_path(str(NAMED_AP_ROAMING_GUARD), run_name="__main__")
+
+
 def normalize_premium_portal_actions() -> None:
     if not PREMIUM_PORTAL_ACTION_NORMALIZER.exists():
         raise RuntimeError("Premium portal action normalizer is missing")
@@ -153,6 +161,7 @@ def main() -> None:
     enforce_business_qr()
     install_active_bundle_guard()
     enforce_cross_ap_roaming()
+    allow_named_ap_roaming()
     normalize_premium_portal_actions()
     enforce_premium_portal_ui()
     lock_simple_mikrotik_onboarding()
@@ -160,8 +169,9 @@ def main() -> None:
     enforce_no_automatic_mac_auth_last()
     print(
         "Final payment gateway, ioTec diagnostics, business voucher QR, active-bundle "
-        "disconnect guard, seamless cross-AP roaming, premium captive portal UI, "
-        "RouterOS 6/7 IP-first onboarding, captive-flow state, and no-automatic-MAC-auth policy verified."
+        "disconnect guard, seamless same-business roaming across differently named APs, "
+        "premium captive portal UI, RouterOS 6/7 IP-first onboarding, captive-flow state, "
+        "and no-automatic-MAC-auth policy verified."
     )
 
 
