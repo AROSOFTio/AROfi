@@ -2,6 +2,15 @@ name: Deploy AROFi production
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/radius/radius-authorization-policy.service.ts'
+      - 'apps/api/src/modules/radius/radius-authorization-policy.service.spec.ts'
+      - 'apps/api/src/modules/routers/cross-ap-instant-handoff.initializer.ts'
+      - 'apps/api/src/modules/routers/routers.module.ts'
+      - 'scripts/allow_named_ap_roaming.py'
+      - '.github/workflows/deploy.yml'
 
 permissions:
   contents: read
