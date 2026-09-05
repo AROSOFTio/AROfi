@@ -1,18 +1,18 @@
 {
-  "name": "AROFi Portal",
-  "short_name": "AROFi",
-  "description": "Buy hotspot packages, redeem vouchers, and reconnect quickly.",
+  "name": "AroFi Portal",
+  "short_name": "AroFi",
+  "description": "Buy internet packages, redeem vouchers and reconnect through the AroFi WiFi portal.",
   "start_url": "/portal",
   "scope": "/portal/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563EB",
+  "background_color": "#F5F7F9",
+  "theme_color": "#22A53A",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/portal/brand/arofi-favicon-v2.svg",
+      "src": "/brand-assets/arofi-app-icon.png",
       "sizes": "any",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
