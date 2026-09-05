@@ -27,9 +27,18 @@ export class CaptivePortalResilienceInitializer implements OnModuleInit {
   }
 
   private applyResilience(html: string) {
-    if (html.includes('id="arofi-local-resilience-v1"')) return html
+    if (html.includes('id="arofi-local-resilience-v2"')) return html
 
-    const style = `<style id="arofi-local-resilience-v1">
+    const routerHeaders = `$(if http-header == "Cache-Control")no-store, no-cache, must-revalidate, max-age=0$(endif)
+$(if http-header == "Pragma")no-cache$(endif)
+$(if http-header == "Expires")0$(endif)`
+
+    const meta = `<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="arofi-local-portal-release" content="20260905-v2">`
+
+    const style = `<style id="arofi-local-resilience-v2">
       /* Keep the top calm and premium on the router-hosted captive page too. */
       .premium-hero{background:#071A49!important}
       .premium-wifi span{animation:none!important;opacity:.58!important}
@@ -40,7 +49,7 @@ export class CaptivePortalResilienceInitializer implements OnModuleInit {
       .arofi-load-retry{appearance:none;border:0;border-radius:10px;background:#0964FA;color:#fff;font-size:12px;font-weight:800;padding:9px 18px;cursor:pointer}
     </style>`
 
-    const script = `<script id="arofi-local-resilience-script-v1">
+    const script = `<script id="arofi-local-resilience-script-v2">
     (function(){
       var CONTEXT_TIMEOUT=4000;
       var WATCHDOG_MS=8500;
@@ -95,7 +104,11 @@ export class CaptivePortalResilienceInitializer implements OnModuleInit {
         loading.className='arofi-load-fail';
         loading.innerHTML='<strong>Packages could not load</strong><span>Keep this WiFi connected and try again. The portal will never stay stuck on loading.</span><button type="button" class="arofi-load-retry" id="arofiLoadRetry">Retry</button>';
         var b=document.getElementById('arofiLoadRetry');
-        if(b)b.onclick=function(){window.location.reload();};
+        if(b)b.onclick=function(){
+          var q=window.location.search||'';
+          var sep=q?'&':'?';
+          window.location.replace(window.location.pathname+q+sep+'arofiReload='+Date.now());
+        };
       }
 
       function arm(){setTimeout(failOpen,WATCHDOG_MS);}
@@ -103,7 +116,9 @@ export class CaptivePortalResilienceInitializer implements OnModuleInit {
     })();
     </script>`
 
-    let next = html.replace('</head>', `${style}</head>`)
+    let next = html.replace(/<!doctype html>/i, `${routerHeaders}\n<!-- AROFi local portal 20260905-v2 -->\n<!doctype html>`)
+    next = next.replace('<head>', `<head>\n  ${meta}`)
+    next = next.replace('</head>', `${style}</head>`)
     next = next.replace('</body>', `${script}</body>`)
     return next
   }
