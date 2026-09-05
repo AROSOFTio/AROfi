@@ -39,6 +39,7 @@ RUN python3 scripts/apply_iotec_source_patches.py \
     && python3 scripts/enforce_no_idle_bundle_logout.py \
     && python3 scripts/fix_router_presence_and_access_lifecycle.py \
     && python3 scripts/enable_router_full_management_v2.py \
+    && python3 scripts/fix_router_full_management_overview.py \
     && python3 scripts/stabilize_router_status_hysteresis.py \
     && python3 scripts/fix_iotec_live_gateway_diagnostics.py \
     && python3 scripts/fix_iotec_oauth_compatibility.py \
