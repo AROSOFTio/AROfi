@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +29,7 @@ replace_required(
     1,
 )
 
-# Forgot/recovery pages: use the exact supplied AroFi SVG and show a clear
+# Forgot/recovery pages: use the supplied AroFi brand and show a clear
 # top-level back control in addition to the existing footer links.
 for relative_path, back_href, back_label in [
     ("apps/admin-web/src/app/forgot-password/page.tsx", "/login", "← Back to sign in"),
@@ -95,4 +96,8 @@ append_once(
 ''',
 )
 
-print("AroFi final auth background and back navigation applied.")
+# Last visual-only pass: route all visible branding to the exact supplied
+# AroFi assets after the preceding patches have finished.
+runpy.run_path(str(ROOT / "scripts/apply_arofi_user_asset_override.py"), run_name="__main__")
+
+print("AroFi final auth background, back navigation and supplied assets applied.")
