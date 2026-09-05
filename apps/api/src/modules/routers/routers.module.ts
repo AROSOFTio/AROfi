@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module'
 import { MailModule } from '../mail/mail.module'
 import { RadiusModule } from '../radius/radius.module'
 import { SmsModule } from '../sms/sms.module'
+import { CaptivePortalResilienceInitializer } from './captive-portal-resilience.initializer'
 import { MikrotikAloginController } from './mikrotik-alogin.controller'
 import { MikrotikCompatibilityInitializer } from './mikrotik-compatibility.initializer'
 import { MikrotikInstantLoginInterceptor } from './mikrotik-instant-login.interceptor'
@@ -39,6 +40,9 @@ import { RemoteProxyService } from './remote-proxy.service'
     // is preserved while the final RouterOS login.html gets readable plan cards.
     PremiumCaptivePortalInitializer,
     PortalPackageClarityInitializer,
+    // This MUST remain after the visual transforms. It is the final safety layer
+    // on the real RouterOS hotspot/login.html used by first-time customers.
+    CaptivePortalResilienceInitializer,
     {
       provide: APP_INTERCEPTOR,
       useClass: MikrotikInstantLoginInterceptor,
