@@ -1,55 +1,37 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import PortalThemeToggle from './PortalThemeToggle'
 
 const SITE_URL = 'https://arofi.net/portal'
-const TITLE = 'AROFi WiFi Portal – Buy Internet Access | MTN MoMo & Airtel Money Uganda'
+const TITLE = 'AroFi WiFi Portal – Internet Packages, Vouchers & Mobile Money'
 const DESCRIPTION =
-  'Connect to high-speed WiFi instantly. Pay with MTN Mobile Money or Airtel Money. No app needed — just your phone number. Secure hotspot access powered by AROFi, Uganda\'s leading WiFi billing platform.'
+  'Connect to WiFi, choose an internet package, redeem a voucher, and pay using supported payment methods. Secure hotspot access powered by AroFi for African WiFi and ISP operators.'
 
-const FAVICON = '/portal/brand/arofi-favicon-v2.svg'
-const MARK = '/portal/brand/arofi-mark-blue.svg'
-const LOGO = '/portal/brand/arofi-logo-blue.svg'
-
-async function getPublicDefaultAccentTheme() {
-  try {
-    const apiBase = process.env.API_SERVER_URL || 'http://api:3000/api'
-    const response = await fetch(`${apiBase}/system/public-settings`, {
-      next: { revalidate: 60 },
-    })
-    if (!response.ok) return 'green'
-    const settings = await response.json() as { publicDefaultAccentTheme?: string }
-    return ['blue', 'green', 'gold'].includes(settings.publicDefaultAccentTheme ?? '')
-      ? settings.publicDefaultAccentTheme
-      : 'green'
-  } catch {
-    return 'green'
-  }
-}
+const FAVICON = '/brand-assets/arofi-app-icon.png'
+const MARK = '/brand-assets/arofi-app-icon.png'
+const LOGO = '/brand-assets/arofi-logo.png'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://arofi.net'),
   title: TITLE,
   description: DESCRIPTION,
   keywords: [
-    'buy wifi Uganda', 'pay for wifi Uganda', 'wifi hotspot Uganda',
-    'MTN MoMo wifi payment', 'Airtel Money wifi payment', 'pay wifi mobile money',
-    'internet access Uganda', 'hotspot internet Uganda', 'wifi voucher Uganda',
-    'buy wifi Kampala', 'connect to wifi Kampala', 'public wifi Uganda',
-    'pay for internet with MTN', 'pay for internet with Airtel',
-    'AROFi portal', 'hotspot login Uganda', 'wifi login Uganda',
-    'wifi packages Uganda', 'cheap wifi Uganda', 'affordable internet Uganda',
-  ].join(', '),
+    'AroFi portal', 'WiFi hotspot portal', 'buy WiFi package', 'WiFi voucher',
+    'hotspot login Africa', 'WiFi login Uganda', 'WiFi packages Uganda',
+    'mobile money WiFi', 'MTN MoMo WiFi', 'Airtel Money WiFi',
+    'ISP customer portal Africa', 'captive portal Africa',
+  ],
   authors: [{ name: 'AROSOFT Innovations Ltd', url: 'https://arosoftlabs.com' }],
   creator: 'AROSOFT Innovations Ltd',
   publisher: 'AROSOFT Innovations Ltd',
   manifest: '/portal/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'AROFi Portal',
+    title: 'AroFi Portal',
     statusBarStyle: 'default',
   },
   icons: {
-    icon: [{ url: FAVICON, type: 'image/svg+xml' }],
+    icon: [{ url: FAVICON, type: 'image/png' }],
     apple: MARK,
     shortcut: FAVICON,
   },
@@ -59,33 +41,25 @@ export const metadata: Metadata = {
     type: 'website',
     url: SITE_URL,
     locale: 'en_UG',
-    siteName: 'AROFi WiFi Portal',
-    images: [
-      {
-        url: `https://arofi.net${LOGO}`,
-        width: 620,
-        height: 220,
-        alt: 'AROFi – Buy WiFi with Mobile Money Uganda',
-      },
-    ],
+    siteName: 'AroFi WiFi Portal',
+    images: [{
+      url: `https://arofi.net${LOGO}`,
+      width: 1200,
+      height: 500,
+      alt: 'AroFi WiFi and hotspot portal',
+    }],
   },
   twitter: {
     card: 'summary',
     title: TITLE,
     description: DESCRIPTION,
-    images: [`https://arofi.net${LOGO}`],
+    images: [`https://arofi.net${MARK}`],
   },
-  alternates: {
-    canonical: SITE_URL,
-  },
+  alternates: { canonical: SITE_URL },
   robots: {
     index: true,
     follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-snippet': -1,
-    },
+    googleBot: { index: true, follow: true, 'max-snippet': -1 },
   },
 }
 
@@ -96,12 +70,7 @@ export const viewport: Viewport = {
   ],
 }
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const publicDefaultAccentTheme = await getPublicDefaultAccentTheme()
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   const themeScript = `
     (function () {
       try {
@@ -118,19 +87,21 @@ export default async function RootLayout({
           ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
           : preference;
         document.documentElement.setAttribute('data-theme', mode);
+        document.documentElement.setAttribute('data-accent-theme', 'green');
         document.documentElement.style.colorScheme = mode;
       } catch (error) {
         document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-accent-theme', 'green');
       }
     })();
   `
 
   return (
-    <html lang="en" data-accent-theme={publicDefaultAccentTheme} suppressHydrationWarning>
+    <html lang="en" data-accent-theme="green" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="icon" href={FAVICON} type="image/svg+xml" />
-        <link rel="shortcut icon" href={FAVICON} type="image/svg+xml" />
+        <link rel="icon" href={FAVICON} type="image/png" />
+        <link rel="shortcut icon" href={FAVICON} type="image/png" />
         <link rel="apple-touch-icon" href={MARK} />
         <script
           type="application/ld+json"
@@ -138,17 +109,12 @@ export default async function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'WebApplication',
-              name: 'AROFi WiFi Portal',
+              name: 'AroFi WiFi Portal',
               url: SITE_URL,
               description: DESCRIPTION,
               applicationCategory: 'UtilitiesApplication',
               operatingSystem: 'Web',
               image: `https://arofi.net${LOGO}`,
-              offers: {
-                '@type': 'Offer',
-                priceCurrency: 'UGX',
-                description: 'Pay for WiFi access with MTN MoMo or Airtel Money',
-              },
               provider: {
                 '@type': 'Organization',
                 name: 'AROSOFT Innovations Ltd',
@@ -160,6 +126,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="antialiased">
+        <PortalThemeToggle />
         <main className="min-h-screen">
           <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 sm:py-6">
             {children}
@@ -168,10 +135,10 @@ export default async function RootLayout({
                 href="https://arosoftlabs.com"
                 target="_blank"
                 rel="noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--portal-text-muted)', textDecoration: 'none', letterSpacing: '0.04em' }}
+                className="portal-powered-by"
               >
-                <img src={MARK} alt="" aria-hidden="true" style={{ width: 20, height: 17, objectFit: 'contain' }} />
-                AROSOFT
+                <img src={MARK} alt="" aria-hidden="true" />
+                Powered by AroFi · AROSOFT Innovations Ltd
               </a>
             </p>
           </div>
