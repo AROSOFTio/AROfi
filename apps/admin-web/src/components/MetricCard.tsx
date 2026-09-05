@@ -22,17 +22,19 @@ export default function MetricCard({
 }: MetricCardProps) {
   return (
     <div className="ui-card metric-card">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      <div className="metric-card-head">
         <span className="label-text">{label}</span>
-        {icon && <div style={{ color: 'var(--brand)', opacity: 0.85 }}>{icon}</div>}
-        {badge}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {badge}
+          {icon && <span className="metric-card-icon">{icon}</span>}
+        </span>
       </div>
       <div className="card-value" style={{ marginBottom: (subtextLeft || subtextRight || children) ? 8 : 0 }}>
         {value}
       </div>
       {(subtextLeft || subtextRight) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
-          {subtextLeft && <span>{subtextLeft}</span>}
+        <div className="metric-card-meta">
+          {subtextLeft ? <span>{subtextLeft}</span> : <span />}
           {subtextRight && <span>{subtextRight}</span>}
         </div>
       )}

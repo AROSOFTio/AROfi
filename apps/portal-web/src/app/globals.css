@@ -3,58 +3,208 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
+  --portal-primary: #22A53A;
+  --portal-primary-hover: #1E9134;
+  --portal-bg: #F5F7F9;
+  --portal-surface: #FFFFFF;
+  --portal-surface-soft: #F8FAFB;
+  --portal-border: #E1E6EA;
+  --portal-text: #122033;
+  --portal-text-secondary: #596675;
+  --portal-text-muted: #7F8A96;
+
+  --background: 210 20% 97%;
+  --foreground: 214 47% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 214 47% 14%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 219 97% 53%;
+  --popover-foreground: 214 47% 14%;
+  --primary: 130 66% 39%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 219 100% 97%;
-  --secondary-foreground: 219 97% 40%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 219 100% 95%;
-  --accent-foreground: 219 97% 40%;
-  --destructive: 0 84% 60%;
+  --secondary: 132 45% 94%;
+  --secondary-foreground: 130 66% 30%;
+  --muted: 210 18% 96%;
+  --muted-foreground: 212 11% 47%;
+  --accent: 132 45% 94%;
+  --accent-foreground: 130 66% 30%;
+  --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 219 97% 53%;
-  --radius: 0.75rem;
-  --brand: #2563EB;
+  --border: 210 14% 90%;
+  --input: 210 14% 90%;
+  --ring: 130 66% 39%;
+  --radius: 0.625rem;
+  --brand: #22A53A;
   --arofi-portal-logo: url('/portal/brand/arofi-logo-blue.svg');
   --arofi-portal-mark: url('/portal/brand/arofi-mark-blue.svg');
 }
 
+:root[data-theme='dark'] {
+  --portal-bg: #0B0805;
+  --portal-surface: #202020;
+  --portal-surface-soft: #292929;
+  --portal-border: #303030;
+  --portal-text: #E6E6E6;
+  --portal-text-secondary: #B0B0B0;
+  --portal-text-muted: #8F8F8F;
+
+  --background: 30 38% 3%;
+  --foreground: 0 0% 90%;
+  --card: 0 0% 13%;
+  --card-foreground: 0 0% 90%;
+  --popover: 0 0% 13%;
+  --popover-foreground: 0 0% 90%;
+  --primary: 130 66% 39%;
+  --primary-foreground: 0 0% 96%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 82%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 58%;
+  --accent: 130 32% 18%;
+  --accent-foreground: 130 45% 70%;
+  --destructive: 0 78% 65%;
+  --destructive-foreground: 0 0% 96%;
+  --border: 0 0% 19%;
+  --input: 0 0% 19%;
+  --ring: 130 66% 39%;
+}
+
 :root[data-accent-theme='green'] {
-  --brand: #2C963F;
   --arofi-portal-logo: url('/portal/brand/arofi-logo-green.svg');
   --arofi-portal-mark: url('/portal/brand/arofi-mark-green.svg');
 }
 
 :root[data-accent-theme='gold'] {
-  --brand: #d59a24;
   --arofi-portal-logo: url('/portal/brand/arofi-logo-gold.svg');
   --arofi-portal-mark: url('/portal/brand/arofi-mark-gold.svg');
-}
-
-body {
-  min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-feature-settings: normal;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: light;
+  background: var(--portal-bg);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+body,
+body > main,
+main.min-h-screen {
+  min-height: 100vh;
+  background: var(--portal-bg) !important;
+  color: var(--portal-text) !important;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: normal;
+}
+
 ::selection {
-  background: rgba(29, 78, 216, 0.16);
-  color: #0f172a;
+  background: rgba(34, 165, 58, .20);
+  color: var(--portal-text);
+}
+
+a {
+  color: var(--portal-primary);
+}
+
+/* Normalize Tailwind slate surfaces used by the current portal without touching
+   payment, voucher, reconnect, or package-loading behavior. */
+html[data-theme='dark'] .bg-white,
+html[data-theme='dark'] [class*='bg-white'] {
+  background-color: var(--portal-surface) !important;
+}
+
+html[data-theme='dark'] .bg-slate-50,
+html[data-theme='dark'] .bg-slate-100,
+html[data-theme='dark'] [class*='bg-slate-50'],
+html[data-theme='dark'] [class*='bg-slate-100'] {
+  background-color: var(--portal-surface-soft) !important;
+}
+
+html[data-theme='dark'] .text-slate-950,
+html[data-theme='dark'] .text-slate-900,
+html[data-theme='dark'] .text-slate-800,
+html[data-theme='dark'] [class*='text-slate-950'],
+html[data-theme='dark'] [class*='text-slate-900'],
+html[data-theme='dark'] [class*='text-slate-800'] {
+  color: var(--portal-text) !important;
+}
+
+html[data-theme='dark'] .text-slate-700,
+html[data-theme='dark'] .text-slate-600,
+html[data-theme='dark'] [class*='text-slate-700'],
+html[data-theme='dark'] [class*='text-slate-600'] {
+  color: var(--portal-text-secondary) !important;
+}
+
+html[data-theme='dark'] .text-slate-500,
+html[data-theme='dark'] .text-slate-400,
+html[data-theme='dark'] [class*='text-slate-500'],
+html[data-theme='dark'] [class*='text-slate-400'] {
+  color: var(--portal-text-muted) !important;
+}
+
+html[data-theme='dark'] .border-slate-200,
+html[data-theme='dark'] .border-slate-300,
+html[data-theme='dark'] [class*='border-slate-200'],
+html[data-theme='dark'] [class*='border-slate-300'] {
+  border-color: var(--portal-border) !important;
+}
+
+/* Core primary controls stay AROFi green even when a tenant uses a different
+   logo/brand asset. */
+button[class*='bg-blue-'],
+button[class*='bg-indigo-'],
+a[class*='bg-blue-'],
+a[class*='bg-indigo-'],
+.bg-primary,
+button[data-primary='true'] {
+  background-color: var(--portal-primary) !important;
+  border-color: var(--portal-primary) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+button[class*='bg-blue-']:hover,
+button[class*='bg-indigo-']:hover,
+a[class*='bg-blue-']:hover,
+a[class*='bg-indigo-']:hover {
+  background-color: var(--portal-primary-hover) !important;
+}
+
+input,
+select,
+textarea {
+  border-color: var(--portal-border) !important;
+  border-radius: 9px !important;
+  background: var(--portal-surface) !important;
+  color: var(--portal-text) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--portal-primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(34, 165, 58, .13) !important;
+}
+
+.rounded-2xl,
+.rounded-3xl {
+  border-radius: 12px !important;
+}
+
+.shadow-xl,
+.shadow-2xl {
+  box-shadow: 0 4px 18px rgba(16, 24, 40, .07) !important;
+}
+
+html[data-theme='dark'] .shadow-xl,
+html[data-theme='dark'] .shadow-2xl {
+  box-shadow: none !important;
 }
 
 /* The platform fallback logo is borderless. Tenant-uploaded custom logos remain untouched. */
@@ -82,4 +232,12 @@ img[src="/logo.png"].h-10 {
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+@media (max-width: 640px) {
+  body > main > div,
+  main.min-h-screen > div {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
 }

@@ -1,6 +1,98 @@
-/* Public homepage responsive alignment overrides.
-   Keep desktop/tablet sections constrained to the same 1180px frame as the
-   navigation and hero. Only switch to full-width stacked pricing on phones. */
+/* Public AROFi visual and responsive overrides.
+   Marketing content and SEO copy remain unchanged; these rules only align the
+   public surface with the shared aaPanel-inspired product language. */
+
+.home-shell,
+.home-page {
+  background: var(--aa-page-bg, var(--bg-app));
+  color: var(--aa-text, var(--text-1));
+}
+
+.home-nav-wrap,
+.home-nav-shell {
+  background: color-mix(in srgb, var(--aa-topbar-bg, var(--bg-card)) 96%, transparent);
+  border-bottom-color: var(--aa-border, var(--border));
+  box-shadow: none;
+}
+
+.home-nav .btn,
+.home-hero .btn,
+.home-pricing-card .btn,
+.home-contact-card .btn {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.home-nav .btn-primary,
+.home-hero .btn-primary,
+.home-pricing-card .btn-primary,
+.home-contact-card .btn-primary {
+  background: #22A53A !important;
+  border-color: #22A53A !important;
+  color: #fff !important;
+}
+
+.home-nav .btn-primary:hover,
+.home-hero .btn-primary:hover,
+.home-pricing-card .btn-primary:hover,
+.home-contact-card .btn-primary:hover {
+  background: #1E9134 !important;
+  border-color: #1E9134 !important;
+}
+
+.home-feature-card,
+.home-why-card,
+.preview-card,
+.home-faq-item,
+.home-pricing-card,
+.home-contact-card,
+.home-panel {
+  border-color: var(--aa-border, var(--border));
+  border-radius: 12px;
+  background: var(--aa-card-bg, var(--bg-card));
+  box-shadow: var(--aa-shadow-card, var(--shadow-sm));
+}
+
+.home-feature-card:hover,
+.home-why-card:hover,
+.preview-card:hover,
+.home-pricing-card:hover {
+  border-color: color-mix(in srgb, #22A53A 38%, var(--aa-border, var(--border)));
+  box-shadow: var(--aa-shadow-card, var(--shadow-sm));
+}
+
+.home-feature-icon,
+.home-kicker,
+.home-pricing-commission,
+.home-section-head a,
+.home-contact-item svg,
+.home-why-card strong {
+  color: #22A53A !important;
+}
+
+.home-pricing-card.featured {
+  border-color: #22A53A;
+  box-shadow: 0 0 0 1px rgba(34, 165, 58, .08);
+}
+
+.home-contact-card {
+  background: linear-gradient(135deg, rgba(34, 165, 58, .08), var(--aa-card-bg, var(--bg-card)) 56%);
+}
+
+[data-theme="dark"] .home-nav-wrap,
+[data-theme="dark"] .home-nav-shell {
+  background: rgba(26, 26, 26, .96);
+}
+
+[data-theme="dark"] .home-feature-card,
+[data-theme="dark"] .home-why-card,
+[data-theme="dark"] .preview-card,
+[data-theme="dark"] .home-faq-item,
+[data-theme="dark"] .home-pricing-card,
+[data-theme="dark"] .home-contact-card,
+[data-theme="dark"] .home-panel {
+  box-shadow: none;
+}
 
 .home-pricing {
   width: 100%;
@@ -26,7 +118,7 @@
   height: 100%;
   padding: 22px 20px;
   gap: 11px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .home-pricing-card h3 {
@@ -54,15 +146,16 @@
   min-height: 40px;
   margin-top: auto;
 }
+
 .home-pricing-note {
   width: fit-content;
   padding: 5px 9px;
   border: 1px solid rgba(217, 119, 6, 0.25);
   border-radius: 8px;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warn-bg, #fef3c7);
+  color: var(--warn-fg, #92400e);
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -72,7 +165,6 @@
   opacity: 0.72;
 }
 
-/* Keep all major public sections on the same desktop/tablet content rail. */
 .home-nav,
 .home-hero,
 .home-why,
@@ -84,7 +176,6 @@
   max-width: 1180px;
 }
 
-/* Tablet: keep pricing on one line as requested; tighten gutters/cards. */
 @media (max-width: 900px) and (min-width: 641px) {
   .home-pricing {
     padding-inline: 18px;
@@ -114,7 +205,6 @@
   }
 }
 
-/* Phone only: pricing becomes a true full-width single-column layout. */
 @media (max-width: 640px) {
   .home-pricing {
     width: 100%;
@@ -143,7 +233,7 @@
     width: 100%;
     max-width: none;
     padding: 20px 18px;
-    border-radius: 14px;
+    border-radius: 12px;
   }
 
   .home-pricing-card .btn {
@@ -158,7 +248,6 @@
   }
 }
 
-/* Very small phones: preserve readable edge spacing without horizontal scroll. */
 @media (max-width: 380px) {
   .home-pricing {
     padding-inline: 10px;
