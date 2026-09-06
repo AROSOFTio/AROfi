@@ -10,9 +10,8 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/brand-assets/arofi-app-icon.png",
+      "src": "/brand-assets/arofi-app-icon",
       "sizes": "any",
-      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
