@@ -1,4 +1,5 @@
 import './globals.css'
+import './brand-theme.css'
 import type { Metadata, Viewport } from 'next'
 import PortalThemeToggle from './PortalThemeToggle'
 
@@ -7,9 +8,9 @@ const TITLE = 'AroFi WiFi Portal – Internet Packages, Vouchers & Mobile Money'
 const DESCRIPTION =
   'Connect to WiFi, choose an internet package, redeem a voucher, and pay using supported payment methods. Secure hotspot access powered by AroFi for African WiFi and ISP operators.'
 
-const FAVICON = '/brand-assets/arofi-app-icon.png'
-const MARK = '/brand-assets/arofi-app-icon.png'
-const LOGO = '/brand-assets/arofi-logo.png'
+const FAVICON = '/brand-assets/arofi-app-icon'
+const MARK = '/brand-assets/arofi-app-icon'
+const LOGO = '/brand-assets/arofi-logo'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://arofi.net'),
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: [{ url: FAVICON, type: 'image/png' }],
+    icon: [{ url: FAVICON }],
     apple: MARK,
     shortcut: FAVICON,
   },
@@ -100,8 +101,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-accent-theme="green" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="icon" href={FAVICON} type="image/png" />
-        <link rel="shortcut icon" href={FAVICON} type="image/png" />
+        <link rel="icon" href={FAVICON} />
+        <link rel="shortcut icon" href={FAVICON} />
         <link rel="apple-touch-icon" href={MARK} />
         <script
           type="application/ld+json"
@@ -119,30 +120,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 '@type': 'Organization',
                 name: 'AROSOFT Innovations Ltd',
                 url: 'https://arosoftlabs.com',
-                logo: `https://arofi.net${MARK}`,
               },
             }),
           }}
         />
       </head>
-      <body className="antialiased">
+      <body>
         <PortalThemeToggle />
-        <main className="min-h-screen">
-          <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 sm:py-6">
-            {children}
-            <p className="pb-6 pt-10 text-center">
-              <a
-                href="https://arosoftlabs.com"
-                target="_blank"
-                rel="noreferrer"
-                className="portal-powered-by"
-              >
-                <img src={MARK} alt="" aria-hidden="true" />
-                Powered by AroFi · AROSOFT Innovations Ltd
-              </a>
-            </p>
-          </div>
-        </main>
+        {children}
       </body>
     </html>
   )
