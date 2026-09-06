@@ -109,12 +109,32 @@
     border-color: #303030 !important;
   }
 
-  /* Real backdrop: unlike a ::before pseudo-element, this receives taps and
-     closes the drawer immediately on phones. It sits below the drawer but above
-     the landing page, so tapping anywhere outside the off-canvas panel works. */
+  /* Solid menu sheet. It is visual only, so it never steals taps from
+     the X button or links. The real tap-away button stays below the nav. */
   .home-nav::before {
-    content: none !important;
-    display: none !important;
+    content: '' !important;
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #FFFFFF !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(100%) !important;
+    transition: transform .18s ease, opacity .18s ease !important;
+    z-index: 1001 !important;
+  }
+
+  [data-theme='dark'] .home-nav::before {
+    background: #151515 !important;
+  }
+
+  .home-nav.home-nav-open::before {
+    opacity: 1 !important;
+    transform: translateX(0) !important;
   }
 
   .home-mobile-nav-backdrop {
@@ -133,7 +153,7 @@
     pointer-events: none !important;
     touch-action: manipulation !important;
     -webkit-tap-highlight-color: transparent !important;
-    z-index: 1001 !important;
+    z-index: 999 !important;
     transition: opacity .18s ease, visibility 0s linear .18s !important;
   }
 
@@ -153,13 +173,18 @@
     max-width: none !important;
     margin: 0 !important;
     box-sizing: border-box !important;
-    background: var(--aa-card-bg, #FFFFFF) !important;
+    background: #FFFFFF !important;
     backdrop-filter: none !important;
     box-shadow: none !important;
     opacity: 0 !important;
     pointer-events: none !important;
     transform: translateX(100%) !important;
     transition: transform .18s ease, opacity .18s ease !important;
+  }
+
+  [data-theme='dark'] .home-nav-links,
+  [data-theme='dark'] .home-actions {
+    background: #151515 !important;
   }
 
   .home-nav-links {
