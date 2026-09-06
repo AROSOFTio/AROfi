@@ -165,7 +165,7 @@ cutover_api() {
       -e SERVICE_NAME=api \
       -e AROFI_BACKUP_DIR=/var/lib/arofi/backups \
       --mount "source=$MANAGED_BACKUP_VOLUME,target=/var/lib/arofi/backups" \
-      --memory 768m \
+      --memory 1024m \
       -p 31000-31100:31000-31100/tcp \
       "$RUNTIME_IMAGE" >/dev/null; then
     restore_rollback_container "$API_NAME" "$rollback" api
