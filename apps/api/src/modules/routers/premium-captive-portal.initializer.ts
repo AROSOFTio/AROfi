@@ -145,6 +145,10 @@ export class PremiumCaptivePortalInitializer implements OnModuleInit {
     let next = html.replace('</head>', `${style}</head>`)
     next = next.replace('<div class="card">', `<div class="card">${hero}`)
     next = next.replace(
+      'pkgs=d.packages||[];',
+      "pkgs=d.packages||[];var _pc=d.tenant&&d.tenant.brandColor;if(_pc&&/^#[0-9a-f]{6}$/i.test(_pc))document.documentElement.style.setProperty('--portal-primary',_pc);var _pt=document.getElementById('premiumTenant');if(_pt&&d.tenant)_pt.textContent=d.tenant.name||'AROFi Wi-Fi';var _pl=document.getElementById('premiumLogo');if(_pl&&d.tenant&&d.tenant.logoUrl){_pl.src=d.tenant.logoUrl;}",
+    )
+    next = next.replace(
       "document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';",
       "document.getElementById('tname').textContent=d.tenant?d.tenant.name:'AROFi Hotspot';var _pt=document.getElementById('premiumTenant');if(_pt&&d.tenant)_pt.textContent=d.tenant.name||'AROFi Wi-Fi';var _pc=d.tenant&&d.tenant.brandColor;if(_pc&&/^#[0-9a-f]{6}$/i.test(_pc))document.documentElement.style.setProperty('--portal-primary',_pc);var _pl=document.getElementById('premiumLogo');if(_pl&&d.tenant&&d.tenant.logoUrl){_pl.src=d.tenant.logoUrl;_pl.onerror=function(){this.onerror=null;this.src='https://arofi.net/brand-assets/arofi-logo';};}",
     )
