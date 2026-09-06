@@ -87,19 +87,19 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
     const radiusAccountingPort = Number(input?.radiusAccountingPort ?? 1813)
     const radiusRepair = radiusHost && radiusSecret
       ? [
-          ':do { /radius remove [find where comment="' + this.escapeRouterOsScriptSource(radiusComment) + '"] } on-error={}',
-          ':do { /radius add service=hotspot address=' + radiusHost + ' secret="' + radiusSecret + '" authentication-port=' + radiusAuthPort + ' accounting-port=' + radiusAccountingPort + ' timeout=5s comment="' + this.escapeRouterOsScriptSource(radiusComment) + '" } on-error={}',
+          ':local arofiRadius [\/radius find where comment="' + this.escapeRouterOsScriptSource(radiusComment) + '"]',
+          ':if ([:len $arofiRadius] = 0) do={ :do { \/radius add service=hotspot address=' + radiusHost + ' secret="' + radiusSecret + '" authentication-port=' + radiusAuthPort + ' accounting-port=' + radiusAccountingPort + ' timeout=5s comment="' + this.escapeRouterOsScriptSource(radiusComment) + '" } on-error={} }',
           ...(input?.radiusSecondaryHost ? [
-            ':do { /radius remove [find where comment="' + this.escapeRouterOsScriptSource(radiusComment + ' standby') + '"] } on-error={}',
-            ':do { /radius add service=hotspot address=' + this.escapeRouterOsScriptSource(input.radiusSecondaryHost) + ' secret="' + radiusSecret + '" authentication-port=' + radiusAuthPort + ' accounting-port=' + radiusAccountingPort + ' timeout=5s comment="' + this.escapeRouterOsScriptSource(radiusComment + ' standby') + '" } on-error={}',
+            ':local arofiRadiusStandby [\/radius find where comment="' + this.escapeRouterOsScriptSource(radiusComment + ' standby') + '"]',
+            ':if ([:len $arofiRadiusStandby] = 0) do={ :do { \/radius add service=hotspot address=' + this.escapeRouterOsScriptSource(input.radiusSecondaryHost) + ' secret="' + radiusSecret + '" authentication-port=' + radiusAuthPort + ' accounting-port=' + radiusAccountingPort + ' timeout=5s comment="' + this.escapeRouterOsScriptSource(radiusComment + ' standby') + '" } on-error={} }',
           ] : []),
-          ':do { /radius incoming set accept=yes } on-error={}',
+          ':do { \/radius incoming set accept=yes } on-error={}',
         ]
       : []
     const policySource = [
       ...radiusRepair,
-      ':foreach p in=[/ip hotspot profile find] do={ :do { /ip hotspot profile set $p use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d } on-error={} }',
-      ':foreach up in=[/ip hotspot user profile find] do={ :do { /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s } on-error={} }',
+      ':foreach p in=[/ip hotspot profile find] do={ :if (([/ip hotspot profile get $p use-radius] != yes) || ([/ip hotspot profile get $p radius-accounting] != yes) || ([/ip hotspot profile get $p radius-interim-update] != 1m) || ([/ip hotspot profile get $p login-by] != "cookie,mac-cookie,http-pap")) do={ :do { /ip hotspot profile set $p use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d } on-error={} } }',
+      ':foreach up in=[/ip hotspot user profile find] do={ :if (([/ip hotspot user profile get $up shared-users] != 1) || ([/ip hotspot user profile get $up add-mac-cookie] != yes) || ([/ip hotspot user profile get $up mac-cookie-timeout] != 30d) || ([/ip hotspot user profile get $up idle-timeout] != none) || ([/ip hotspot user profile get $up keepalive-timeout] != none) || ([/ip hotspot user profile get $up session-timeout] != 0s)) do={ :do { /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s } on-error={} } }',
     ].join('; ')
     const escapedPolicySource = this.escapeRouterOsScriptSource(policySource)
 
