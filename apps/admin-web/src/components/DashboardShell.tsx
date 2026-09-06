@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Headphones, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { AdminSessionResponse } from '@/lib/admin-types'
 import { refreshAccessToken } from '@/lib/client-api'
 import AdminSessionControl from './AdminSessionControl'
@@ -10,9 +10,7 @@ import AgentSidebar from './AgentSidebar'
 import FeedbackPrompt from './FeedbackPrompt'
 import NotificationBell from './NotificationBell'
 import RouterOnboardingNudge from './RouterOnboardingNudge'
-import RouterSupportDock from './RouterSupportDock'
 import Sidebar from './Sidebar'
-import SupportTicketQuickAccess from './SupportTicketQuickAccess'
 import ThemeToggle from './ThemeToggle'
 import { SESSION_RECOVERY_ATTEMPT_KEY } from './SessionRecoveryGate'
 import WorkspaceRouteGuard from './WorkspaceRouteGuard'
@@ -109,18 +107,6 @@ export default function DashboardShell({ children, initials, session, workspaceT
             <span className="topbar-title">{workspaceTitle}</span>
           </div>
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {!isAgent && <RouterSupportDock user={session.user} />}
-            {!isAgent && <SupportTicketQuickAccess user={session.user} />}
-            {!isAgent && (
-              <button
-                type="button"
-                className="topbar-ai-support"
-                onClick={() => window.dispatchEvent(new Event('arofi:open-chat'))}
-                aria-label="Open support chat"
-              >
-                <Headphones size={15} /><span>Support</span>
-              </button>
-            )}
             {!isAgent && <ThemeToggle compact />}
             <NotificationBell />
             <div style={{ position: 'relative' }}>
