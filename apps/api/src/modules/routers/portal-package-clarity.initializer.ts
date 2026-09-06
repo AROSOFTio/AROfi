@@ -33,16 +33,16 @@ export class PortalPackageClarityInitializer implements OnModuleInit {
       .section-label{font-size:17px!important;line-height:1.2!important;margin-bottom:3px!important}
       .section-sub{font-size:12px!important;line-height:1.35!important;margin-bottom:11px!important}
       .pkgs{gap:10px!important;margin-top:10px!important}
-      .pkg{position:relative!important;min-height:154px!important;padding:13px!important;gap:6px!important;border-radius:17px!important;border:1px solid #d8e2ef!important;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%)!important;box-shadow:0 6px 18px rgba(7,26,73,.055)!important;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease!important}
-      .pkg:active{transform:scale(.985)!important;border-color:#9cc7ff!important;box-shadow:0 4px 12px rgba(9,100,250,.12)!important}
+      .pkg{position:relative!important;min-height:154px!important;padding:13px!important;gap:6px!important;border-radius:17px!important;border:1px solid #d8e2ef!important;background:#fff!important;box-shadow:0 6px 18px rgba(7,26,73,.055)!important;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease!important}
+      .pkg:active{transform:scale(.985)!important;border-color:var(--portal-primary,#22A53A)!important;box-shadow:0 4px 12px rgba(18,32,51,.08)!important}
       .pkg-head{display:flex!important;align-items:center!important;gap:9px!important;min-width:0!important}
-      .pkg-visual-icon{display:flex!important;align-items:center!important;justify-content:center!important;flex:0 0 38px!important;width:38px!important;height:38px!important;border-radius:50%!important;background:#edf6ff!important;color:#0964FA!important;border:1px solid #d8ebff!important}
+      .pkg-visual-icon{display:flex!important;align-items:center!important;justify-content:center!important;flex:0 0 38px!important;width:38px!important;height:38px!important;border-radius:50%!important;background:#f8fafc!important;color:var(--portal-primary,#22A53A)!important;border:1px solid #e2e8f0!important}
       .pkg-visual-icon svg{width:20px!important;height:20px!important;stroke:currentColor!important;fill:none!important;stroke-width:2!important;stroke-linecap:round!important;stroke-linejoin:round!important}
       .pkg-head-text{display:block!important;min-width:0!important;flex:1!important}
       .pkg .pk-name{display:block!important;font-size:15.5px!important;line-height:1.18!important;font-weight:900!important;color:#0b1739!important;white-space:normal!important;overflow:visible!important;-webkit-line-clamp:unset!important}
       .pkg .pk-dur{display:block!important;margin-top:3px!important;font-size:11.5px!important;line-height:1.25!important;font-weight:600!important;color:#64748b!important}
-      .pkg .pk-price{display:block!important;font-size:21px!important;line-height:1.05!important;font-weight:950!important;letter-spacing:-.02em!important;color:#0759e8!important;margin:4px 0 3px!important}
-      .pkg .pk-buy{display:flex!important;align-items:center!important;justify-content:center!important;min-height:34px!important;margin-top:auto!important;border-radius:10px!important;padding:8px 10px!important;font-size:12.5px!important;line-height:1!important;font-weight:850!important;letter-spacing:.005em!important;color:#fff!important;box-shadow:0 6px 13px rgba(9,100,250,.18)!important}
+      .pkg .pk-price{display:block!important;font-size:21px!important;line-height:1.05!important;font-weight:950!important;letter-spacing:-.02em!important;color:var(--portal-primary,#22A53A)!important;margin:4px 0 3px!important}
+      .pkg .pk-buy{display:flex!important;align-items:center!important;justify-content:center!important;min-height:34px!important;margin-top:auto!important;border-radius:10px!important;padding:8px 10px!important;font-size:12.5px!important;line-height:1!important;font-weight:850!important;letter-spacing:.005em!important;color:#fff!important;background:var(--portal-primary,#22A53A)!important;box-shadow:none!important}
       .premium-tab{font-size:10.5px!important}
       .accept-label strong{font-size:16px!important}.accept-label small{font-size:11px!important}
       @media(max-width:720px){
