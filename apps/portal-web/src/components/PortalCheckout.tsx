@@ -721,7 +721,8 @@ export default function PortalCheckout({
     // Poll sequentially so a slow provider never creates overlapping requests.
     let stopped = false
     let timeout: ReturnType<typeof window.setTimeout> | undefined
-    let failureDelayMs = 2_000
+    const instantPollDelayMs = 450
+    let failureDelayMs = instantPollDelayMs
 
     const poll = async () => {
       if (stopped || paymentStatusPollInFlightRef.current) return
@@ -738,12 +739,12 @@ export default function PortalCheckout({
         return
       }
 
-      failureDelayMs = 2_000
+      failureDelayMs = instantPollDelayMs
       const stillWaiting =
         pendingStatuses.includes(payment.status) ||
         (payment.status === 'COMPLETED' && Boolean(payment.activation) && !hasUsableReconnect(payment))
       if (stillWaiting) {
-        timeout = window.setTimeout(() => void poll(), 2_000)
+        timeout = window.setTimeout(() => void poll(), instantPollDelayMs)
       }
     }
 
