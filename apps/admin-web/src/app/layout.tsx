@@ -1,6 +1,7 @@
 import './globals.css'
 import '../styles/public-responsive-overrides.css'
 import '../styles/mobile-public-hotfix.css'
+import '../styles/final-ui-polish.css'
 import type { Metadata, Viewport } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
@@ -14,10 +15,10 @@ const TITLE = 'AroFi – WiFi, Hotspot, RADIUS & ISP Billing Platform for Africa
 const DESCRIPTION =
   'AroFi helps WiFi businesses and ISPs manage hotspot billing, RADIUS access, routers, internet packages, vouchers, customers, wallets and live sessions from one cloud console. Built for African network operators in Uganda, Kenya, Nigeria, Ghana, Rwanda, Tanzania, Zambia, Malawi, Botswana, South Africa and additional markets as local payment and support options are enabled.'
 
-const FAVICON = '/brand-assets/arofi-app-icon'
-const BRAND_MARK = '/brand-assets/arofi-app-icon'
-const BRAND_LOGO = '/brand-assets/arofi-logo'
-const HERO_IMAGE = '/brand-assets/arofi-hero'
+const FAVICON = '/brand-assets/arofi-app-icon.png?v=20260906-final3'
+const BRAND_MARK = '/brand-assets/arofi-app-icon.png?v=20260906-final3'
+const BRAND_LOGO = '/brand-assets/arofi-logo.png?v=20260906-final3'
+const HERO_IMAGE = '/brand-assets/arofi-hero.png?v=20260906-final3'
 
 const COUNTRIES = [
   'Uganda', 'Kenya', 'Nigeria', 'Ghana', 'Rwanda', 'Tanzania', 'Zambia', 'Malawi',
