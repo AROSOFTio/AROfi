@@ -377,6 +377,15 @@ export default function RootPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(contactJsonLd) }} />
+      <button
+        type="button"
+        className={`home-mobile-nav-backdrop ${mobileNavOpen ? 'is-open' : ''}`}
+        aria-label="Close navigation menu"
+        aria-hidden={!mobileNavOpen}
+        tabIndex={mobileNavOpen ? 0 : -1}
+        onPointerDown={closeMobileNav}
+        onClick={closeMobileNav}
+      />
       <nav className={`home-nav ${mobileNavOpen ? 'home-nav-open' : ''}`} aria-label="Primary">
         {/* Logo only — hide text when logo is present */}
         <div className="home-brand">
