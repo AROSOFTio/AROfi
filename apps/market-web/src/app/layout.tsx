@@ -4,11 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://market.arofi.net"),
   title: {
-    default: "AROFi Market — Verified Networking Equipment & Technology",
+    default: "AROFi Market — Networking & Technology Marketplace Uganda",
     template: "%s | AROFi Market",
   },
   description:
-    "AROFi Market is a trusted multi-vendor marketplace for verified networking equipment, routers, access points, switches, CCTV, computers, phones, cables, power and complete network kits. Launching first in Uganda.",
+    "AROFi Market is a coming multi-vendor marketplace for routers, access points, switches, CCTV, computers, phones, cables, power and networking equipment from approved sellers. Join the Uganda launch waitlist.",
   keywords: [
     "networking equipment Uganda",
     "MikroTik Uganda",
@@ -18,31 +18,27 @@ export const metadata: Metadata = {
     "CCTV Uganda",
     "network cables Uganda",
     "AROFi Market",
-    "WiFi hotspot equipment",
-    "network kit Uganda",
-    "verified electronics marketplace Uganda",
+    "WiFi hotspot equipment Uganda",
+    "network marketplace Uganda",
   ],
   applicationName: "AROFi Market",
   authors: [{ name: "AROSOFT Innovations Ltd", url: "https://arofi.net" }],
   creator: "AROSOFT Innovations Ltd",
   publisher: "AROSOFT Innovations Ltd",
-  alternates: {
-    canonical: "https://market.arofi.net/",
-  },
+  alternates: { canonical: "https://market.arofi.net/" },
   openGraph: {
     type: "website",
     url: "https://market.arofi.net/",
     siteName: "AROFi Market",
-    title: "AROFi Market — Build Your Network With Confidence",
+    title: "AROFi Market — Networking & Technology Marketplace",
     description:
-      "Shop verified networking devices and supporting technology from approved sellers, with AROFi verification, buyer protection and optional pre-configuration.",
+      "Networking equipment and supporting technology from approved sellers. Uganda launch coming soon — join the waitlist.",
     locale: "en_UG",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AROFi Market — Verified Networking Equipment",
-    description:
-      "Approved sellers. Verified equipment. Buyer protection. AROFi-ready networking kits. Coming first to Uganda.",
+    title: "AROFi Market — Coming Soon",
+    description: "Uganda’s AROFi marketplace for networking equipment and supporting technology. Join the launch waitlist.",
   },
   robots: {
     index: true,
@@ -61,7 +57,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0B1220",
+  themeColor: "#22A53A",
   colorScheme: "light",
 };
 
