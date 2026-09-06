@@ -13,10 +13,10 @@ const TITLE = 'AroFi – WiFi, Hotspot, RADIUS & ISP Billing Platform for Africa
 const DESCRIPTION =
   'AroFi helps WiFi businesses and ISPs manage hotspot billing, RADIUS access, routers, internet packages, vouchers, customers, wallets and live sessions from one cloud console. Built for African network operators in Uganda, Kenya, Nigeria, Ghana, Rwanda, Tanzania, Zambia, Malawi, Botswana, South Africa and additional markets as local payment and support options are enabled.'
 
-const FAVICON = '/brand-assets/arofi-app-icon.png'
-const BRAND_MARK = '/brand-assets/arofi-app-icon.png'
-const BRAND_LOGO = '/brand-assets/arofi-logo.png'
-const HERO_IMAGE = '/brand-assets/arofi-hero.png'
+const FAVICON = '/brand-assets/arofi-app-icon'
+const BRAND_MARK = '/brand-assets/arofi-app-icon'
+const BRAND_LOGO = '/brand-assets/arofi-logo'
+const HERO_IMAGE = '/brand-assets/arofi-hero'
 
 const COUNTRIES = [
   'Uganda', 'Kenya', 'Nigeria', 'Ghana', 'Rwanda', 'Tanzania', 'Zambia', 'Malawi',
@@ -66,7 +66,7 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: [{ url: FAVICON, type: 'image/png' }],
+    icon: [{ url: FAVICON }],
     apple: BRAND_MARK,
     shortcut: FAVICON,
   },
@@ -83,7 +83,6 @@ export const metadata: Metadata = {
         width: 1600,
         height: 900,
         alt: 'AroFi network and WiFi management platform for African operators',
-        type: 'image/png',
       },
     ],
   },
@@ -197,8 +196,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="icon" href={FAVICON} type="image/png" />
-        <link rel="shortcut icon" href={FAVICON} type="image/png" />
+        <link rel="icon" href={FAVICON} />
+        <link rel="shortcut icon" href={FAVICON} />
         <link rel="apple-touch-icon" href={BRAND_MARK} />
         <link rel="llms" href="/llms.txt" type="text/plain" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }} />
