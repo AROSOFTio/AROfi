@@ -48,10 +48,17 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
     const original = service.buildProvisioningScript.bind(service)
 
     service.buildProvisioningScript = (...args: any[]) =>
-      this.applyPermanentSessionPolicy(original(...args))
+      this.applyPermanentSessionPolicy(original(...args), args[0])
   }
 
-  private applyPermanentSessionPolicy(script: string) {
+  private applyPermanentSessionPolicy(script: string, input?: {
+    registrationKey?: string
+    radiusHost?: string
+    radiusSecondaryHost?: string
+    radiusAuthPort?: number
+    radiusAccountingPort?: number
+    sharedSecret?: string
+  }) {
     let updated = script
 
     // Exact login policy: no automatic RADIUS MAC auth, but keep trusted
@@ -72,8 +79,26 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
       return updated
     }
 
+    const registrationKey = String(input?.registrationKey ?? 'manual-test-router')
+    const radiusComment = 'AROFi ' + registrationKey
+    const radiusSecret = input?.sharedSecret ? this.escapeRouterOsScriptSource(input.sharedSecret) : ''
+    const radiusHost = input?.radiusHost ? this.escapeRouterOsScriptSource(input.radiusHost) : ''
+    const radiusAuthPort = Number(input?.radiusAuthPort ?? 1812)
+    const radiusAccountingPort = Number(input?.radiusAccountingPort ?? 1813)
+    const radiusRepair = radiusHost && radiusSecret
+      ? [
+          ':do { /radius remove [find where comment="' + this.escapeRouterOsScriptSource(radiusComment) + '"] } on-error={}',
+          ':do { /radius add service=hotspot address=' + radiusHost + ' secret="' + radiusSecret + '" authentication-port=' + radiusAuthPort + ' accounting-port=' + radiusAccountingPort + ' timeout=5s comment="' + this.escapeRouterOsScriptSource(radiusComment) + '" } on-error={}',
+          ...(input?.radiusSecondaryHost ? [
+            ':do { /radius remove [find where comment="' + this.escapeRouterOsScriptSource(radiusComment + ' standby') + '"] } on-error={}',
+            ':do { /radius add service=hotspot address=' + this.escapeRouterOsScriptSource(input.radiusSecondaryHost) + ' secret="' + radiusSecret + '" authentication-port=' + radiusAuthPort + ' accounting-port=' + radiusAccountingPort + ' timeout=5s comment="' + this.escapeRouterOsScriptSource(radiusComment + ' standby') + '" } on-error={}',
+          ] : []),
+          ':do { /radius incoming set accept=yes } on-error={}',
+        ]
+      : []
     const policySource = [
-      ':foreach p in=[/ip hotspot profile find] do={ :do { /ip hotspot profile set $p login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d } on-error={} }',
+      ...radiusRepair,
+      ':foreach p in=[/ip hotspot profile find] do={ :do { /ip hotspot profile set $p use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d } on-error={} }',
       ':foreach up in=[/ip hotspot user profile find] do={ :do { /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s } on-error={} }',
     ].join('; ')
     const escapedPolicySource = this.escapeRouterOsScriptSource(policySource)
