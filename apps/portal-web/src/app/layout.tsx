@@ -1,4 +1,5 @@
 import './globals.css'
+import './brand-theme.css'
 import type { Metadata, Viewport } from 'next'
 import PortalThemeToggle from './PortalThemeToggle'
 
