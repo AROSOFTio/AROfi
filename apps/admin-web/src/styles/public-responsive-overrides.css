@@ -1,25 +1,100 @@
-/* Public AroFi visual/responsive overrides.
-   Shared light/dark colours come from the aaPanel token system and
-   PublicAppearanceDock. This file focuses on geometry, green actions and auth. */
+/* Final AroFi public/auth visual system.
+   Visible branding uses AroFi. Core product actions use #22A53A.
+   The supplied hero/auth artwork is the background itself — no white/black overlay panels. */
 
 .dashboard-shell .sidebar-direct-item { font-size: 15px !important; }
 
 .home-shell,
 .home-page {
-  background: var(--aa-page-bg, var(--bg-app));
   color: var(--aa-text, var(--text-1));
+  background: var(--aa-page-bg, var(--bg-app));
+}
+
+/* ONE continuous supplied image behind both header and hero. */
+.home-shell {
+  position: relative;
+  isolation: isolate;
+}
+.home-shell::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1180px, calc(100% - 32px));
+  height: 680px;
+  border: 1px solid rgba(34,165,58,.14);
+  border-radius: 20px;
+  background: url('/brand-assets/arofi-hero') center center / cover no-repeat;
+  box-shadow: 0 14px 38px rgba(18,32,51,.08);
+  pointer-events: none;
+}
+
+.home-nav,
+.ph-hero {
+  position: relative;
+  z-index: 1;
+  width: min(1180px, calc(100% - 32px)) !important;
+  max-width: 1180px !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
 
 .home-nav {
-  border-color: var(--aa-border, var(--border)) !important;
-  border-radius: 12px !important;
-  box-shadow: var(--aa-shadow-card, var(--shadow-sm)) !important;
+  margin: 22px auto 0 !important;
+  border: 0 !important;
+  border-radius: 20px 20px 0 0 !important;
+}
+
+.ph-hero {
+  min-height: 600px !important;
+  margin: 0 auto 30px !important;
+  border: 0 !important;
+  border-radius: 0 0 20px 20px !important;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+/* The image already provides a clean area. Do not paint another background behind copy. */
+.ph-copy {
+  width: min(650px, 58%) !important;
+  padding: clamp(34px, 4.4vw, 58px) !important;
+  background: transparent !important;
+}
+.ph-eyebrow {
+  background: rgba(234,247,237,.78) !important;
+  border-color: rgba(34,165,58,.24) !important;
+  color: #197C2C !important;
+}
+.ph-copy h1 {
+  max-width: 640px;
+  color: #122033 !important;
+  font-size: clamp(40px, 4.4vw, 62px) !important;
+  line-height: 1.02 !important;
+}
+.ph-copy h1 span { color: #22A53A !important; }
+.ph-lead {
+  max-width: 520px !important;
+  color: #596675 !important;
+}
+
+.home-nav a,
+.home-nav .btn-ghost {
+  color: #26313D !important;
+}
+.home-nav .btn-ghost {
+  background: rgba(255,255,255,.70) !important;
+  border-color: rgba(18,32,51,.14) !important;
 }
 
 .home-nav .btn,
 .home-hero .btn,
 .home-pricing-card .btn,
-.home-contact-card .btn {
+.home-contact-card .btn,
+.ph-btn {
   border-radius: 8px;
   box-shadow: none;
 }
@@ -33,7 +108,6 @@
   border-color: #22A53A !important;
   color: #fff !important;
 }
-
 .home-nav .btn-primary:hover,
 .home-hero .btn-primary:hover,
 .home-pricing-card .btn-primary:hover,
@@ -42,6 +116,29 @@
   background: #1E9134 !important;
   border-color: #1E9134 !important;
 }
+.ph-btn-secondary {
+  background: rgba(255,255,255,.72) !important;
+  color: #26313D !important;
+  border-color: rgba(18,32,51,.16) !important;
+}
+
+/* Keep the dashboard ThemeToggle shape/behaviour but reserve a stable width so the header never jumps. */
+.home-mode-toggle { display: none !important; }
+.home-actions > .topbar-theme {
+  order: -1;
+  flex: 0 0 108px !important;
+  width: 108px !important;
+  min-width: 108px !important;
+}
+.home-actions .topbar-theme-trigger {
+  width: 108px !important;
+  min-width: 108px !important;
+  min-height: 36px !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+}
+.home-actions .topbar-theme-trigger span { white-space: nowrap !important; }
+.home-actions .theme-menu { min-width: 178px !important; }
 
 .home-feature-card,
 .home-feature,
@@ -55,9 +152,9 @@
   border-color: var(--aa-border, var(--border));
   border-radius: 12px;
   background: var(--aa-card-bg, var(--bg-card));
+  background-image: none !important;
   box-shadow: var(--aa-shadow-card, var(--shadow-sm));
 }
-
 .home-feature-card:hover,
 .home-feature:hover,
 .home-why-card:hover,
@@ -65,7 +162,6 @@
 .home-pricing-card:hover {
   border-color: color-mix(in srgb, #22A53A 38%, var(--aa-border, var(--border)));
 }
-
 .home-feature-icon,
 .home-kicker,
 .home-pricing-commission,
@@ -74,11 +170,10 @@
 .home-why-card strong {
   color: #22A53A !important;
 }
-
 .home-pricing-card.featured { border-color: #22A53A; box-shadow: 0 0 0 1px rgba(34,165,58,.08); }
-.home-contact-card { background: linear-gradient(135deg, rgba(34,165,58,.08), var(--aa-card-bg, var(--bg-card)) 56%); }
+.home-contact-card { background: var(--aa-card-bg, var(--bg-card)) !important; }
+.home-shell [class*='gradient'] { background-image: none !important; }
 
-[data-theme='dark'] .home-nav,
 [data-theme='dark'] .home-feature-card,
 [data-theme='dark'] .home-feature,
 [data-theme='dark'] .home-why-card,
@@ -89,8 +184,6 @@
 [data-theme='dark'] .home-panel,
 [data-theme='dark'] .home-blog-card { box-shadow: none !important; }
 
-.home-nav,
-.home-hero,
 .home-why,
 .home-section,
 .home-pricing,
@@ -101,7 +194,10 @@
 }
 
 .home-brand img,
-.site-footer-brand img { content: url('/brand-assets/arofi-logo') !important; object-fit: contain !important; }
+.site-footer-brand img {
+  content: url('/brand-assets/arofi-logo') !important;
+  object-fit: contain !important;
+}
 [data-theme='dark'] .home-brand img,
 [data-theme='dark'] .site-footer-brand img { content: url('/brand-assets/arofi-logo-dark') !important; }
 
@@ -133,131 +229,224 @@
 }
 .home-pricing-card .btn:disabled { cursor:not-allowed; opacity:.72; }
 
-/* AUTH — same side-by-side composition on desktop, tablet and phone.
-   The image is always the left pane; it never becomes a full-width top block. */
+/* AUTH: the supplied artwork is the FULL page background. The form sits directly over its clean right side. */
 .login-page {
   min-height:100svh !important;
   display:flex !important;
   align-items:center !important;
   justify-content:center !important;
-  padding:24px !important;
-  background:var(--aa-page-bg,#F5F7F9) !important;
-  background-image:none !important;
+  padding:20px !important;
+  background-color:transparent !important;
+  background-image:url('/brand-assets/arofi-auth-bg') !important;
+  background-position:center center !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
 }
-
 .login-shell,
 .login-shell[style] {
   position:relative !important;
-  width:min(1180px,calc(100vw - 48px)) !important;
+  width:min(1180px,calc(100vw - 40px)) !important;
   max-width:1180px !important;
-  min-height:min(720px,calc(100svh - 48px)) !important;
+  min-height:min(680px,calc(100svh - 40px)) !important;
   display:grid !important;
-  grid-template-columns:minmax(0,1.05fr) minmax(390px,.95fr) !important;
+  grid-template-columns:minmax(0,55%) minmax(360px,45%) !important;
   align-items:stretch !important;
   overflow:hidden !important;
   padding:0 !important;
-  border:1px solid var(--aa-border,#E1E6EA) !important;
+  border:0 !important;
   border-radius:20px !important;
-  background:var(--aa-card-bg,#fff) !important;
-  box-shadow:0 18px 50px rgba(18,32,51,.10) !important;
+  background:transparent !important;
+  box-shadow:none !important;
 }
-
-.login-shell::before {
-  content:'';
-  grid-column:1;
-  grid-row:1;
-  min-width:0;
-  background:#eef7f0 url('/brand-assets/arofi-auth-bg') 42% center / cover no-repeat;
-}
-
+.login-shell::before { display:none !important; content:none !important; }
 .login-card {
   grid-column:2 !important;
   grid-row:1 !important;
   width:100% !important;
   max-width:none !important;
   margin:0 !important;
-  padding:clamp(34px,4.2vw,58px) clamp(30px,4vw,54px) !important;
+  padding:clamp(30px,4vw,52px) clamp(28px,3.8vw,50px) !important;
   display:flex !important;
   flex-direction:column !important;
   justify-content:center !important;
   border:0 !important;
   border-radius:0 !important;
-  background:var(--aa-card-bg,#fff) !important;
+  background:transparent !important;
+  background-image:none !important;
   box-shadow:none !important;
   backdrop-filter:none !important;
 }
-
 .login-brand { text-align:left !important; }
 .login-logo {
   content:url('/brand-assets/arofi-logo') !important;
-  width:min(250px,75%) !important;
+  width:min(250px,76%) !important;
   max-height:88px !important;
   object-fit:contain !important;
   object-position:left center !important;
-  margin:0 0 16px !important;
+  margin:0 0 14px !important;
 }
 [data-theme='dark'] .login-logo { content:url('/brand-assets/arofi-logo-dark') !important; }
 .login-card .btn-primary { background:#22A53A !important; border-color:#22A53A !important; color:#fff !important; box-shadow:none !important; }
 .login-card .btn-primary:hover { background:#1E9134 !important; }
 .auth-back-link { color:#197C2C !important; font-weight:800 !important; }
-
-[data-theme='dark'] .login-page { background:#0B0805 !important; }
-[data-theme='dark'] .login-shell { background:#202020 !important; border-color:#303030 !important; box-shadow:none !important; }
-[data-theme='dark'] .login-card { background:#202020 !important; color:#E6E6E6 !important; }
+.login-brand h1,
+.login-card .form-label { color:#122033 !important; }
+.login-brand p,
+.login-signup,
+.login-footer { color:#667382 !important; }
+.login-card .form-input {
+  background:rgba(255,255,255,.70) !important;
+  border-color:rgba(18,32,51,.18) !important;
+  color:#122033 !important;
+  box-shadow:none !important;
+}
+[data-theme='dark'] .login-page {
+  background-color:transparent !important;
+  background-image:url('/brand-assets/arofi-auth-bg') !important;
+}
+[data-theme='dark'] .login-shell,
+[data-theme='dark'] .login-card { background:transparent !important; color:#122033 !important; box-shadow:none !important; }
 [data-theme='dark'] .login-brand h1,
-[data-theme='dark'] .login-card .form-label { color:#E6E6E6 !important; }
+[data-theme='dark'] .login-card .form-label { color:#122033 !important; }
 [data-theme='dark'] .login-brand p,
 [data-theme='dark'] .login-signup,
-[data-theme='dark'] .login-footer { color:#9B9B9B !important; }
-[data-theme='dark'] .login-card .form-input { background:#1B1B1B !important; border-color:#383838 !important; color:#E6E6E6 !important; }
+[data-theme='dark'] .login-footer { color:#667382 !important; }
+[data-theme='dark'] .login-card .form-input {
+  background:rgba(255,255,255,.70) !important;
+  border-color:rgba(18,32,51,.18) !important;
+  color:#122033 !important;
+}
 
 @media (max-width:900px) {
+  .home-shell::before {
+    top:14px;
+    width:calc(100% - 24px);
+    height:560px;
+    border-radius:16px;
+    background-position:62% center;
+  }
+  .home-nav,
+  .ph-hero { width:calc(100% - 24px) !important; }
+  .home-nav { margin-top:14px !important; border-radius:16px 16px 0 0 !important; }
+  .ph-hero { min-height:500px !important; border-radius:0 0 16px 16px !important; }
+  .ph-copy { width:min(580px,60%) !important; padding:30px !important; }
+  .ph-copy h1 { font-size:clamp(34px,6.2vw,52px) !important; }
   .home-pricing { padding-inline:18px; }
   .home-pricing-grid { gap:12px; }
   .home-pricing-card { padding:18px 16px; gap:9px; }
 
-  .login-page { padding:14px !important; }
+  .login-page { padding:12px !important; }
   .login-shell,
   .login-shell[style] {
     width:100% !important;
-    min-height:calc(100svh - 28px) !important;
-    grid-template-columns:minmax(0,44%) minmax(0,56%) !important;
+    min-height:calc(100svh - 24px) !important;
+    grid-template-columns:minmax(0,50%) minmax(0,50%) !important;
     border-radius:16px !important;
   }
-  .login-shell::before { background-position:44% center; }
-  .login-card { padding:30px 26px !important; }
-  .login-logo { width:min(190px,70%) !important; }
+  .login-card { padding:26px 22px !important; }
+  .login-logo { width:min(180px,72%) !important; }
 }
 
 @media (max-width:640px) {
+  .home-shell::before {
+    top:8px;
+    width:calc(100% - 16px);
+    height:392px;
+    border-radius:14px;
+    background-position:61% center;
+  }
+  .home-nav,
+  .ph-hero { width:calc(100% - 16px) !important; }
+  .home-nav {
+    margin-top:8px !important;
+    min-height:58px !important;
+    border-radius:14px 14px 0 0 !important;
+  }
+  .ph-hero {
+    min-height:334px !important;
+    margin-bottom:18px !important;
+    border-radius:0 0 14px 14px !important;
+  }
+  .ph-copy {
+    width:58% !important;
+    padding:18px 7px 18px 14px !important;
+  }
+  .ph-eyebrow {
+    min-height:22px !important;
+    padding:0 6px !important;
+    font-size:7.5px !important;
+    white-space:nowrap !important;
+  }
+  .ph-copy h1 {
+    max-width:210px !important;
+    margin-top:11px !important;
+    font-size:clamp(23px,7.2vw,31px) !important;
+    line-height:1.01 !important;
+  }
+  .ph-lead {
+    max-width:205px !important;
+    margin-top:10px !important;
+    font-size:10.8px !important;
+    line-height:1.4 !important;
+  }
+  .ph-actions {
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:6px !important;
+    width:100% !important;
+    max-width:205px !important;
+    margin-top:12px !important;
+  }
+  .ph-btn {
+    min-height:34px !important;
+    padding:0 6px !important;
+    font-size:9.5px !important;
+    white-space:nowrap !important;
+  }
+  .home-actions > .topbar-theme,
+  .home-actions .topbar-theme-trigger {
+    width:104px !important;
+    min-width:104px !important;
+    flex-basis:104px !important;
+  }
+
   .home-pricing { width:100%; max-width:none; margin-top:48px; padding-inline:12px; }
   .home-pricing-grid { grid-template-columns:1fr; gap:12px; }
   .home-pricing-card { width:100%; padding:20px 18px; }
   .home-pricing-card .btn { width:100%; }
   .home-section,.home-why,.home-hero { width:100%; max-width:none; }
 
-  .login-page { padding:8px !important; }
+  .login-page {
+    padding:6px !important;
+    background-position:center center !important;
+  }
   .login-shell,
   .login-shell[style] {
     width:100% !important;
-    min-height:calc(100svh - 16px) !important;
-    grid-template-columns:minmax(0,38%) minmax(0,62%) !important;
-    border-radius:14px !important;
+    min-height:calc(100svh - 12px) !important;
+    grid-template-columns:minmax(0,44%) minmax(0,56%) !important;
+    border-radius:12px !important;
   }
-  .login-shell::before { min-height:0 !important; background-position:46% center; }
-  .login-card { padding:20px 14px !important; overflow:auto; }
-  .login-logo { width:min(130px,72%) !important; max-height:54px !important; margin-bottom:10px !important; }
-  .login-brand h1 { font-size:clamp(21px,6vw,28px) !important; }
-  .login-brand p { font-size:11.5px !important; line-height:1.45 !important; }
-  .login-card .form-label { font-size:11px !important; }
-  .login-card .form-input { min-height:40px !important; font-size:13px !important; }
-  .login-card .btn { min-height:42px !important; font-size:12px !important; }
-  .login-signup,.login-footer { font-size:10.5px !important; }
+  .login-card { padding:16px 10px !important; overflow:auto; }
+  .login-logo { width:min(118px,74%) !important; max-height:48px !important; margin-bottom:8px !important; }
+  .login-brand h1 { font-size:clamp(19px,5.8vw,25px) !important; line-height:1.06 !important; }
+  .login-brand p { font-size:10.5px !important; line-height:1.35 !important; }
+  .login-card .form-label { font-size:10px !important; }
+  .login-card .form-input { min-height:36px !important; font-size:12px !important; }
+  .login-card .btn { min-height:38px !important; font-size:11px !important; }
+  .login-signup,.login-footer { font-size:9.5px !important; }
 }
 
 @media (max-width:390px) {
+  .home-shell::before { height:370px; background-position:62% center; }
+  .ph-hero { min-height:312px !important; }
+  .ph-copy { width:60% !important; padding:14px 5px 14px 11px !important; }
+  .ph-copy h1 { max-width:185px !important; font-size:clamp(21px,7vw,27px) !important; }
+  .ph-lead { max-width:180px !important; font-size:9.8px !important; }
+  .ph-actions { max-width:180px !important; }
+  .ph-btn { font-size:8.7px !important; }
   .login-shell,
-  .login-shell[style] { grid-template-columns:minmax(0,34%) minmax(0,66%) !important; }
-  .login-card { padding:16px 11px !important; }
-  .login-logo { width:108px !important; }
+  .login-shell[style] { grid-template-columns:minmax(0,42%) minmax(0,58%) !important; }
+  .login-card { padding:14px 8px !important; }
+  .login-logo { width:102px !important; }
 }
