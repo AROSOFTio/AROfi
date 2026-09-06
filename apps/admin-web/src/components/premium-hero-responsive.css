@@ -1,73 +1,101 @@
 @media (max-width: 900px) {
   .ph-hero {
     width: min(100% - 24px, 1180px);
-    min-height: 560px;
+    min-height: 520px;
     margin-top: 14px;
     border-radius: 16px;
-    background-position: 64% center;
+    align-items: center;
+    background-position: 66% center;
     background-image:
-      linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.94) 42%, rgba(255,255,255,.42) 68%, rgba(255,255,255,0) 100%),
+      linear-gradient(90deg, rgba(255,255,255,.99) 0%, rgba(255,255,255,.96) 38%, rgba(255,255,255,.48) 62%, rgba(255,255,255,.02) 86%),
       url('/brand-assets/arofi-hero');
   }
 
   .ph-copy {
-    width: min(470px, 72%);
-    padding: 34px;
+    width: min(440px, 62%);
+    padding: 30px;
   }
+
+  .ph-copy h1 { font-size: clamp(38px, 7vw, 54px); }
+  .ph-lead { max-width: 360px; font-size: 15px; }
 
   [data-theme='dark'] .ph-hero {
     background-image:
-      linear-gradient(90deg, rgba(11,8,5,.98) 0%, rgba(11,8,5,.94) 42%, rgba(11,8,5,.50) 70%, rgba(11,8,5,.08) 100%),
+      linear-gradient(90deg, rgba(11,8,5,.99) 0%, rgba(11,8,5,.96) 38%, rgba(11,8,5,.56) 64%, rgba(11,8,5,.06) 88%),
       url('/brand-assets/arofi-hero');
   }
 }
 
 @media (max-width: 640px) {
   .ph-hero {
-    width: calc(100% - 20px);
-    min-height: 590px;
-    align-items: flex-end;
-    margin: 10px auto 22px;
+    width: calc(100% - 16px);
+    min-height: 430px;
+    margin: 8px auto 18px;
     border-radius: 14px;
-    background-position: 70% center;
+    align-items: center;
+    background-position: 68% center;
     background-image:
-      linear-gradient(180deg, rgba(255,255,255,.05) 0%, rgba(255,255,255,.22) 36%, rgba(255,255,255,.95) 64%, rgba(255,255,255,.99) 100%),
+      linear-gradient(90deg, rgba(255,255,255,.99) 0%, rgba(255,255,255,.97) 42%, rgba(255,255,255,.55) 66%, rgba(255,255,255,.04) 92%),
       url('/brand-assets/arofi-hero');
   }
 
   .ph-copy {
-    width: 100%;
-    padding: 28px 22px 30px;
+    width: 62%;
+    min-width: 0;
+    padding: 22px 10px 22px 18px;
+  }
+
+  .ph-eyebrow {
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 8.5px;
+    letter-spacing: .055em;
+    white-space: nowrap;
   }
 
   .ph-copy h1 {
-    max-width: 350px;
-    font-size: clamp(36px, 11vw, 48px);
+    max-width: 250px;
+    margin-top: 13px;
+    font-size: clamp(27px, 8vw, 39px);
+    line-height: 1.02;
   }
 
   .ph-lead {
-    max-width: 330px;
-    font-size: 14.5px;
+    max-width: 245px;
+    margin-top: 12px;
+    font-size: 12.5px;
+    line-height: 1.45;
   }
 
   .ph-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 16px;
     width: 100%;
+    max-width: 245px;
   }
 
   .ph-btn {
-    flex: 1 1 145px;
+    min-height: 40px;
+    padding: 0 9px;
+    font-size: 11px;
+    white-space: nowrap;
   }
 
   [data-theme='dark'] .ph-hero {
     background-image:
-      linear-gradient(180deg, rgba(11,8,5,.04) 0%, rgba(11,8,5,.22) 36%, rgba(11,8,5,.93) 64%, rgba(11,8,5,.99) 100%),
+      linear-gradient(90deg, rgba(11,8,5,.99) 0%, rgba(11,8,5,.97) 42%, rgba(11,8,5,.62) 68%, rgba(11,8,5,.08) 94%),
       url('/brand-assets/arofi-hero');
   }
 }
 
 @media (max-width: 390px) {
-  .ph-hero { min-height: 560px; }
-  .ph-copy { padding: 24px 18px 26px; }
-  .ph-eyebrow { font-size: 9.5px; }
-  .ph-actions { gap: 8px; }
+  .ph-hero { min-height: 400px; background-position: 70% center; }
+  .ph-copy { width: 64%; padding: 18px 7px 18px 14px; }
+  .ph-eyebrow { font-size: 7.5px; padding: 0 6px; }
+  .ph-copy h1 { font-size: clamp(24px, 7.8vw, 32px); max-width: 205px; }
+  .ph-lead { font-size: 11px; max-width: 205px; }
+  .ph-actions { max-width: 205px; }
+  .ph-btn { min-height: 36px; font-size: 10px; padding: 0 7px; }
 }
