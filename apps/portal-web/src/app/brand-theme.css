@@ -1,0 +1,111 @@
+:root,
+:root[data-theme='light'] {
+  --portal-primary: #22A53A;
+  --portal-primary-hover: #1E9134;
+  --portal-bg: #F5F7F9;
+  --portal-surface: #FFFFFF;
+  --portal-surface-soft: #F8FAFB;
+  --portal-border: #E1E6EA;
+  --portal-text: #122033;
+  --portal-text-secondary: #596675;
+  --portal-text-muted: #7F8A96;
+  --brand: #22A53A;
+  --arofi-portal-logo: url('/brand-assets/arofi-logo');
+  --arofi-portal-mark: url('/brand-assets/arofi-app-icon');
+}
+
+:root[data-theme='dark'] {
+  --portal-primary: #22A53A;
+  --portal-primary-hover: #2AB747;
+  --portal-bg: #0B0805;
+  --portal-surface: #202020;
+  --portal-surface-soft: #292929;
+  --portal-border: #303030;
+  --portal-text: #E6E6E6;
+  --portal-text-secondary: #B0B0B0;
+  --portal-text-muted: #8F8F8F;
+  --brand: #22A53A;
+  --arofi-portal-logo: url('/brand-assets/arofi-logo-dark');
+  --arofi-portal-mark: url('/brand-assets/arofi-app-icon-dark');
+}
+
+:root[data-accent-theme='blue'],
+:root[data-accent-theme='green'],
+:root[data-accent-theme='gold'] {
+  --brand: #22A53A;
+  --portal-primary: #22A53A;
+}
+
+.portal-theme-toggle { display: none !important; }
+
+.portal-theme-menu {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1100;
+}
+
+.portal-theme-trigger {
+  min-width: 94px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--portal-border);
+  border-radius: 8px;
+  background: var(--portal-surface);
+  color: var(--portal-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+
+:root[data-theme='dark'] .portal-theme-trigger { box-shadow: none; }
+
+.portal-theme-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 170px;
+  padding: 5px;
+  border: 1px solid var(--portal-border);
+  border-radius: 9px;
+  background: var(--portal-surface);
+  box-shadow: 0 12px 30px rgba(16,24,40,.12);
+}
+
+:root[data-theme='dark'] .portal-theme-popover { box-shadow: 0 12px 30px rgba(0,0,0,.30); }
+
+.portal-theme-popover button {
+  width: 100%;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 20px 1fr 18px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--portal-text-secondary);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.portal-theme-popover button:hover,
+.portal-theme-popover button.active {
+  background: color-mix(in srgb, #22A53A 12%, var(--portal-surface));
+  color: var(--portal-primary);
+}
+
+@media (max-width: 640px) {
+  .portal-theme-menu { top: 10px; right: 10px; }
+  .portal-theme-trigger { min-width: 82px; min-height: 34px; font-size: 11px; }
+}
