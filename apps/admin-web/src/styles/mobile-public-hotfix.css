@@ -109,24 +109,39 @@
     border-color: #303030 !important;
   }
 
-  /* A full-width solid sheet replaces the previous 70vw drawer. Nothing from the
-     hero is allowed to bleed through or overlap the menu. */
+  /* Real backdrop: unlike a ::before pseudo-element, this receives taps and
+     closes the drawer immediately on phones. It sits below the drawer but above
+     the landing page, so tapping anywhere outside the off-canvas panel works. */
   .home-nav::before {
-    content: '' !important;
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 1001 !important;
-    background: var(--aa-card-bg, #FFFFFF) !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    transform: translateX(100%) !important;
-    transition: transform .18s ease, opacity .18s ease !important;
+    content: none !important;
+    display: none !important;
   }
 
-  .home-nav.home-nav-open::before {
+  .home-mobile-nav-backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: rgba(15, 23, 42, .48) !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    z-index: 1001 !important;
+    transition: opacity .18s ease, visibility 0s linear .18s !important;
+  }
+
+  .home-mobile-nav-backdrop.is-open {
     opacity: 1 !important;
+    visibility: visible !important;
     pointer-events: auto !important;
-    transform: translateX(0) !important;
+    transition: opacity .18s ease !important;
   }
 
   .home-nav-links,
