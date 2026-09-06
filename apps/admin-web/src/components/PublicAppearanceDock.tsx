@@ -40,8 +40,6 @@ export default function PublicAppearanceDock() {
         : <div className="public-theme-fallback"><ThemeToggle compact /></div>}
 
       <style jsx global>{`
-        /* Public pages use the exact same AroFi green and light/dark surfaces
-           as the internal dashboard. Blue remains informational only. */
         :root {
           --arofi-accent: #22A53A;
           --arofi-accent-strong: #1E9134;
@@ -80,7 +78,7 @@ export default function PublicAppearanceDock() {
         :root[data-theme='dark'] {
           color-scheme: dark;
           --arofi-logo: url('/brand-assets/arofi-logo-dark');
-          --arofi-mark: url('/brand-assets/arofi-logo-dark');
+          --arofi-mark: url('/brand-assets/arofi-app-icon-dark');
           --bg-app: #0B0805;
           --bg-card: #202020;
           --bg-sidebar: #171717;
@@ -105,12 +103,17 @@ export default function PublicAppearanceDock() {
 
         body { background: var(--bg-app) !important; color: var(--text-1); }
         .home-shell { background: var(--bg-app) !important; color: var(--text-1) !important; }
-        .home-nav {
-          background: var(--bg-card) !important;
-          border-color: var(--border) !important;
-          box-shadow: var(--shadow-sm) !important;
+
+        /* On the homepage the supplied hero artwork is shared by header+hero.
+           Never paint an extra card behind the nav. */
+        .home-shell > .home-nav {
+          background: transparent !important;
+          background-image: none !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
         }
-        .home-brand { min-width: 122px !important; display:flex !important; align-items:center !important; }
+
+        .home-brand { min-width: 126px !important; display:flex !important; align-items:center !important; }
         .home-brand::before { display:none !important; content:none !important; }
         .home-brand img,
         .site-footer-brand img,
@@ -120,13 +123,14 @@ export default function PublicAppearanceDock() {
           opacity: 1 !important;
           object-fit: contain !important;
         }
-        .home-brand img { width:118px !important; height:44px !important; object-position:left center !important; }
+        .home-brand img { width:122px !important; height:44px !important; object-position:left center !important; }
         .home-brand-text,
         .site-footer-brand > span { display:none !important; }
 
         .home-console,.home-why-card,.home-feature,.home-preview-card,.preview-card,
         .home-faq-item,.home-pricing-card,.pricing-card,.home-contact-card,.home-blog-card {
           background: var(--bg-card) !important;
+          background-image:none !important;
           border-color: var(--border) !important;
           box-shadow: var(--shadow-sm) !important;
         }
@@ -139,7 +143,7 @@ export default function PublicAppearanceDock() {
         :root[data-theme='dark'] .home-pricing-card,
         :root[data-theme='dark'] .pricing-card,
         :root[data-theme='dark'] .home-contact-card,
-        :root[data-theme='dark'] .home-blog-card { background-image:none !important; }
+        :root[data-theme='dark'] .home-blog-card { box-shadow:none !important; }
 
         .home-kicker,.home-feature > svg,.home-live,.home-feed-amount,
         .home-pricing-commission,.home-section-head a { color:#22A53A !important; }
@@ -156,20 +160,33 @@ export default function PublicAppearanceDock() {
           background:#1E9134 !important;
           border-color:#1E9134 !important;
         }
-        .home-shell .btn-ghost {
+        .home-shell .btn-ghost:not(.home-nav .btn-ghost) {
           background:var(--bg-card) !important;
           color:var(--text-1) !important;
           border-color:var(--border) !important;
         }
-        .home-nav a,.home-section-head p,.home-feature p,.home-why-card p,.home-faq-item p {
+        .home-section-head p,.home-feature p,.home-why-card p,.home-faq-item p {
           color:var(--text-2) !important;
         }
 
-        /* Replace the homepage's old two-button mode control with the exact
-           compact Auto/Light/Dark dashboard dropdown. */
+        /* Replace the legacy public switch with the exact dashboard dropdown,
+           but reserve fixed geometry so Auto/Light/Dark label changes cannot move the header. */
         .home-mode-toggle { display:none !important; }
-        .home-actions > .topbar-theme { order:-1; }
-        .home-actions .topbar-theme-trigger { min-height:36px; }
+        .home-actions > .topbar-theme {
+          order:-1;
+          flex:0 0 108px !important;
+          width:108px !important;
+          min-width:108px !important;
+        }
+        .home-actions .topbar-theme-trigger {
+          width:108px !important;
+          min-width:108px !important;
+          min-height:36px !important;
+          justify-content:center !important;
+          white-space:nowrap !important;
+        }
+        .home-actions .topbar-theme-trigger span { white-space:nowrap !important; }
+        .home-actions .theme-menu { min-width:178px !important; }
         .public-theme-fallback {
           position:fixed;
           top:14px;
@@ -178,11 +195,19 @@ export default function PublicAppearanceDock() {
         }
 
         @media (max-width:760px) {
-          .home-brand { min-width:96px !important; }
-          .home-brand img { width:96px !important; height:38px !important; }
-          .home-actions > .topbar-theme { width:100%; }
-          .home-actions .topbar-theme-trigger { width:100%; justify-content:center; }
-          .home-actions .theme-menu { left:0; right:auto; min-width:100%; }
+          .home-brand { min-width:92px !important; }
+          .home-brand img { width:92px !important; height:36px !important; }
+          .home-actions > .topbar-theme {
+            width:104px !important;
+            min-width:104px !important;
+            flex-basis:104px !important;
+          }
+          .home-actions .topbar-theme-trigger {
+            width:104px !important;
+            min-width:104px !important;
+            justify-content:center !important;
+          }
+          .home-actions .theme-menu { left:0; right:auto; min-width:170px !important; }
         }
       `}</style>
     </>
