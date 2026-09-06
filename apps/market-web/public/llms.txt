@@ -1,52 +1,13 @@
 # AROFi Market
 
-AROFi Market is the multi-vendor networking and technology marketplace from AROFi / AROSOFT Innovations Ltd.
+AROFi Market is AROFi's multi-vendor marketplace for networking equipment and supporting technology.
 
 Canonical URL: https://market.arofi.net/
-Parent platform: https://arofi.net/
 Launch market: Uganda
-Status: Coming soon / launch waitlist open
+Status: Coming soon — waitlist open
 
-## What AROFi Market is
+Planned categories include routers, access points, switches, CCTV, computers, phones, cables and fibre, power backup, networking tools and related accessories.
 
-AROFi Market is focused on networking equipment and supporting technology rather than general consumer merchandise. Planned categories include routers, access points, switches, bridges/CPEs, fibre equipment, Ethernet cable, connectors, SFP modules, racks, patch panels, PoE equipment, UPS and power backup, CCTV cameras and NVRs, computers, phones, tablets, network tools and related accessories.
+AROFi Market is designed around approved sellers, buyer protection, product verification and optional AROFi-ready configuration for eligible networking equipment.
 
-## Marketplace trust model
-
-- Sellers may apply, but AROFi must approve sellers before they trade.
-- Marketplace orders move through seller supply, AROFi receipt, verification/testing, optional configuration, shipment, delivery and completion states.
-- Seller proceeds are designed to remain unavailable for payout until required order conditions are completed, subject to the approved payment-provider arrangement and marketplace policy.
-- Sellers have a default three-business-day supply deadline unless an order or country policy says otherwise.
-- Failed supply may lead to cancellation/refund and seller performance penalties.
-- Eligible equipment can be marked AROFi Verified after inspection/testing.
-- Eligible network equipment can offer AROFi Ready configuration before shipment.
-
-## Buyers
-
-AROFi Market is intended for hotspot operators, businesses, installers, schools, ISPs, IT teams and consumers who need trusted networking equipment and related technology.
-
-Buyers will be able to purchase individual items, seller-created bundles and same-seller custom network kits. Multi-seller checkouts will be split into seller-specific fulfilment orders internally.
-
-## Sellers
-
-Approved sellers will receive seller shops, product catalogues, order notifications, fulfilment deadlines, verification feedback, settlement visibility and reputation metrics. Seller application is planned to be free at launch, with configurable category commissions.
-
-## Countries
-
-Uganda is the first launch market. Kenya, Tanzania, Rwanda and other countries are planned. Country selection will control currency, payments, seller rules and fulfilment availability. Markets that are not active will show Coming Soon rather than pretending to support transactions.
-
-## Payments
-
-The platform is designed to support providers such as Yo! Uganda, direct MTN MoMo, direct Airtel Money and Flutterwave depending on country and commercial approval. Exact live payment methods will be shown at checkout when the marketplace launches.
-
-## AROFi Ready
-
-AROFi Ready means eligible networking equipment can be tested and optionally configured for AROFi deployments before shipment when the buyer requests it.
-
-## Search intent
-
-Relevant queries include: networking equipment Uganda, MikroTik Uganda, routers Uganda, access points Uganda, network switches Uganda, CCTV Uganda, network cables Uganda, WiFi hotspot equipment, network kits Uganda, verified electronics marketplace Uganda, AROFi Market, AROFi Ready.
-
-## Current action
-
-The public launch waitlist is available at https://market.arofi.net/#waitlist for buyers and prospective sellers.
+Buyers and prospective sellers can join the launch waitlist at https://market.arofi.net/#waitlist.
