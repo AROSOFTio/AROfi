@@ -40,13 +40,13 @@ $(if http-header == "Expires")0$(endif)`
 
     const style = `<style id="arofi-local-resilience-v2">
       /* Keep the top calm and premium on the router-hosted captive page too. */
-      .premium-hero{background:#071A49!important}
+      .premium-hero{background:var(--portal-primary,#22A53A)!important}
       .premium-wifi span{animation:none!important;opacity:.58!important}
       .premium-wifi i{box-shadow:none!important}
       .arofi-load-fail{padding:22px 14px;text-align:center}
       .arofi-load-fail strong{display:block;color:#0f172a;font-size:14px;margin-bottom:5px}
       .arofi-load-fail span{display:block;color:#64748b;font-size:11px;line-height:1.45;margin:0 auto 12px;max-width:300px}
-      .arofi-load-retry{appearance:none;border:0;border-radius:10px;background:#0964FA;color:#fff;font-size:12px;font-weight:800;padding:9px 18px;cursor:pointer}
+      .arofi-load-retry{appearance:none;border:0;border-radius:10px;background:var(--portal-primary,#22A53A);color:#fff;font-size:12px;font-weight:800;padding:9px 18px;cursor:pointer}
     </style>`
 
     const script = `<script id="arofi-local-resilience-script-v2">
