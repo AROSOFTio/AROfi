@@ -96,10 +96,13 @@ export class RouterCaptiveFlowInitializer implements OnModuleInit {
           ':do { \/radius incoming set accept=yes } on-error={}',
         ]
       : []
+    const managedProfileName = 'arofi-' + registrationKey.slice(0, 8)
     const policySource = [
       ...radiusRepair,
-      ':foreach p in=[/ip hotspot profile find] do={ :if (([/ip hotspot profile get $p use-radius] != yes) || ([/ip hotspot profile get $p radius-accounting] != yes) || ([/ip hotspot profile get $p radius-interim-update] != 1m) || ([/ip hotspot profile get $p login-by] != "cookie,mac-cookie,http-pap")) do={ :do { /ip hotspot profile set $p use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d } on-error={} } }',
-      ':foreach up in=[/ip hotspot user profile find] do={ :if (([/ip hotspot user profile get $up shared-users] != 1) || ([/ip hotspot user profile get $up add-mac-cookie] != yes) || ([/ip hotspot user profile get $up mac-cookie-timeout] != 30d) || ([/ip hotspot user profile get $up idle-timeout] != none) || ([/ip hotspot user profile get $up keepalive-timeout] != none) || ([/ip hotspot user profile get $up session-timeout] != 0s)) do={ :do { /ip hotspot user profile set $up shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s } on-error={} } }',
+      ':local arofiProfile [/ip hotspot profile find name="' + managedProfileName + '"]',
+      ':if ([:len $arofiProfile] > 0) do={ :if (([/ip hotspot profile get $arofiProfile use-radius] != yes) || ([/ip hotspot profile get $arofiProfile radius-accounting] != yes) || ([/ip hotspot profile get $arofiProfile radius-interim-update] != 1m) || ([/ip hotspot profile get $arofiProfile login-by] != "cookie,mac-cookie,http-pap")) do={ :do { /ip hotspot profile set $arofiProfile use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,mac-cookie,http-pap http-cookie-lifetime=30d } on-error={} } }',
+      ':local arofiUserProfile [/ip hotspot user profile find name="default"]',
+      ':if ([:len $arofiUserProfile] > 0) do={ :if (([/ip hotspot user profile get $arofiUserProfile shared-users] != 1) || ([/ip hotspot user profile get $arofiUserProfile add-mac-cookie] != yes) || ([/ip hotspot user profile get $arofiUserProfile mac-cookie-timeout] != 30d) || ([/ip hotspot user profile get $arofiUserProfile idle-timeout] != none) || ([/ip hotspot user profile get $arofiUserProfile keepalive-timeout] != none) || ([/ip hotspot user profile get $arofiUserProfile session-timeout] != 0s)) do={ :do { /ip hotspot user profile set $arofiUserProfile shared-users=1 add-mac-cookie=yes mac-cookie-timeout=30d idle-timeout=none keepalive-timeout=none session-timeout=0s } on-error={} } }',
     ].join('; ')
     const escapedPolicySource = this.escapeRouterOsScriptSource(policySource)
 
