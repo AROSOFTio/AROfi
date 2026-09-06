@@ -36,17 +36,88 @@
   --portal-primary: #22A53A;
 }
 
-.portal-theme-toggle { display: none !important; }
+html, body {
+  background: var(--portal-bg) !important;
+  color: var(--portal-text) !important;
+}
 
+/* Always use the supplied AroFi brand asset for generic AroFi portal marks.
+   Tenant-specific names/data remain intact; the old blue AroFi fallback does not. */
+img[alt='AROFi'],
+img[src='/logo.png'] {
+  content: var(--arofi-portal-logo) !important;
+  object-fit: contain !important;
+}
+
+/* AroFi's portal visual language is green, not the legacy classic blue/sky palette. */
+body [class*='text-blue-'],
+body [class*='text-sky-'] { color: var(--portal-primary) !important; }
+body [class*='border-blue-'],
+body [class*='border-sky-'] { border-color: color-mix(in srgb, var(--portal-primary) 30%, var(--portal-border)) !important; }
+body [class*='bg-blue-'],
+body [class*='bg-sky-'] { background-color: color-mix(in srgb, var(--portal-primary) 9%, var(--portal-surface)) !important; }
+
+body .bg-blue-600,
+body .bg-blue-500,
+body .bg-sky-500,
+body .bg-emerald-600,
+body .bg-emerald-500 { background-color: var(--portal-primary) !important; color: #fff !important; }
+body .hover\:bg-blue-700:hover,
+body .hover\:bg-blue-600:hover,
+body .hover\:bg-emerald-700:hover,
+body .hover\:bg-emerald-600:hover { background-color: var(--portal-primary-hover) !important; }
+
+/* No gradients anywhere in the hosted portal. */
+body [class*='bg-gradient-'],
+body [class*='from-blue-'],
+body [class*='from-sky-'],
+body [class*='from-emerald-'],
+body [class*='via-blue-'],
+body [class*='via-sky-'],
+body [class*='to-blue-'],
+body [class*='to-sky-'] {
+  background-image: none !important;
+}
+
+/* Normalize the legacy Tailwind surfaces to the same dashboard light/dark system. */
+body .bg-white { background-color: var(--portal-surface) !important; }
+body .bg-slate-50,
+body .bg-slate-100 { background-color: var(--portal-surface-soft) !important; }
+body .border-slate-200,
+body .border-slate-300 { border-color: var(--portal-border) !important; }
+body .text-slate-950,
+body .text-slate-900,
+body .text-slate-800,
+body .text-slate-700 { color: var(--portal-text) !important; }
+body .text-slate-600,
+body .text-slate-500 { color: var(--portal-text-secondary) !important; }
+body .text-slate-400 { color: var(--portal-text-muted) !important; }
+
+:root[data-theme='dark'] body .bg-slate-900,
+:root[data-theme='dark'] body .bg-slate-950 { background-color: var(--portal-surface) !important; }
+:root[data-theme='dark'] body .border-slate-700,
+:root[data-theme='dark'] body .border-slate-800,
+:root[data-theme='dark'] body .border-slate-900 { border-color: var(--portal-border) !important; }
+:root[data-theme='dark'] body .text-white,
+:root[data-theme='dark'] body .text-slate-100,
+:root[data-theme='dark'] body .text-slate-200 { color: var(--portal-text) !important; }
+
+/* Remove heavy decorative shadows; keep the portal crisp like the internal console. */
+body [class*='shadow-['],
+body .shadow-xl,
+body .shadow-2xl { box-shadow: none !important; }
+
+.portal-theme-toggle { display: none !important; }
 .portal-theme-menu {
   position: fixed;
   top: 14px;
   right: 14px;
   z-index: 1100;
+  width: 104px;
 }
-
 .portal-theme-trigger {
-  min-width: 94px;
+  width: 104px;
+  min-width: 104px;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
@@ -60,26 +131,23 @@
   font: inherit;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }
-
 :root[data-theme='dark'] .portal-theme-trigger { box-shadow: none; }
-
 .portal-theme-popover {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 170px;
+  min-width: 178px;
   padding: 5px;
   border: 1px solid var(--portal-border);
   border-radius: 9px;
   background: var(--portal-surface);
   box-shadow: 0 12px 30px rgba(16,24,40,.12);
 }
-
 :root[data-theme='dark'] .portal-theme-popover { box-shadow: 0 12px 30px rgba(0,0,0,.30); }
-
 .portal-theme-popover button {
   width: 100%;
   min-height: 36px;
@@ -98,7 +166,6 @@
   font-weight: 650;
   cursor: pointer;
 }
-
 .portal-theme-popover button:hover,
 .portal-theme-popover button.active {
   background: color-mix(in srgb, #22A53A 12%, var(--portal-surface));
@@ -106,6 +173,7 @@
 }
 
 @media (max-width: 640px) {
-  .portal-theme-menu { top: 10px; right: 10px; }
-  .portal-theme-trigger { min-width: 82px; min-height: 34px; font-size: 11px; }
+  .portal-theme-menu { top: 10px; right: 10px; width: 96px; }
+  .portal-theme-trigger { width: 96px; min-width: 96px; min-height: 34px; font-size: 11px; }
+  .portal-theme-popover { min-width: 166px; }
 }
