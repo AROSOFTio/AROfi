@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import {
   ArrowRight,
   CheckCircle2,
@@ -123,6 +123,11 @@ function formatMoney(value: number) {
   return `UGX ${new Intl.NumberFormat('en-UG').format(value)}`
 }
 
+function normalizeBrandColor(value?: string | null) {
+  const color = value?.trim()
+  return color && /^#[0-9a-f]{6}$/i.test(color) ? color : '#22A53A'
+}
+
 function formatDuration(minutes: number) {
   if (minutes >= 1440 && minutes % 1440 === 0) {
     const days = minutes / 1440
@@ -197,12 +202,13 @@ export default function CompactPortalCheckout() {
   const standardPackages = useMemo(() => packages.filter((pkg) => !isTrialPackage(pkg) && !isTvPackage(pkg) && !isMultiPackage(pkg)), [packages])
   const multiPackages = useMemo(() => packages.filter((pkg) => !isTrialPackage(pkg) && isMultiPackage(pkg)), [packages])
   const tvPackages = useMemo(() => packages.filter((pkg) => !isTrialPackage(pkg) && isTvPackage(pkg)), [packages])
-  const trialPackage = useMemo(() => packages.find(isTrialPackage) ?? null, [packages])
+  const trialPackage = useMemo(() => context?.trialEligibility?.eligible === false ? null : packages.find(isTrialPackage) ?? null, [packages, context?.trialEligibility?.eligible])
   const networks = (context?.paymentNetworks?.length ? context.paymentNetworks : ['MTN', 'AIRTEL']) as MobileNetwork[]
   const supportPhone = context?.tenant.supportPhone ?? context?.tenant.platformSupportPhone ?? ''
   const supportEmail = context?.tenant.supportEmail ?? context?.tenant.platformSupportEmail ?? ''
   const tenantName = context?.tenant.name?.trim() || 'AROFi Wi-Fi'
-  const logo = context?.tenant.logoUrl?.trim() || '/brand/arofi-logo-gradient.webp'
+  const logo = context?.tenant.logoUrl?.trim() || '/brand-assets/arofi-logo'
+  const primaryColor = normalizeBrandColor(context?.tenant.brandColor)
 
   const reconnect = useCallback((payload?: ReconnectPayload | null) => {
     if (!payload?.username || !payload.password || typeof window === 'undefined') return false
@@ -397,6 +403,11 @@ export default function CompactPortalCheckout() {
       })
       const body = await response.json().catch(() => ({})) as RecoveryResponse
       if (!response.ok) throw new Error(body.message || 'Unable to start the free trial.')
+      setContext((current) => current ? {
+        ...current,
+        packages: current.packages.filter((item) => !isTrialPackage(item)),
+        trialEligibility: { eligible: false, used: true, reason: 'This device has already used its free trial for this business.' },
+      } : current)
       setMessage('Free trial activated. Connecting now…')
       if (!reconnect(body.reconnect)) await loadContext(hotspot)
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to start the free trial.') }
@@ -454,23 +465,22 @@ export default function CompactPortalCheckout() {
   }
 
   return (
-    <main className="min-h-screen bg-[#eef4fb] text-[#0b1739] sm:px-3 sm:py-3">
+    <main className="min-h-screen bg-[#f5f7f9] text-[#122033] sm:px-3 sm:py-3" style={{ '--portal-primary': primaryColor } as CSSProperties}>
       <section className="mx-auto w-full max-w-[880px] overflow-hidden bg-white shadow-[0_18px_55px_rgba(7,26,73,0.10)] sm:rounded-[24px]">
-        <header className="relative min-h-[168px] overflow-hidden bg-[#071A49] px-5 pb-5 pt-4 text-white sm:min-h-[190px] sm:px-7 sm:pb-6 sm:pt-5">
-          <div className="absolute inset-0 opacity-90" style={{ background: 'radial-gradient(circle at 82% 18%, rgba(0,215,244,.30), transparent 28%), linear-gradient(130deg,#020b26 0%,#071A49 58%,#0a37a3 100%)' }} />
+        <header className="relative min-h-[168px] overflow-hidden bg-[var(--portal-primary)] px-5 pb-5 pt-4 text-white sm:min-h-[190px] sm:px-7 sm:pb-6 sm:pt-5">
           <div className="relative z-10 flex items-center justify-between gap-3">
             <img src={logo} alt={`${tenantName} logo`} className="h-9 max-w-[150px] object-contain object-left drop-shadow-sm sm:h-11 sm:max-w-[190px]" />
             <button type="button" className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold backdrop-blur"><Globe2 className="h-3.5 w-3.5" /> English <span aria-hidden>⌄</span></button>
           </div>
           <div className="relative z-10 mt-5 max-w-[470px] pr-20 sm:mt-6 sm:pr-36">
             <h1 className="text-[27px] font-extrabold tracking-tight sm:text-[34px]">Connect to Wi-Fi</h1>
-            <p className="mt-1.5 flex items-center gap-2 text-xs text-blue-100 sm:text-sm"><ShieldCheck className="h-4 w-4 text-cyan-300" /> Fast, secure internet access</p>
-            <p className="mt-2 truncate text-[11px] text-blue-200/80 sm:text-xs">{tenantName}</p>
+            <p className="mt-1.5 flex items-center gap-2 text-xs text-white/85 sm:text-sm"><ShieldCheck className="h-4 w-4 text-white/80" /> Fast, secure internet access</p>
+            <p className="mt-2 truncate text-[11px] text-white/70 sm:text-xs">{tenantName}</p>
           </div>
           <div className="absolute bottom-4 right-5 z-10 flex h-20 w-20 items-center justify-center sm:right-8 sm:h-28 sm:w-28">
-            <span className="absolute h-16 w-16 animate-ping rounded-full border border-cyan-300/20 [animation-duration:2.4s] sm:h-24 sm:w-24" />
-            <span className="absolute h-12 w-12 animate-pulse rounded-full bg-cyan-400/10 sm:h-16 sm:w-16" />
-            <Wifi className="relative h-12 w-12 animate-pulse text-cyan-300 drop-shadow-[0_0_14px_rgba(0,220,255,.7)] sm:h-16 sm:w-16" strokeWidth={2.6} />
+            <span className="absolute h-16 w-16 animate-ping rounded-full border border-white/35 [animation-duration:2.4s] sm:h-24 sm:w-24" />
+            <span className="absolute h-12 w-12 animate-pulse rounded-full bg-white/10 sm:h-16 sm:w-16" />
+            <Wifi className="relative h-12 w-12 animate-pulse text-white/80 sm:h-16 sm:w-16" strokeWidth={2.6} />
           </div>
         </header>
 
@@ -482,26 +492,26 @@ export default function CompactPortalCheckout() {
             ['recover', Search, 'Find Voucher'],
             ['promo', Gift, 'Promo'],
           ] as const).map(([id, Icon, label]) => (
-            <button key={id} type="button" onClick={() => { setTab(id); setError(''); setMessage('') }} className={`relative flex min-w-0 flex-col items-center gap-1 px-1 py-2.5 text-[9px] font-semibold leading-tight transition sm:py-3 sm:text-[11px] ${tab === id ? 'text-[#0964FA]' : 'text-slate-500'}`}>
+            <button key={id} type="button" onClick={() => { setTab(id); setError(''); setMessage('') }} className={`relative flex min-w-0 flex-col items-center gap-1 px-1 py-2.5 text-[9px] font-semibold leading-tight transition sm:py-3 sm:text-[11px] ${tab === id ? 'text-[var(--portal-primary)]' : 'text-slate-500'}`}>
               <Icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" strokeWidth={2.2} />
               <span className="truncate">{label}</span>
-              {tab === id && <span className="absolute bottom-0 h-[2.5px] w-10 rounded-full bg-[#0964FA] sm:w-14" />}
+              {tab === id && <span className="absolute bottom-0 h-[2.5px] w-10 rounded-full bg-[var(--portal-primary)] sm:w-14" />}
             </button>
           ))}
         </nav>
 
-        <div className="space-y-3 bg-[#f8fbff] p-3 sm:p-5">
+        <div className="space-y-3 bg-[#f5f7f9] p-3 sm:p-5">
           {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700 sm:text-sm">{error}</div>}
           {message && <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-semibold text-blue-800 sm:text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{message}</div>}
-          {loading && <div className="flex min-h-36 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-white text-sm font-semibold text-slate-500"><Loader2 className="h-5 w-5 animate-spin text-[#0964FA]" /> Loading {tenantName}…</div>}
+          {loading && <div className="flex min-h-36 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-white text-sm font-semibold text-slate-500"><Loader2 className="h-5 w-5 animate-spin text-[var(--portal-primary)]" /> Loading {tenantName}…</div>}
 
           {!loading && tab === 'voucher' && (
             <>
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_5px_18px_rgba(7,26,73,.04)] sm:p-5">
-                <h2 className="flex items-center gap-2 text-base font-extrabold sm:text-lg"><Ticket className="h-5 w-5 text-[#0964FA]" /> Have a voucher?</h2>
+                <h2 className="flex items-center gap-2 text-base font-extrabold sm:text-lg"><Ticket className="h-5 w-5 text-[var(--portal-primary)]" /> Have a voucher?</h2>
                 <form onSubmit={redeemVoucher} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-                  <div className="relative"><Ticket className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)} placeholder="Enter voucher code" autoComplete="off" className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#0964FA] focus:ring-4 focus:ring-blue-100" /></div>
-                  <button disabled={busy === 'voucher'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0964FA] to-[#0646e6] px-6 text-sm font-bold text-white shadow-[0_8px_18px_rgba(9,100,250,.18)] disabled:opacity-60">{busy === 'voucher' ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Connect Now <ArrowRight className="h-4 w-4" /></>}</button>
+                  <div className="relative"><Ticket className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)} placeholder="Enter voucher code" autoComplete="off" className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[var(--portal-primary)] focus:ring-4 focus:ring-slate-100" /></div>
+                  <button disabled={busy === 'voucher'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--portal-primary)] px-6 text-sm font-bold text-white shadow-none disabled:opacity-60">{busy === 'voucher' ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Connect Now <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
                 <p className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-500"><LockKeyhole className="h-3.5 w-3.5" /> Secure & encrypted connection</p>
               </section>
@@ -518,7 +528,7 @@ export default function CompactPortalCheckout() {
                 </section>
               )}
 
-              {trialPackage && <section className="rounded-2xl border border-cyan-200 bg-gradient-to-r from-blue-50 to-cyan-50 p-4"><div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-cyan-700">Try AROFi</div><h3 className="mt-0.5 text-sm font-extrabold">{trialPackage.name}</h3><p className="mt-0.5 text-xs text-slate-600">{formatDuration(trialPackage.durationMinutes)} free trial.</p></div><button type="button" onClick={() => void startTrial(trialPackage)} disabled={busy === `trial-${trialPackage.id}`} className="rounded-xl bg-[#071A49] px-3 py-2.5 text-xs font-bold text-white">{busy === `trial-${trialPackage.id}` ? 'Starting…' : 'Start trial'}</button></div></section>}
+              {trialPackage && <section className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[var(--portal-primary)]">Free trial</div><h3 className="mt-0.5 text-sm font-extrabold">{trialPackage.name}</h3><p className="mt-0.5 text-xs text-slate-600">{formatDuration(trialPackage.durationMinutes)} · once per device.</p></div><button type="button" onClick={() => void startTrial(trialPackage)} disabled={busy === `trial-${trialPackage.id}`} className="rounded-xl bg-[var(--portal-primary)] px-3 py-2.5 text-xs font-bold text-white disabled:opacity-60">{busy === `trial-${trialPackage.id}` ? 'Starting…' : 'Try free'}</button></div></section>}
             </>
           )}
 
@@ -526,39 +536,39 @@ export default function CompactPortalCheckout() {
 
           {!loading && tab === 'tv' && (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div className="flex items-start gap-2.5"><div className="rounded-xl bg-blue-50 p-2.5 text-[#0964FA]"><Monitor className="h-5 w-5" /></div><div><h2 className="text-lg font-extrabold">Smart TV Access</h2><p className="mt-0.5 text-xs text-slate-500">Pay from a phone for a TV that cannot open this portal.</p></div></div>
+              <div className="flex items-start gap-2.5"><div className="rounded-xl bg-blue-50 p-2.5 text-[var(--portal-primary)]"><Monitor className="h-5 w-5" /></div><div><h2 className="text-lg font-extrabold">Smart TV Access</h2><p className="mt-0.5 text-xs text-slate-500">Pay from a phone for a TV that cannot open this portal.</p></div></div>
               <div className="mt-4"><PackageCards packages={tvPackages} onBuy={openCheckout} empty="No Smart TV packages are published right now." /></div>
             </section>
           )}
 
           {!loading && tab === 'recover' && (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div className="flex items-start gap-2.5"><div className="rounded-xl bg-blue-50 p-2.5 text-[#0964FA]"><Search className="h-5 w-5" /></div><div><h2 className="text-lg font-extrabold">Find My Voucher</h2><p className="mt-0.5 text-xs text-slate-500">Recover active access using your phone number or transaction ID.</p></div></div>
-              <form onSubmit={recoverVoucher} className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]"><input value={recoverReference} onChange={(e) => setRecoverReference(e.target.value)} placeholder="Phone number or Transaction ID" className="rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-[#0964FA] focus:ring-4 focus:ring-blue-100" /><button disabled={busy === 'recover'} className="rounded-xl bg-[#0964FA] px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy === 'recover' ? 'Recovering…' : 'Recover Voucher'}</button></form>
+              <div className="flex items-start gap-2.5"><div className="rounded-xl bg-blue-50 p-2.5 text-[var(--portal-primary)]"><Search className="h-5 w-5" /></div><div><h2 className="text-lg font-extrabold">Find My Voucher</h2><p className="mt-0.5 text-xs text-slate-500">Recover active access using your phone number or transaction ID.</p></div></div>
+              <form onSubmit={recoverVoucher} className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]"><input value={recoverReference} onChange={(e) => setRecoverReference(e.target.value)} placeholder="Phone number or Transaction ID" className="rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-[var(--portal-primary)] focus:ring-4 focus:ring-slate-100" /><button disabled={busy === 'recover'} className="rounded-xl bg-[var(--portal-primary)] px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy === 'recover' ? 'Recovering…' : 'Recover Voucher'}</button></form>
             </section>
           )}
 
-          {!loading && tab === 'promo' && <section className="rounded-2xl border border-slate-200 bg-white p-5 text-center"><Gift className="mx-auto h-7 w-7 text-[#0964FA]" /><h2 className="mt-2 text-lg font-extrabold">Promotions</h2><p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Active Wi-Fi promotions will appear here when the operator publishes them.</p></section>}
+          {!loading && tab === 'promo' && <section className="rounded-2xl border border-slate-200 bg-white p-5 text-center"><Gift className="mx-auto h-7 w-7 text-[var(--portal-primary)]" /><h2 className="mt-2 text-lg font-extrabold">Promotions</h2><p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Active Wi-Fi promotions will appear here when the operator publishes them.</p></section>}
 
           {!loading && (supportPhone || supportEmail) && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-4"><h2 className="text-sm font-extrabold">Need Help?</h2><div className="mt-3 grid gap-2 sm:grid-cols-3">{supportPhone && <a href={`tel:${supportPhone}`} className="flex items-center gap-2 rounded-xl bg-slate-50 p-3"><Phone className="h-4 w-4 text-[#0964FA]" /><strong className="text-xs">{supportPhone}</strong></a>}{supportPhone && <a href={supportWhatsApp(supportPhone)} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3"><Smartphone className="h-4 w-4 text-emerald-600" /><strong className="text-xs">WhatsApp</strong></a>}{supportEmail && <a href={`mailto:${supportEmail}`} className="flex min-w-0 items-center gap-2 rounded-xl bg-slate-50 p-3"><Mail className="h-4 w-4 shrink-0 text-[#0964FA]" /><strong className="truncate text-xs">{supportEmail}</strong></a>}</div></section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4"><h2 className="text-sm font-extrabold">Need Help?</h2><div className="mt-3 grid gap-2 sm:grid-cols-3">{supportPhone && <a href={`tel:${supportPhone}`} className="flex items-center gap-2 rounded-xl bg-slate-50 p-3"><Phone className="h-4 w-4 text-[var(--portal-primary)]" /><strong className="text-xs">{supportPhone}</strong></a>}{supportPhone && <a href={supportWhatsApp(supportPhone)} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3"><Smartphone className="h-4 w-4 text-emerald-600" /><strong className="text-xs">WhatsApp</strong></a>}{supportEmail && <a href={`mailto:${supportEmail}`} className="flex min-w-0 items-center gap-2 rounded-xl bg-slate-50 p-3"><Mail className="h-4 w-4 shrink-0 text-[var(--portal-primary)]" /><strong className="truncate text-xs">{supportEmail}</strong></a>}</div></section>
           )}
         </div>
 
-        <footer className="border-t border-slate-100 bg-white px-4 py-3 text-center text-[10px] text-slate-500"><div className="flex items-center justify-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-[#071A49]" /> Secure payments powered by AROFi</div></footer>
+        <footer className="border-t border-slate-100 bg-white px-4 py-3 text-center text-[10px] text-slate-500"><div className="flex items-center justify-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-[var(--portal-primary)]" /> Secure payments powered by AROFi</div></footer>
       </section>
 
       {checkoutPackage && (
-        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#071A49]/70 p-3 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget && busy !== 'payment') setCheckoutPackage(null) }}>
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget && busy !== 'payment') setCheckoutPackage(null) }}>
           <div className="w-full max-w-sm rounded-[22px] bg-white p-4 shadow-2xl sm:p-5">
-            <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[#0964FA]">Checkout</div><h2 className="mt-0.5 text-lg font-extrabold">{checkoutPackage.name}</h2><p className="mt-0.5 text-xs text-slate-500">{formatDuration(checkoutPackage.durationMinutes)} · {formatMoney(checkoutPackage.amountUgx)}</p></div><button type="button" onClick={() => busy !== 'payment' && setCheckoutPackage(null)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-500">✕</button></div>
+            <div className="flex items-start justify-between gap-3"><div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[var(--portal-primary)]">Checkout</div><h2 className="mt-0.5 text-lg font-extrabold">{checkoutPackage.name}</h2><p className="mt-0.5 text-xs text-slate-500">{formatDuration(checkoutPackage.durationMinutes)} · {formatMoney(checkoutPackage.amountUgx)}</p></div><button type="button" onClick={() => busy !== 'payment' && setCheckoutPackage(null)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-500">✕</button></div>
             <form onSubmit={initiatePayment} className="mt-4 space-y-3">
-              {isTvPackage(checkoutPackage) && <label className="block text-xs font-bold">Smart TV Wireless MAC<input value={tvMac} onChange={(e) => setTvMac(normalizeMac(e.target.value))} placeholder="AA:BB:CC:DD:EE:FF" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-[#0964FA] focus:ring-4 focus:ring-blue-100" /></label>}
-              <label className="block text-xs font-bold">Mobile Money Number<input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="07XX XXX XXX" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-[#0964FA] focus:ring-4 focus:ring-blue-100" /></label>
+              {isTvPackage(checkoutPackage) && <label className="block text-xs font-bold">Smart TV Wireless MAC<input value={tvMac} onChange={(e) => setTvMac(normalizeMac(e.target.value))} placeholder="AA:BB:CC:DD:EE:FF" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-[var(--portal-primary)] focus:ring-4 focus:ring-slate-100" /></label>}
+              <label className="block text-xs font-bold">Mobile Money Number<input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="07XX XXX XXX" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-[var(--portal-primary)] focus:ring-4 focus:ring-slate-100" /></label>
               <div className="grid grid-cols-2 gap-2">{networks.includes('MTN') && <button type="button" onClick={() => setNetwork('MTN')} className={`rounded-xl border px-3 py-2.5 text-xs font-black ${network === 'MTN' ? 'border-[#071A49] bg-[#ffdd54] text-[#071A49]' : 'border-slate-200 bg-white text-slate-500'}`}>MTN MoMo</button>}{networks.includes('AIRTEL') && <button type="button" onClick={() => setNetwork('AIRTEL')} className={`rounded-xl border px-3 py-2.5 text-xs font-black ${network === 'AIRTEL' ? 'border-[#e60012] bg-rose-50 text-[#e60012]' : 'border-slate-200 bg-white text-slate-500'}`}>Airtel Money</button>}</div>
               {payment && PENDING_STATUSES.includes(payment.status) && <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-xs font-semibold text-blue-800"><Loader2 className="h-4 w-4 animate-spin" /> Waiting for Mobile Money approval…</div>}
               {payment?.status === 'TIMED_OUT' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs font-semibold text-amber-800">Payment confirmation timed out. Check Find My Voucher before trying again.</div>}
-              <button disabled={busy === 'payment'} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0964FA] to-[#0646e6] px-4 py-3.5 text-sm font-extrabold text-white shadow-[0_10px_24px_rgba(9,100,250,.20)] disabled:opacity-60">{busy === 'payment' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {busy === 'payment' ? 'Waiting for PIN…' : `Pay ${formatMoney(checkoutPackage.amountUgx)}`}</button>
+              <button disabled={busy === 'payment'} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--portal-primary)] px-4 py-3.5 text-sm font-extrabold text-white shadow-none disabled:opacity-60">{busy === 'payment' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {busy === 'payment' ? 'Waiting for PIN…' : `Pay ${formatMoney(checkoutPackage.amountUgx)}`}</button>
             </form>
           </div>
         </div>
@@ -568,10 +578,10 @@ export default function CompactPortalCheckout() {
 }
 
 function PackageSection({ id, title, subtitle, packages, onBuy, empty, multi = false }: { id?: string; title: string; subtitle: string; packages: PortalPackage[]; onBuy: (pkg: PortalPackage) => void; empty: string; multi?: boolean }) {
-  return <section id={id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"><div className="flex items-center gap-2.5"><div className="rounded-xl bg-blue-50 p-2 text-[#0964FA]">{multi ? <Laptop2 className="h-5 w-5" /> : <Ticket className="h-5 w-5" />}</div><div><h2 className="text-base font-extrabold sm:text-lg">{title}</h2><p className="text-xs text-slate-500">{subtitle}</p></div></div><div className="mt-3"><PackageCards packages={packages} onBuy={onBuy} empty={empty} multi={multi} /></div></section>
+  return <section id={id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"><div className="flex items-center gap-2.5"><div className="rounded-xl bg-blue-50 p-2 text-[var(--portal-primary)]">{multi ? <Laptop2 className="h-5 w-5" /> : <Ticket className="h-5 w-5" />}</div><div><h2 className="text-base font-extrabold sm:text-lg">{title}</h2><p className="text-xs text-slate-500">{subtitle}</p></div></div><div className="mt-3"><PackageCards packages={packages} onBuy={onBuy} empty={empty} multi={multi} /></div></section>
 }
 
 function PackageCards({ packages, onBuy, empty, multi = false }: { packages: PortalPackage[]; onBuy: (pkg: PortalPackage) => void; empty: string; multi?: boolean }) {
   if (packages.length === 0) return <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">{empty}</div>
-  return <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{packages.map((pkg) => <article key={pkg.id} className="flex min-h-[154px] min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-[0_3px_12px_rgba(7,26,73,.04)]"><div className="flex items-start justify-between gap-1"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-[#0964FA]">{multi ? <Laptop2 className="h-4 w-4" /> : isTvPackage(pkg) ? <Monitor className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}</div>{pkg.isFeatured && <span className="rounded-full bg-cyan-50 px-1.5 py-0.5 text-[8px] font-bold uppercase text-cyan-700">Popular</span>}</div><h3 className="mt-2 truncate text-sm font-extrabold">{pkg.name}</h3><p className="mt-0.5 text-[10px] text-slate-500">{formatDuration(pkg.durationMinutes)}{(pkg.deviceLimit ?? 1) > 1 ? ` · ${pkg.deviceLimit} devices` : ''}</p><div className="mt-1.5 text-[15px] font-black text-[#0646e6] sm:text-lg">{formatMoney(pkg.amountUgx)}</div><button type="button" onClick={() => onBuy(pkg)} className="mt-auto w-full rounded-lg bg-gradient-to-r from-[#0964FA] to-[#0646e6] px-2 py-2 text-[11px] font-bold text-white sm:text-xs">Buy Now</button></article>)}</div>
+  return <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{packages.map((pkg) => <article key={pkg.id} className="flex min-h-[154px] min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-[0_3px_12px_rgba(7,26,73,.04)]"><div className="flex items-start justify-between gap-1"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-[var(--portal-primary)]">{multi ? <Laptop2 className="h-4 w-4" /> : isTvPackage(pkg) ? <Monitor className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}</div>{pkg.isFeatured && <span className="rounded-full bg-cyan-50 px-1.5 py-0.5 text-[8px] font-bold uppercase text-cyan-700">Popular</span>}</div><h3 className="mt-2 truncate text-sm font-extrabold">{pkg.name}</h3><p className="mt-0.5 text-[10px] text-slate-500">{formatDuration(pkg.durationMinutes)}{(pkg.deviceLimit ?? 1) > 1 ? ` · ${pkg.deviceLimit} devices` : ''}</p><div className="mt-1.5 text-[15px] font-black text-[var(--portal-primary)] sm:text-lg">{formatMoney(pkg.amountUgx)}</div><button type="button" onClick={() => onBuy(pkg)} className="mt-auto w-full rounded-lg bg-[var(--portal-primary)] px-2 py-2 text-[11px] font-bold text-white sm:text-xs">Buy Now</button></article>)}</div>
 }

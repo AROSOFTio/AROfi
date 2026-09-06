@@ -14,15 +14,16 @@ export default function PortalPackageVisuals() {
         min-height: 178px !important;
         padding: 14px !important;
         border-radius: 16px !important;
-        border-color: #d8e2ef !important;
-        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+        border-color: var(--portal-border, #d8e2ef) !important;
+        background: var(--portal-surface, #ffffff) !important;
         box-shadow: 0 6px 18px rgba(7, 26, 73, 0.055) !important;
       }
       main article > div:first-child > div:first-child {
         width: 38px !important;
         height: 38px !important;
-        border: 1px solid #d8ebff !important;
-        background: #edf6ff !important;
+        border: 1px solid color-mix(in srgb, var(--portal-primary) 24%, var(--portal-border, #d8e2ef)) !important;
+        background: color-mix(in srgb, var(--portal-primary) 9%, var(--portal-surface, #fff)) !important;
+        color: var(--portal-primary) !important;
       }
       main article > div:first-child > div:first-child svg {
         width: 20px !important;
@@ -36,7 +37,7 @@ export default function PortalPackageVisuals() {
         font-size: 16px !important;
         line-height: 1.18 !important;
         font-weight: 900 !important;
-        color: #0b1739 !important;
+        color: var(--portal-text, #122033) !important;
       }
       main article h3 + p {
         margin-top: 4px !important;
@@ -51,7 +52,7 @@ export default function PortalPackageVisuals() {
         line-height: 1.05 !important;
         font-weight: 950 !important;
         letter-spacing: -0.02em !important;
-        color: #0759e8 !important;
+        color: var(--portal-primary) !important;
       }
       main article button {
         min-height: 36px !important;
@@ -60,7 +61,9 @@ export default function PortalPackageVisuals() {
         font-size: 13px !important;
         line-height: 1 !important;
         font-weight: 850 !important;
-        box-shadow: 0 6px 13px rgba(9, 100, 250, 0.18) !important;
+        background: var(--portal-primary) !important;
+        color: #fff !important;
+        box-shadow: none !important;
       }
       #portal-plans h2 {
         font-size: 18px !important;
