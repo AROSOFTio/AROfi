@@ -19,6 +19,13 @@ export type PortalContextResponse = {
   activeActivation?: PortalActivation | null
   latestPayment?: PortalPayment | null
   session?: PortalCustomerSession | null
+  trialEligibility?: {
+    eligible: boolean
+    used: boolean
+    previousTrialStatus?: string | null
+    previousTrialEndsAt?: string | null
+    reason?: string | null
+  }
   returningDevice?: {
     existingActiveAccess: boolean
     reason?: string
